@@ -76,6 +76,7 @@ Everything is 48 kHz, deterministic (explicit rng), per-sample numba filters (Pd
 from __future__ import annotations
 
 import math
+import os
 import re
 import subprocess
 import zlib
@@ -102,7 +103,7 @@ PDN = math.sqrt(SR / PD_FS)
 _PI_PD = 3.14159             # Pd's own constant in d_filter.c
 
 OUT_DIR = Path(__file__).resolve().parent.parent / "out" / "samples_v2"
-MANIFEST = Path(r"C:\Users\bilal\Documents\SS\game\assets\production\manifest.toml")
+MANIFEST = Path(os.environ.get("GENNY_MANIFEST", "manifest.toml"))   # asset list read by the self-test only
 
 
 # ==========================================================================================

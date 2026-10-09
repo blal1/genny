@@ -82,6 +82,7 @@ damping amount, the squeak pulse rate, bubble/drip counts).
 
 from __future__ import annotations
 
+import os
 import zlib
 from pathlib import Path
 
@@ -736,7 +737,7 @@ def render(row: dict, variation: int, rng: np.random.Generator) -> np.ndarray:
 # Self-test
 # ==========================================================================================
 
-MANIFEST = Path(r"C:\Users\bilal\Documents\SS\game\assets\production\manifest.toml")
+MANIFEST = Path(os.environ.get("GENNY_MANIFEST", "manifest.toml"))   # asset list read by the self-test only
 OUT = Path(__file__).resolve().parent.parent / "out" / "samples_v2"
 
 
