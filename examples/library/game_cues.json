@@ -1,0 +1,388 @@
+{
+  "out_dir": "sounds/game_cues",
+  "sounds": [
+    {
+      "out": "beep_sine.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "beep",
+          "params": {
+            "freq": 880,
+            "dur": 0.1
+          }
+        }
+      ]
+    },
+    {
+      "out": "beep_square.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "beep",
+          "params": {
+            "freq": 660,
+            "dur": 0.1,
+            "wave": "square"
+          }
+        }
+      ]
+    },
+    {
+      "out": "blip_cursor.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "blip",
+          "params": {
+            "freq": 1400,
+            "dur": 0.04
+          }
+        }
+      ]
+    },
+    {
+      "out": "blip_cursor_low.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "blip",
+          "params": {
+            "freq": 900,
+            "dur": 0.05
+          }
+        }
+      ]
+    },
+    {
+      "out": "select_confirm.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "chip",
+          "steps": "C6:0.05 G6:0.12",
+          "params": {
+            "width": 0.25
+          },
+          "legato": 0.9
+        }
+      ]
+    },
+    {
+      "out": "cancel_back.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "chip",
+          "steps": "G5:0.05 C5:0.12",
+          "params": {
+            "width": 0.25
+          },
+          "legato": 0.9
+        }
+      ]
+    },
+    {
+      "out": "click_ui.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "click",
+          "params": {
+            "tone": 3500
+          }
+        }
+      ]
+    },
+    {
+      "out": "tick_soft.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "click",
+          "params": {
+            "tone": 2000
+          },
+          "gain": 0.6
+        }
+      ]
+    },
+    {
+      "out": "wall_proximity_far.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "proximity",
+          "params": {
+            "freq": 900,
+            "rate": 2,
+            "dur": 1.5,
+            "width": 0.25
+          }
+        }
+      ]
+    },
+    {
+      "out": "wall_proximity_mid.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "proximity",
+          "params": {
+            "freq": 1000,
+            "rate": 5,
+            "dur": 1.2,
+            "width": 0.35
+          }
+        }
+      ]
+    },
+    {
+      "out": "wall_proximity_close.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "proximity",
+          "params": {
+            "freq": 1150,
+            "rate": 12,
+            "dur": 1.0,
+            "width": 0.5
+          }
+        }
+      ]
+    },
+    {
+      "out": "radar_ping.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "radar",
+          "params": {
+            "freq": 1300
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "delay",
+          "time": 0.3,
+          "feedback": 0.35,
+          "mix": 0.3
+        }
+      ]
+    },
+    {
+      "out": "sonar_deep.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "radar",
+          "params": {
+            "freq": 700
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "underwater",
+          "amount": 0.5
+        },
+        {
+          "type": "reverb",
+          "mix": 0.35,
+          "size": 0.85,
+          "damp": 0.5
+        }
+      ]
+    },
+    {
+      "out": "laser_pew.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "laser",
+          "params": {
+            "start": 2200,
+            "end": 300,
+            "dur": 0.22
+          }
+        }
+      ]
+    },
+    {
+      "out": "laser_short.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "laser",
+          "params": {
+            "start": 3000,
+            "end": 800,
+            "dur": 0.1,
+            "wave": "square"
+          }
+        }
+      ]
+    },
+    {
+      "out": "jump.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "jump",
+          "params": {
+            "start": 280,
+            "end": 900,
+            "dur": 0.18
+          }
+        }
+      ]
+    },
+    {
+      "out": "coin_pickup.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "coin",
+          "params": {
+            "freq": "B5",
+            "up": 5
+          }
+        }
+      ]
+    },
+    {
+      "out": "item_pickup.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "chip",
+          "steps": "E6:0.05 G6:0.05 B6:0.05 E7:0.2",
+          "params": {
+            "width": 0.5
+          },
+          "legato": 0.9
+        }
+      ]
+    },
+    {
+      "out": "hit_hurt.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "hit",
+          "params": {
+            "dur": 0.22,
+            "tone": 220,
+            "crunch": 0.6
+          }
+        }
+      ]
+    },
+    {
+      "out": "punch_impact.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "punch",
+          "params": {}
+        },
+        {
+          "type": "drum",
+          "kind": "kick",
+          "gain": 0.5,
+          "params": {
+            "tune": 50
+          }
+        }
+      ]
+    },
+    {
+      "out": "explosion_small.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "explosion",
+          "params": {
+            "dur": 0.7,
+            "boom": 0.6
+          }
+        }
+      ]
+    },
+    {
+      "out": "explosion_big.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "explosion",
+          "params": {
+            "dur": 1.6,
+            "boom": 1.2
+          }
+        },
+        {
+          "type": "drum",
+          "kind": "taiko",
+          "gain": 0.6
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "footstep_stone.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "footstep",
+          "params": {
+            "tone": 110
+          }
+        }
+      ]
+    },
+    {
+      "out": "door_close.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "door",
+          "params": {}
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "low_health_heartbeat.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "heartbeat",
+          "params": {
+            "rate": 1.3,
+            "dur": 2.3
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "lowpass",
+          "cutoff": 400
+        }
+      ]
+    }
+  ]
+}

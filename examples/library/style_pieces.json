@@ -1,0 +1,460 @@
+{
+ "out_dir": "sounds/style_pieces",
+ "sounds": [
+  {
+   "out": "lofi.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "lofi",
+     "bars": 8,
+     "seed": 100
+    }
+   ]
+  },
+  {
+   "out": "jazz_swing.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "jazz_swing",
+     "bars": 8,
+     "seed": 101
+    }
+   ]
+  },
+  {
+   "out": "bossa_nova.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "bossa_nova",
+     "bars": 8,
+     "seed": 102
+    }
+   ]
+  },
+  {
+   "out": "blues_shuffle.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "blues_shuffle",
+     "bars": 8,
+     "seed": 103
+    }
+   ]
+  },
+  {
+   "out": "soul_ballad.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "soul_ballad",
+     "bars": 8,
+     "seed": 104
+    }
+   ]
+  },
+  {
+   "out": "funk.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "funk",
+     "bars": 8,
+     "seed": 105
+    }
+   ]
+  },
+  {
+   "out": "disco.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "disco",
+     "bars": 8,
+     "seed": 106
+    }
+   ]
+  },
+  {
+   "out": "reggae.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "reggae",
+     "bars": 8,
+     "seed": 107
+    }
+   ]
+  },
+  {
+   "out": "latin_salsa.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "latin_salsa",
+     "bars": 8,
+     "seed": 108
+    }
+   ]
+  },
+  {
+   "out": "reggaeton.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "reggaeton",
+     "bars": 8,
+     "seed": 109
+    }
+   ]
+  },
+  {
+   "out": "rock.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "rock",
+     "bars": 8,
+     "seed": 110
+    }
+   ]
+  },
+  {
+   "out": "metal.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "metal",
+     "bars": 8,
+     "seed": 111
+    }
+   ]
+  },
+  {
+   "out": "pop.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "pop",
+     "bars": 8,
+     "seed": 112
+    }
+   ]
+  },
+  {
+   "out": "synthwave.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "synthwave",
+     "bars": 8,
+     "seed": 113
+    }
+   ]
+  },
+  {
+   "out": "house.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "house",
+     "bars": 8,
+     "seed": 114
+    }
+   ]
+  },
+  {
+   "out": "acid_techno.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "acid_techno",
+     "bars": 8,
+     "seed": 115
+    }
+   ]
+  },
+  {
+   "out": "drum_and_bass.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "drum_and_bass",
+     "bars": 8,
+     "seed": 116
+    }
+   ]
+  },
+  {
+   "out": "trap.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "trap",
+     "bars": 8,
+     "seed": 117
+    }
+   ]
+  },
+  {
+   "out": "chiptune.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "chiptune",
+     "bars": 8,
+     "seed": 118
+    }
+   ]
+  },
+  {
+   "out": "orchestral_heroic.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "orchestral_heroic",
+     "bars": 8,
+     "seed": 119
+    }
+   ]
+  },
+  {
+   "out": "baroque.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "baroque",
+     "bars": 8,
+     "seed": 120
+    }
+   ]
+  },
+  {
+   "out": "ragtime.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "ragtime",
+     "bars": 8,
+     "seed": 121
+    }
+   ]
+  },
+  {
+   "out": "lullaby.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "lullaby",
+     "bars": 8,
+     "seed": 122
+    }
+   ]
+  },
+  {
+   "out": "spooky.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "spooky",
+     "bars": 8,
+     "seed": 123
+    }
+   ]
+  },
+  {
+   "out": "christmas.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "christmas",
+     "bars": 8,
+     "seed": 124
+    }
+   ]
+  },
+  {
+   "out": "celtic_jig.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "celtic_jig",
+     "bars": 8,
+     "seed": 125
+    }
+   ]
+  },
+  {
+   "out": "bluegrass.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "bluegrass",
+     "bars": 8,
+     "seed": 126
+    }
+   ]
+  },
+  {
+   "out": "polka_oompah.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "polka_oompah",
+     "bars": 8,
+     "seed": 127
+    }
+   ]
+  },
+  {
+   "out": "tango.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "tango",
+     "bars": 8,
+     "seed": 128
+    }
+   ]
+  },
+  {
+   "out": "andean.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "andean",
+     "bars": 8,
+     "seed": 129
+    }
+   ]
+  },
+  {
+   "out": "middle_eastern.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "middle_eastern",
+     "bars": 8,
+     "seed": 130
+    }
+   ]
+  },
+  {
+   "out": "indian_raga.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "indian_raga",
+     "bars": 8,
+     "seed": 131
+    }
+   ]
+  },
+  {
+   "out": "japanese.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "japanese",
+     "bars": 8,
+     "seed": 132
+    }
+   ]
+  },
+  {
+   "out": "gamelan.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "gamelan",
+     "bars": 8,
+     "seed": 133
+    }
+   ]
+  },
+  {
+   "out": "ambient.wav",
+   "normalize": -2.0,
+   "tail": 2.0,
+   "layers": [
+    {
+     "type": "arrangement",
+     "style": "ambient",
+     "bars": 8,
+     "seed": 134
+    }
+   ]
+  }
+ ]
+}

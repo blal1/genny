@@ -1,0 +1,615 @@
+{
+  "out_dir": "sounds/game_over",
+  "sounds": [
+    {
+      "out": "descend_piano.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "piano",
+          "steps": "G5:0.25 Eb5:0.25 C5:0.25 G4:0.9",
+          "vel": 0.7
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.35,
+          "size": 0.85,
+          "damp": 0.5
+        }
+      ]
+    },
+    {
+      "out": "descend_chip.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "chip",
+          "steps": "C6:0.12 B5:0.12 Bb5:0.12 A5:0.12 Ab5:0.12 G5:0.5",
+          "params": {
+            "width": 0.5
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "bitcrush",
+          "bits": 8,
+          "rate": 16000
+        }
+      ]
+    },
+    {
+      "out": "powerdown_classic.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "powerdown",
+          "params": {
+            "freq": "C6",
+            "steps": 7,
+            "rate": 0.08
+          }
+        }
+      ]
+    },
+    {
+      "out": "powerdown_slow.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "powerdown",
+          "params": {
+            "freq": "A5",
+            "steps": 5,
+            "rate": 0.14
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "lowpass",
+          "cutoff": 3000
+        },
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "minor_chord_pad.wav",
+      "layers": [
+        {
+          "type": "synth",
+          "inst": "pad",
+          "notes": "C4:min",
+          "dur": 1.2,
+          "params": {
+            "attack": 0.05,
+            "release": 1.0
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.35,
+          "size": 0.85,
+          "damp": 0.5
+        }
+      ]
+    },
+    {
+      "out": "dark_organ.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "organ",
+          "steps": "C4:min:0.5 Ab3:maj:0.9"
+        }
+      ],
+      "fx": [
+        {
+          "type": "lowpass",
+          "cutoff": 1800
+        },
+        {
+          "type": "reverb",
+          "mix": 0.35,
+          "size": 0.85,
+          "damp": 0.5
+        }
+      ]
+    },
+    {
+      "out": "taiko_doom.wav",
+      "layers": [
+        {
+          "type": "drum",
+          "kind": "taiko",
+          "params": {
+            "tune": 50,
+            "decay": 1.4
+          }
+        },
+        {
+          "type": "drum",
+          "kind": "taiko",
+          "at": 0.6,
+          "params": {
+            "tune": 45,
+            "decay": 1.8
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.35,
+          "size": 0.85,
+          "damp": 0.5
+        }
+      ]
+    },
+    {
+      "out": "kick808_death.wav",
+      "layers": [
+        {
+          "type": "drum",
+          "kind": "kick808",
+          "params": {
+            "tune": 40,
+            "decay": 1.5
+          }
+        },
+        {
+          "type": "synth",
+          "inst": "sub",
+          "notes": "C2",
+          "dur": 1.0,
+          "gain": 0.6
+        }
+      ],
+      "fx": [
+        {
+          "type": "lowpass",
+          "cutoff": 800
+        }
+      ]
+    },
+    {
+      "out": "muffled_end.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "piano",
+          "steps": "E5:0.3 C5:0.3 A4:1.0",
+          "vel": 0.6
+        }
+      ],
+      "fx": [
+        {
+          "type": "muffle",
+          "amount": 0.7
+        },
+        {
+          "type": "reverb",
+          "mix": 0.35,
+          "size": 0.85,
+          "damp": 0.5
+        }
+      ]
+    },
+    {
+      "out": "underwater_drown.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "bell",
+          "steps": "A5:0.3 F5:0.3 D5:0.8",
+          "params": {
+            "decay": 1.5
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "underwater",
+          "amount": 0.8
+        },
+        {
+          "type": "reverb",
+          "mix": 0.35,
+          "size": 0.85,
+          "damp": 0.5
+        }
+      ]
+    },
+    {
+      "out": "sad_strings.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "strings",
+          "steps": "E4:0.5 D4:0.5 C4:1.2",
+          "params": {
+            "attack": 0.15
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.35,
+          "size": 0.85,
+          "damp": 0.5
+        }
+      ]
+    },
+    {
+      "out": "sad_flute.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "flute",
+          "steps": "A4:0.4 G4:0.4 E4:1.0"
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.35,
+          "size": 0.85,
+          "damp": 0.5
+        }
+      ]
+    },
+    {
+      "out": "chip_death_jingle.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "chip",
+          "steps": "E5:0.1 E5:0.1 -:0.1 E5:0.1 C5:0.1 E5:0.1 G5:0.3 -:0.2 G4:0.5",
+          "params": {
+            "width": 0.25
+          },
+          "legato": 0.85
+        },
+        {
+          "type": "seq",
+          "inst": "chiptri",
+          "steps": "C3:0.6 -:0.2 G2:0.5",
+          "gain": 0.7
+        }
+      ]
+    },
+    {
+      "out": "glitch_crash.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "glitch",
+          "params": {
+            "dur": 0.4
+          }
+        },
+        {
+          "type": "sfx",
+          "kind": "static",
+          "params": {
+            "dur": 0.5,
+            "color": "pink"
+          },
+          "at": 0.3,
+          "gain": 0.6
+        }
+      ],
+      "fx": [
+        {
+          "type": "bitcrush",
+          "bits": 6
+        },
+        {
+          "type": "lowpass",
+          "cutoff": 5000
+        }
+      ]
+    },
+    {
+      "out": "heartbeat_stop.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "heartbeat",
+          "params": {
+            "rate": 1.0,
+            "dur": 2.1
+          }
+        },
+        {
+          "type": "synth",
+          "inst": "sub",
+          "notes": "C2",
+          "dur": 0.8,
+          "at": 2.2,
+          "gain": 0.5
+        }
+      ],
+      "fx": [
+        {
+          "type": "lowpass",
+          "cutoff": 500
+        },
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "error_fail.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "error",
+          "params": {
+            "freq": 160,
+            "dur": 0.5
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "slow_bell_toll.wav",
+      "layers": [
+        {
+          "type": "synth",
+          "inst": "bell",
+          "notes": "C4",
+          "dur": 1.5,
+          "params": {
+            "ratio": 2.0,
+            "decay": 3.0
+          }
+        },
+        {
+          "type": "synth",
+          "inst": "bell",
+          "notes": "C4",
+          "dur": 1.5,
+          "at": 1.2,
+          "params": {
+            "ratio": 2.0,
+            "decay": 3.0
+          },
+          "vel": 0.8
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.35,
+          "size": 0.85,
+          "damp": 0.5
+        }
+      ]
+    },
+    {
+      "out": "tape_stop.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "lead",
+          "steps": "C5:0.2 E5:0.2 G5:0.6"
+        }
+      ],
+      "fx": [
+        {
+          "type": "speed",
+          "factor": 0.6
+        },
+        {
+          "type": "lowpass",
+          "cutoff": 3000
+        },
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "reversed_riser.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "riser",
+          "params": {
+            "dur": 1.5,
+            "start": 1500,
+            "end": 100
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "lowpass",
+          "cutoff": 2500
+        },
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "bass_thud_minor.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "bass",
+          "steps": "A2:0.3 F2:0.3 D2:0.8",
+          "params": {
+            "cutoff": 700
+          }
+        },
+        {
+          "type": "drum",
+          "kind": "kick",
+          "gain": 0.6
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "choir_lament.wav",
+      "layers": [
+        {
+          "type": "synth",
+          "inst": "choir",
+          "notes": "A3:min",
+          "dur": 1.6,
+          "params": {
+            "vowel": "u"
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "lowpass",
+          "cutoff": 2000
+        },
+        {
+          "type": "reverb",
+          "mix": 0.35,
+          "size": 0.85,
+          "damp": 0.5
+        }
+      ]
+    },
+    {
+      "out": "epiano_defeat.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "epiano",
+          "steps": "F5:0.3 D5:0.3 Bb4:0.3 A4:1.0",
+          "vel": 0.55
+        }
+      ],
+      "fx": [
+        {
+          "type": "tremolo",
+          "rate": 4,
+          "depth": 0.4
+        },
+        {
+          "type": "reverb",
+          "mix": 0.35,
+          "size": 0.85,
+          "damp": 0.5
+        }
+      ]
+    },
+    {
+      "out": "distorted_hit_end.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "hit",
+          "params": {
+            "dur": 0.5,
+            "tone": 120,
+            "crunch": 0.9
+          }
+        },
+        {
+          "type": "drum",
+          "kind": "crash",
+          "gain": 0.5
+        }
+      ],
+      "fx": [
+        {
+          "type": "distortion",
+          "drive": 3,
+          "tone": 3000
+        },
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "marimba_wilt.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "marimba",
+          "steps": "G5:0.15 F5:0.15 Eb5:0.15 D5:0.15 C5:0.5",
+          "vel": 0.6
+        }
+      ],
+      "fx": [
+        {
+          "type": "lowpass",
+          "cutoff": 2500
+        },
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "thunder_end.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "thunder",
+          "params": {
+            "dur": 2.5
+          }
+        },
+        {
+          "type": "synth",
+          "inst": "pad",
+          "notes": "D3:min",
+          "dur": 1.5,
+          "gain": 0.5
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.35,
+          "size": 0.85,
+          "damp": 0.5
+        }
+      ]
+    }
+  ]
+}

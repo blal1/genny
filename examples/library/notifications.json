@@ -1,0 +1,521 @@
+{
+  "out_dir": "sounds/notifications",
+  "sounds": [
+    {
+      "out": "ding_glass.wav",
+      "layers": [
+        {
+          "type": "synth",
+          "inst": "glass",
+          "notes": "E6",
+          "dur": 0.25
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "ding_bell_soft.wav",
+      "layers": [
+        {
+          "type": "synth",
+          "inst": "bell",
+          "notes": "C6",
+          "dur": 0.3,
+          "vel": 0.6,
+          "params": {
+            "ratio": 2.0,
+            "decay": 1.2
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "chime_two_up.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "bell",
+          "steps": "G5:0.12 C6:0.4",
+          "params": {
+            "decay": 1.0
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "chime_two_down.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "bell",
+          "steps": "C6:0.12 G5:0.4",
+          "params": {
+            "decay": 1.0
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "tri_tone.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "glass",
+          "steps": "E6:0.1 G#6:0.1 B6:0.35"
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "marimba_tap.wav",
+      "layers": [
+        {
+          "type": "synth",
+          "inst": "marimba",
+          "notes": "A5",
+          "dur": 0.2
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "marimba_double.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "marimba",
+          "steps": "D5:0.09 A5:0.3"
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "kalimba_message.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "kalimba",
+          "steps": "E5:0.1 G5:0.1 B5:0.3",
+          "vel": 0.8
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "music_box_hello.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "music_box",
+          "steps": "C6:0.12 E6:0.12 G6:0.12 E6:0.4"
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "epiano_mail.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "epiano",
+          "steps": "F4:0.15 A4:0.35",
+          "vel": 0.7
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "pop_soft.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "pop",
+          "params": {
+            "freq": 600
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "pop_double.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "pop",
+          "params": {
+            "freq": 500
+          }
+        },
+        {
+          "type": "sfx",
+          "kind": "pop",
+          "params": {
+            "freq": 750
+          },
+          "at": 0.09
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "blip_sine.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "beep",
+          "params": {
+            "freq": "A6",
+            "dur": 0.06
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "success_rise.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "success",
+          "params": {
+            "freq": "E5",
+            "up": 7
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "success_bright.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "success",
+          "params": {
+            "freq": "A5",
+            "up": 5,
+            "wave": "triangle"
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "mention_triad.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "glass",
+          "steps": "C6:0.08 E6:0.08 G6:0.3",
+          "vel": 0.9
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "reminder_three.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "bell",
+          "steps": "E5:0.18 E5:0.18 A5:0.5",
+          "params": {
+            "decay": 1.2
+          },
+          "vel": 0.7
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "gentle_pad_swell.wav",
+      "layers": [
+        {
+          "type": "synth",
+          "inst": "pad",
+          "notes": "C5:maj",
+          "dur": 0.5,
+          "params": {
+            "attack": 0.25,
+            "release": 0.5
+          },
+          "gain": 0.8
+        }
+      ],
+      "fx": [
+        {
+          "type": "lowpass",
+          "cutoff": 3000
+        },
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "achievement_sparkle.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "glass",
+          "steps": "C6:0.07 E6:0.07 G6:0.07 C7:0.4"
+        },
+        {
+          "type": "sfx",
+          "kind": "magic",
+          "params": {
+            "dur": 0.5,
+            "density": 6
+          },
+          "gain": 0.4,
+          "at": 0.2
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "alert_double_beep.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "beep",
+          "params": {
+            "freq": 1046,
+            "dur": 0.08,
+            "wave": "triangle"
+          },
+          "repeat": 2,
+          "every": 0.14
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "warning_low.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "sine",
+          "steps": "A4:0.12 F4:0.3",
+          "vel": 0.8
+        }
+      ],
+      "fx": [
+        {
+          "type": "lowpass",
+          "cutoff": 2500
+        },
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "low_battery.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "chip",
+          "steps": "E5:0.1 C5:0.1 A4:0.25",
+          "params": {
+            "width": 0.5
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "lowpass",
+          "cutoff": 4000
+        },
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "unlock_glass_up.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "glass",
+          "steps": "A5:0.06 C#6:0.06 E6:0.06 A6:0.3"
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "lock_glass_down.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "glass",
+          "steps": "A6:0.06 E6:0.06 C#6:0.06 A5:0.3"
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "bubble_message.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "bubble",
+          "params": {
+            "freq": 450
+          }
+        },
+        {
+          "type": "sfx",
+          "kind": "bubble",
+          "params": {
+            "freq": 650
+          },
+          "at": 0.1
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    }
+  ]
+}

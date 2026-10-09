@@ -1,0 +1,2972 @@
+{
+ "out_dir": "sounds/instrument_tunes",
+ "sounds": [
+  {
+   "out": "piano.wav",
+   "bpm": 100,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "piano",
+     "step": 1,
+     "steps": "E3:1 G3:0.5 B3:0.5 E4:1 B3:1 C4:0.5 B3:0.5 G3:1 F#3:0.5 G3:0.5 E3:1 A3:0.5 C4:0.5 E4:1 D4:0.5 B3:0.5 G3:1 F#3:0.5 G3:0.5 F#3:0.5 D3:0.5 E3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "felt_piano.wav",
+   "bpm": 100,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "felt_piano",
+     "step": 1,
+     "steps": "B3:0.5 C4:0.5 E4:1 B3:1 G3:1 A3:0.5 G3:0.5 F#3:1 B3:2 G3:0.5 A3:0.5 B3:1 E4:1 C4:1 B3:0.5 A3:0.5 G3:0.5 F#3:0.5 E3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "epiano.wav",
+   "bpm": 100,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "epiano",
+     "step": 1,
+     "steps": "F#3:1 A#3:0.5 C#4:0.5 F#4:1 C#4:1 D#4:0.5 C#4:0.5 A#3:1 G#3:0.5 A#3:0.5 F#3:1 B3:0.5 D#4:0.5 F#4:1 F4:0.5 C#4:0.5 A#3:1 G#3:0.5 A#3:0.5 G#3:0.5 F3:0.5 F#3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "organ.wav",
+   "bpm": 100,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "organ",
+     "step": 1,
+     "steps": "F#3:1 A3:0.5 C#4:0.5 F#4:1 C#4:1 D#4:0.5 C#4:0.5 A3:1 G#3:0.5 A3:0.5 F#3:1 B3:0.5 D#4:0.5 F#4:1 E4:0.5 C#4:0.5 A3:1 G#3:0.5 A3:0.5 G#3:0.5 E3:0.5 F#3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "pluck.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "pluck",
+     "step": 1,
+     "steps": "C4:1.5 D4:0.5 D#4:1 G4:1 F4:1.5 D#4:0.5 D4:2 D#4:1.5 G4:0.5 C5:1 G#4:1 G4:1 D4:1 C4:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "harp.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "harp",
+     "step": 1,
+     "steps": "G4:0.5 A4:0.5 C5:1 G4:1 E4:1 F4:0.5 E4:0.5 D4:1 G4:2 E4:0.5 F4:0.5 G4:1 C5:1 A4:1 G4:0.5 F4:0.5 E4:0.5 D4:0.5 C4:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "guitar.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "guitar",
+     "step": 1,
+     "steps": "E3:1 G3:0.5 B3:0.5 E4:1 B3:1 C#4:0.5 B3:0.5 G3:1 F#3:0.5 G3:0.5 E3:1 A3:0.5 C#4:0.5 E4:1 D4:0.5 B3:0.5 G3:1 F#3:0.5 G3:0.5 F#3:0.5 D3:0.5 E3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "bass.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "bass",
+     "step": 1,
+     "steps": "C2:1 C2:0.5 G2:0.5 C3:1 G2:1 G#2:1 G#2:0.5 D#2:0.5 F2:1 G2:1 C2:1 D#2:0.5 G2:0.5 G#2:1 G2:1 F2:0.5 G2:0.5 F2:0.5 D2:0.5 C2:2",
+     "vel": 0.85,
+     "legato": 0.9
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "sub.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "sub",
+     "step": 1,
+     "steps": "F#1:1 F#1:0.5 C#2:0.5 F#2:1 C#2:1 D#2:1 D#2:0.5 A1:0.5 B1:1 C#2:1 F#1:1 A1:0.5 C#2:0.5 D#2:1 C#2:1 B1:0.5 C#2:0.5 B1:0.5 G#1:0.5 F#1:2",
+     "vel": 0.85,
+     "legato": 0.9
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "wobble.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "wobble",
+     "step": 1,
+     "steps": "F#1:1 F#1:0.5 C#2:0.5 F#2:1 C#2:1 D2:1 D2:0.5 A1:0.5 B1:1 C#2:1 F#1:1 A1:0.5 C#2:0.5 D2:1 C#2:1 B1:0.5 C#2:0.5 B1:0.5 G#1:0.5 F#1:2",
+     "vel": 0.85,
+     "legato": 0.9
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "lead.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "lead",
+     "step": 1,
+     "steps": "G4:0.5 A4:0.5 C5:1 G4:1 D#4:1 F4:0.5 D#4:0.5 D4:1 G4:2 D#4:0.5 F4:0.5 G4:1 C5:1 A4:1 G4:0.5 F4:0.5 D#4:0.5 D4:0.5 C4:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "pad.wav",
+   "bpm": 66,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "pad",
+     "step": 1,
+     "steps": "[C3,D#3,G3]:4 [G#3,C4,D#4]:4 [F3,G#3,C4]:4 [G3,A#3,D4]:2 [C3,D#3,G3]:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "strings.wav",
+   "bpm": 76,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "strings",
+     "step": 1,
+     "steps": "C#4:0.5 D4:0.5 F#4:1 C#4:1 A3:1 B3:0.5 A3:0.5 G#3:1 C#4:2 A3:0.5 B3:0.5 C#4:1 F#4:1 D4:1 C#4:0.5 B3:0.5 A3:0.5 G#3:0.5 F#3:2",
+     "vel": 0.85,
+     "legato": 0.98
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "brass.wav",
+   "bpm": 92,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "brass",
+     "step": 1,
+     "steps": "F#3:1 A#3:0.5 C#4:0.5 F#4:1 C#4:1 D#4:0.5 C#4:0.5 A#3:1 G#3:0.5 A#3:0.5 F#3:1 B3:0.5 D#4:0.5 F#4:1 F4:0.5 C#4:0.5 A#3:1 G#3:0.5 A#3:0.5 G#3:0.5 F3:0.5 F#3:2",
+     "vel": 0.85,
+     "legato": 0.92
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "choir.wav",
+   "bpm": 72,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "choir",
+     "step": 1,
+     "steps": "F#3:1 A3:0.5 C#4:0.5 F#4:1 C#4:1 D4:0.5 C#4:0.5 A3:1 G#3:0.5 A3:0.5 F#3:1 B3:0.5 D4:0.5 F#4:1 E4:0.5 C#4:0.5 A3:1 G#3:0.5 A3:0.5 G#3:0.5 E3:0.5 F#3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "pwm.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "pwm",
+     "step": 1,
+     "steps": "F#3:1.5 G#3:0.5 A3:1 C#4:1 B3:1.5 A3:0.5 G#3:2 A3:1.5 C#4:0.5 F#4:1 D4:1 C#4:1 G#3:1 F#3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "bell.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "bell",
+     "step": 1,
+     "steps": "F#4:1.5 G#4:0.5 A4:1 C#5:1 B4:1.5 A4:0.5 G#4:2 A4:1.5 C#5:0.5 F#5:1 D#5:1 C#5:1 G#4:1 F#4:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "glass.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "glass",
+     "step": 1,
+     "steps": "G5:0.5 A5:0.5 C6:1 G5:1 E5:1 F5:0.5 E5:0.5 D5:1 G5:2 E5:0.5 F5:0.5 G5:1 C6:1 A5:1 G5:0.5 F5:0.5 E5:0.5 D5:0.5 C5:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "marimba.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "marimba",
+     "step": 1,
+     "steps": "C4:1.5 D4:0.5 E4:1 G4:1 F4:1.5 E4:0.5 D4:2 E4:1.5 G4:0.5 C5:1 A4:1 G4:1 D4:1 C4:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "kalimba.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "kalimba",
+     "step": 1,
+     "steps": "F#4:1 A#4:0.5 C#5:0.5 F#5:1 C#5:1 D#5:0.5 C#5:0.5 A#4:1 G#4:0.5 A#4:0.5 F#4:1 B4:0.5 D#5:0.5 F#5:1 F5:0.5 C#5:0.5 A#4:1 G#4:0.5 A#4:0.5 G#4:0.5 F4:0.5 F#4:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "vibraphone.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "vibraphone",
+     "step": 1,
+     "steps": "C5:0.5 C#5:0.5 F5:1 C5:1 G#4:1 A#4:0.5 G#4:0.5 G4:1 C5:2 G#4:0.5 A#4:0.5 C5:1 F5:1 C#5:1 C5:0.5 A#4:0.5 G#4:0.5 G4:0.5 F4:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "music_box.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "music_box",
+     "step": 1,
+     "steps": "C6:1.5 D6:0.5 D#6:1 G6:1 F6:1.5 D#6:0.5 D6:2 D#6:1.5 G6:0.5 C7:1 A6:1 G6:1 D6:1 C6:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "steel_drum.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "steel_drum",
+     "step": 1,
+     "steps": "G4:0.5 A4:0.5 C5:1 G4:1 D#4:1 F4:0.5 D#4:0.5 D4:1 G4:2 D#4:0.5 F4:0.5 G4:1 C5:1 A4:1 G4:0.5 F4:0.5 D#4:0.5 D4:0.5 C4:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "flute.wav",
+   "bpm": 88,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "flute",
+     "step": 1,
+     "steps": "G5:0.5 G#5:0.5 C6:1 G5:1 D#5:1 F5:0.5 D#5:0.5 D5:1 G5:2 D#5:0.5 F5:0.5 G5:1 C6:1 G#5:1 G5:0.5 F5:0.5 D#5:0.5 D5:0.5 C5:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "chip.wav",
+   "bpm": 132,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "chip",
+     "step": 1,
+     "steps": "F#4:1.5 G#4:0.5 A4:1 C#5:1 B4:1.5 A4:0.5 G#4:2 A4:1.5 C#5:0.5 F#5:1 D5:1 C#5:1 G#4:1 F#4:2",
+     "vel": 0.85,
+     "legato": 0.85
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "chiptri.wav",
+   "bpm": 132,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "chiptri",
+     "step": 1,
+     "steps": "G3:0.5 G#3:0.5 C4:1 G3:1 D#3:1 F3:0.5 D#3:0.5 D3:1 G3:2 D#3:0.5 F3:0.5 G3:1 C4:1 G#3:1 G3:0.5 F3:0.5 D#3:0.5 D3:0.5 C3:2",
+     "vel": 0.85,
+     "legato": 0.85
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "board.wav",
+   "bpm": 132,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "board",
+     "step": 1,
+     "steps": "G4:0.5 A4:0.5 C5:1 G4:1 E4:1 F4:0.5 E4:0.5 D4:1 G4:2 E4:0.5 F4:0.5 G4:1 C5:1 A4:1 G4:0.5 F4:0.5 E4:0.5 D4:0.5 C4:2",
+     "vel": 0.85,
+     "legato": 0.85
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "sine.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "sine",
+     "step": 1,
+     "steps": "G4:0.5 A4:0.5 C5:1 G4:1 E4:1 F4:0.5 E4:0.5 D4:1 G4:2 E4:0.5 F4:0.5 G4:1 C5:1 A4:1 G4:0.5 F4:0.5 E4:0.5 D4:0.5 C4:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "square.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "square",
+     "step": 1,
+     "steps": "C#4:0.5 D#4:0.5 F#4:1 C#4:1 A#3:1 B3:0.5 A#3:0.5 G#3:1 C#4:2 A#3:0.5 B3:0.5 C#4:1 F#4:1 D#4:1 C#4:0.5 B3:0.5 A#3:0.5 G#3:0.5 F#3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "saw.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "saw",
+     "step": 1,
+     "steps": "C#4:0.5 D4:0.5 F#4:1 C#4:1 A3:1 B3:0.5 A3:0.5 G#3:1 C#4:2 A3:0.5 B3:0.5 C#4:1 F#4:1 D4:1 C#4:0.5 B3:0.5 A3:0.5 G#3:0.5 F#3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "synth.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "synth",
+     "step": 1,
+     "steps": "F#3:1.5 G#3:0.5 A3:1 C#4:1 B3:1.5 A3:0.5 G#3:2 A3:1.5 C#4:0.5 F#4:1 D4:1 C#4:1 G#3:1 F#3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "wurli.wav",
+   "bpm": 100,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "wurli",
+     "step": 1,
+     "steps": "F#3:1.5 G#3:0.5 A#3:1 C#4:1 B3:1.5 A#3:0.5 G#3:2 A#3:1.5 C#4:0.5 F#4:1 D#4:1 C#4:1 G#3:1 F#3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "clav.wav",
+   "bpm": 100,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "clav",
+     "step": 1,
+     "steps": "F#3:1 A3:0.5 C#4:0.5 F#4:1 C#4:1 D#4:0.5 C#4:0.5 A3:1 G#3:0.5 A3:0.5 F#3:1 B3:0.5 D#4:0.5 F#4:1 E4:0.5 C#4:0.5 A3:1 G#3:0.5 A3:0.5 G#3:0.5 E3:0.5 F#3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "harpsichord.wav",
+   "bpm": 100,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "harpsichord",
+     "step": 1,
+     "steps": "F#3:1.5 G#3:0.5 A3:1 C#4:1 B3:1.5 A3:0.5 G#3:2 A3:1.5 C#4:0.5 F#4:1 D#4:1 C#4:1 G#3:1 F#3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "celesta.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "celesta",
+     "step": 1,
+     "steps": "F#5:1 A5:0.5 C#6:0.5 F#6:1 C#6:1 D6:0.5 C#6:0.5 A5:1 G#5:0.5 A5:0.5 F#5:1 B5:0.5 D6:0.5 F#6:1 E6:0.5 C#6:0.5 A5:1 G#5:0.5 A5:0.5 G#5:0.5 E5:0.5 F#5:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "toy_piano.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "toy_piano",
+     "step": 1,
+     "steps": "C5:1 E5:0.5 G5:0.5 C6:1 G5:1 A5:0.5 G5:0.5 E5:1 D5:0.5 E5:0.5 C5:1 F5:0.5 A5:0.5 C6:1 B5:0.5 G5:0.5 E5:1 D5:0.5 E5:0.5 D5:0.5 B4:0.5 C5:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "church_organ.wav",
+   "bpm": 100,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "church_organ",
+     "step": 1,
+     "steps": "F#3:1.5 G#3:0.5 A#3:1 C#4:1 B3:1.5 A#3:0.5 G#3:2 A#3:1.5 C#4:0.5 F#4:1 D#4:1 C#4:1 G#3:1 F#3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "accordion.wav",
+   "bpm": 100,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "accordion",
+     "step": 1,
+     "steps": "G4:0.5 G#4:0.5 C5:1 G4:1 D#4:1 F4:0.5 D#4:0.5 D4:1 G4:2 D#4:0.5 F4:0.5 G4:1 C5:1 G#4:1 G4:0.5 F4:0.5 D#4:0.5 D4:0.5 C4:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "xylophone.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "xylophone",
+     "step": 1,
+     "steps": "F#5:1 A#5:0.5 C#6:0.5 F#6:1 C#6:1 D#6:0.5 C#6:0.5 A#5:1 G#5:0.5 A#5:0.5 F#5:1 B5:0.5 D#6:0.5 F#6:1 F6:0.5 C#6:0.5 A#5:1 G#5:0.5 A#5:0.5 G#5:0.5 F5:0.5 F#5:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "glockenspiel.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "glockenspiel",
+     "step": 1,
+     "steps": "B6:0.5 C#7:0.5 E7:1 B6:1 G6:1 A6:0.5 G6:0.5 F#6:1 B6:2 G6:0.5 A6:0.5 B6:1 E7:1 C#7:1 B6:0.5 A6:0.5 G6:0.5 F#6:0.5 E6:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "handpan.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "handpan",
+     "step": 1,
+     "steps": "F#3:1.5 G#3:0.5 A#3:1 C#4:1 B3:1.5 A#3:0.5 G#3:2 A#3:1.5 C#4:0.5 F#4:1 D#4:1 C#4:1 G#3:1 F#3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "tubular_bell.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "tubular_bell",
+     "step": 1,
+     "steps": "G4:0.5 A4:0.5 C5:1 G4:1 E4:1 F4:0.5 E4:0.5 D4:1 G4:2 E4:0.5 F4:0.5 G4:1 C5:1 A4:1 G4:0.5 F4:0.5 E4:0.5 D4:0.5 C4:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "gamelan.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "gamelan",
+     "step": 1,
+     "steps": "C5:1 D#5:0.5 G5:0.5 C6:1 G5:1 A5:0.5 G5:0.5 D#5:1 D5:0.5 D#5:0.5 C5:1 F5:0.5 A5:0.5 C6:1 A#5:0.5 G5:0.5 D#5:1 D5:0.5 D#5:0.5 D5:0.5 A#4:0.5 C5:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "singing_bowl.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "singing_bowl",
+     "step": 1,
+     "steps": "C#4:0.5 D#4:0.5 F#4:1 C#4:1 A#3:1 B3:0.5 A#3:0.5 G#3:1 C#4:2 A#3:0.5 B3:0.5 C#4:1 F#4:1 D#4:1 C#4:0.5 B3:0.5 A#3:0.5 G#3:0.5 F#3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "timpani.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "timpani",
+     "step": 1,
+     "steps": "C#3:0.5 D#3:0.5 F#3:1 C#3:1 A2:1 B2:0.5 A2:0.5 G#2:1 C#3:2 A2:0.5 B2:0.5 C#3:1 F#3:1 D#3:1 C#3:0.5 B2:0.5 A2:0.5 G#2:0.5 F#2:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "steel_guitar.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "steel_guitar",
+     "step": 1,
+     "steps": "A#3:1 C#4:0.5 F4:0.5 A#4:1 F4:1 F#4:0.5 F4:0.5 C#4:1 C4:0.5 C#4:0.5 A#3:1 D#4:0.5 F#4:0.5 A#4:1 G#4:0.5 F4:0.5 C#4:1 C4:0.5 C#4:0.5 C4:0.5 G#3:0.5 A#3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "electric_guitar.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "electric_guitar",
+     "step": 1,
+     "steps": "A#3:1.5 C4:0.5 D4:1 F4:1 D#4:1.5 D4:0.5 C4:2 D4:1.5 F4:0.5 A#4:1 G4:1 F4:1 C4:1 A#3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "muted_guitar.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "muted_guitar",
+     "step": 1,
+     "steps": "E3:1 G#3:0.5 B3:0.5 E4:1 B3:1 C#4:0.5 B3:0.5 G#3:1 F#3:0.5 G#3:0.5 E3:1 A3:0.5 C#4:0.5 E4:1 D#4:0.5 B3:0.5 G#3:1 F#3:0.5 G#3:0.5 F#3:0.5 D#3:0.5 E3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "dist_guitar.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "dist_guitar",
+     "step": 1,
+     "steps": "F4:0.5 G4:0.5 A#4:1 F4:1 C#4:1 D#4:0.5 C#4:0.5 C4:1 F4:2 C#4:0.5 D#4:0.5 F4:1 A#4:1 G4:1 F4:0.5 D#4:0.5 C#4:0.5 C4:0.5 A#3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "banjo.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "banjo",
+     "step": 1,
+     "steps": "F#4:1.5 G#4:0.5 A4:1 C#5:1 B4:1.5 A4:0.5 G#4:2 A4:1.5 C#5:0.5 F#5:1 D5:1 C#5:1 G#4:1 F#4:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "mandolin.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "mandolin",
+     "step": 1,
+     "steps": "C5:1 D#5:0.5 G5:0.5 C6:1 G5:1 A5:0.5 G5:0.5 D#5:1 D5:0.5 D#5:0.5 C5:1 F5:0.5 A5:0.5 C6:1 A#5:0.5 G5:0.5 D#5:1 D5:0.5 D#5:0.5 D5:0.5 A#4:0.5 C5:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "koto.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "koto",
+     "step": 1,
+     "steps": "C4:1 E4:0.5 G4:0.5 C5:1 G4:1 A4:0.5 G4:0.5 E4:1 D4:0.5 E4:0.5 C4:1 F4:0.5 A4:0.5 C5:1 B4:0.5 G4:0.5 E4:1 D4:0.5 E4:0.5 D4:0.5 B3:0.5 C4:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "sitar.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "sitar",
+     "step": 1,
+     "steps": "C#4:0.5 D#4:0.5 F#4:1 C#4:1 A#3:1 B3:0.5 A#3:0.5 G#3:1 C#4:2 A#3:0.5 B3:0.5 C#4:1 F#4:1 D#4:1 C#4:0.5 B3:0.5 A#3:0.5 G#3:0.5 F#3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "pizzicato.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "pizzicato",
+     "step": 1,
+     "steps": "C4:1.5 D4:0.5 D#4:1 G4:1 F4:1.5 D#4:0.5 D4:2 D#4:1.5 G4:0.5 C5:1 A4:1 G4:1 D4:1 C4:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "upright_bass.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "upright_bass",
+     "step": 1,
+     "steps": "C2:1 C2:0.5 G2:0.5 C3:1 G2:1 G#2:1 G#2:0.5 D#2:0.5 F2:1 G2:1 C2:1 D#2:0.5 G2:0.5 G#2:1 G2:1 F2:0.5 G2:0.5 F2:0.5 D2:0.5 C2:2",
+     "vel": 0.85,
+     "legato": 0.9
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "finger_bass.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "finger_bass",
+     "step": 1,
+     "steps": "C2:1 C2:0.5 G2:0.5 C3:1 G2:1 G#2:1 G#2:0.5 D#2:0.5 F2:1 G2:1 C2:1 D#2:0.5 G2:0.5 G#2:1 G2:1 F2:0.5 G2:0.5 F2:0.5 D2:0.5 C2:2",
+     "vel": 0.85,
+     "legato": 0.9
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "slap_bass.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "slap_bass",
+     "step": 1,
+     "steps": "F#2:1 F#2:0.5 C#3:0.5 F#3:1 C#3:1 D#3:1 D#3:0.5 A2:0.5 B2:1 C#3:1 F#2:1 A2:0.5 C#3:0.5 D#3:1 C#3:1 B2:0.5 C#3:0.5 B2:0.5 G#2:0.5 F#2:2",
+     "vel": 0.85,
+     "legato": 0.9
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "violin.wav",
+   "bpm": 76,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "violin",
+     "step": 1,
+     "steps": "A#4:1 D5:0.5 F5:0.5 A#5:1 F5:1 G5:0.5 F5:0.5 D5:1 C5:0.5 D5:0.5 A#4:1 D#5:0.5 G5:0.5 A#5:1 A5:0.5 F5:0.5 D5:1 C5:0.5 D5:0.5 C5:0.5 A4:0.5 A#4:2",
+     "vel": 0.85,
+     "legato": 0.98
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "cello.wav",
+   "bpm": 76,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "cello",
+     "step": 1,
+     "steps": "C3:1 D#3:0.5 G3:0.5 C4:1 G3:1 G#3:0.5 G3:0.5 D#3:1 D3:0.5 D#3:0.5 C3:1 F3:0.5 G#3:0.5 C4:1 A#3:0.5 G3:0.5 D#3:1 D3:0.5 D#3:0.5 D3:0.5 A#2:0.5 C3:2",
+     "vel": 0.85,
+     "legato": 0.98
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "clarinet.wav",
+   "bpm": 88,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "clarinet",
+     "step": 1,
+     "steps": "C#4:1.5 D#4:0.5 E4:1 G#4:1 F#4:1.5 E4:0.5 D#4:2 E4:1.5 G#4:0.5 C#5:1 A#4:1 G#4:1 D#4:1 C#4:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "oboe.wav",
+   "bpm": 88,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "oboe",
+     "step": 1,
+     "steps": "G#4:1 C5:0.5 D#5:0.5 G#5:1 D#5:1 F5:0.5 D#5:0.5 C5:1 A#4:0.5 C5:0.5 G#4:1 C#5:0.5 F5:0.5 G#5:1 G5:0.5 D#5:0.5 C5:1 A#4:0.5 C5:0.5 A#4:0.5 G4:0.5 G#4:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "sax.wav",
+   "bpm": 88,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "sax",
+     "step": 1,
+     "steps": "G#3:1.5 A#3:0.5 B3:1 D#4:1 C#4:1.5 B3:0.5 A#3:2 B3:1.5 D#4:0.5 G#4:1 E4:1 D#4:1 A#3:1 G#3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "trumpet.wav",
+   "bpm": 92,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "trumpet",
+     "step": 1,
+     "steps": "D4:1 F4:0.5 A4:0.5 D5:1 A4:1 B4:0.5 A4:0.5 F4:1 E4:0.5 F4:0.5 D4:1 G4:0.5 B4:0.5 D5:1 C5:0.5 A4:0.5 F4:1 E4:0.5 F4:0.5 E4:0.5 C4:0.5 D4:2",
+     "vel": 0.85,
+     "legato": 0.92
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "french_horn.wav",
+   "bpm": 92,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "french_horn",
+     "step": 1,
+     "steps": "A3:0.5 B3:0.5 D4:1 A3:1 F#3:1 G3:0.5 F#3:0.5 E3:1 A3:2 F#3:0.5 G3:0.5 A3:1 D4:1 B3:1 A3:0.5 G3:0.5 F#3:0.5 E3:0.5 D3:2",
+     "vel": 0.85,
+     "legato": 0.92
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "trombone.wav",
+   "bpm": 92,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "trombone",
+     "step": 1,
+     "steps": "D3:1 F3:0.5 A3:0.5 D4:1 A3:1 A#3:0.5 A3:0.5 F3:1 E3:0.5 F3:0.5 D3:1 G3:0.5 A#3:0.5 D4:1 C4:0.5 A3:0.5 F3:1 E3:0.5 F3:0.5 E3:0.5 C3:0.5 D3:2",
+     "vel": 0.85,
+     "legato": 0.92
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "tuba.wav",
+   "bpm": 92,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "tuba",
+     "step": 1,
+     "steps": "G2:0.5 A2:0.5 C3:1 G2:1 E2:1 F2:0.5 E2:0.5 D2:1 G2:2 E2:0.5 F2:0.5 G2:1 C3:1 A2:1 G2:0.5 F2:0.5 E2:0.5 D2:0.5 C2:2",
+     "vel": 0.85,
+     "legato": 0.92
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "harmonica.wav",
+   "bpm": 88,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "harmonica",
+     "step": 1,
+     "steps": "G5:0.5 A5:0.5 C6:1 G5:1 D#5:1 F5:0.5 D#5:0.5 D5:1 G5:2 D#5:0.5 F5:0.5 G5:1 C6:1 A5:1 G5:0.5 F5:0.5 D#5:0.5 D5:0.5 C5:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "pan_flute.wav",
+   "bpm": 88,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "pan_flute",
+     "step": 1,
+     "steps": "C5:1 D#5:0.5 G5:0.5 C6:1 G5:1 G#5:0.5 G5:0.5 D#5:1 D5:0.5 D#5:0.5 C5:1 F5:0.5 G#5:0.5 C6:1 A#5:0.5 G5:0.5 D#5:1 D5:0.5 D#5:0.5 D5:0.5 A#4:0.5 C5:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "whistle.wav",
+   "bpm": 88,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "whistle",
+     "step": 1,
+     "steps": "F#5:1.5 G#5:0.5 A#5:1 C#6:1 B5:1.5 A#5:0.5 G#5:2 A#5:1.5 C#6:0.5 F#6:1 D#6:1 C#6:1 G#5:1 F#5:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "ocarina.wav",
+   "bpm": 88,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "ocarina",
+     "step": 1,
+     "steps": "C#5:1.5 D#5:0.5 E5:1 G#5:1 F#5:1.5 E5:0.5 D#5:2 E5:1.5 G#5:0.5 C#6:1 A#5:1 G#5:1 D#5:1 C#5:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "didgeridoo.wav",
+   "bpm": 88,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "didgeridoo",
+     "step": 1,
+     "steps": "A1:1.5 B1:0.5 C2:1 E2:1 D2:1.5 C2:0.5 B1:2 C2:1.5 E2:0.5 A1:1 F2:1 E2:1 B1:1 A1:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "soft_lead.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "soft_lead",
+     "step": 1,
+     "steps": "C#5:0.5 D#5:0.5 F#5:1 C#5:1 A#4:1 B4:0.5 A#4:0.5 G#4:1 C#5:2 A#4:0.5 B4:0.5 C#5:1 F#5:1 D#5:1 C#5:0.5 B4:0.5 A#4:0.5 G#4:0.5 F#4:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "square_lead.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "square_lead",
+     "step": 1,
+     "steps": "G4:0.5 A4:0.5 C5:1 G4:1 E4:1 F4:0.5 E4:0.5 D4:1 G4:2 E4:0.5 F4:0.5 G4:1 C5:1 A4:1 G4:0.5 F4:0.5 E4:0.5 D4:0.5 C4:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "synth_pluck.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "synth_pluck",
+     "step": 1,
+     "steps": "F#3:1 A#3:0.5 C#4:0.5 F#4:1 C#4:1 D#4:0.5 C#4:0.5 A#3:1 G#3:0.5 A#3:0.5 F#3:1 B3:0.5 D#4:0.5 F#4:1 F4:0.5 C#4:0.5 A#3:1 G#3:0.5 A#3:0.5 G#3:0.5 F3:0.5 F#3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "theremin.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "theremin",
+     "step": 1,
+     "steps": "F#4:1 A4:0.5 C#5:0.5 F#5:1 C#5:1 D5:0.5 C#5:0.5 A4:1 G#4:0.5 A4:0.5 F#4:1 B4:0.5 D5:0.5 F#5:1 E5:0.5 C#5:0.5 A4:1 G#4:0.5 A4:0.5 G#4:0.5 E4:0.5 F#4:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "warm_pad.wav",
+   "bpm": 66,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "warm_pad",
+     "step": 1,
+     "steps": "[C3,D#3,G3]:4 [A3,C4,D#4]:4 [F3,A3,C4]:4 [G3,A#3,D4]:2 [C3,D#3,G3]:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "glass_pad.wav",
+   "bpm": 66,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "glass_pad",
+     "step": 1,
+     "steps": "[C4,D#4,G4]:4 [A4,C5,D#5]:4 [F4,A4,C5]:4 [G4,A#4,D5]:2 [C4,D#4,G4]:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "string_machine.wav",
+   "bpm": 66,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "string_machine",
+     "step": 1,
+     "steps": "[F#3,A3,C#4]:4 [D#4,F#4,A4]:4 [B3,D#4,F#4]:4 [C#4,E4,G#4]:2 [F#3,A3,C#4]:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "acid.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "acid",
+     "step": 1,
+     "steps": "C2:1 C2:0.5 G2:0.5 C3:1 G2:1 G#2:1 G#2:0.5 D#2:0.5 F2:1 G2:1 C2:1 D#2:0.5 G2:0.5 G#2:1 G2:1 F2:0.5 G2:0.5 F2:0.5 D2:0.5 C2:2",
+     "vel": 0.85,
+     "legato": 0.9
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "reese.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "reese",
+     "step": 1,
+     "steps": "F#1:1 F#1:0.5 C#2:0.5 F#2:1 C#2:1 D#2:1 D#2:0.5 A#1:0.5 B1:1 C#2:1 F#1:1 A#1:0.5 C#2:0.5 D#2:1 C#2:1 B1:0.5 C#2:0.5 B1:0.5 G#1:0.5 F#1:2",
+     "vel": 0.85,
+     "legato": 0.9
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "fm_bass.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "fm_bass",
+     "step": 1,
+     "steps": "C2:1 C2:0.5 G2:0.5 C3:1 G2:1 A2:1 A2:0.5 D#2:0.5 F2:1 G2:1 C2:1 D#2:0.5 G2:0.5 A2:1 G2:1 F2:0.5 G2:0.5 F2:0.5 D2:0.5 C2:2",
+     "vel": 0.85,
+     "legato": 0.9
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "bass808.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "bass808",
+     "step": 1,
+     "steps": "F#1:1 F#1:0.5 C#2:0.5 F#2:1 C#2:1 D#2:1 D#2:0.5 A#1:0.5 B1:1 C#2:1 F#1:1 A#1:0.5 C#2:0.5 D#2:1 C#2:1 B1:0.5 C#2:0.5 B1:0.5 G#1:0.5 F#1:2",
+     "vel": 0.85,
+     "legato": 0.9
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "sfxr_voice.wav",
+   "bpm": 132,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "sfxr_voice",
+     "step": 1,
+     "steps": "F#3:1.5 G#3:0.5 A3:1 C#4:1 B3:1.5 A3:0.5 G#3:2 A3:1.5 C#4:0.5 F#4:1 D4:1 C#4:1 G#3:1 F#3:2",
+     "vel": 0.85,
+     "legato": 0.85
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "zzfx_voice.wav",
+   "bpm": 132,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "zzfx_voice",
+     "step": 1,
+     "steps": "F#3:1 A#3:0.5 C#4:0.5 F#4:1 C#4:1 D#4:0.5 C#4:0.5 A#3:1 G#3:0.5 A#3:0.5 F#3:1 B3:0.5 D#4:0.5 F#4:1 F4:0.5 C#4:0.5 A#3:1 G#3:0.5 A#3:0.5 G#3:0.5 F3:0.5 F#3:2",
+     "vel": 0.85,
+     "legato": 0.85
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "psg.wav",
+   "bpm": 132,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "psg",
+     "step": 1,
+     "steps": "F#3:1.5 G#3:0.5 A3:1 C#4:1 B3:1.5 A3:0.5 G#3:2 A3:1.5 C#4:0.5 F#4:1 D#4:1 C#4:1 G#3:1 F#3:2",
+     "vel": 0.85,
+     "legato": 0.85
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "cristal.wav",
+   "bpm": 76,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "cristal",
+     "step": 1,
+     "steps": "F#3:1.5 G#3:0.5 A3:1 C#4:1 B3:1.5 A3:0.5 G#3:2 A3:1.5 C#4:0.5 F#4:1 D4:1 C#4:1 G#3:1 F#3:2",
+     "vel": 0.85,
+     "legato": 0.98
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "rubbed_glass.wav",
+   "bpm": 76,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "rubbed_glass",
+     "step": 1,
+     "steps": "C5:1 E5:0.5 G5:0.5 C6:1 G5:1 A5:0.5 G5:0.5 E5:1 D5:0.5 E5:0.5 C5:1 F5:0.5 A5:0.5 C6:1 B5:0.5 G5:0.5 E5:1 D5:0.5 E5:0.5 D5:0.5 B4:0.5 C5:2",
+     "vel": 0.85,
+     "legato": 0.98
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "bowed_bar.wav",
+   "bpm": 76,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "bowed_bar",
+     "step": 1,
+     "steps": "C5:0.5 D5:0.5 F5:1 C5:1 G#4:1 A#4:0.5 G#4:0.5 G4:1 C5:2 G#4:0.5 A#4:0.5 C5:1 F5:1 D5:1 C5:0.5 A#4:0.5 G#4:0.5 G4:0.5 F4:2",
+     "vel": 0.85,
+     "legato": 0.98
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "bowed_sheet.wav",
+   "bpm": 76,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "bowed_sheet",
+     "step": 1,
+     "steps": "C3:1 E3:0.5 G3:0.5 C4:1 G3:1 A3:0.5 G3:0.5 E3:1 D3:0.5 E3:0.5 C3:1 F3:0.5 A3:0.5 C4:1 B3:0.5 G3:0.5 E3:1 D3:0.5 E3:0.5 D3:0.5 B2:0.5 C3:2",
+     "vel": 0.85,
+     "legato": 0.98
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "rod_bank.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "rod_bank",
+     "step": 1,
+     "steps": "G3:1 B3:0.5 D4:0.5 G4:1 D4:1 E4:0.5 D4:0.5 B3:1 A3:0.5 B3:0.5 G3:1 C4:0.5 E4:0.5 G4:1 F#4:0.5 D4:0.5 B3:1 A3:0.5 B3:0.5 A3:0.5 F#3:0.5 G3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "whistling_blades.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "whistling_blades",
+     "step": 1,
+     "steps": "B6:1.5 C#7:0.5 D7:1 F#7:1 E7:1.5 D7:0.5 C#7:2 D7:1.5 F#7:0.5 B7:1 G#7:1 F#7:1 C#7:1 B6:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "tuning_fork.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "tuning_fork",
+     "step": 1,
+     "steps": "A#4:1 C#5:0.5 F5:0.5 A#5:1 F5:1 F#5:0.5 F5:0.5 C#5:1 C5:0.5 C#5:0.5 A#4:1 D#5:0.5 F#5:0.5 A#5:1 G#5:0.5 F5:0.5 C#5:1 C5:0.5 C#5:0.5 C5:0.5 G#4:0.5 A#4:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "coil_spring.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "coil_spring",
+     "step": 1,
+     "steps": "C3:1 D#3:0.5 G3:0.5 C4:1 G3:1 G#3:0.5 G3:0.5 D#3:1 D3:0.5 D#3:0.5 C3:1 F3:0.5 G#3:0.5 C4:1 A#3:0.5 G3:0.5 D#3:1 D3:0.5 D#3:0.5 D3:0.5 A#2:0.5 C3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "fd_string.wav",
+   "bpm": 84,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "fd_string",
+     "step": 1,
+     "steps": "D3:1 F3:0.5 A3:0.5 D4:1 A3:1 B3:0.5 A3:0.5 F3:1 E3:0.5 F3:0.5 D3:1 G3:0.5 B3:0.5 D4:1 C4:0.5 A3:0.5 F3:1 E3:0.5 F3:0.5 E3:0.5 C3:0.5 D3:2",
+     "vel": 0.85,
+     "legato": 0.98
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "fd_piano.wav",
+   "bpm": 100,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "fd_piano",
+     "step": 1,
+     "steps": "E3:1 G#3:0.5 B3:0.5 E4:1 B3:1 C#4:0.5 B3:0.5 G#3:1 F#3:0.5 G#3:0.5 E3:1 A3:0.5 C#4:0.5 E4:1 D#4:0.5 B3:0.5 G#3:1 F#3:0.5 G#3:0.5 F#3:0.5 D#3:0.5 E3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "prepared_piano.wav",
+   "bpm": 100,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "prepared_piano",
+     "step": 1,
+     "steps": "F#3:1 A3:0.5 C#4:0.5 F#4:1 C#4:1 D4:0.5 C#4:0.5 A3:1 G#3:0.5 A3:0.5 F#3:1 B3:0.5 D4:0.5 F#4:1 E4:0.5 C#4:0.5 A3:1 G#3:0.5 A3:0.5 G#3:0.5 E3:0.5 F#3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "slack_string.wav",
+   "bpm": 84,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "slack_string",
+     "step": 1,
+     "steps": "F3:0.5 F#3:0.5 A#3:1 F3:1 C#3:1 D#3:0.5 C#3:0.5 C3:1 F3:2 C#3:0.5 D#3:0.5 F3:1 A#3:1 F#3:1 F3:0.5 D#3:0.5 C#3:0.5 C3:0.5 A#2:2",
+     "vel": 0.85,
+     "legato": 0.98
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "fd_bar.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "fd_bar",
+     "step": 1,
+     "steps": "C#5:0.5 D5:0.5 F#5:1 C#5:1 A4:1 B4:0.5 A4:0.5 G#4:1 C#5:2 A4:0.5 B4:0.5 C#5:1 F#5:1 D5:1 C#5:0.5 B4:0.5 A4:0.5 G#4:0.5 F#4:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "bowed_string_fd.wav",
+   "bpm": 84,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "bowed_string_fd",
+     "step": 1,
+     "steps": "A#3:1.5 C4:0.5 C#4:1 F4:1 D#4:1.5 C#4:0.5 C4:2 C#4:1.5 F4:0.5 A#4:1 F#4:1 F4:1 C4:1 A#3:2",
+     "vel": 0.85,
+     "legato": 0.98
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "reed_tube.wav",
+   "bpm": 88,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "reed_tube",
+     "step": 1,
+     "steps": "A#3:1.5 C4:0.5 C#4:1 F4:1 D#4:1.5 C#4:0.5 C4:2 C#4:1.5 F4:0.5 A#4:1 G4:1 F4:1 C4:1 A#3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "reed_cone.wav",
+   "bpm": 88,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "reed_cone",
+     "step": 1,
+     "steps": "C#4:1 F4:0.5 G#4:0.5 C#5:1 G#4:1 A#4:0.5 G#4:0.5 F4:1 D#4:0.5 F4:0.5 C#4:1 F#4:0.5 A#4:0.5 C#5:1 C5:0.5 G#4:0.5 F4:1 D#4:0.5 F4:0.5 D#4:0.5 C4:0.5 C#4:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "vowel_tube.wav",
+   "bpm": 72,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "vowel_tube",
+     "step": 1,
+     "steps": "D3:1.5 E3:0.5 F3:1 A3:1 G3:1.5 F3:0.5 E3:2 F3:1.5 A3:0.5 D4:1 A#3:1 A3:1 E3:1 D3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "piston_pipe.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "piston_pipe",
+     "step": 1,
+     "steps": "F#2:1 A2:0.5 C#3:0.5 F#3:1 C#3:1 D3:0.5 C#3:0.5 A2:1 G#2:0.5 A2:0.5 F#2:1 B2:0.5 D3:0.5 F#3:1 E3:0.5 C#3:0.5 A2:1 G#2:0.5 A2:0.5 G#2:0.5 E2:0.5 F#2:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "pvc_pipe.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "pvc_pipe",
+     "step": 1,
+     "steps": "G3:0.5 A3:0.5 C4:1 G3:1 E3:1 F3:0.5 E3:0.5 D3:1 G3:2 E3:0.5 F3:0.5 G3:1 C4:1 A3:1 G3:0.5 F3:0.5 E3:0.5 D3:0.5 C3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "bottle.wav",
+   "bpm": 88,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "bottle",
+     "step": 1,
+     "steps": "G4:0.5 G#4:0.5 C5:1 G4:1 D#4:1 F4:0.5 D#4:0.5 D4:1 G4:2 D#4:0.5 F4:0.5 G4:1 C5:1 G#4:1 G4:0.5 F4:0.5 D#4:0.5 D4:0.5 C4:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "feedback_guitar.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "feedback_guitar",
+     "step": 1,
+     "steps": "E3:1.5 F#3:0.5 G3:1 B3:1 A3:1.5 G3:0.5 F#3:2 G3:1.5 B3:0.5 E4:1 C4:1 B3:1 F#3:1 E3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "whistling.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "whistling",
+     "step": 1,
+     "steps": "F#5:1 A5:0.5 C#6:0.5 F#6:1 C#6:1 D6:0.5 C#6:0.5 A5:1 G#5:0.5 A5:0.5 F#5:1 B5:0.5 D6:0.5 F#6:1 E6:0.5 C#6:0.5 A5:1 G#5:0.5 A5:0.5 G#5:0.5 E5:0.5 F#5:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "voice.wav",
+   "bpm": 72,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "voice",
+     "step": 1,
+     "steps": "C#4:0.5 D#4:0.5 F#4:1 C#4:1 A3:1 B3:0.5 A3:0.5 G#3:1 C#4:2 A3:0.5 B3:0.5 C#4:1 F#4:1 D#4:1 C#4:0.5 B3:0.5 A3:0.5 G#3:0.5 F#3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "vocal_choir.wav",
+   "bpm": 72,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "vocal_choir",
+     "step": 1,
+     "steps": "F#3:1.5 G#3:0.5 A3:1 C#4:1 B3:1.5 A3:0.5 G#3:2 A3:1.5 C#4:0.5 F#4:1 D#4:1 C#4:1 G#3:1 F#3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "hum.wav",
+   "bpm": 72,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "hum",
+     "step": 1,
+     "steps": "C3:1 D#3:0.5 G3:0.5 C4:1 G3:1 G#3:0.5 G3:0.5 D#3:1 D3:0.5 D#3:0.5 C3:1 F3:0.5 G#3:0.5 C4:1 A#3:0.5 G3:0.5 D#3:1 D3:0.5 D#3:0.5 D3:0.5 A#2:0.5 C3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "throat_singing.wav",
+   "bpm": 72,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "throat_singing",
+     "step": 1,
+     "steps": "C2:1.5 D2:0.5 E2:1 G2:1 F2:1.5 E2:0.5 D2:2 E2:1.5 G2:0.5 C3:1 A2:1 G2:1 D2:1 C2:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "falsetto.wav",
+   "bpm": 72,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "falsetto",
+     "step": 1,
+     "steps": "G4:0.5 A4:0.5 C5:1 G4:1 E4:1 F4:0.5 E4:0.5 D4:1 G4:2 E4:0.5 F4:0.5 G4:1 C5:1 A4:1 G4:0.5 F4:0.5 E4:0.5 D4:0.5 C4:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "boys_choir.wav",
+   "bpm": 72,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "boys_choir",
+     "step": 1,
+     "steps": "E4:1.5 F#4:0.5 G4:1 B4:1 A4:1.5 G4:0.5 F#4:2 G4:1.5 B4:0.5 E5:1 C5:1 B4:1 F#4:1 E4:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "chant.wav",
+   "bpm": 72,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "chant",
+     "step": 1,
+     "steps": "C3:1 D#3:0.5 G3:0.5 C4:1 G3:1 G#3:0.5 G3:0.5 D#3:1 D3:0.5 D#3:0.5 C3:1 F3:0.5 G#3:0.5 C4:1 A#3:0.5 G3:0.5 D#3:1 D3:0.5 D#3:0.5 D3:0.5 A#2:0.5 C3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "church_bell.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "church_bell",
+     "step": 1,
+     "steps": "C#4:0.5 D#4:0.5 F#4:1 C#4:1 A3:1 B3:0.5 A3:0.5 G#3:1 C#4:2 A3:0.5 B3:0.5 C#4:1 F#4:1 D#4:1 C#4:0.5 B3:0.5 A3:0.5 G#3:0.5 F#3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "handbell.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "handbell",
+     "step": 1,
+     "steps": "G#5:0.5 A5:0.5 C#6:1 G#5:1 E5:1 F#5:0.5 E5:0.5 D#5:1 G#5:2 E5:0.5 F#5:0.5 G#5:1 C#6:1 A5:1 G#5:0.5 F#5:0.5 E5:0.5 D#5:0.5 C#5:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "china_bell.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "china_bell",
+     "step": 1,
+     "steps": "F#3:1 A3:0.5 C#4:0.5 F#4:1 C#4:1 D4:0.5 C#4:0.5 A3:1 G#3:0.5 A3:0.5 F#3:1 B3:0.5 D4:0.5 F#4:1 E4:0.5 C#4:0.5 A3:1 G#3:0.5 A3:0.5 G#3:0.5 E3:0.5 F#3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "glass_harmonica.wav",
+   "bpm": 76,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "glass_harmonica",
+     "step": 1,
+     "steps": "A#4:1.5 C5:0.5 C#5:1 F5:1 D#5:1.5 C#5:0.5 C5:2 C#5:1.5 F5:0.5 A#5:1 G5:1 F5:1 C5:1 A#4:2",
+     "vel": 0.85,
+     "legato": 0.98
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "bowed_bowl.wav",
+   "bpm": 76,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "bowed_bowl",
+     "step": 1,
+     "steps": "F#3:1 A3:0.5 C#4:0.5 F#4:1 C#4:1 D4:0.5 C#4:0.5 A3:1 G#3:0.5 A3:0.5 F#3:1 B3:0.5 D4:0.5 F#4:1 E4:0.5 C#4:0.5 A3:1 G#3:0.5 A3:0.5 G#3:0.5 E3:0.5 F#3:2",
+     "vel": 0.85,
+     "legato": 0.98
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "hurdy_gurdy.wav",
+   "bpm": 76,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "hurdy_gurdy",
+     "step": 1,
+     "steps": "D4:0.5 E4:0.5 G4:1 D4:1 A#3:1 C4:0.5 A#3:0.5 A3:1 D4:2 A#3:0.5 C4:0.5 D4:1 G4:1 E4:1 D4:0.5 C4:0.5 A#3:0.5 A3:0.5 G3:2",
+     "vel": 0.85,
+     "legato": 0.98
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "wind_chime.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "wind_chime",
+     "step": 1,
+     "steps": "C#6:0.5 D#6:0.5 F#6:1 C#6:1 A5:1 B5:0.5 A5:0.5 G#5:1 C#6:2 A5:0.5 B5:0.5 C#6:1 F#6:1 D#6:1 C#6:0.5 B5:0.5 A5:0.5 G#5:0.5 F#5:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "ks_string.wav",
+   "bpm": 96,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "ks_string",
+     "step": 1,
+     "steps": "F4:0.5 G4:0.5 A#4:1 F4:1 C#4:1 D#4:0.5 C#4:0.5 C4:1 F4:2 C#4:0.5 D#4:0.5 F4:1 A#4:1 G4:1 F4:0.5 D#4:0.5 C#4:0.5 C4:0.5 A#3:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "viola.wav",
+   "bpm": 76,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "viola",
+     "step": 1,
+     "steps": "A4:0.5 B4:0.5 D5:1 A4:1 F4:1 G4:0.5 F4:0.5 E4:1 A4:2 F4:0.5 G4:0.5 A4:1 D5:1 B4:1 A4:0.5 G4:0.5 F4:0.5 E4:0.5 D4:2",
+     "vel": 0.85,
+     "legato": 0.98
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "bassoon.wav",
+   "bpm": 88,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "bassoon",
+     "step": 1,
+     "steps": "G#3:0.5 A3:0.5 C#4:1 G#3:1 E3:1 F#3:0.5 E3:0.5 D#3:1 G#3:2 E3:0.5 F#3:0.5 G#3:1 C#4:1 A3:1 G#3:0.5 F#3:0.5 E3:0.5 D#3:0.5 C#3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "cor_anglais.wav",
+   "bpm": 88,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "cor_anglais",
+     "step": 1,
+     "steps": "C4:1 E4:0.5 G4:0.5 C5:1 G4:1 A4:0.5 G4:0.5 E4:1 D4:0.5 E4:0.5 C4:1 F4:0.5 A4:0.5 C5:1 B4:0.5 G4:0.5 E4:1 D4:0.5 E4:0.5 D4:0.5 B3:0.5 C4:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "bass_clarinet.wav",
+   "bpm": 88,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "bass_clarinet",
+     "step": 1,
+     "steps": "E3:1.5 F#3:0.5 G3:1 B3:1 A3:1.5 G3:0.5 F#3:2 G3:1.5 B3:0.5 E4:1 C4:1 B3:1 F#3:1 E3:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "piccolo.wav",
+   "bpm": 88,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "piccolo",
+     "step": 1,
+     "steps": "G#6:0.5 A#6:0.5 C#7:1 G#6:1 E6:1 F#6:0.5 E6:0.5 D#6:1 G#6:2 E6:0.5 F#6:0.5 G#6:1 C#7:1 A#6:1 G#6:0.5 F#6:0.5 E6:0.5 D#6:0.5 C#6:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "recorder.wav",
+   "bpm": 88,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "recorder",
+     "step": 1,
+     "steps": "G#5:0.5 A#5:0.5 C#6:1 G#5:1 F5:1 F#5:0.5 F5:0.5 D#5:1 G#5:2 F5:0.5 F#5:0.5 G#5:1 C#6:1 A#5:1 G#5:0.5 F#5:0.5 F5:0.5 D#5:0.5 C#5:2",
+     "vel": 0.85,
+     "legato": 0.95
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  },
+  {
+   "out": "hand_chime.wav",
+   "bpm": 104,
+   "tail": 2.0,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "seq",
+     "inst": "hand_chime",
+     "step": 1,
+     "steps": "F5:0.5 G5:0.5 A#5:1 F5:1 C#5:1 D#5:0.5 C#5:0.5 C5:1 F5:2 C#5:0.5 D#5:0.5 F5:1 A#5:1 G5:1 F5:0.5 D#5:0.5 C#5:0.5 C5:0.5 A#4:2",
+     "vel": 0.85,
+     "legato": 1.0
+    }
+   ],
+   "fx": [
+    {
+     "type": "reverb",
+     "mix": 0.14,
+     "size": 0.5
+    }
+   ]
+  }
+ ]
+}

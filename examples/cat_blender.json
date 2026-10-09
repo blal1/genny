@@ -1,0 +1,21 @@
+{
+  "out": "sounds/demo/cat_in_blender.wav",
+  "layers": [
+    {"type": "seq", "inst": "flute", "steps": "A5:0.25 C6:0.35@0.8", "params": {"breath": 0.3},
+     "fx": [{"type": "vibrato", "rate": 7, "depth": 0.5}, {"type": "ringmod", "freq": 30, "mix": 0.3}], "gain": 0.9},
+    {"type": "sfx", "kind": "sweep_down", "params": {"start": 1400, "end": 700, "dur": 0.3, "wave": "saw"}, "at": 0.45,
+     "fx": [{"type": "lowpass", "cutoff": 2500}], "gain": 0.4},
+    {"type": "sfx", "kind": "whoosh", "params": {"dur": 0.35, "direction": "down"}, "at": 0.7, "gain": 0.6},
+    {"type": "sfx", "kind": "punch", "at": 1.0, "gain": 0.8},
+    {"type": "sfx", "kind": "engine", "params": {"rpm": 90, "dur": 1.6}, "at": 1.05,
+     "fx": [{"type": "sweep", "kind": "lowpass", "start": 400, "end": 5000, "q": 1.5}, {"type": "distortion", "drive": 5, "tone": 5000}, {"type": "fade", "in": 0.1}], "gain": 0.7},
+    {"type": "seq", "inst": "flute", "steps": "C6:0.1 -:0.05 E6:0.08 -:0.05 G6:0.06", "at": 1.2, "params": {"breath": 0.4},
+     "fx": [{"type": "vibrato", "rate": 12, "depth": 0.8}, {"type": "stutter", "start": 0.0, "length": 0.03, "repeats": 6}, {"type": "pitch", "semitones": 5}], "gain": 0.6},
+    {"type": "sfx", "kind": "glitch", "params": {"dur": 0.3}, "at": 1.8, "gain": 0.5},
+    {"type": "sfx", "kind": "sweep_down", "params": {"start": 600, "end": 60, "dur": 0.5, "wave": "saw"}, "at": 2.5,
+     "fx": [{"type": "distortion", "drive": 3}], "gain": 0.5},
+    {"type": "sfx", "kind": "pop", "params": {"freq": 300}, "at": 3.0}
+  ],
+  "fx": [{"type": "compressor", "threshold": -14, "ratio": 3}, {"type": "reverb", "mix": 0.15, "size": 0.4}],
+  "normalize": -1.0
+}

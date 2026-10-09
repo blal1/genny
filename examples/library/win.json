@@ -1,0 +1,617 @@
+{
+  "out_dir": "sounds/win",
+  "sounds": [
+    {
+      "out": "fanfare_brass.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "brass",
+          "steps": "C4:0.12 E4:0.12 G4:0.12 C5:0.5"
+        },
+        {
+          "type": "synth",
+          "inst": "brass",
+          "notes": "C5:maj",
+          "dur": 0.5,
+          "at": 0.36,
+          "gain": 0.6
+        },
+        {
+          "type": "drum",
+          "kind": "crash",
+          "gain": 0.4
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "fanfare_brass_long.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "brass",
+          "steps": "G4:0.15 G4:0.15 G4:0.15 C5:0.3 E5:0.3 G5:0.7"
+        },
+        {
+          "type": "drum",
+          "kind": "taiko",
+          "gain": 0.6
+        },
+        {
+          "type": "drum",
+          "kind": "crash",
+          "at": 0.9,
+          "gain": 0.4
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "chip_victory.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "chip",
+          "steps": "C5:0.08 E5:0.08 G5:0.08 C6:0.08 E6:0.08 G6:0.08 C7:0.45",
+          "params": {
+            "width": 0.25
+          },
+          "legato": 0.9
+        },
+        {
+          "type": "seq",
+          "inst": "chiptri",
+          "steps": "C3:0.25 G3:0.25 C4:0.5",
+          "gain": 0.7
+        }
+      ]
+    },
+    {
+      "out": "chip_victory_bitcrushed.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "chip",
+          "steps": "E5:0.1 G5:0.1 C6:0.1 E6:0.1 G6:0.4",
+          "params": {
+            "width": 0.5
+          }
+        },
+        {
+          "type": "drum",
+          "kind": "kick",
+          "gain": 0.5
+        }
+      ],
+      "fx": [
+        {
+          "type": "bitcrush",
+          "bits": 7,
+          "rate": 16000
+        }
+      ]
+    },
+    {
+      "out": "bell_triumph.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "bell",
+          "steps": "C5:0.1 E5:0.1 G5:0.1 C6:0.7",
+          "params": {
+            "decay": 2.0
+          }
+        },
+        {
+          "type": "synth",
+          "inst": "pad",
+          "notes": "C4:maj",
+          "dur": 1.0,
+          "gain": 0.4
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.35,
+          "size": 0.85,
+          "damp": 0.5
+        }
+      ]
+    },
+    {
+      "out": "glass_win_sparkle.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "glass",
+          "steps": "G5:0.07 B5:0.07 D6:0.07 G6:0.07 B6:0.07 D7:0.4"
+        },
+        {
+          "type": "sfx",
+          "kind": "magic",
+          "params": {
+            "dur": 0.7,
+            "density": 10
+          },
+          "gain": 0.4,
+          "at": 0.2
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "harp_win_gliss.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "harp",
+          "steps": "C4:0.05 E4:0.05 G4:0.05 C5:0.05 E5:0.05 G5:0.05 C6:0.05 E6:0.05 G6:0.6"
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "piano_win.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "piano",
+          "steps": "C5:0.15 E5:0.15 G5:0.15 C6:maj:0.8",
+          "vel": 0.9
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "marimba_win.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "marimba",
+          "steps": "C5:0.08 E5:0.08 G5:0.08 C6:0.08 G5:0.08 C6:0.4"
+        },
+        {
+          "type": "drum",
+          "kind": "shaker",
+          "gain": 0.4,
+          "repeat": 4,
+          "every": 0.12
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "orchestral_hit.wav",
+      "layers": [
+        {
+          "type": "synth",
+          "inst": "strings",
+          "notes": "C4:maj",
+          "dur": 0.6,
+          "params": {
+            "attack": 0.01
+          }
+        },
+        {
+          "type": "synth",
+          "inst": "brass",
+          "notes": "C5:maj",
+          "dur": 0.6,
+          "gain": 0.6
+        },
+        {
+          "type": "drum",
+          "kind": "taiko",
+          "gain": 0.8
+        },
+        {
+          "type": "drum",
+          "kind": "crash",
+          "gain": 0.5
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.35,
+          "size": 0.85,
+          "damp": 0.5
+        }
+      ]
+    },
+    {
+      "out": "lead_synth_win.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "lead",
+          "steps": "E5:0.1 G5:0.1 B5:0.1 E6:0.5",
+          "params": {
+            "cutoff": 7000
+          }
+        },
+        {
+          "type": "seq",
+          "inst": "bass",
+          "steps": "E2:0.4 E2:0.4",
+          "gain": 0.7
+        },
+        {
+          "type": "drum",
+          "kind": "kick",
+          "gain": 0.6,
+          "repeat": 2,
+          "every": 0.4
+        }
+      ],
+      "fx": [
+        {
+          "type": "delay",
+          "time": 0.2,
+          "feedback": 0.3,
+          "mix": 0.2
+        },
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "organ_win.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "organ",
+          "steps": "G4:maj:0.25 C5:maj:0.25 G4:maj:0.25 C5:maj:0.8"
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "steel_drum_win.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "steel_drum",
+          "steps": "C5:0.1 E5:0.1 G5:0.1 C6:0.1 E6:0.5"
+        },
+        {
+          "type": "drum",
+          "kind": "shaker",
+          "gain": 0.3,
+          "repeat": 6,
+          "every": 0.1
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "choir_glory.wav",
+      "layers": [
+        {
+          "type": "synth",
+          "inst": "choir",
+          "notes": "C4:maj",
+          "dur": 1.6,
+          "params": {
+            "vowel": "a"
+          }
+        },
+        {
+          "type": "seq",
+          "inst": "bell",
+          "steps": "C6:0.2 G6:0.6",
+          "gain": 0.5,
+          "at": 0.4
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.35,
+          "size": 0.85,
+          "damp": 0.5
+        }
+      ]
+    },
+    {
+      "out": "music_box_win.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "music_box",
+          "steps": "C6:0.1 E6:0.1 G6:0.1 C7:0.1 E7:0.5"
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "coin_shower.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "coin",
+          "params": {
+            "freq": "B5",
+            "up": 5
+          },
+          "repeat": 5,
+          "every": 0.09
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "powerup_win.wav",
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "powerup",
+          "params": {
+            "freq": "C5",
+            "steps": 8,
+            "step": 2,
+            "rate": 0.06
+          }
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "kalimba_win.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "kalimba",
+          "steps": "G4:0.1 B4:0.1 D5:0.1 G5:0.1 B5:0.5"
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "vibraphone_win.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "vibraphone",
+          "steps": "F5:0.12 A5:0.12 C6:0.12 F6:0.6"
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "pluck_win_delay.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "pluck",
+          "steps": "D5:0.1 F#5:0.1 A5:0.1 D6:0.5"
+        }
+      ],
+      "fx": [
+        {
+          "type": "delay",
+          "time": 0.18,
+          "feedback": 0.4,
+          "mix": 0.35,
+          "pingpong": true
+        },
+        {
+          "type": "reverb",
+          "mix": 0.18,
+          "size": 0.35
+        }
+      ]
+    },
+    {
+      "out": "epiano_win_soft.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "epiano",
+          "steps": "A4:0.15 C#5:0.15 E5:0.15 A5:0.7",
+          "vel": 0.7
+        }
+      ],
+      "fx": [
+        {
+          "type": "chorus",
+          "mix": 0.4
+        },
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "flute_win.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "flute",
+          "steps": "G5:0.12 A5:0.12 B5:0.12 D6:0.6"
+        },
+        {
+          "type": "synth",
+          "inst": "strings",
+          "notes": "G4:maj",
+          "dur": 0.9,
+          "gain": 0.5
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "drum_roll_finish.wav",
+      "layers": [
+        {
+          "type": "pattern",
+          "kind": "snare",
+          "steps": "xxxxxxxxxxxxxxxx",
+          "step": 0.045,
+          "vel": 0.7
+        },
+        {
+          "type": "drum",
+          "kind": "crash",
+          "at": 0.75,
+          "gain": 0.7
+        },
+        {
+          "type": "synth",
+          "inst": "brass",
+          "notes": "C5:maj",
+          "dur": 0.6,
+          "at": 0.75,
+          "gain": 0.7
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "pwm_win_lush.wav",
+      "layers": [
+        {
+          "type": "seq",
+          "inst": "pwm",
+          "steps": "C5:0.15 E5:0.15 G5:0.15 C6:0.7"
+        }
+      ],
+      "fx": [
+        {
+          "type": "chorus",
+          "mix": 0.5
+        },
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    },
+    {
+      "out": "guitar_win_strum.wav",
+      "layers": [
+        {
+          "type": "synth",
+          "inst": "guitar",
+          "notes": "D3 A3 D4 F#4 A4 D5",
+          "dur": 1.0,
+          "strum": 0.025
+        },
+        {
+          "type": "synth",
+          "inst": "guitar",
+          "notes": "D3 A3 D4 F#4 A4 D5",
+          "dur": 1.2,
+          "at": 0.3,
+          "strum": 0.025,
+          "vel": 0.8
+        }
+      ],
+      "fx": [
+        {
+          "type": "reverb",
+          "mix": 0.28,
+          "size": 0.6
+        }
+      ]
+    }
+  ]
+}

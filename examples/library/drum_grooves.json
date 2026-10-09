@@ -1,0 +1,1417 @@
+{
+ "out_dir": "sounds/drum_grooves",
+ "sounds": [
+  {
+   "out": "kick.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x--x--x-x--x-x--",
+     "bars": 2,
+     "gain": 0.9
+    }
+   ]
+  },
+  {
+   "out": "kick808.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "kick808",
+     "steps": "x---x---x---x-x-",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "snare.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "snare",
+     "steps": "x--x--x-x--x-x--",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "clap.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "clap",
+     "steps": "x-x-x-xxx-x-x-xX",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "hihat.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "x-x-x-xxx-x-x-xX",
+     "bars": 2,
+     "gain": 0.9
+    }
+   ]
+  },
+  {
+   "out": "openhat.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "openhat",
+     "steps": "x---x---x---x-x-",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "tom.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "tom",
+     "steps": "x---x---x---x-x-",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "rim.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "rim",
+     "steps": "x-x-x-xxx-x-x-xX",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "cowbell.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "cowbell",
+     "steps": "x---x---x---x-x-",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "crash.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "crash",
+     "steps": "x-x-x-xxx-x-x-xX",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "ride.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "ride",
+     "steps": "x---x---x---x-x-",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "shaker.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "shaker",
+     "steps": "x--x--x-x--x-x--",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "tambourine.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "tambourine",
+     "steps": "x-x-x-xxx-x-x-xX",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "woodblock.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "woodblock",
+     "steps": "x-x-x-xxx-x-x-xX",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "taiko.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "taiko",
+     "steps": "x--x--x-x--x-x--",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "zap_kick.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "zap_kick",
+     "steps": "x---x---x---x-x-",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "conga.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "conga",
+     "steps": "x--x--x-x--x-x--",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "bongo.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "bongo",
+     "steps": "x---x---x---x-x-",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "djembe.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "djembe",
+     "steps": "x--x--x-x--x-x--",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "tabla.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "tabla",
+     "steps": "x---x---x---x-x-",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "cajon.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "cajon",
+     "steps": "x--x--x-x--x-x--",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "timbale.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "timbale",
+     "steps": "x---x---x---x-x-",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "clave.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "clave",
+     "steps": "x-x-x-xxx-x-x-xX",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "guiro.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "guiro",
+     "steps": "x--x--x-x--x-x--",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "triangle.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "triangle",
+     "steps": "x--x--x-x--x-x--",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "gong.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "gong",
+     "steps": "x--x--x-x--x-x--",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "snap.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "snap",
+     "steps": "x---x---x---x-x-",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "brush.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "brush",
+     "steps": "x--x--x-x--x-x--",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "snare808.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "snare808",
+     "steps": "x--x--x-x--x-x--",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "sleigh.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "sleigh",
+     "steps": "x---x---x---x-x-",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "fd_drum.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "fd_drum",
+     "steps": "x-x-x-xxx-x-x-xX",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "plate_crash.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "plate_crash",
+     "steps": "x-x-x-xxx-x-x-xX",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "plate_ride.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "plate_ride",
+     "steps": "x---x---x---x-x-",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "plate_china.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "plate_china",
+     "steps": "x-x-x-xxx-x-x-xX",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "plate_gong.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "plate_gong",
+     "steps": "x---x---x---x-x-",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "tam_tam.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "tam_tam",
+     "steps": "x---x---x---x-x-",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "thunder_sheet.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "thunder_sheet",
+     "steps": "x--x--x-x--x-x--",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "cabasa.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "cabasa",
+     "steps": "x--x--x-x--x-x--",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "sekere.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "sekere",
+     "steps": "x-x-x-xxx-x-x-xX",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "maraca.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "maraca",
+     "steps": "x-x-x-xxx-x-x-xX",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "bamboo_chimes.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "bamboo_chimes",
+     "steps": "x---x---x---x-x-",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "sandpaper.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "sandpaper",
+     "steps": "x--x--x-x--x-x--",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "sleigh_bells.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "sleigh_bells",
+     "steps": "x---x---x---x-x-",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "agogo.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "agogo",
+     "steps": "x---x---x---x-x-",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "anvil.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "anvil",
+     "steps": "x-x-x-xxx-x-x-xX",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "brake_drum.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "brake_drum",
+     "steps": "x--x--x-x--x-x--",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "wind_chimes.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "wind_chimes",
+     "steps": "x---x---x---x-x-",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  },
+  {
+   "out": "ks_drum.wav",
+   "bpm": 100,
+   "beats": 8,
+   "tail": 2.5,
+   "normalize": -3.0,
+   "layers": [
+    {
+     "type": "pattern",
+     "kind": "ks_drum",
+     "steps": "x---x---x---x-x-",
+     "bars": 2,
+     "gain": 0.9
+    },
+    {
+     "type": "pattern",
+     "kind": "kick",
+     "steps": "x-------x-------",
+     "at": 4,
+     "gain": 0.6
+    },
+    {
+     "type": "pattern",
+     "kind": "hihat",
+     "steps": "--x---x---x---x-",
+     "at": 4,
+     "gain": 0.2
+    }
+   ]
+  }
+ ]
+}

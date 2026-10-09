@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+*.nbi
+*.nbc
+.pytest_cache/
+sounds/
+dist/
+build/
+*.egg-info/
