@@ -189,6 +189,15 @@ def cmd_info(args):
         print(json.dumps(out, indent=2))
 
 
+def cmd_identify(args):
+    from .identify import identify_machine
+    out = []
+    for f in args.files:
+        y, sr = read_wav(f)
+        out.append({"file": str(f), **identify_machine(y, sr, rpm=args.rpm)})
+    print(json.dumps(out, indent=2))
+
+
 def cmd_play(args):
     import platform
     import shutil
@@ -293,6 +302,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("files", nargs="+")
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_info)
+
+    s = sub.add_parser("identify", help="name the machine in a steady recording (transformer, gearbox, bearing fault, engine) and the sfx params that reproduce it")
+    s.add_argument("files", nargs="+")
+    s.add_argument("--rpm", type=float, default=None, help="shaft speed, if known")
+    s.set_defaults(fn=cmd_identify)
 
     s = sub.add_parser("play", help="play wav files through the system player")
     s.add_argument("files", nargs="+")

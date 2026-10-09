@@ -5,7 +5,7 @@ description: Generate game sounds and music as .wav files with the genny CLI fro
 
 # genny — make sounds from a one-line request
 
-`genny` synthesizes sounds and music offline (129 instruments, 48 drums, 226 sound effects from physical models, sung and spoken voice, 89 effects, generated music) into WAV files from JSON specs. You are the sound designer: turn the request into specs, render them, report the files. Do not ask clarifying questions; make reasonable choices and say what you chose.
+`genny` synthesizes sounds and music offline (129 instruments, 48 drums, 234 sound effects from physical models, sung and spoken voice, 96 effects, generated music) into WAV files from JSON specs. You are the sound designer: turn the request into specs, render them, report the files. Do not ask clarifying questions; make reasonable choices and say what you chose.
 
 ## 0. Check the tool
 

@@ -7,8 +7,8 @@ Use these names in JSON specs (`"inst"`, `"kind"`, fx `"type"`, layer `"type"`) 
 |---|---|
 | Instruments | 129 |
 | Drums | 48 |
-| Sound effects | 226 |
-| Effects | 89 |
+| Sound effects | 234 |
+| Effects | 96 |
 | Extra layer types | 13 |
 
 ## Instruments (129)
@@ -1650,11 +1650,11 @@ Electronic laser-kick hybrid.  *(module `drums`)*
 |---|---|---|
 | `decay` | `0.3` | s |
 
-## Sound effects (226)
+## Sound effects (234)
 
 Usage: `{"type": "sfx", "kind": "<name>", "params": {...}}`
 
-Index by module: **contact**: `roll`, `scrape`, `impact`, `bounce`, `drop`, `smash`, `crumple`, `avalanche`, `rumble`, `modal_engine`; **creatures**: `heartbeat`, `roar`, `growl`, `bark`, `meow`, `purr`, `moo`, `howl`, `monster`, `animal`, `cricket`, `cicada`, `fly`, `mosquito`, `bee`, `night_insects`, `wings`, `birdsong`, `bird_call`, `dawn_chorus`, `frog`, `rattlesnake`, `hiss`, `breath`, `grunt`, `cough`, `sneeze`, `snore`, `gulp`, `eat`, `handclap`, `applause`, `crowd_murmur`, `whistle_human`, `footsteps`; **dsp**: `noise_bed`; **fdstring**: `twang`; **foley**: `hit`, `clang`, `clink`, `thud`, `knock`, `shake`, `chain`, `keys`, `cloth`, `creak`, `zipper`, `velcro`, `paper`, `coin_spin`, `dice`, `cork_pop`, `boing`, `ratchet`, `drawer`, `book_drop`, `gunshot`, `reload`, `casing`, `sword`, `clash`, `stab`, `slash`, `bow_shot`, `whip`, `shield_bash`, `clock`, `switch`, `button`, `keyboard_typing`, `mouse_click`, `camera_shutter`, `servo`, `printer`, `drill`, `saw`, `hammering`, `ratchet_wrench`, `piston`, `steam_engine`, `train`, `sonar`, `dtmf`, `phone_tone`, `phone_bell`, `siren_wail`, `car_horn`, `bike_bell`, `buzzer`, `shepard`, `transporter`, `robot_babble`, `red_alert`, `dark_drone`, `force_field`, `teleport`, `energy_blade`, `warp`, `charge_up`, `scanner`; **friction**: `stick_slip`, `squeak`, `brake_squeal`, `rub`; **klang**: `toy_boat`, `klang_car`, `harrier`, `bicycle`, `klang_rain`, `ui_tick`, `ui_chime`, `damage`, `sniff`, `strain`, `weight_shift`, `handle`, `tide`, `distant_bell`; **matter**: `fire`, `pour`, `drip`, `drops`, `splash`, `babble`, `bubbles`, `boil`, `sizzle`, `fizz`, `gurgle`, `drain`, `surf`, `cave_drips`, `waterfall`, `underwater_ambience`, `steam`, `air_leak`, `spray`, `kettle`, `balloon`, `gust`, `flame`, `match`, `spark`, `arc`, `mains_hum`, `tesla`, `neon`, `lightning`, `ice_crack`, `ice_cubes`, `freeze`; **pinball**: `solenoid`, `knocker`, `steel_ball`, `ball_roll`, `chirp`, `flipper`, `pop_bumper`, `slingshot`, `spinner`, `spring`; **plates**: `metal_plate`, `glass_pane`, `wood_panel`, `plate_bow`; **retro**: `sfxr`, `zzfx`; **sfx**: `beep`, `blip`, `click`, `pop`, `coin`, `powerup`, `powerdown`, `laser`, `zap`, `punch`, `explosion`, `jump`, `whoosh`, `swoosh`, `alarm`, `siren`, `error`, `success`, `proximity`, `radar`, `riser`, `sweep_up`, `sweep_down`, `bubble`, `glitch`, `static`, `wind`, `thunder`, `footstep`, `door`, `engine`, `magic`, `tone`, `noise`, `typewriter`, `countdown`, `vinyl`, `rain`, `stream`, `fan`, `propeller`, `jet_engine`, `helicopter`, `shatter`, `electric_motor`, `gears`; **tubes**: `pipe_blow`; **vehicle**: `car_engine`
+Index by module: **contact**: `roll`, `scrape`, `impact`, `bounce`, `drop`, `smash`, `crumple`, `avalanche`, `rumble`, `modal_engine`; **creatures**: `heartbeat`, `roar`, `growl`, `bark`, `meow`, `purr`, `moo`, `howl`, `monster`, `animal`, `cricket`, `cicada`, `fly`, `mosquito`, `bee`, `night_insects`, `wings`, `birdsong`, `bird_call`, `dawn_chorus`, `frog`, `rattlesnake`, `hiss`, `breath`, `grunt`, `cough`, `sneeze`, `snore`, `gulp`, `eat`, `handclap`, `applause`, `crowd_murmur`, `whistle_human`, `footsteps`; **cyber**: `transformer`, `gearbox`, `bearing`, `pipe_engine`, `turbo`, `tyre_squeal`, `pass_by`, `cyber_ui`; **dsp**: `noise_bed`; **fdstring**: `twang`; **foley**: `hit`, `clang`, `clink`, `thud`, `knock`, `shake`, `chain`, `keys`, `cloth`, `creak`, `zipper`, `velcro`, `paper`, `coin_spin`, `dice`, `cork_pop`, `boing`, `ratchet`, `drawer`, `book_drop`, `gunshot`, `reload`, `casing`, `sword`, `clash`, `stab`, `slash`, `bow_shot`, `whip`, `shield_bash`, `clock`, `switch`, `button`, `keyboard_typing`, `mouse_click`, `camera_shutter`, `servo`, `printer`, `drill`, `saw`, `hammering`, `ratchet_wrench`, `piston`, `steam_engine`, `train`, `sonar`, `dtmf`, `phone_tone`, `phone_bell`, `siren_wail`, `car_horn`, `bike_bell`, `buzzer`, `shepard`, `transporter`, `robot_babble`, `red_alert`, `dark_drone`, `force_field`, `teleport`, `energy_blade`, `warp`, `charge_up`, `scanner`; **friction**: `stick_slip`, `squeak`, `brake_squeal`, `rub`; **klang**: `toy_boat`, `klang_car`, `harrier`, `bicycle`, `klang_rain`, `ui_tick`, `ui_chime`, `damage`, `sniff`, `strain`, `weight_shift`, `handle`, `tide`, `distant_bell`; **matter**: `fire`, `pour`, `drip`, `drops`, `splash`, `babble`, `bubbles`, `boil`, `sizzle`, `fizz`, `gurgle`, `drain`, `surf`, `cave_drips`, `waterfall`, `underwater_ambience`, `steam`, `air_leak`, `spray`, `kettle`, `balloon`, `gust`, `flame`, `match`, `spark`, `arc`, `mains_hum`, `tesla`, `neon`, `lightning`, `ice_crack`, `ice_cubes`, `freeze`; **pinball**: `solenoid`, `knocker`, `steel_ball`, `ball_roll`, `chirp`, `flipper`, `pop_bumper`, `slingshot`, `spinner`, `spring`; **plates**: `metal_plate`, `glass_pane`, `wood_panel`, `plate_bow`; **retro**: `sfxr`, `zzfx`; **sfx**: `beep`, `blip`, `click`, `pop`, `coin`, `powerup`, `powerdown`, `laser`, `zap`, `punch`, `explosion`, `jump`, `whoosh`, `swoosh`, `alarm`, `siren`, `error`, `success`, `proximity`, `radar`, `riser`, `sweep_up`, `sweep_down`, `bubble`, `glitch`, `static`, `wind`, `thunder`, `footstep`, `door`, `engine`, `magic`, `tone`, `noise`, `typewriter`, `countdown`, `vinyl`, `rain`, `stream`, `fan`, `propeller`, `jet_engine`, `helicopter`, `shatter`, `electric_motor`, `gears`; **tubes**: `pipe_blow`; **vehicle**: `car_engine`
 
 ### `air_leak`
 
@@ -1779,6 +1779,23 @@ Dog barks: short arched pulses bursts, 'wa-u' vowel path.  *(module `creatures`)
 | `count` | `2` | barks |
 | `aggression` | `0.6` | 0..1 |
 | `pitch` | `0.0` | f0 peak in Hz, 0 = from size |
+| `seed` | `0` | variation |
+
+### `bearing`
+
+Rolling bearing on a spinning shaft, healthy or failing: rumble, dry squeal, the periodic ticking of a race or ball defect, a loose or misaligned shaft.  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `3.0` | s |
+| `rpm` | `1750.0` | shaft |
+| `rpm_end` | `-1.0` | glide to this rpm (-1 = steady) |
+| `state` | `'healthy'` | healthy/worn/dry/outer/inner/ball/loose/misaligned |
+| `severity` | `0.6` | 0..1 how far gone |
+| `balls` | `9` | rolling elements |
+| `ball_mm` | `7.94` | ball diameter |
+| `pitch_mm` | `39.04` | pitch diameter |
+| `resonance` | `1000.0` | Hz main housing resonance (others at 0.7, 2 and 4.1 times it) |
 | `seed` | `0` | variation |
 
 ### `bee`
@@ -2283,6 +2300,16 @@ Crumpling / crushing: stochastic impact bursts with power-law energies; facets s
 | `bright` | `0.5` | 0 dark .. 1 bright |
 | `seed` | `0` | variation |
 
+### `cyber_ui`
+
+Sci-fi interface cue: scan, confirm, deny, hack, decrypt, upload, warning, target_lock, implant or neural_link. Every seed is another cue of the same family.  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'confirm'` | scan/confirm/deny/hack/decrypt/upload/warning/target_lock/implant/neural_link |
+| `pitch` | `1.0` | 0.5..2 transposes the whole cue |
+| `seed` | `0` | variation |
+
 ### `damage`
 
 Damage landing on a character: a physical blow, a `soul` hit (one heartbeat under a rumble) or a `mental` hit (pressure without pitch). Felt and low, never shrill.  *(module `klang`)*
@@ -2639,6 +2666,24 @@ Frog calls (Farnell patches): accelerating croak, V-shaped 'brrp', resonant tril
 | `size` | `1.0` | body scale: bigger = lower and slower |
 | `calls` | `3` | number of calls |
 | `gap` | `0.5` | s between calls |
+| `seed` | `0` | variation |
+
+### `gearbox`
+
+Gear whine: the tooth-mesh tone (teeth x rpm / 60) with shaft-rate sidebands, housing ring and backlash rattle.  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `3.0` | s |
+| `rpm` | `1800.0` | input shaft |
+| `rpm_end` | `-1.0` | glide to this rpm (-1 = steady) |
+| `teeth` | `23` | driving gear |
+| `teeth2` | `41` | driven gear |
+| `load` | `0.6` | 0 idle (rattles) .. 1 loaded (whines) |
+| `wear` | `0.3` | 0 ground and quiet .. 1 worn: more mesh harmonics, a damaged tooth knocking once per turn |
+| `eccentricity` | `0.3` | 0..1 run-out of the shafts: strength of the sidebands (the 'singing' roughness) |
+| `backlash` | `0.3` | 0..1 clearance: rattle when the load is low |
+| `housing` | `1050.0` | Hz first casing resonance |
 | `seed` | `0` | variation |
 
 ### `gears`
@@ -3218,6 +3263,23 @@ Paper: rustle, tear, or a page turn.  *(module `foley`)*
 | `weight` | `0.5` | 0 tissue .. 1 heavy paper/card |
 | `seed` | `0` | variation |
 
+### `pass_by`
+
+A car driving past: tyre roar that grows with speed, engine or electric drive, wind, the Doppler drop and the ground reflection.  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `5.0` | s |
+| `speed` | `60.0` | km/h, 10..250 |
+| `distance` | `6.0` | m from the lane at the closest point |
+| `power` | `'combustion'` | combustion / electric / none (tyres and wind only) |
+| `cylinders` | `4` | combustion: cylinder count |
+| `gear` | `3.2` | combustion: engine rpm = gear x 26 x km/h (2.2 top gear .. 6 low gear) |
+| `wet` | `0.0` | 0 dry .. 1 wet road: spray hiss above 2 kHz |
+| `direction` | `'lr'` | lr / rl |
+| `pan` | `1` | 1 = stereo, panned across; 0 = mono (when the game positions it itself) |
+| `seed` | `0` | variation |
+
 ### `phone_bell`
 
 Old electromechanical telephone ringer: a hammer rattling between two slightly detuned bells inside a Bakelite case.  *(module `foley`)*
@@ -3256,6 +3318,25 @@ Breath across the open end of a pipe: airy, noisy hoot that only hints at the pi
 | `dur` | `1.2` | s |
 | `breath` | `0.7` | 0..1 gustiness / roughness of the air stream |
 | `seed` | `0` | noise seed |
+
+### `pipe_engine`
+
+Four-stroke engine built from its plumbing: each cylinder's valves gate an intake and an exhaust waveguide, joined by a collector, a pipe and a muffler. Rasps, drones and lopes like a real exhaust.  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `3.0` | s |
+| `rpm` | `1800.0` | crankshaft |
+| `rpm_end` | `-1.0` | glide to this rpm (-1 = steady) |
+| `cylinders` | `4` | 1..12 |
+| `load` | `0.5` | 0 coasting .. 1 full throttle: combustion strength and intake roar |
+| `header` | `1.6` | ms exhaust runner length per cylinder: short = raspy, long = deep |
+| `pipe` | `6.0` | ms straight pipe before the muffler (the drone) |
+| `lope` | `0.0` | 0 even firing .. 1 uneven (odd cylinders fire early: V-twin / cammed idle) |
+| `unequal` | `0.15` | 0..0.5 spread of the header lengths (unequal headers burble) |
+| `mic` | `0.3` | 0 at the tailpipe .. 1 at the air intake |
+| `backfire` | `0.0` | 0..0.99 chance of a pop in the exhaust per engine cycle, only while the rpm falls (rpm_end below rpm); each pop makes the next less likely |
+| `seed` | `0` | variation |
 
 ### `piston`
 
@@ -4156,6 +4237,21 @@ Riding a train: wheels clacking over rail joints in the rhythm set by the bogie 
 | `horn` | `0.0` | s of horn at the start (0 = none) |
 | `seed` | `0` | variation |
 
+### `transformer`
+
+Power transformer / substation hum from the core's magnetostriction: 100 or 120 Hz and its multiples, tank resonances, loose-lamination buzz.  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `4.0` | s |
+| `mains` | `50.0` | Hz supply (50 or 60): the hum is at twice this |
+| `flux` | `0.8` | 0.3..1.3 core induction relative to saturation: higher = more harmonics, harsher |
+| `dc_bias` | `0.0` | 0..0.5 DC magnetisation: brings in the odd multiples (50, 150 Hz), a rougher growl |
+| `load` | `0.3` | 0..1 winding current: adds pure 2f |
+| `loose` | `0.0` | 0..1 loose laminations / panel: buzz and rattle |
+| `size` | `1.0` | 0.3 small wall unit .. 3 substation: scales the tank resonances down |
+| `seed` | `0` | variation |
+
 ### `transporter`
 
 Sci-fi transporter beam: a shimmering whole-tone cluster of narrow noise bands that swells and dissolves upward.  *(module `foley`)*
@@ -4165,6 +4261,19 @@ Sci-fi transporter beam: a shimmering whole-tone cluster of narrow noise bands t
 | `dur` | `3.0` | s |
 | `freq` | `'A4'` | lowest band: Hz or note name |
 | `bands` | `10` | whole-tone steps stacked |
+| `seed` | `0` | variation |
+
+### `turbo`
+
+Turbocharger: the compressor whine rising as it spools, intake hiss, and the blow-off valve when the throttle shuts.  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `2.5` | s |
+| `spool` | `90000.0` | peak shaft rpm, 30000..200000 (the pitch of the whine) |
+| `boost` | `0.7` | 0..1 how hard it is pushed: hiss and blow-off level |
+| `blowoff` | `1` | 1 = end on the blow-off valve's pshh |
+| `flutter` | `0.0` | 0..1 compressor surge chatter in the blow-off |
 | `seed` | `0` | variation |
 
 ### `twang`
@@ -4181,6 +4290,17 @@ Twang: 'band' = rubber band / slack string that starts sharp and sags; 'ruler' =
 ### `typewriter`
 
 Key press clack.  *(module `sfx`)*
+
+### `tyre_squeal`
+
+Tyres scrubbing past their grip limit (a drift, a hard brake, a getaway).  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `1.5` | s |
+| `slip` | `0.8` | 0.2 chirp .. 1.5 full slide: pitch and harshness |
+| `wobble` | `0.5` | 0..1 unsteadiness of the slide |
+| `seed` | `0` | variation |
 
 ### `ui_chime`
 
@@ -4392,11 +4512,11 @@ The ZzFX 1.3.2 sound function: paste a ZzFX array as `p`, or use named slots / a
 | `tremolo` | `None` | tremolo depth 0..1 (period = repeat_time); default 0 |
 | `filter` | `None` | Hz: >0 high-pass, <0 low-pass (actual corner about 2x); default 0 |
 
-## Effects (89)
+## Effects (96)
 
 Usage: `"fx": [{"type": "<name>", ...params}]  on a layer, a group or the whole spec`
 
-Index by module: **contact**: `resonate`, `cavity`; **dsp**: `convolve`, `fir_eq`, `steep_lowpass`, `steep_highpass`, `steep_bandpass`, `overdrive`, `wavefold`, `mulaw`, `dither`, `codec`, `lofi`, `smooth`, `tape`, `wall`, `dc_block`; **fdstring**: `spring_reverb`; **friction**: `sheet_radiator`, `cone_radiator`, `sympathetic`; **fx**: `reverb`, `delay`, `vibrato`, `tremolo`, `distortion`, `bitcrush`, `lowpass`, `highpass`, `bandpass`, `notch`, `eq`, `lowshelf`, `highshelf`, `sweep`, `muffle`, `telephone`, `underwater`, `ringmod`, `compressor`, `limiter`, `gain`, `normalize`, `pan`, `autopan`, `width`, `fade`, `loop`, `reverse`, `speed`, `pitch`, `trim`, `stutter`, `mono`; **plates**: `plate_reverb`, `room2d`; **reverbs**: `chorus`, `flanger`, `phaser`, `jcrev`, `satrev`, `fdn_reverb`, `early_reflections`, `room`, `zita`, `distance`, `doppler`, `occlude`, `leslie`, `tape_delay`, `shimmer`, `gated_reverb`, `reverse_reverb`; **spectral**: `timestretch`, `pitch_shift`, `harmonizer`, `vocoder`, `cross_synth`, `spectral_gate`, `sines_only`, `noise_only`, `freeze`, `spectral_blur`, `freqshift`, `robotize`, `whisperize`, `spectral_tilt`; **tubes**: `formant_tract`, `tube`
+Index by module: **contact**: `resonate`, `cavity`; **cyber**: `packet_loss`, `beat_repeat`, `paulstretch`, `waveset`, `formant_shift`, `cyber_voice`, `texturize`; **dsp**: `convolve`, `fir_eq`, `steep_lowpass`, `steep_highpass`, `steep_bandpass`, `overdrive`, `wavefold`, `mulaw`, `dither`, `codec`, `lofi`, `smooth`, `tape`, `wall`, `dc_block`; **fdstring**: `spring_reverb`; **friction**: `sheet_radiator`, `cone_radiator`, `sympathetic`; **fx**: `reverb`, `delay`, `vibrato`, `tremolo`, `distortion`, `bitcrush`, `lowpass`, `highpass`, `bandpass`, `notch`, `eq`, `lowshelf`, `highshelf`, `sweep`, `muffle`, `telephone`, `underwater`, `ringmod`, `compressor`, `limiter`, `gain`, `normalize`, `pan`, `autopan`, `width`, `fade`, `loop`, `reverse`, `speed`, `pitch`, `trim`, `stutter`, `mono`; **plates**: `plate_reverb`, `room2d`; **reverbs**: `chorus`, `flanger`, `phaser`, `jcrev`, `satrev`, `fdn_reverb`, `early_reflections`, `room`, `zita`, `distance`, `doppler`, `occlude`, `leslie`, `tape_delay`, `shimmer`, `gated_reverb`, `reverse_reverb`; **spectral**: `timestretch`, `pitch_shift`, `harmonizer`, `vocoder`, `cross_synth`, `spectral_gate`, `sines_only`, `noise_only`, `freeze`, `spectral_blur`, `freqshift`, `robotize`, `whisperize`, `spectral_tilt`; **tubes**: `formant_tract`, `tube`
 
 ### `autopan`
 
@@ -4415,6 +4535,20 @@ Bandpass filter.  *(module `fx`)*
 |---|---|---|
 | `center` | `1000` | Hz |
 | `q` | `1.0` | narrowness |
+
+### `beat_repeat`
+
+Buffer repeat: now and then a slice of the sound is caught and played again in place of what follows (stutter, roll, reverse), without changing the length.  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `grid` | `0.125` | slice length in seconds (at 120 bpm: 0.125 = a 16th note) |
+| `chance` | `0.3` | probability that a slice is caught |
+| `repeats` | `3` | times the caught slice is played |
+| `divide` | `1` | play only the first 1/divide of the slice, that many times (2, 4, 8 = rolls) |
+| `decay` | `0.85` | level of each repeat relative to the one before |
+| `reverse` | `0.2` | probability that a caught slice plays backwards |
+| `seed` | `0` | which slices |
 
 ### `bitcrush`
 
@@ -4512,6 +4646,22 @@ Cross-synthesis: put this sound's moving spectral envelope (its 'vowels') on ano
 | `mix` | `1.0` | wet amount |
 | `seed` | `0` | noise seed when no carrier file is given |
 
+### `cyber_voice`
+
+Synthetic / augmented voice in one step: formant shift, vocoder, ring modulation, a lossy link and a radio band. For speech layers and recorded voices.  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `formant` | `-3.0` | semitones the formants move (- = larger, colder) |
+| `pitch` | `110.0` | vocoder carrier: Hz or a note name |
+| `vocode` | `0.6` | 0 natural .. 1 fully vocoded |
+| `ring` | `70.0` | ring modulator Hz (30..180) |
+| `ring_mix` | `0.25` | 0..1 |
+| `loss` | `0.06` | fraction of 30 ms packets lost (0 = clean link) |
+| `conceal` | `'noise'` | mute / repeat / noise: what a lost packet becomes |
+| `radio` | `1.0` | 0 full band .. 1 the 300-3400 Hz band of a comms channel |
+| `seed` | `0` | variation |
+
 ### `dc_block`
 
 Remove DC offset (one-pole/one-zero DC blocker).  *(module `dsp`)*
@@ -4582,6 +4732,8 @@ Fly-by: the sound passes the listener on a straight line, with the true Doppler 
 | `air` | `True` | true = air absorption that opens up as it approaches |
 | `humidity` | `50` | relative humidity % (40..70) |
 | `ref` | `None` | distance in metres where gain = 1 (default = `closest`, so the pass is at full level) |
+| `ground` | `0.0` | 0..1 strength of the reflection off the ground: a comb that sweeps as the source passes (0.35 = asphalt) |
+| `height` | `1.8` | source height + listener height in metres, for the ground path |
 
 ### `early_reflections`
 
@@ -4665,6 +4817,14 @@ Jet-like sweeping comb: a short delay swept by an LFO and mixed with the dry sou
 | `shape` | `'sine'` | LFO shape: sine / triangle / exp (triangle on a log scale: even sweep in pitch) |
 | `phase` | `0.0` | LFO start phase 0..1 cycles |
 | `stereo` | `0.0` | LFO phase offset between left and right in cycles (0.25 = wide; makes stereo output) |
+
+### `formant_shift`
+
+Move the formants without changing the pitch: a bigger or smaller speaker, the same notes.  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `semitones` | `-3.0` | + smaller / brighter, - bigger / darker (-12..12) |
 
 ### `formant_tract`
 
@@ -4894,6 +5054,18 @@ Alias-free waveshaping overdrive (oversampled; bias adds even harmonics).  *(mod
 | `mix` | `1.0` | wet 0..1 |
 | `oversample` | `4` | 1/2/4/8 (1 = naive, aliases) |
 
+### `packet_loss`
+
+Lossy digital link: packets drop out in bursts and are muted, replaced by the last good one fading away, or by its frozen spectrum (bad radio, failing implant, VoIP).  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `loss` | `0.1` | fraction of packets lost, 0..0.95 |
+| `burst` | `2.0` | average number of packets lost in a row (1 = scattered) |
+| `packet_ms` | `20.0` | packet length, 10..60 ms |
+| `conceal` | `'repeat'` | mute / repeat (stutter) / noise (the last spectrum with random phase) |
+| `seed` | `0` | which packets |
+
 ### `pan`
 
 Stereo position (produces stereo).  *(module `fx`)*
@@ -4901,6 +5073,19 @@ Stereo position (produces stereo).  *(module `fx`)*
 | param | default | meaning |
 |---|---|---|
 | `pos` | `0.0` | -1 left .. 1 right |
+
+### `paulstretch`
+
+Extreme time-stretch that turns any sound into a slowly evolving wash (random-phase windows), or holds one instant as an endless pad.  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `stretch` | `8.0` | length ratio, 1..1000 |
+| `window` | `0.25` | seconds: longer = smoother and more blurred in time |
+| `hold` | `-1.0` | seconds: freeze the sound at this instant instead of stretching (-1 = off) |
+| `length` | `4.0` | seconds of output when `hold` is used |
+| `smear` | `0.0` | 0..1 blur across frequency (a held note becomes a noise band) |
+| `seed` | `0` | phase seed |
 
 ### `phaser`
 
@@ -5267,6 +5452,16 @@ Narrow band-limited radio/phone/walkie-talkie voice.  *(module `fx`)*
 | `low` | `300` | Hz |
 | `high` | `3400` | Hz |
 
+### `texturize`
+
+Turn a recording of a steady texture (rain, a server room, a crowd, static) into a new, endless, seamlessly looping one of any length with the same character.  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `length` | `8.0` | seconds of output, up to 60 |
+| `iters` | `12` | refinement passes (more = closer, slower) |
+| `seed` | `0` | a different rendition |
+
 ### `timestretch`
 
 Change length without changing pitch (phase vocoder, or SOLA for speech and drums).  *(module `spectral`)*
@@ -5364,6 +5559,15 @@ Wavefolder (oversampled): the wave is reflected back each time it passes full sc
 | `shape` | `'sine'` | sine/tri |
 | `tone` | `5000` | post low-pass Hz (0 = off) |
 | `mix` | `1.0` | wet 0..1 |
+
+### `waveset`
+
+Waveset repetition: each cycle between zero crossings is played several times and the next ones skipped. Buzzy, pitch drops by octaves, speech turns to insect chatter.  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `repeats` | `2` | times each kept cycle is played (2 = an octave down in feel, 4 = two) |
+| `keep_length` | `True` | false = keep every cycle, so the sound gets `repeats` times longer |
 
 ### `whisperize`
 

@@ -1,0 +1,83 @@
+{
+  "out_dir": "sounds/cyber",
+  "sounds": [
+    {"out": "transformer_substation.wav", "layers": [{"type": "sfx", "kind": "transformer", "params": {"dur": 5, "flux": 1.1, "loose": 0.3, "size": 2.0}}],
+     "fx": [{"type": "room", "preset": "hall", "mix": 0.2}]},
+    {"out": "transformer_wall_unit_60hz.wav", "layers": [{"type": "sfx", "kind": "transformer", "params": {"dur": 4, "mains": 60, "flux": 0.6, "size": 0.5}}]},
+    {"out": "transformer_dc_growl.wav", "layers": [{"type": "sfx", "kind": "transformer", "params": {"dur": 4, "dc_bias": 0.35, "flux": 1.0}}]},
+
+    {"out": "gearbox_run_up.wav", "layers": [{"type": "sfx", "kind": "gearbox", "params": {"dur": 4, "rpm": 600, "rpm_end": 3600, "wear": 0.4}}]},
+    {"out": "gearbox_idle_rattle.wav", "layers": [{"type": "sfx", "kind": "gearbox", "params": {"dur": 3, "rpm": 900, "load": 0.1, "backlash": 0.9}}]},
+    {"out": "gearbox_worn_singing.wav", "layers": [{"type": "sfx", "kind": "gearbox", "params": {"dur": 3, "rpm": 2400, "teeth": 17, "teeth2": 52, "wear": 0.9, "eccentricity": 0.8}}]},
+
+    {"out": "bearing_healthy.wav", "layers": [{"type": "sfx", "kind": "bearing", "params": {"dur": 3}}]},
+    {"out": "bearing_inner_race.wav", "layers": [{"type": "sfx", "kind": "bearing", "params": {"dur": 3, "state": "inner", "severity": 0.8}}]},
+    {"out": "bearing_outer_race_far_gone.wav", "layers": [{"type": "sfx", "kind": "bearing", "params": {"dur": 3, "state": "outer", "severity": 1.0}}]},
+    {"out": "bearing_ball_defect.wav", "layers": [{"type": "sfx", "kind": "bearing", "params": {"dur": 4, "state": "ball", "severity": 0.9}}]},
+    {"out": "bearing_dry_squeal.wav", "layers": [{"type": "sfx", "kind": "bearing", "params": {"dur": 3, "state": "dry", "rpm": 2800}}]},
+    {"out": "bearing_loose_spin_down.wav", "layers": [{"type": "sfx", "kind": "bearing", "params": {"dur": 5, "state": "loose", "rpm": 3000, "rpm_end": 300}}]},
+
+    {"out": "engine_inline4_idle.wav", "layers": [{"type": "sfx", "kind": "pipe_engine", "params": {"dur": 4, "rpm": 900, "load": 0.2}}]},
+    {"out": "engine_v8_lope_rev.wav", "layers": [{"type": "sfx", "kind": "pipe_engine", "params": {"dur": 5, "rpm": 800, "rpm_end": 4500, "cylinders": 8, "lope": 0.8, "header": 2.4, "load": 0.8}}]},
+    {"out": "engine_twin_at_the_intake.wav", "layers": [{"type": "sfx", "kind": "pipe_engine", "params": {"dur": 4, "rpm": 2800, "cylinders": 2, "lope": 1.0, "mic": 0.9, "load": 0.7}}]},
+    {"out": "engine_lift_off_backfire.wav", "layers": [{"type": "sfx", "kind": "pipe_engine", "params": {"dur": 4, "rpm": 6500, "rpm_end": 1800, "cylinders": 6, "header": 1.0, "load": 0.3, "backfire": 0.9}}]},
+    {"out": "turbo_spool_blowoff.wav", "layers": [{"type": "sfx", "kind": "turbo", "params": {"dur": 2.5}}]},
+    {"out": "turbo_flutter.wav", "layers": [{"type": "sfx", "kind": "turbo", "params": {"dur": 2.0, "spool": 120000, "flutter": 0.8}}]},
+    {"out": "tyre_squeal.wav", "layers": [{"type": "sfx", "kind": "tyre_squeal", "params": {"dur": 1.8, "slip": 1.1}}]},
+
+    {"out": "pass_by_combustion_90.wav", "layers": [{"type": "sfx", "kind": "pass_by", "params": {"dur": 5, "speed": 90}}]},
+    {"out": "pass_by_electric_wet_60.wav", "layers": [{"type": "sfx", "kind": "pass_by", "params": {"dur": 6, "speed": 60, "power": "electric", "wet": 0.7, "direction": "rl"}}]},
+    {"out": "pass_by_fast_close_mono.wav", "layers": [{"type": "sfx", "kind": "pass_by", "params": {"dur": 3, "speed": 180, "distance": 3, "cylinders": 6, "pan": 0}}]},
+    {"out": "street_at_night.wav", "layers": [
+      {"type": "sfx", "kind": "pass_by", "params": {"dur": 6, "speed": 50, "power": "electric", "wet": 0.6, "seed": 1}},
+      {"type": "sfx", "kind": "pass_by", "params": {"dur": 5, "speed": 110, "cylinders": 6, "direction": "rl", "distance": 12, "wet": 0.6, "seed": 2}, "at": 2.5},
+      {"type": "sfx", "kind": "pass_by", "params": {"dur": 5, "speed": 70, "power": "electric", "distance": 9, "wet": 0.6, "seed": 3}, "at": 5.5},
+      {"type": "sfx", "kind": "transformer", "params": {"dur": 10.5, "flux": 0.9, "loose": 0.2}, "gain": 0.12},
+      {"type": "sfx", "kind": "neon", "params": {"dur": 10.5, "flicker": 0.6}, "gain": 0.08}],
+     "fx": [{"type": "room", "preset": "hall", "mix": 0.12}]},
+    {"out": "doppler_ground_reflection.wav", "layers": [{"type": "sfx", "kind": "siren_wail", "params": {"dur": 5}}],
+     "fx": [{"type": "doppler", "speed": 25, "closest": 6, "ground": 0.35}]},
+
+    {"out": "ui_scan.wav", "layers": [{"type": "sfx", "kind": "cyber_ui", "params": {"kind": "scan"}}]},
+    {"out": "ui_confirm.wav", "layers": [{"type": "sfx", "kind": "cyber_ui", "params": {"kind": "confirm"}}], "fx": [{"type": "reverb", "mix": 0.12, "size": 0.3}]},
+    {"out": "ui_deny.wav", "layers": [{"type": "sfx", "kind": "cyber_ui", "params": {"kind": "deny"}}]},
+    {"out": "ui_hack.wav", "layers": [{"type": "sfx", "kind": "cyber_ui", "params": {"kind": "hack"}}]},
+    {"out": "ui_decrypt.wav", "layers": [{"type": "sfx", "kind": "cyber_ui", "params": {"kind": "decrypt"}}], "fx": [{"type": "reverb", "mix": 0.12, "size": 0.3}]},
+    {"out": "ui_upload.wav", "layers": [{"type": "sfx", "kind": "cyber_ui", "params": {"kind": "upload"}}]},
+    {"out": "ui_warning.wav", "layers": [{"type": "sfx", "kind": "cyber_ui", "params": {"kind": "warning"}}]},
+    {"out": "ui_target_lock.wav", "layers": [{"type": "sfx", "kind": "cyber_ui", "params": {"kind": "target_lock"}}]},
+    {"out": "ui_implant.wav", "layers": [{"type": "sfx", "kind": "cyber_ui", "params": {"kind": "implant"}}]},
+    {"out": "ui_neural_link.wav", "layers": [{"type": "sfx", "kind": "cyber_ui", "params": {"kind": "neural_link"}}], "fx": [{"type": "reverb", "mix": 0.2, "size": 0.5}]},
+    {"out": "ui_confirm_three_seeds.wav", "layers": [
+      {"type": "sfx", "kind": "cyber_ui", "params": {"kind": "confirm", "seed": 1}},
+      {"type": "sfx", "kind": "cyber_ui", "params": {"kind": "confirm", "seed": 2, "pitch": 1.2}, "at": 0.9},
+      {"type": "sfx", "kind": "cyber_ui", "params": {"kind": "confirm", "seed": 3, "pitch": 0.8}, "at": 1.8}]},
+
+    {"out": "voice_clean.wav", "layers": [{"type": "speech", "text": "access granted. welcome back.", "params": {"voice": "female"}}]},
+    {"out": "voice_cyber.wav", "layers": [{"type": "speech", "text": "access granted. welcome back.", "params": {"voice": "female"}}],
+     "fx": [{"type": "cyber_voice", "pitch": "A2", "loss": 0.05}, {"type": "reverb", "mix": 0.12, "size": 0.4}]},
+    {"out": "voice_failing_link.wav", "layers": [{"type": "speech", "text": "signal lost. reconnecting.", "params": {"voice": "male"}}],
+     "fx": [{"type": "cyber_voice", "vocode": 0.3, "loss": 0.3, "conceal": "repeat", "formant": -2}]},
+    {"out": "voice_formant_giant.wav", "layers": [{"type": "speech", "text": "you should not be here", "params": {"voice": "male"}}],
+     "fx": [{"type": "formant_shift", "semitones": -7}]},
+    {"out": "voice_packet_loss_mute.wav", "layers": [{"type": "speech", "text": "can you hear me now", "params": {"voice": "female"}}],
+     "fx": [{"type": "packet_loss", "loss": 0.25, "burst": 3, "conceal": "mute"}]},
+    {"out": "voice_beat_repeat.wav", "layers": [{"type": "speech", "text": "system failure in sector seven", "params": {"voice": "male"}}],
+     "fx": [{"type": "beat_repeat", "grid": 0.09, "chance": 0.35, "divide": 2, "seed": 4}]},
+    {"out": "voice_waveset.wav", "layers": [{"type": "speech", "text": "system failure in sector seven", "params": {"voice": "male"}}],
+     "fx": [{"type": "waveset", "repeats": 3}]},
+
+    {"out": "pad_gearbox_paulstretch.wav", "layers": [{"type": "sfx", "kind": "gearbox", "params": {"dur": 1.5, "rpm": 1400}}],
+     "fx": [{"type": "paulstretch", "stretch": 6, "window": 0.3}, {"type": "reverb", "mix": 0.25, "size": 0.8}]},
+    {"out": "pad_held_instant.wav", "layers": [{"type": "sfx", "kind": "cyber_ui", "params": {"kind": "neural_link"}}],
+     "fx": [{"type": "paulstretch", "hold": 0.3, "length": 5, "smear": 0.1}]},
+    {"out": "rain_source_4s.wav", "layers": [{"type": "sfx", "kind": "klang_rain", "params": {"dur": 4, "intensity": 0.7}}]},
+    {"out": "rain_texturized_10s_loop.wav", "layers": [{"type": "sfx", "kind": "klang_rain", "params": {"dur": 4, "intensity": 0.7}}],
+     "fx": [{"type": "texturize", "length": 10, "iters": 10}]},
+    {"out": "machine_room_texturized_loop.wav", "layers": [
+      {"type": "sfx", "kind": "transformer", "params": {"dur": 4, "flux": 0.9}, "gain": 0.5},
+      {"type": "sfx", "kind": "bearing", "params": {"dur": 4, "state": "worn", "rpm": 2900}, "gain": 0.4},
+      {"type": "sfx", "kind": "gearbox", "params": {"dur": 4, "rpm": 1200, "load": 0.8}, "gain": 0.3}],
+     "fx": [{"type": "texturize", "length": 12, "iters": 10}]}
+  ]
+}

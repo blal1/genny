@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.0.1
+
+Catalog: 129 instruments, 48 drums, 234 sound effects (was 226), 96 effects (was 89), 13 extra layer types.
+
+New module `cyber` (`docs/cyber.md`, `tests/test_cyber.py`); its sources are listed in the module and in
+`THIRD_PARTY_NOTICES.md`:
+- sound effects `transformer` (magnetostriction: hum at twice the mains), `gearbox` (tooth-mesh tone with
+  shaft sidebands), `bearing` (healthy and seven failing states at the kinematic fault rates),
+  `pipe_engine` (valve-gated intake and exhaust waveguides, backfire), `turbo`, `tyre_squeal`, `pass_by`
+  (Harmonoise tyre and engine levels, Doppler, ground reflection), `cyber_ui` (ten interface cues);
+- effects `packet_loss`, `beat_repeat`, `paulstretch`, `waveset`, `formant_shift`, `cyber_voice`,
+  `texturize` (texture synthesis from envelope statistics, after McDermott & Simoncelli);
+- `doppler` takes `ground` and `height`: the reflection off the ground.
+
+Examples: `examples/in_your_code.py` (genny called from a program) and `examples/library/cyber.json`
+(47 renders of the new sounds and effects).
+
+`genny.identify.identify_machine` and `genny identify file.wav`: from a steady recording to the kind of
+machine (transformer, gearbox, bearing fault, engine) and the sfx parameters that reproduce it. A first,
+rule-based version: reliable on genny's own renders, weak on real recordings (`docs/cyber.md`, "Limits").
+
+`bearing` is fitted to recordings (FSTF sound dataset, SKF 6004): housing modes at 0.7, 1, 2 and 4.1 kHz
+ringing 7 ms, impacts level with the rolling noise at the default severity, a soft outer-race tick, a
+ball defect in bursts at the cage rate, looseness as a rumble. The comparison table is in `docs/cyber.md`.
+
+After reading Randall (1982) and Randall & Antoni (2011), which until then were cited from memory:
+- `bearing`: slip adds up from impact to impact (it was a jitter about a fixed period, the model the
+  tutorial calls incorrect); a ball defect is gated once per cage turn, not twice;
+- `gearbox`: `load` raises the mesh line by 20 dB per decade and its double by 7 (it was one gain for all
+  harmonics); the run-out index follows the tooth count; a damaged tooth also modulates the mesh;
+- `identify_machine` names a ball defect by its cage rate, tells an outer-race from an inner-race defect
+  by the level of the sidebands against the line's double, and no longer takes a motor's hum for a
+  defect. Checked on three sets of recordings (FSTF, AHU, SUBF): table in `docs/cyber.md`, "Limits".
+  Gear sideband spacings are ranked by their stronger side, since the two sides are unequal.
+
 ## 1.0.0
 
 Catalog: 129 instruments (was 82), 48 drums, 226 sound effects, 89 effects, 13 extra layer types.

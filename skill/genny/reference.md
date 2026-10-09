@@ -152,7 +152,7 @@ A top-level JSON array of specs also works. `genny render batch.json` renders al
 
 ## Extended catalog (physical models)
 
-The names above are the core set. The modules below add the rest: 129 instruments, 48 drums, 226 sfx, 89 effects
+The names above are the core set. The modules below add the rest: 129 instruments, 48 drums, 234 sfx, 96 effects
 and 13 extra layer types in all. `genny list` (or `genny list --json`, `genny list layers`) prints every name with
 its parameters; `docs/catalog.md` is the same list as a page, `docs/physics.md` says which physical model is behind
 each sound, and each module has a page with recipes.
@@ -171,6 +171,7 @@ each sound, and each module has a page with recipes.
 - **dsp** (`docs/dsp.md`) — sfx: `noise_bed`; fx: `convolve`, `fir_eq`, `steep_lowpass`, `steep_highpass`, `steep_bandpass`, `overdrive`, `wavefold`, `mulaw`, `dither`, `codec`, `lofi`, `smooth`, `tape`, `wall`, `dc_block`
 - **retro** (`docs/retro.md`) — instruments: `sfxr_voice`, `zzfx_voice`, `psg`; sfx: `sfxr`, `zzfx`; layers: `song`
 - **compose** (`docs/compose.md`) — instruments: `ks_string`; drums: `ks_drum`; layers: `compose`, `euclid`, `arp`, `stinger`, `scatter`, `arrangement`, `adaptive`
+- **cyber** (`docs/cyber.md`) — sfx: `transformer`, `gearbox`, `bearing`, `pipe_engine`, `turbo`, `tyre_squeal`, `pass_by`, `cyber_ui` (kind: scan, confirm, deny, hack, decrypt, upload, warning, target_lock, implant, neural_link); effects: `packet_loss`, `beat_repeat`, `paulstretch`, `waveset`, `formant_shift`, `cyber_voice`, `texturize`; CLI: `genny identify file.wav`
 - **klang** (`docs/klang.md`) — instruments: `viola`, `bassoon`, `cor_anglais`, `bass_clarinet`, `piccolo`, `recorder`, `hand_chime`; sfx: `toy_boat`, `klang_car`, `harrier`, `bicycle`, `klang_rain`, `ui_tick`, `ui_chime`, `damage`, `sniff`, `strain`, `weight_shift`, `handle`, `tide`, `distant_bell`; layers: `articulate`, `sampler`
 
 Extra layer types are used like the built-in ones (`"type": "compose"`, `"sing"`, ...) and take the common layer keys

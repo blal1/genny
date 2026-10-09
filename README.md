@@ -4,8 +4,11 @@ Offline sound and music synthesis in Python: physical models of instruments, obj
 and rooms, rendered to WAV from JSON specs, a command line or Python. Built to be driven by AI agents
 (see `AGENTS.md`), and deterministic: the same spec always gives the same file.
 
-Version 1.0: **129 instruments, 48 drums, 226 sound effects, 89 effects, 13 generative and vocal layer
+Version 1.0.1: **129 instruments, 48 drums, 234 sound effects, 96 effects, 13 generative and vocal layer
 types**, plus a speech synthesiser (English, Spanish). Python only (numpy, scipy, numba).
+
+On PyPI: [pypi.org/project/genny](https://pypi.org/project/genny/). `pip install genny` gives the library and
+the `genny` command.
 
 ```
 python install.py --tool          # installs the `genny` command (needs uv) and the Claude Code skill
@@ -17,9 +20,27 @@ genny seq cristal "A4:2 C5:2 E5:4" --bpm 60 -o cristal.wav
 genny say "level up!" -p voice=female -o level_up.wav
 genny render examples/library/instrument_tunes.json    # a short tune for each of the 129 instruments
 genny render examples/library/style_pieces.json        # a generated piece for each of the 35 styles
+genny render examples/library/cyber.json               # 47 machines, vehicles, interface cues and damaged voices (new in 1.0.1)
 genny list                                             # every name and parameter (--json for agents)
 genny info tune.wav                                    # loudness, sharpness, energy above 5 kHz
 ```
+
+In a program, a sound is one call that returns a numpy array (`pip install genny`):
+
+```python
+import genny
+from genny.sfx import render_sfx
+from genny.core import write_wav
+
+tap = render_sfx("impact", 44100, material="glass", size=0.2)          # float array, -1..1
+ok = render_sfx("cyber_ui", 44100, kind="confirm", seed=3)              # another seed, another cue
+engine = render_sfx("pipe_engine", 44100, rpm=3200.0, cylinders=6, dur=2.0)
+write_wav("engine.wav", engine, 44100)
+```
+
+`examples/in_your_code.py` shows the patterns a project needs: a cache keyed by the arguments, an event
+table for an interface, variations by seed, an engine bank by rpm, sounds driven by program state, effects
+on an array, a scene built from a dict, and WAV bytes in memory.
 
 | Read | For |
 |---|---|
@@ -28,6 +49,7 @@ genny info tune.wav                                    # loudness, sharpness, en
 | `docs/catalog.md` | every instrument, drum, sound effect, effect and layer type with its parameters |
 | `docs/physics.md` | which physical model is behind each sound, its source, and the known limits |
 | `docs/api.md` | the Python API |
+| `examples/in_your_code.py` | genny called from a program: caching, variations, parameter banks, scenes |
 | `examples/library/*.json` | demo batches; renders go to `sounds/` |
 
 What is modelled: plucked, hammered, bowed and prepared strings (waveguide and finite difference); bars,

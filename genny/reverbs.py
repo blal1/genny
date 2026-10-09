@@ -940,9 +940,11 @@ def flyby_path(n: int, sr: int, speed: float, closest: float, pass_at: float = 0
         pan=(True, "true = stereo output panned by the source direction"),
         air=(True, "true = air absorption that opens up as it approaches"),
         humidity=(50, "relative humidity % (40..70)"),
-        ref=(None, "distance in metres where gain = 1 (default = `closest`, so the pass is at full level)"))
+        ref=(None, "distance in metres where gain = 1 (default = `closest`, so the pass is at full level)"),
+        ground=(0.0, "0..1 strength of the reflection off the ground: a comb that sweeps as the source passes (0.35 = asphalt)"),
+        height=(1.8, "source height + listener height in metres, for the ground path"))
 def doppler(x, sr=DEFAULT_SR, speed=20.0, closest=5.0, pass_at=0.5, direction="lr", pan=True, air=True,
-            humidity=50, ref=None):
+            humidity=50, ref=None, ground=0.0, height=1.8):
     """Time-varying delay = exact Doppler (PASP/Doppler_Simulation; g13 §3.2): each output sample
     reads the input at its emission time with a 4th-order Lagrange interpolator (even order for
     swept delays, g13 §2.1). Pan: constant-power cos/sin law (g15 §6.1 item 7) on sin(azimuth)."""
@@ -952,6 +954,13 @@ def doppler(x, sr=DEFAULT_SR, speed=20.0, closest=5.0, pass_at=0.5, direction="l
     y = _read_l4(mono, np.ascontiguousarray(tau * sr))
     rref = float(max(closest, 0.05) if ref is None else max(ref, 0.01))
     y = y * np.minimum(rref / r, 2.0)
+    if ground:
+        # Image source below the ground: path longer by sqrt(r^2 + h^2) - r, phase-inverted (grazing
+        # incidence on a hard surface; the -0.35 of Agent00PED/ice-simulator audio/spatial.js).
+        # ponytail: reads the direct signal late instead of solving a second emission time, and one
+        # broadband coefficient; a Delany-Bazley impedance filter if the surface must be audible.
+        late = np.arange(len(y)) - (np.sqrt(r * r + float(height) ** 2) - r) / C_AIR * sr
+        y = y - float(ground) * _read_l4(np.ascontiguousarray(y), np.ascontiguousarray(np.maximum(late, 0.0)))
     if air:
         fc = np.minimum(air_cutoff(r, humidity), 0.45 * sr)
         y = _tv_one_pole(np.ascontiguousarray(y), np.exp(-2 * np.pi * fc / sr))

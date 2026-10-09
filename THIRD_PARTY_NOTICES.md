@@ -16,3 +16,25 @@ and a stable high-level API was added in `genny.physics`, `genny.acoustics`, and
 
 Important: the Klang Open License adds an attribution requirement for interactive audio-visual
 products. Consult the bundled license before shipping a game, simulation, or multimedia installation.
+
+## genny/cyber.py: models and constants read in other projects
+
+`genny/cyber.py` contains no code copied from another project. It re-implements published models, and
+some of its numeric constants were read in these sources:
+
+- `pipe_engine`: the engine model of Baldan, Lachambre, Delle Monache & Boussard (2015) as implemented in
+  **DasEtwas/enginesound** and **Antonio-R1/engine-sound-generator** (both MIT); reflection coefficients,
+  mix levels and muffler lengths are those of DasEtwas' `default.esc`.
+- `cyber_ui`: the layer grammar and the note, gap and envelope ranges of **m1ckc3s/procedural-sounds** (MIT).
+- `bearing` and `identify_machine`: constants and thresholds were set by measuring three sets of recordings,
+  none of which is redistributed: the FSTF sound dataset (Mendeley Data n9y9c7xrz3), the AHU parabolic
+  acoustic mirror bearing dataset (Lab-of-AMFD, no licence stated) and SUBF v2.0 (Kaggle, CC BY-NC-SA 4.0).
+- `paulstretch`, `beat_repeat`, `waveset`: the algorithms of Paul Nasca's paulstretch and of
+  **Soundpipe** (MIT) and **arraypress/paulstretch** (MIT).
+- `pass_by`: the Harmonoise car coefficients (Jonasson et al., "Source modelling of road vehicles", 2004),
+  transcribed from the table in **boschresearch/acoustic-traffic-simulation-counting** (GPL-3; the numbers
+  are those of the public report).
+- `turbo`, `tyre_squeal`, the wind term of `pass_by` and the default `ground` coefficient of `doppler`:
+  formulas and constants read in **Agent00PED/ice-simulator**, which carries **no licence file**. Ask its
+  author, or replace these constants, before a release that must be licence-clean.
+- `texturize`: the model of McDermott & Simoncelli (Neuron, 2011), reduced.

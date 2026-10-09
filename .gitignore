@@ -1,4 +1,4 @@
-.venv/
+.venv*/
 __pycache__/
 *.pyc
 *.nbi
@@ -8,3 +8,6 @@ sounds/
 dist/
 build/
 *.egg-info/
+.claude/
+out_code/
+/*.wav

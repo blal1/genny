@@ -29,6 +29,7 @@ numbers its tests measure and the constants that have no source.
 | [`dsp.md`](dsp.md) | Convolution, FIR and steep filters, overdrive, codecs, lo-fi, tape, wall |
 | [`retro.md`](retro.md) | sfxr and ZzFX engines, AY-3-8910 voice, tracker `song` layer |
 | [`compose.md`](compose.md) | Generated music: `compose`, `arrangement`, `euclid`, `arp`, `stinger`, `scatter`, `adaptive` |
+| [`cyber.md`](cyber.md) | Machines (transformer, gearbox, bearing), waveguide engine, turbo, car pass-by, sci-fi interface cues, glitch and voice effects, texture synthesis, machine identification |
 | [`klang.md`](klang.md) | Ports of the Klang procedural library (vehicles), UI ticks, `sampler` and `articulate` layers, QA harness |
 
 ## Using genny from Python

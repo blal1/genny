@@ -1,5 +1,5 @@
 """genny - procedural and physically informed sound synthesis."""
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 # High-level physical API (existing module-level APIs remain backward compatible).
 from .physics import (Material, MATERIALS, ModalBody, ParticleMaterial, BubblePopulation,
@@ -44,7 +44,7 @@ from .strings import StringMaterial, STRING_MATERIALS, StringPhysicalProperties,
 import importlib as _importlib
 from . import spec as _spec  # noqa: F401
 for _name in ("retro", "contact", "friction", "fdstring", "plates", "tubes", "spectral", "dsp",
-              "reverbs", "matter", "creatures", "choir", "foley", "compose", "klang"):
+              "reverbs", "matter", "creatures", "choir", "foley", "compose", "klang", "cyber"):
     try:
         _importlib.import_module(f"{__name__}.{_name}")
     except ModuleNotFoundError as _e:
