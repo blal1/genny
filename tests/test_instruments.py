@@ -45,6 +45,8 @@ def test_tuning():
     # church and china bells are tuned on one stated partial of a strongly inharmonic spectrum, which an
     # autocorrelation pitch cannot follow; tests/test_foley.py checks that partial against the mode table
     inharmonic = {"church_bell", "china_bell"}
+    # the chips' noise channels take a note only to choose a noise rate (tests/test_chiptune.py checks those rates)
+    inharmonic |= {"nes_noise", "gb_noise"}
     for name, e in I.REGISTRY.items():
         if name in inharmonic:
             continue

@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.0
+
+Catalog: 136 instruments (was 129), 48 drums, 234 sound effects, 96 effects, 14 extra layer types (was 13).
+
+New module `chiptune` (`docs/chiptune.md`, `tests/test_chiptune.py`): sound chips modelled one by one.
+- layer type `chip`, hardware-accurate: `system` `nes` (2A03: two pulses, triangle, noise, the non-linear mixer,
+  the output filters), `gb` (Game Boy: two pulses, wave RAM, noise, hard panning, the output capacitor) or
+  `ym2612` (six four-operator FM channels, a port of ymfm's OPN core, 9-bit output with the DAC step);
+- instruments `nes_pulse`, `nes_triangle`, `nes_noise`, `gb_pulse`, `gb_wave`, `gb_noise`, `ym2612`: one
+  channel as a polyphonic voice, in tune (`mode: "hardware_accurate"` for the raw channel);
+- hardware envelopes and sweeps, and the per-frame volume, duty, arpeggio and pitch tables of a music driver.
+
+Voices corrected (`tests/test_voice_stability.py`): `flute`, `piccolo` and `recorder` are the jet model blown at
+its playing pressure and corrected in pitch; `violin`, `cello`, `trumpet`, `french_horn`, `trombone` and `tuba`
+have one pitch source (they beat against a second one); `strings` is a section of individual players.
+
 ## 1.0.1
 
 Catalog: 129 instruments, 48 drums, 234 sound effects (was 226), 96 effects (was 89), 13 extra layer types.

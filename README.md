@@ -4,7 +4,7 @@ Offline sound and music synthesis in Python: physical models of instruments, obj
 and rooms, rendered to WAV from JSON specs, a command line or Python. Built to be driven by AI agents
 (see `AGENTS.md`), and deterministic: the same spec always gives the same file.
 
-Version 1.0.1: **129 instruments, 48 drums, 234 sound effects, 96 effects, 13 generative and vocal layer
+Version 1.1.0: **136 instruments, 48 drums, 234 sound effects, 96 effects, 14 generative and vocal layer
 types**, plus a speech synthesiser (English, Spanish). Python only (numpy, scipy, numba).
 
 On PyPI: [pypi.org/project/genny](https://pypi.org/project/genny/). `pip install genny` gives the library and

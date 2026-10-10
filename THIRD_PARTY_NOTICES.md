@@ -38,3 +38,31 @@ some of its numeric constants were read in these sources:
   formulas and constants read in **Agent00PED/ice-simulator**, which carries **no licence file**. Ask its
   author, or replace these constants, before a release that must be licence-clean.
 - `texturize`: the model of McDermott & Simoncelli (Neuron, 2011), reduced.
+
+## genny/chiptune.py: the Yamaha YM2612 core is a port of ymfm
+
+The FM section of `genny/chiptune.py` (`_opn_core`, `_opn_vol` and the `OPN_*` tables) is a Python port of parts
+of **ymfm** by Aaron Giles (`ymfm_fm.ipp`, `ymfm_opn.cpp`), used under the BSD 3-Clause License:
+
+    Copyright (c) 2021, Aaron Giles. All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without modification, are permitted provided
+    that the following conditions are met:
+    1. Redistributions of source code must retain the above copyright notice, this list of conditions and
+       the following disclaimer.
+    2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and
+       the following disclaimer in the documentation and/or other materials provided with the distribution.
+    3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or
+       promote products derived from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+    WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+    PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY
+    DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+
+The NES and Game Boy sections contain no code from another project: they implement the hardware as described
+in the NESdev wiki and in Pan Docs. The FM patches (`FM_PATCHES`) and the wave shapes (`GB_WAVES`) are genny's own.

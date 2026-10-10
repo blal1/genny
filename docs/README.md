@@ -28,6 +28,7 @@ numbers its tests measure and the constants that have no source.
 | [`spectral.md`](spectral.md) | Time-stretch, pitch shift, vocoder, spectral gate, freeze, analysis and resynthesis |
 | [`dsp.md`](dsp.md) | Convolution, FIR and steep filters, overdrive, codecs, lo-fi, tape, wall |
 | [`retro.md`](retro.md) | sfxr and ZzFX engines, AY-3-8910 voice, tracker `song` layer |
+| [`chiptune.md`](chiptune.md) | NES 2A03, Game Boy and Yamaha YM2612 sound chips: `chip` layer (hardware-accurate) and per-channel voices |
 | [`compose.md`](compose.md) | Generated music: `compose`, `arrangement`, `euclid`, `arp`, `stinger`, `scatter`, `adaptive` |
 | [`cyber.md`](cyber.md) | Machines (transformer, gearbox, bearing), waveguide engine, turbo, car pass-by, sci-fi interface cues, glitch and voice effects, texture synthesis, machine identification |
 | [`klang.md`](klang.md) | Ports of the Klang procedural library (vehicles), UI ticks, `sampler` and `articulate` layers, QA harness |

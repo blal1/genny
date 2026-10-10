@@ -1,0 +1,10 @@
+{"name": "nes_overworld", "sr": 48000, "bpm": 138, "normalize": -3.0, "layers": [
+ {"type": "chip", "system": "nes", "channels": {
+  "pulse1": {"duty": 1, "vol": [15, 13, 11, 10, 9, 8, 8, 7], "vib": 0.15, "vib_delay": 0.2,
+   "steps": "D5:1 F#5:.5 A5:1 G5:.5 F#5:1 | E5:.5 D5:.5 E5:1 B4:2 | G5:1 B5:.5 A5:1 G5:.5 E5:1 | F#5:1.5 E5:.5 D5:2 | B4:.5 D5:.5 G5:1 F#5:.5 E5:.5 D5:1 | C#5:1 E5:1 A5:1.5 G5:.5 | F#5:.5 G5:.5 A5:1 E5:1 C#5:1 | D5:3 -:1"},
+  "pulse2": {"duty": 2, "vol": [8, 7, 6, 5, 5, 4],
+   "steps": "[D4,F#4,A4]:1 -:1 [D4,F#4,A4]:1 -:1 | [E4,G4,B4]:1 -:1 [E4,G4,B4]:1 -:1 | [G3,B3,D4]:1 -:1 [A3,C#4,E4]:1 -:1 | [D4,F#4,A4]:1 -:1 [D4,F#4,A4]:1 -:1 | [G3,B3,D4]:1 -:1 [G3,B3,D4]:1 -:1 | [A3,C#4,E4]:1 -:1 [A3,C#4,E4]:1 -:1 | [D4,F#4,A4]:1 -:1 [A3,C#4,E4]:1 -:1 | [D4,F#4,A4]:2 -:2"},
+  "triangle": {"gate": 0.8, "steps": "D3:1 A2:1 D3:1 A2:1 | E3:1 B2:1 E3:1 B2:1 | G2:1 D3:1 A2:1 E3:1 | D3:1 A2:1 D3:1 F#3:1 | G2:1 D3:1 G2:1 B2:1 | A2:1 E3:1 A2:1 C#3:1 | D3:1 A2:1 A2:1 E3:1 | D3:2 -:2"},
+  "noise": [
+   {"step": 0.5, "vol": [8, 5, 3, 1, 0], "steps": "C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8 C8"},
+   {"step": 1, "decay": 1, "steps": "- C6 - C6 - C6 - C6 - C6 - C6 - C6 - C6 - C6 - C6 - C6 - C6 - C6 - C6 - C6"}]}}]}

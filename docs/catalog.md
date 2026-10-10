@@ -5,17 +5,17 @@ Use these names in JSON specs (`"inst"`, `"kind"`, fx `"type"`, layer `"type"`) 
 
 | section | count |
 |---|---|
-| Instruments | 129 |
+| Instruments | 136 |
 | Drums | 48 |
 | Sound effects | 234 |
 | Effects | 96 |
-| Extra layer types | 13 |
+| Extra layer types | 14 |
 
-## Instruments (129)
+## Instruments (136)
 
 Usage: `{"type": "seq", "inst": "<name>", "steps": "C4:1 E4:1", "params": {...}}`
 
-Index by module: **acoustic**: `harp`, `guitar`, `flute`, `wurli`, `clav`, `harpsichord`, `celesta`, `toy_piano`, `church_organ`, `accordion`, `xylophone`, `glockenspiel`, `handpan`, `tubular_bell`, `gamelan`, `singing_bowl`, `timpani`, `steel_guitar`, `electric_guitar`, `muted_guitar`, `dist_guitar`, `banjo`, `mandolin`, `koto`, `sitar`, `pizzicato`, `upright_bass`, `finger_bass`, `slap_bass`, `violin`, `cello`, `clarinet`, `oboe`, `sax`, `trumpet`, `french_horn`, `trombone`, `tuba`, `harmonica`, `pan_flute`, `whistle`, `ocarina`, `didgeridoo`; **choir**: `voice`, `vocal_choir`, `hum`, `throat_singing`, `falsetto`, `boys_choir`, `chant`; **compose**: `ks_string`; **creatures**: `whistling`; **fdstring**: `fd_string`, `fd_piano`, `prepared_piano`, `slack_string`, `fd_bar`, `bowed_string_fd`; **foley**: `church_bell`, `handbell`, `china_bell`, `glass_harmonica`, `bowed_bowl`, `hurdy_gurdy`, `wind_chime`; **friction**: `cristal`, `rubbed_glass`, `bowed_bar`, `bowed_sheet`, `rod_bank`, `whistling_blades`, `tuning_fork`, `coil_spring`; **instruments**: `piano`, `felt_piano`, `epiano`, `organ`, `pluck`, `bass`, `sub`, `wobble`, `lead`, `pad`, `strings`, `brass`, `choir`, `pwm`, `bell`, `glass`, `marimba`, `kalimba`, `vibraphone`, `music_box`, `steel_drum`, `chip`, `chiptri`, `board`, `sine`, `square`, `saw`, `synth`; **klang**: `viola`, `bassoon`, `cor_anglais`, `bass_clarinet`, `piccolo`, `recorder`, `hand_chime`; **retro**: `sfxr_voice`, `zzfx_voice`, `psg`; **reverbs**: `feedback_guitar`; **synths**: `soft_lead`, `square_lead`, `synth_pluck`, `theremin`, `warm_pad`, `glass_pad`, `string_machine`, `acid`, `reese`, `fm_bass`, `bass808`; **tubes**: `reed_tube`, `reed_cone`, `vowel_tube`, `piston_pipe`, `pvc_pipe`, `bottle`
+Index by module: **acoustic**: `harp`, `guitar`, `strings`, `flute`, `wurli`, `clav`, `harpsichord`, `celesta`, `toy_piano`, `church_organ`, `accordion`, `xylophone`, `glockenspiel`, `handpan`, `tubular_bell`, `gamelan`, `singing_bowl`, `timpani`, `steel_guitar`, `electric_guitar`, `muted_guitar`, `dist_guitar`, `banjo`, `mandolin`, `koto`, `sitar`, `pizzicato`, `upright_bass`, `finger_bass`, `slap_bass`, `violin`, `cello`, `clarinet`, `oboe`, `sax`, `trumpet`, `french_horn`, `trombone`, `tuba`, `harmonica`, `pan_flute`, `whistle`, `ocarina`, `didgeridoo`; **chiptune**: `nes_pulse`, `nes_triangle`, `nes_noise`, `gb_pulse`, `gb_wave`, `gb_noise`, `ym2612`; **choir**: `voice`, `vocal_choir`, `hum`, `throat_singing`, `falsetto`, `boys_choir`, `chant`; **compose**: `ks_string`; **creatures**: `whistling`; **fdstring**: `fd_string`, `fd_piano`, `prepared_piano`, `slack_string`, `fd_bar`, `bowed_string_fd`; **foley**: `church_bell`, `handbell`, `china_bell`, `glass_harmonica`, `bowed_bowl`, `hurdy_gurdy`, `wind_chime`; **friction**: `cristal`, `rubbed_glass`, `bowed_bar`, `bowed_sheet`, `rod_bank`, `whistling_blades`, `tuning_fork`, `coil_spring`; **instruments**: `piano`, `felt_piano`, `epiano`, `organ`, `pluck`, `bass`, `sub`, `wobble`, `lead`, `pad`, `brass`, `choir`, `pwm`, `bell`, `glass`, `marimba`, `kalimba`, `vibraphone`, `music_box`, `steel_drum`, `chip`, `chiptri`, `board`, `sine`, `square`, `saw`, `synth`; **klang**: `viola`, `bassoon`, `cor_anglais`, `bass_clarinet`, `piccolo`, `recorder`, `hand_chime`; **retro**: `sfxr_voice`, `zzfx_voice`, `psg`; **reverbs**: `feedback_guitar`; **synths**: `soft_lead`, `square_lead`, `synth_pluck`, `theremin`, `warm_pad`, `glass_pad`, `string_machine`, `acid`, `reese`, `fm_bass`, `bass808`; **tubes**: `reed_tube`, `reed_cone`, `vowel_tube`, `piston_pipe`, `pvc_pipe`, `bottle`
 
 ### `accordion` — keys, range C3-C6
 
@@ -417,11 +417,12 @@ Electric bass guitar, fingerstyle: round, even, sustaining (rock, pop, soul, reg
 
 ### `flute` — wind, range C4-C7
 
-Hybrid jet-driven flute: physical waveguide with a pitch-stable acoustic anchor.  *(module `acoustic`)*
+Concert flute, jet-driven (STK Flute: jet delay, cubic jet, bore waveguide), blown at STK's pressure and held on the written pitch. The breath rides on the jet pressure inside the model; no noise is added on top of the tone.  *(module `acoustic`)*
 
 | param | default | meaning |
 |---|---|---|
-| `breath` | `0.15` | noise amount |
+| `breath` | `0.15` | turbulence on the jet: 0 = none .. 0.4 (STK's noise gain; 0.15 is its default) |
+| `vibrato` | `0.0` | 0 = steady .. 1 = STK's breath vibrato (5.9 Hz) |
 
 ### `fm_bass` — bass, range C1-C4
 
@@ -442,6 +443,55 @@ Gamelan metallophone (saron/gender): bronze bars tuned in beating pairs, so ever
 | param | default | meaning |
 |---|---|---|
 | `ombak` | `3.0` | beat rate Hz between the paired bars |
+
+### `gb_noise` — retro, range C3-C8
+
+Game Boy noise channel: 15-bit LFSR, or 7-bit for a metallic pitched buzz, with the hardware envelope.  *(module `chiptune`)*
+
+| param | default | meaning |
+|---|---|---|
+| `period` | `-1` | noise: the period index (NES 0..15) or [shift, divider] (Game Boy); -1 = from the note's pitch |
+| `short` | `False` | noise: the short LFSR mode (93 or 31 steps on the NES, 7-bit on the Game Boy), a buzzing pitched noise |
+| `volume` | `15` | 0..15, the channel volume when no envelope runs |
+| `vol` | `None` | driver table: a list of volumes 0..15, one per 1/60 s, the last one held (a plucked note: [15, 11, 8, 6, 4, 3]) |
+| `env` | `0` | Game Boy hardware envelope: -1..-7 falls one step every n/64 s, 1..7 rises, 0 = off |
+| `pitch` | `None` | driver table: semitone offsets, one per 1/60 s, the last one held (a drum: [12, 7, 3, 0]) |
+| `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
+
+### `gb_pulse` — retro, range C2-C7
+
+Game Boy pulse channel: 8-step duty, 4-bit volume with the hardware envelope, frequency sweep, driver tables.  *(module `chiptune`)*
+
+| param | default | meaning |
+|---|---|---|
+| `duty` | `2` | 0..3 = 12.5, 25, 50, 75 %, or a driver table of them, one per 1/60 s, the last one held |
+| `volume` | `15` | 0..15, the channel volume when no envelope runs |
+| `vol` | `None` | driver table: a list of volumes 0..15, one per 1/60 s, the last one held (a plucked note: [15, 11, 8, 6, 4, 3]) |
+| `env` | `0` | Game Boy hardware envelope: -1..-7 falls one step every n/64 s, 1..7 rises, 0 = off |
+| `arp` | `None` | driver table: semitone offsets, one per 1/60 s, cycling (a chord on one channel: [0, 4, 7]) |
+| `pitch` | `None` | driver table: semitone offsets, one per 1/60 s, the last one held (a drum: [12, 7, 3, 0]) |
+| `vib` | `0.0` | vibrato depth in semitones, applied to the timer once per 1/60 s |
+| `vib_hz` | `6.0` | vibrato rate |
+| `vib_delay` | `0.15` | seconds before the vibrato starts |
+| `sweep` | `None` | hardware sweep. NES [period P 0..7, shift 1..7, negate 0/1] every (P + 1)/120 s; Game Boy pulse 1 [pace 1..7, step 1..7, direction 1 up / -1 down] every pace/128 s |
+| `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
+| `bright` | `0.5` | retro_stylized: 0 = dull .. 0.5 = default .. 1 = unfiltered |
+
+### `gb_wave` — retro, range C1-C6
+
+Game Boy wave channel: 32 four-bit samples of wave RAM read at the note's rate (bass, leads, any shape).  *(module `chiptune`)*
+
+| param | default | meaning |
+|---|---|---|
+| `wave` | `'triangle'` | 32 values 0..15, 32 hex digits, or triangle / saw / square / pulse25 / sine / organ / bass |
+| `level` | `1` | Game Boy wave: output level 1 = 100 %, 2 = 50 %, 3 = 25 % |
+| `arp` | `None` | driver table: semitone offsets, one per 1/60 s, cycling (a chord on one channel: [0, 4, 7]) |
+| `pitch` | `None` | driver table: semitone offsets, one per 1/60 s, the last one held (a drum: [12, 7, 3, 0]) |
+| `vib` | `0.0` | vibrato depth in semitones, applied to the timer once per 1/60 s |
+| `vib_hz` | `6.0` | vibrato rate |
+| `vib_delay` | `0.15` | seconds before the vibrato starts |
+| `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
+| `bright` | `1.0` | retro_stylized: 0 = dull .. 0.5 = default .. 1 = unfiltered |
 
 ### `glass` — mallet, range C4-C7
 
@@ -590,6 +640,56 @@ Tiny music-box comb tine: sweet and delicate, made to be played high.  *(module 
 
 Palm-muted electric guitar: short woody chug (funk scratch, reggae skank, rock eighths).  *(module `acoustic`)*
 
+### `nes_noise` — retro, range C3-C8
+
+NES 2A03 noise channel: 15-bit LFSR at 16 fixed rates; the short mode is a buzzing, pitched noise.  *(module `chiptune`)*
+
+| param | default | meaning |
+|---|---|---|
+| `period` | `-1` | noise: the period index (NES 0..15) or [shift, divider] (Game Boy); -1 = from the note's pitch |
+| `short` | `False` | noise: the short LFSR mode (93 or 31 steps on the NES, 7-bit on the Game Boy), a buzzing pitched noise |
+| `volume` | `15` | 0..15, the channel volume when no envelope runs |
+| `vol` | `None` | driver table: a list of volumes 0..15, one per 1/60 s, the last one held (a plucked note: [15, 11, 8, 6, 4, 3]) |
+| `decay` | `None` | NES hardware envelope: divider V 0..15, the volume falls 15 -> 0 one step every (V + 1)/240 s |
+| `loop` | `False` | NES hardware envelope: start again at 15 when it reaches 0 |
+| `pitch` | `None` | driver table: semitone offsets, one per 1/60 s, the last one held (a drum: [12, 7, 3, 0]) |
+| `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
+
+### `nes_pulse` — retro, range C2-C7
+
+NES 2A03 pulse channel: 8-step sequencer at four duties, 4-bit volume, hardware envelope and sweep, driver tables.  *(module `chiptune`)*
+
+| param | default | meaning |
+|---|---|---|
+| `duty` | `2` | 0..3 = 12.5, 25, 50, 75 %, or a driver table of them, one per 1/60 s, the last one held |
+| `volume` | `15` | 0..15, the channel volume when no envelope runs |
+| `vol` | `None` | driver table: a list of volumes 0..15, one per 1/60 s, the last one held (a plucked note: [15, 11, 8, 6, 4, 3]) |
+| `decay` | `None` | NES hardware envelope: divider V 0..15, the volume falls 15 -> 0 one step every (V + 1)/240 s |
+| `loop` | `False` | NES hardware envelope: start again at 15 when it reaches 0 |
+| `arp` | `None` | driver table: semitone offsets, one per 1/60 s, cycling (a chord on one channel: [0, 4, 7]) |
+| `pitch` | `None` | driver table: semitone offsets, one per 1/60 s, the last one held (a drum: [12, 7, 3, 0]) |
+| `vib` | `0.0` | vibrato depth in semitones, applied to the timer once per 1/60 s |
+| `vib_hz` | `6.0` | vibrato rate |
+| `vib_delay` | `0.15` | seconds before the vibrato starts |
+| `sweep` | `None` | hardware sweep. NES [period P 0..7, shift 1..7, negate 0/1] every (P + 1)/120 s; Game Boy pulse 1 [pace 1..7, step 1..7, direction 1 up / -1 down] every pace/128 s |
+| `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
+| `bright` | `0.5` | retro_stylized: 0 = dull .. 0.5 = default .. 1 = unfiltered |
+
+### `nes_triangle` — retro, range C1-C6
+
+NES 2A03 triangle channel: a 32-step, 4-bit staircase triangle with no volume control (the console's bass).  *(module `chiptune`)*
+
+| param | default | meaning |
+|---|---|---|
+| `linear` | `0` | NES triangle: linear counter, the note stops after this many 1/240 s (0 = off) |
+| `arp` | `None` | driver table: semitone offsets, one per 1/60 s, cycling (a chord on one channel: [0, 4, 7]) |
+| `pitch` | `None` | driver table: semitone offsets, one per 1/60 s, the last one held (a drum: [12, 7, 3, 0]) |
+| `vib` | `0.0` | vibrato depth in semitones, applied to the timer once per 1/60 s |
+| `vib_hz` | `6.0` | vibrato rate |
+| `vib_delay` | `0.15` | seconds before the vibrato starts |
+| `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
+| `bright` | `1.0` | retro_stylized: 0 = dull .. 0.5 = default .. 1 = unfiltered |
+
 ### `oboe` — wind, range Bb3-G6
 
 Oboe: reedy, nasal, plaintive (pastoral, baroque, Middle-Eastern flavoured lines).  *(module `acoustic`)*
@@ -623,11 +723,12 @@ Warm slow-attack synth pad (stereo when chorused).  *(module `instruments`)*
 
 ### `pan_flute` — wind, range C4-C7
 
-Pan flute / bamboo flute: breathy, chiffy, hollow (Andean, new age, calm exploration).  *(module `acoustic`)*
+Pan flute: a stopped pipe blown across its end. Odd harmonics, a breath that sits in the pipe's own resonances, a soft chiff.  *(module `acoustic`)*
 
 | param | default | meaning |
 |---|---|---|
-| `breath` | `0.3` | air noise 0..1 |
+| `breath` | `0.3` | air 0..1 |
+| `vibrato` | `0.0` | 0 = steady .. 1 |
 
 ### `piano` — keys, range A0-C7
 
@@ -640,11 +741,12 @@ Physical acoustic piano: nonlinear felt hammer, stiff dispersive string and comm
 
 ### `piccolo` — wind, range D5-C8
 
-Piccolo: the flute an octave up, nearly a pure tone (marches, sparkle on top of a tutti; keep it soft).  *(module `klang`)*
+Piccolo: the flute an octave up, jet-driven like it (marches, sparkle on top of a tutti; keep it soft).  *(module `klang`)*
 
 | param | default | meaning |
 |---|---|---|
-| `breath` | `0.15` | air noise 0..1 |
+| `breath` | `0.15` | turbulence on the jet: 0 = none .. 0.4 |
+| `vibrato` | `0.0` | 0 = steady .. 1 |
 
 ### `piston_pipe` — organ, range C2-C4
 
@@ -717,12 +819,13 @@ Pulse-width-modulated synth (retro/lush).  *(module `instruments`)*
 
 ### `recorder` — wind, range C4-D7
 
-Recorder: a plain, breathy fipple flute with a soft chiff on each note (early music, folk, school).  *(module `klang`)*
+Recorder: a fipple flute, jet-driven, with the tongued chiff of each note as a short overshoot of the breath (early music, folk, school).  *(module `klang`)*
 
 | param | default | meaning |
 |---|---|---|
-| `breath` | `0.25` | air noise 0..1 |
-| `chiff` | `1.0` | attack chiff 0..2 |
+| `breath` | `0.2` | turbulence on the jet: 0 = none .. 0.4 |
+| `chiff` | `1.0` | tongued attack 0..2 |
+| `vibrato` | `0.0` | 0 = steady .. 1 |
 
 ### `reed_cone` — wind, range D3-C6
 
@@ -908,12 +1011,15 @@ Steel-string acoustic guitar: bright strum and fingerpicking (folk, country, pop
 
 ### `strings` — bowed, range C2-C6
 
-String ensemble: detuned saws, slow attack, vibrato.  *(module `instruments`)*
+String section: individual bowed players with their own vibrato, a few cents and a few milliseconds apart, centred on the written pitch. Short notes are bowed short.  *(module `acoustic`)*
 
 | param | default | meaning |
 |---|---|---|
-| `attack` | `0.25` | s |
-| `release` | `0.5` | s |
+| `attack` | `0.12` | s of bow attack on a long note (a short note takes 40 % of its length) |
+| `release` | `0.3` | s |
+| `players` | `6` | 2..12 players |
+| `scatter` | `0.0` | cents: standard deviation of the players' mean pitch (Ternstrom: 0-5 preferred, 14 tolerable); above 0 the section beats slowly |
+| `vibrato` | `0.12` | 0 = none .. 2 = wide; each player has their own, so more than about 0.2 makes the section's level heave |
 
 ### `sub` — bass, range C1-C3
 
@@ -1108,7 +1214,11 @@ Warm analog pad: dark, slow, breathing filter (ambient beds, ballads, lo-fi).  *
 
 ### `whistle` — wind, range C5-C7
 
-Human whistle: pure tone with a little air, slides into each note (westerns, carefree tunes).  *(module `acoustic`)*
+Human whistle: a near-pure tone that slides into each note, with a little breath in its own resonance.  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `vibrato` | `0.3` | 0 = steady .. 1 |
 
 ### `whistling` — winds, range C5-C7
 
@@ -1160,6 +1270,17 @@ Wurlitzer-style reed electric piano: hollow and a little nasal, growls when hit 
 ### `xylophone` — mallet, range C4-C8
 
 Physical struck wooden-bar model backed by modal-bar research tables.  *(module `acoustic`)*
+
+### `ym2612` — retro, range C1-C7
+
+Yamaha YM2612 (Mega Drive) FM channel: four operators, eight algorithms, the chip's envelopes, feedback and LFO.  *(module `chiptune`)*
+
+| param | default | meaning |
+|---|---|---|
+| `patch` | `'epiano'` | a patch name (bass / bell / brass / clav / epiano / lead / organ / pluck / sine / strings) or {alg 0..7, fb 0..7, ams 0..3, pms 0..7, ops: [4 x {ar 0..31, dr 0..31, sr 0..31, rr 0..15, sl 0..15, tl 0..127, ks 0..3, mul 0..15, dt 0..7, am 0/1}]} |
+| `lfo` | `None` | LFO rate 0 (slowest) .. 7 (fastest) or null = off; it acts through the patch's pms (vibrato) and ams + am (tremolo) |
+| `tail` | `0.6` | seconds rendered after the key goes up, for the release |
+| `mode` | `'retro_stylized'` | retro_stylized = the full-resolution operator sum / hardware_accurate = the chip's 9-bit output and DAC step |
 
 ### `zzfx_voice` — retro, range C2-C6
 
@@ -5602,7 +5723,7 @@ zita-rev1 (Fons Adriaensen): the smooth 8-line reverb with separate low and mid 
 | `width` | `1.0` | stereo width 0..1 |
 | `tail` | `None` | seconds of tail appended (auto = 1.2 x the longer decay, max 10) |
 
-## Extra layer types (13)
+## Extra layer types (14)
 
 Built-in: `synth`, `seq`, `drum`, `pattern`, `sfx`, `speech`, `file`, `silence`, `group` (see AGENTS.md).
 
@@ -5644,6 +5765,16 @@ length, at least 60 ms), hit (60 ms: just the attack and the instrument's own ri
 (the `pizzicato` instrument at the same pitches), harmonic (an octave up, vel x 0.6),
 tremolo (re-struck ``rate`` times a second, alternating strong / weak), roll (the same with
 a crescendo over each note). ``rate``: strokes per second for tremolo / roll (default 12).
+
+**chip** — A whole sound chip (`system`: nes | gb), hardware-accurate: one voice per channel, the chip's mixer and filters.
+
+### `chip`  *(module `chiptune`)*
+
+A whole sound chip (`system`: nes | gb), hardware-accurate: one voice per channel, the chip's mixer and filters.
+
+`channels` maps a hardware channel (nes: pulse1, pulse2, triangle, noise; gb: pulse1, pulse2, wave, noise) to
+a lane {"steps": "...", ...patch} or to a list of lanes sharing the channel, as a driver shares the noise
+channel between its drums: the latest note wins. A chord in `steps` is played as a 60 Hz arpeggio.
 
 **compose** — One generated part (role melody|bass|chords|arp|drums|pad|counter) from key, scale, progression, style and seed.
 

@@ -1287,16 +1287,23 @@ def _fipple(freq, dur, sr, vel, breath, chiff, corner, seed, gain):
     return (y + air * (float(breath) * 0.25 * np.abs(y) + float(chiff) * 0.2 * np.exp(-t / 0.02) * (0.5 + 0.5 * vel))) * gain
 
 
-@instrument("piccolo", "Piccolo: the flute an octave up, nearly a pure tone (marches, sparkle on top of a tutti; keep it soft).",
-            family="wind", span=("D5", "C8"), breath=(0.15, "air noise 0..1"))
-def piccolo(freq, dur, sr=DEFAULT_SR, vel=1.0, breath=0.15):
-    return _fipple(freq, dur, sr, vel, breath, 0.3, 2400.0, 58, 0.44)
+@instrument("piccolo", "Piccolo: the flute an octave up, jet-driven like it (marches, sparkle on top of a tutti; keep it soft).",
+            family="wind", span=("D5", "C8"), breath=(0.15, "turbulence on the jet: 0 = none .. 0.4"), vibrato=(0.0, "0 = steady .. 1"))
+def piccolo(freq, dur, sr=DEFAULT_SR, vel=1.0, breath=0.15, vibrato=0.0):
+    from .acoustic import _jet_voice
+    return _jet_voice(freq, dur, sr, vel, breath, vibrato, top=6500.0, gain=1.0)
 
 
-@instrument("recorder", "Recorder: a plain, breathy fipple flute with a soft chiff on each note (early music, folk, school).",
-            family="wind", span=("C4", "D7"), breath=(0.25, "air noise 0..1"), chiff=(1.0, "attack chiff 0..2"))
-def recorder(freq, dur, sr=DEFAULT_SR, vel=1.0, breath=0.25, chiff=1.0):
-    return _fipple(freq, dur, sr, vel, breath, chiff, 2000.0, 59, 0.44)
+@instrument("recorder", "Recorder: a fipple flute, jet-driven, with the tongued chiff of each note as a short overshoot of the breath (early music, folk, school).",
+            family="wind", span=("C4", "D7"), breath=(0.2, "turbulence on the jet: 0 = none .. 0.4"), chiff=(1.0, "tongued attack 0..2"),
+            vibrato=(0.0, "0 = steady .. 1"))
+def recorder(freq, dur, sr=DEFAULT_SR, vel=1.0, breath=0.2, chiff=1.0, vibrato=0.0):
+    """The STK jet model, not STK's Recorder (the Verge, Hirschberg and Causse model): that one is in
+    genny.physical.waveguides.recorder(model="verge") and does not hold a written pitch. It blows every note at one
+    pressure, and a scan of 40 pressures per note found at most a few narrow windows where the pipe speaks within
+    60 cents of the note (one for C4, one for G4, none for C7), each at a different pressure."""
+    from .acoustic import _jet_voice
+    return _jet_voice(freq, dur, sr, vel, breath, vibrato, top=3600.0, gain=1.0, chiff=chiff)
 
 
 @instrument("hand_chime", "Hand chime: a clapper-struck tuned tube, strong fundamental with its twelfth; softer and rounder than a handbell.",

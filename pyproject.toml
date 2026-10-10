@@ -1,6 +1,6 @@
 [project]
 name = "genny"
-version = "1.0.1"
+version = "1.1.0"
 description = "Procedural and physically informed sound synthesis: DSP, modal bodies, waveguides, particles, fluids, voices, environments and acoustics."
 readme = "README.md"
 authors = [{ name = "blal1" }]

@@ -382,21 +382,26 @@ class Flute:
     def note(self, frequency: float, dur: float, *, sr: int = DEFAULT_SR,
              seed: int = 0) -> np.ndarray:
         n = max(1, int(round(dur * _PHYS_SR)))
-        env = np.ones(n) * np.clip(self.pressure, 0.0, 1.5)
-        a = max(1, int(min(n, round(0.05 * _PHYS_SR))))
-        env[:a] *= np.linspace(0.0, 1.0, a)
-        specialized = _wg.recorder(frequency, env, dur, np.random.default_rng(seed),
-                                   model=self.model, noise_gain=self.noise,
-                                   jet_ratio=self.jet_ratio, vibrato_gain=self.vibrato)
-        # v0.11: the shared graph contributes a true hydrodynamic jet delay and
-        # passive bore/bell feedback. The specialized renderer remains the
-        # dominant timbral path while migration continues.
-        from .graphsolver import jet_bore
-        jet_velocity = 8.0 + 18.0*np.clip(self.pressure,0.0,1.5)
-        common = jet_bore(frequency, dur, jet_velocity=jet_velocity, sr=_PHYS_SR,
-                          jet_length=max(.003, .012*self.jet_ratio))
-        m=min(len(specialized),len(common.audio))
-        y=.78*np.asarray(specialized[:m],float)+.22*np.asarray(common.audio[:m],float)
+        rng = np.random.default_rng(seed)
+        if self.model == "flute":
+            # Blown as STK blows it (Flute::noteOn): maxPressure (1.1 + 0.2 amp) / 0.8 through its ADSR.
+            # A flat pressure of `pressure` (at most 1.5, in practice 0.5-0.9) is under that: the jet does not
+            # overblow and the pipe speaks in its low register. Measured before this change: C4 at -1204 cents,
+            # A4 -1191, E5 -1184, C6 -1137, G6 -1120, and no sound at all with noise 0. With STK's pressure:
+            # +0.2, 0.0, +0.5, +0.3, +1.6 cents, and it speaks without any noise.
+            amp = float(np.clip(self.pressure, 0.05, 1.0))
+            env = _wg.wind_envelope("flute", dur, amp, release=max(dur - 0.06, 0.02))
+        else:
+            env = np.ones(n) * np.clip(self.pressure, 0.0, 1.5)
+            a = max(1, int(min(n, round(0.05 * _PHYS_SR))))
+            env[:a] *= np.linspace(0.0, 1.0, a)
+            amp = 0.8
+        y = np.asarray(_wg.recorder(frequency, env, dur, rng, amp=amp, model=self.model, noise_gain=self.noise,
+                                    jet_ratio=self.jet_ratio, vibrato_gain=self.vibrato), float)
+        # The shared-graph `jet_bore` used to be mixed in here at 22 %. It does not follow the note: its
+        # loudest partial measured 60.7 Hz for C4, A4, E5, C6 and G6 alike, at an RMS of 0.5-0.6 (the flute
+        # model itself peaks at 0.2-0.4), so every flute note carried a 60 Hz buzz. It stays available as
+        # graphsolver.jet_bore and is out of the audio path until it tracks pitch.
         peak=float(np.max(np.abs(y))) if len(y) else 0.0
         if peak>1.0: y/=peak
         return _to_sr(y, sr)

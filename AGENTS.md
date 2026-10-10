@@ -152,8 +152,8 @@ A top-level JSON array of specs also works. `genny render batch.json` renders al
 
 ## Extended catalog (physical models)
 
-The names above are the core set. The modules below add the rest: 129 instruments, 48 drums, 234 sfx, 96 effects
-and 13 extra layer types in all. `genny list` (or `genny list --json`, `genny list layers`) prints every name with
+The names above are the core set. The modules below add the rest: 136 instruments, 48 drums, 234 sfx, 96 effects
+and 14 extra layer types in all. `genny list` (or `genny list --json`, `genny list layers`) prints every name with
 its parameters; `docs/catalog.md` is the same list as a page, `docs/physics.md` says which physical model is behind
 each sound, and each module has a page with recipes.
 

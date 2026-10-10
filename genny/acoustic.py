@@ -609,43 +609,88 @@ def _hybrid_anchor(physical, anchor, physical_mix=0.55):
 @instrument("violin", "Hybrid physical bowed violin: bow/string waveguide anchored to the requested playing pitch.",
             family="bowed", span=("G3", "C7"), attack=(0.07, "s"), vibrato=(1.0, "0 = none .. 2 = wide"))
 def violin(freq, dur, sr=DEFAULT_SR, vel=1.0, attack=0.07, vibrato=1.0):
-    from .physics import BowedString
-    yp = BowedString(body="violin", bow_pressure=float(np.clip(.55+.4*vel,0,1)),
-                     bow_velocity=.13+.14*vel, vibrato=vibrato>.05,
-                     bow_noise=.035+.025*vel).note(freq, dur+.10, sr=sr, seed=51)
-    ya = _blown(freq, dur+.10, sr, vel,
-                dict(tilt=1.7, formants=VIOLIN_BODY, corner=2000., slope=3.),
-                dict(tilt=1.1, formants=VIOLIN_BODY, corner=3000., slope=3.),
-                attack=attack, release=.10, bloom=attack,
-                vib=(5.8,.18*vibrato,.12))
-    y = _hybrid_anchor(yp, ya, .40)
+    # One pitch source (see _ONE_SOURCE below): the BowedString branch that was mixed in at 40 % is not a pitched
+    # string yet (72-79 % of its energy above 5 kHz, 26-60 % off the harmonics, and it cannot be retuned).
+    y = _blown(freq, dur+.10, sr, vel,
+               dict(tilt=1.7, formants=VIOLIN_BODY, corner=2000., slope=3.),
+               dict(tilt=1.1, formants=VIOLIN_BODY, corner=3000., slope=3.),
+               attack=attack, release=.10, bloom=attack,
+               vib=(5.8,.18*vibrato,.12))
     return _physical_note_fade(F.lowpass(y,min(4200.,.44*sr),sr,.7),sr,max(.005,attack),.10)*.62
 
 
-@instrument("flute", "Hybrid jet-driven flute: physical waveguide with a pitch-stable acoustic anchor.",
-            family="wind", span=("C4", "C7"), breath=(0.15, "noise amount"))
-def flute(freq, dur, sr=DEFAULT_SR, vel=1.0, breath=0.15):
-    from .physics import Flute as PhysicalFlute
-    yp = PhysicalFlute(model="flute", pressure=.50+.42*vel, noise=max(.01,float(breath)),
-                       jet_ratio=.32, vibrato=.02+.04*vel).note(freq,dur+.10,sr=sr,seed=5)
-    n = _n(dur+.10,sr)
-    vib = _vibrato(freq,n,sr,rate=5.5,depth=.10,delay=.10,ramp=.30)
-    amps=np.array([1.,.25*(.6+.4*vel),.08*vel])*_roll(np.array([1,2,3])*freq,2600.)/float(_roll(freq,2600.))
-    ya=_harmonics(vib,n,sr,amps)
-    ya += F.bandpass(O.white(n,seed=5),_cut(freq,2,700,1900),sr,2.)*float(breath)*.4
-    ya = apply(ya,adsr(dur+.02,.06,.08,.86,.08,sr))
-    y=_hybrid_anchor(yp,ya,.30)
-    return _physical_note_fade(F.lowpass(y,min(4200.,.44*sr),sr,.8),sr,.055,.10)*.85
+_JET_TUNE: dict = {}
 
 
+def _jet_tune(freq: float, amp: float, jet: float) -> float:
+    """Sounding pitch / written pitch of the jet model for this note, measured once on a steady blow."""
+    key = (round(float(freq), 2), round(amp, 2), jet)
+    if key not in _JET_TUNE:
+        from .physical import waveguides as wg
+        y = wg.recorder(freq, wg.wind_envelope("flute", 0.7, amp), 0.7, np.random.default_rng(5), amp=amp, model="flute",
+                        noise_gain=0.0, jet_ratio=jet, vibrato_gain=0.0)
+        m = np.asarray(y, float)[int(.3 * wg.SR):int(.62 * wg.SR)]
+        # The strongest partial within a major second of the written pitch, parabolic peak (an autocorrelation
+        # f0 is unreliable above 2 kHz, where the top of the flute's range lies).
+        p = np.abs(np.fft.rfft(m * np.hanning(len(m)), 1 << 18))
+        fr = np.fft.rfftfreq(1 << 18, 1.0 / wg.SR)
+        band = np.flatnonzero((fr > freq * 0.89) & (fr < freq * 1.12))
+        i = band[np.argmax(p[band])]
+        a, b, c = p[i - 1], p[i], p[i + 1]
+        f0 = fr[i] + 0.5 * (a - c) / (a - 2 * b + c + 1e-30) * (fr[1] - fr[0])
+        _JET_TUNE[key] = float(f0 / freq) if b > 0 else 1.0
+    return _JET_TUNE[key]
+
+
+def _jet_voice(freq, dur, sr, vel, breath, vibrato, jet=.32, top=4200., gain=1.08, chiff=0.0):
+    """A flue instrument: the STK Flute jet model (jet delay, cubic jet table, bore waveguide with a one-pole
+    reflection), blown at STK's noteOn pressure and held on the written pitch. One sound source.
+
+    The breath noise multiplies the blowing pressure inside the loop (STK `breathPressure * noiseGain * noise`):
+    it scales with the jet's dynamic pressure, which goes as the jet speed squared (the dependence Hirschberg and
+    Verge measured for turbulence noise in flue instruments), and the bore shapes it as it shapes the tone. Nothing
+    is added on top of the note. `chiff`: the tongued attack of a fipple flute, as a short overshoot of the
+    blowing pressure (UNSOURCED: 25 % per unit of chiff, 20 ms)."""
+    from .physics import _to_sr
+    from .physical import waveguides as wg
+    amp = float(np.clip(.25 + .75 * vel, .05, 1.))
+    k = _jet_tune(freq, amp, jet)                                 # within 2 cents up to G6; +48 cents at C7, +91 at C8
+    d = (dur + .10) / k
+    env = wg.wind_envelope("flute", d, amp, release=max(d - .06, .02))
+    if chiff > 0:
+        env = env * (1. + .25 * float(min(chiff, 2.)) * np.exp(-np.arange(len(env)) / (.02 * wg.SR)))
+    y = np.asarray(wg.recorder(freq, env, d, np.random.default_rng(5), amp=amp, model="flute",
+                               noise_gain=float(np.clip(breath, 0., .4)), jet_ratio=jet,
+                               vibrato_gain=.05 * float(np.clip(vibrato, 0., 2.))), float)
+    if abs(k - 1.) > 2e-4:                                         # a sharp note (k > 1) is read back slower, by 1 / k
+        y = np.interp(np.arange(int(len(y) * k)) / k, np.arange(len(y)), y)
+    y = _to_sr(y, sr)[:_n(dur + .10, sr)]
+    return _physical_note_fade(F.lowpass(y, min(top, .44 * sr), sr, .8), sr, .03, .10) * gain
+
+
+@instrument("flute", "Concert flute, jet-driven (STK Flute: jet delay, cubic jet, bore waveguide), blown at STK's pressure and held on the written pitch. "
+            "The breath rides on the jet pressure inside the model; no noise is added on top of the tone.",
+            family="wind", span=("C4", "C7"), breath=(0.15, "turbulence on the jet: 0 = none .. 0.4 (STK's noise gain; 0.15 is its default)"),
+            vibrato=(0.0, "0 = steady .. 1 = STK's breath vibrato (5.9 Hz)"))
+def flute(freq, dur, sr=DEFAULT_SR, vel=1.0, breath=0.15, vibrato=0.0):
+    """It used to be a mix of three sources that did not agree: the jet model under-blown (an octave low, up to
+    80 cents flat), a 60.7 Hz `jet_bore` buzz, and a sine stack with band-passed white noise added on top (the
+    `fffff` over a sinusoid). Their beating measured as a 31 % flutter in loudness on a held E5."""
+    return _jet_voice(freq, dur, sr, vel, breath, vibrato)
+
+
+# _ONE_SOURCE. A note has one pitch source. The "hybrid" voices mixed a physical model with a formant voice at the
+# written pitch, RMS-balanced; two free-running oscillators a few cents apart beat against each other, and no retuning
+# removes it (half a cent at 400 Hz still swings the level over eight seconds). Measured on held notes, 2026-10-10:
+#   trumpet's lip model +15 to +30 cents sharp, 22 % wobble in loudness, 12-31 % of its energy off the harmonics;
+#   french horn's fine at C3, +12 cents and 25 % wobble at G4; violin's and cello's bowed model not a pitched string.
+# Each of these voices is its formant voice alone; physics.Brass and physics.BowedString stay in the library and come
+# back into the audio path when they hold the written pitch on their own.
 def _brass_hybrid(freq,dur,sr,vel,body,soft,hard,pressure,tension,top=5200.,attack=.04,release=.10,seed=56,physical_mix=.35):
-    from .physics import Brass
-    yp=Brass(pressure=pressure,lip_tension=tension).note(freq,dur+release,sr=sr,seed=seed)
-    ya=_blown(freq,dur+release,sr,vel,
-              dict(tilt=soft,formants=body,corner=min(1800.,top*.55),slope=3.),
-              dict(tilt=hard,formants=body,corner=min(3200.,top*.75),slope=3.),
-              attack=attack,release=release,bloom=max(.04,attack),vib=(5.2,.05,.3),top=top)
-    y=_hybrid_anchor(yp,ya,physical_mix)
+    y=_blown(freq,dur+release,sr,vel,
+             dict(tilt=soft,formants=body,corner=min(1800.,top*.55),slope=3.),
+             dict(tilt=hard,formants=body,corner=min(3200.,top*.75),slope=3.),
+             attack=attack,release=release,bloom=max(.04,attack),vib=(5.2,.05,.3),top=top)
     return _physical_note_fade(F.lowpass(y,min(top,.44*sr),sr,.75),sr,attack,release)
 
 
@@ -885,13 +930,9 @@ def sitar(freq,dur,sr=DEFAULT_SR,vel=1.0,buzz=.45):
 
 @instrument("cello", "Shared-core wound bowed cello with a pitch-stable body radiation anchor.", family="bowed", span=("C2","C5"), attack=(0.1,"s"), vibrato=(1.0,"0 = none .. 2 = wide"))
 def cello(freq,dur,sr=DEFAULT_SR,vel=1.0,attack=.1,vibrato=1.0):
-    from .physics import BowedString
-    yp=BowedString(body="cello",bow_pressure=float(np.clip(.58+.36*vel,0,1)),bow_velocity=.11+.12*vel,
-                   vibrato=vibrato>.05,bow_noise=.018+.010*vel).note(freq,dur+.13,sr=sr,seed=52)
-    ya=_blown(freq,dur+.13,sr,vel,dict(tilt=2.0,formants=CELLO_BODY,corner=1500.,slope=3.2),
-              dict(tilt=1.35,formants=CELLO_BODY,corner=2400.,slope=3.2),attack=attack,release=.13,bloom=attack,
-              vib=(5.1,.14*vibrato,.14),top=3600.)
-    y=_hybrid_anchor(yp,ya,.30)
+    y=_blown(freq,dur+.13,sr,vel,dict(tilt=2.0,formants=CELLO_BODY,corner=1500.,slope=3.2),        # one pitch source: _ONE_SOURCE
+             dict(tilt=1.35,formants=CELLO_BODY,corner=2400.,slope=3.2),attack=attack,release=.13,bloom=attack,
+             vib=(5.1,.14*vibrato,.14),top=3600.)
     return _physical_note_fade(F.lowpass(y,min(3000.,.38*sr),sr,.72,order=3),sr,max(.008,attack),.13)*.56
 
 # v0.20 local-interaction migrations -------------------------------------------------
@@ -1045,3 +1086,90 @@ def slap_bass(freq, dur, sr=DEFAULT_SR, vel=1.0):
     y = y * _off(y.shape[0], dur, sr, 0.05)
     y = F.peak(y / (np.max(np.abs(y)) + 1e-9) * (0.5 + 0.5 * vel), 500, sr, 1.0, -5.0)
     return F.lowpass(F.highpass(y, 35, sr), min(4000.0, 0.4 * sr), sr, 0.7)
+
+
+# String section and the other flue voices (2026-10-10) -------------------------------------------------
+_SECTION_SEED = 1729
+
+
+@instrument("strings", "String section: individual bowed players with their own vibrato, a few cents and a few milliseconds apart, "
+            "centred on the written pitch. Short notes are bowed short.",
+            family="bowed", span=("C2", "C6"), attack=(0.12, "s of bow attack on a long note (a short note takes 40 % of its length)"),
+            release=(0.3, "s"), players=(6, "2..12 players"),
+            scatter=(0.0, "cents: standard deviation of the players' mean pitch (Ternstrom: 0-5 preferred, 14 tolerable); above 0 the section beats slowly"),
+            vibrato=(0.12, "0 = none .. 2 = wide; each player has their own, so more than about 0.2 makes the section's level heave"))
+def strings(freq, dur, sr=DEFAULT_SR, vel=1.0, attack=0.12, release=0.3, players=6, scatter=0.0, vibrato=0.12):
+    """A section is its players, not one detuned oscillator. This voice was six sawtooth waves spread a quarter of
+    a semitone ("supersaw") under a 0.25 s attack: it measured 14-16 cents off the written pitch with a 20-32 %
+    wobble in loudness, and could not speak a sixteenth note.
+
+    Each player is the library's solo bowed voice (harmonics through the instrument's body formants). Between
+    players: the mean pitch differs by `scatter` cents standard deviation (Ternstrom 1993, pitch scatter in
+    ensembles: listeners prefer 0-5 cents and tolerate 14), with the section's mean on the written pitch; onsets
+    differ by 20 ms standard deviation (the timing spread reported for string quartet players); each has its own
+    vibrato rate (5.2-6.4 Hz, UNSOURCED range) and onset delay. The same section plays every note.
+
+    Defaults are set by measurement of the level of a held note (standard deviation over mean): independent
+    vibratos at 0.6 moved it by 30 % at A4 and 50 % at A5, a 3 cent scatter by 21-44 %; at vibrato 0.12 and no
+    scatter it is 1 % at C3, 6 % at A4 and 12 % at A5."""
+    rng = np.random.default_rng(_SECTION_SEED)
+    n_pl = int(np.clip(players, 2, 12))
+    cents = rng.normal(0.0, 1.0, n_pl)
+    cents = (cents - cents.mean()) / (cents.std() + 1e-9) * float(np.clip(scatter, 0.0, 30.0))
+    late = np.abs(rng.normal(0.0, 0.020, n_pl))
+    late -= late.min()
+    rates, delays = rng.uniform(5.2, 6.4, n_pl), rng.uniform(0.12, 0.30, n_pl)
+    att = float(min(attack, 0.4 * dur))
+    rel = float(release if dur >= 0.25 else min(release, 0.12))
+    body = CELLO_BODY if freq < 196.0 else VIOLIN_BODY              # below the violin's open G the cellos carry the line
+    corner = (1500.0, 2400.0) if freq < 196.0 else (2000.0, 3000.0)
+    out = np.zeros(_n(dur + float(late.max()), sr, rel) + 8)
+    for i in range(n_pl):
+        v = _blown(freq * 2.0 ** (cents[i] / 1200.0), dur, sr, vel,
+                   dict(tilt=1.8, formants=body, corner=corner[0], slope=3.0), dict(tilt=1.2, formants=body, corner=corner[1], slope=3.0),
+                   attack=att, release=rel, bloom=max(att, 0.03), vib=(float(rates[i]), 0.12 * vibrato, float(delays[i])), top=4200.0)
+        k = int(late[i] * sr)
+        out[k:k + len(v)] += v[:len(out) - k]
+    return F.lowpass(out, min(4200.0, 0.44 * sr), sr, 0.7) * (0.9 / np.sqrt(n_pl))
+
+
+def _pipe_air(n, sr, freq, env, odd, seed):
+    """Breath of a blown pipe: noise through the pipe's own resonances, following the square of the blowing envelope
+    (turbulence power goes as the jet's dynamic pressure). `odd`: a stopped pipe, odd modes only."""
+    w = O.white(n, seed=seed)
+    y = np.zeros(n)
+    for j, h in enumerate((1, 3, 5) if odd else (1, 2, 3)):
+        if h * freq < 0.45 * sr:
+            y += F.bandpass(w, h * freq, sr, 9.0) / (1.0 + j)
+    return y * env * env
+
+
+@instrument("pan_flute", "Pan flute: a stopped pipe blown across its end. Odd harmonics, a breath that sits in the pipe's own resonances, a soft chiff.",
+            family="wind", span=("C4", "C7"), breath=(0.3, "air 0..1"), vibrato=(0.0, "0 = steady .. 1"))
+def pan_flute(freq, dur, sr=DEFAULT_SR, vel=1.0, breath=0.3, vibrato=0.0):
+    """There is no sourced jet model of a stopped pipe in the library (STK's flute is an open pipe), so the tone stays
+    a harmonic stack with the stopped pipe's odd series. What changed: the vibrato is a parameter and off by default
+    (it was fixed, and a near-sine with vibrato under a reverb flutters), and the breath is no longer a broad band
+    of noise laid over the note: it passes through the pipe's odd modes and follows the blowing pressure squared."""
+    rel = 0.15
+    n = _n(dur, sr, rel)
+    f = _vibrato(freq, n, sr, rate=4.5, depth=0.06 * float(np.clip(vibrato, 0, 2)), delay=0.3, ramp=0.4, scoop=0.4) if vibrato > 0 else freq
+    amps = np.array([1.0, 0.06, 0.18, 0.02, 0.05]) * _roll(np.arange(1, 6) * freq, 2400.0) / float(_roll(freq, 2400.0))
+    x = _harmonics(f, n, sr, amps)
+    env = adsr(dur, 0.05, 0.1, 0.8, rel, sr)[:n]
+    env = np.pad(env, (0, n - len(env)))
+    air = _pipe_air(n, sr, freq, env, True, 56) * breath * 0.6
+    chiff = _air(n, sr, _cut(freq, 2, 800, 2400), 1.2, 58) * decay_env(n, 0.035, sr) * breath * 1.2
+    return (x * env + air + chiff * env) * 0.6 * (0.6 + 0.4 * vel)
+
+
+@instrument("whistle", "Human whistle: a near-pure tone that slides into each note, with a little breath in its own resonance.",
+            family="wind", span=("C5", "C7"), vibrato=(0.3, "0 = steady .. 1"))
+def whistle(freq, dur, sr=DEFAULT_SR, vel=1.0, vibrato=0.3):
+    rel = 0.1
+    n = _n(dur, sr, rel)
+    f = _vibrato(freq, n, sr, rate=5.8, depth=0.12 * float(np.clip(vibrato, 0, 2)), delay=0.2, ramp=0.3, scoop=0.7)
+    x = O.sine(f, n, sr) + 0.04 * O.sine(f * 2, n, sr)
+    env = adsr(dur, 0.04, 0.1, 0.85, rel, sr)[:n]
+    env = np.pad(env, (0, n - len(env)))
+    return (x * env + _pipe_air(n, sr, freq, env, False, 59) * 0.2) * 0.6 * (0.6 + 0.4 * vel)

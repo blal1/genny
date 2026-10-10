@@ -159,11 +159,14 @@ harmonics, so nothing turns piercing as it climbs.
 
 
 
-### `pan_flute(freq, dur, sr=44100, vel=1.0, breath=0.3)`
+### `pan_flute(freq, dur, sr=44100, vel=1.0, breath=0.3, vibrato=0.0)`
 
+There is no sourced jet model of a stopped pipe in the library (STK's flute is an open pipe), so the tone stays
+a harmonic stack with the stopped pipe's odd series. What changed: the vibrato is a parameter and off by default
+(it was fixed, and a near-sine with vibrato under a reverb flutters), and the breath is no longer a broad band
+of noise laid over the note: it passes through the pipe's odd modes and follows the blowing pressure squared.
 
-
-### `whistle(freq, dur, sr=44100, vel=1.0)`
+### `whistle(freq, dur, sr=44100, vel=1.0, vibrato=0.3)`
 
 
 
@@ -175,9 +178,11 @@ harmonics, so nothing turns piercing as it climbs.
 
 
 
-### `flute(freq, dur, sr=44100, vel=1.0, breath=0.15)`
+### `flute(freq, dur, sr=44100, vel=1.0, breath=0.15, vibrato=0.0)`
 
-
+It used to be a mix of three sources that did not agree: the jet model under-blown (an octave low, up to
+80 cents flat), a 60.7 Hz `jet_bore` buzz, and a sine stack with band-passed white noise added on top (the
+`fffff` over a sinusoid). Their beating measured as a 31 % flutter in loudness on a held E5.
 
 ### `harp(freq, dur, sr=44100, vel=1.0)`
 
@@ -186,6 +191,22 @@ harmonics, so nothing turns piercing as it climbs.
 ### `guitar(freq, dur, sr=44100, vel=1.0)`
 
 
+
+### `strings(freq, dur, sr=44100, vel=1.0, attack=0.12, release=0.3, players=6, scatter=0.0, vibrato=0.12)`
+
+A section is its players, not one detuned oscillator. This voice was six sawtooth waves spread a quarter of
+a semitone ("supersaw") under a 0.25 s attack: it measured 14-16 cents off the written pitch with a 20-32 %
+wobble in loudness, and could not speak a sixteenth note.
+
+Each player is the library's solo bowed voice (harmonics through the instrument's body formants). Between
+players: the mean pitch differs by `scatter` cents standard deviation (Ternstrom 1993, pitch scatter in
+ensembles: listeners prefer 0-5 cents and tolerate 14), with the section's mean on the written pitch; onsets
+differ by 20 ms standard deviation (the timing spread reported for string quartet players); each has its own
+vibrato rate (5.2-6.4 Hz, UNSOURCED range) and onset delay. The same section plays every note.
+
+Defaults are set by measurement of the level of a held note (standard deviation over mean): independent
+vibratos at 0.6 moved it by 30 % at A4 and 50 % at A5, a 3 cent scatter by 21-44 %; at vibrato 0.12 and no
+scatter it is 1 % at C3, 6 % at A4 and 12 % at A5.
 
 ## `genny.acoustics`
 
@@ -264,6 +285,73 @@ Sharpness in acum (energy-weighted mean over 46 ms frames).
 ### `describe(y: 'np.ndarray', sr: 'int') -> 'dict'`
 
 Everything `genny info` prints.
+
+## `genny.chiptune`
+
+Sound chips, modelled chip by chip: the NES 2A03 APU, the Game Boy APU and the Yamaha YM2612.
+
+Registers
+    layer type  `chip`       a whole chip: one voice per hardware channel, the chip's own mixer and output filters
+    instrument  `nes_pulse`, `nes_triangle`, `nes_noise`, `gb_pulse`, `gb_wave`, `gb_noise`, `ym2612`
+
+Two ways to use a chip:
+    hardware_accurate   the `chip` layer. Every channel is monophonic, pitches are the chip's timer values, the
+                        channels meet in the chip's mixer (non-linear on the NES) and leave through its filters.
+    retro_stylized      the instruments. One channel alone, as many notes at once as the score asks for, in tune,
+                        rounded like the other retro voices (`mode: "hardware_accurate"` gives the raw channel).
+
+Sources (pages kept in out/research/chips):
+    nesdev_APU*.wiki          NESdev wiki: APU, Pulse, Triangle, Noise, Envelope, Sweep, Frame Counter, Mixer.
+    pandocs_Audio*.md         Pan Docs: Audio, Audio Registers, Audio details.
+    ymfm_fm.ipp, ymfm_opn.*   ymfm by Aaron Giles (BSD 3-Clause): the OPN FM core, ported below.
+What a music driver does on top of the hardware (a table of volumes, duties or pitch offsets stepped once per
+video frame) is not hardware and has no single source: it is marked UNSOURCED where it is defined.
+
+Both cores step the chip's own clock and average blocks of 16 clock ticks; the result is resampled to `sr`.
+
+### `render_chip(system, lanes, dur, sr, region='ntsc', filters=None, dmc=0, wave='triangle', pan=None, model='dmg')`
+
+Renders `dur` seconds of a whole chip. Returns mono (NES, or a Game Boy with every channel centred) or stereo.
+
+### `chip_layer(layer: 'dict', sr: 'int', q: 'float') -> 'np.ndarray'`
+
+A whole sound chip (`system`: nes | gb), hardware-accurate: one voice per channel, the chip's mixer and filters.
+
+`channels` maps a hardware channel (nes: pulse1, pulse2, triangle, noise; gb: pulse1, pulse2, wave, noise) to
+a lane {"steps": "...", ...patch} or to a list of lanes sharing the channel, as a driver shares the noise
+channel between its drums: the latest note wins. A chord in `steps` is played as a 60 Hz arpeggio.
+
+### `nes_pulse(freq, dur, sr=44100, vel=1.0, duty=2, volume=15, vol=None, decay=None, loop=False, arp=None, pitch=None, vib=0.0, vib_hz=6.0, vib_delay=0.15, sweep=None, mode='retro_stylized', bright=0.5)`
+
+
+
+### `nes_triangle(freq, dur, sr=44100, vel=1.0, linear=0, arp=None, pitch=None, vib=0.0, vib_hz=6.0, vib_delay=0.15, mode='retro_stylized', bright=1.0)`
+
+
+
+### `nes_noise(freq, dur, sr=44100, vel=1.0, period=-1, short=False, volume=15, vol=None, decay=None, loop=False, pitch=None, mode='retro_stylized')`
+
+
+
+### `gb_pulse(freq, dur, sr=44100, vel=1.0, duty=2, volume=15, vol=None, env=0, arp=None, pitch=None, vib=0.0, vib_hz=6.0, vib_delay=0.15, sweep=None, mode='retro_stylized', bright=0.5)`
+
+
+
+### `gb_wave(freq, dur, sr=44100, vel=1.0, wave='triangle', level=1, arp=None, pitch=None, vib=0.0, vib_hz=6.0, vib_delay=0.15, mode='retro_stylized', bright=1.0)`
+
+
+
+### `gb_noise(freq, dur, sr=44100, vel=1.0, period=-1, short=False, volume=15, vol=None, env=0, pitch=None, mode='retro_stylized')`
+
+
+
+### `render_opn(lanes, dur, sr, clock=7670453.0, lfo=None, raw_dac=True)`
+
+lanes: channel index 0..5 -> notes (t0, t1, hz, vel, patch, pan 'L'|'R'|'C'). Returns stereo at `sr`.
+
+### `ym2612(freq, dur, sr=44100, vel=1.0, patch='epiano', lfo=None, tail=0.6, mode='retro_stylized')`
+
+
 
 ## `genny.choir`
 
@@ -3411,13 +3499,16 @@ Faust churchBell (mesh2faust FEM modes) struck with strikeModel noise, ``space.d
 
 
 
-### `piccolo(freq, dur, sr=44100, vel=1.0, breath=0.15)`
+### `piccolo(freq, dur, sr=44100, vel=1.0, breath=0.15, vibrato=0.0)`
 
 
 
-### `recorder(freq, dur, sr=44100, vel=1.0, breath=0.25, chiff=1.0)`
+### `recorder(freq, dur, sr=44100, vel=1.0, breath=0.2, chiff=1.0, vibrato=0.0)`
 
-
+The STK jet model, not STK's Recorder (the Verge, Hirschberg and Causse model): that one is in
+genny.physical.waveguides.recorder(model="verge") and does not hold a written pitch. It blows every note at one
+pressure, and a scan of 40 pressures per note found at most a few narrow windows where the pipe speaks within
+60 cents of the note (one for C4, one for G4, none for C7), each at a different pressure.
 
 ### `hand_chime(freq, dur, sr=44100, vel=1.0, decay=1.2)`
 
