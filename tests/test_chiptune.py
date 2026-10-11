@@ -161,7 +161,7 @@ def test_ym2612_modulation_feedback_and_envelope():
 
 def test_ym2612_nine_bit_output_and_chip_layer():
     raw9 = C.render_opn({0: [(0.0, 0.3, 440.0, 1.0, "sine", "C")]}, 0.3, SR, raw_dac=True)
-    native = C._opn_core(2000, np.array([[0, 0, 1, 0, (4 << 11) | 1083, 0]], np.int64), np.array([C._fm_patch("sine")], np.int64), -1, 1,
+    native = C._opn_core(2000, 6, np.array([[0, 0, 1, 0, (4 << 11) | 1083, 0, -1, -1, -1, -1, -1]], np.int64), np.array([C._fm_patch("sine")], np.int64), -1, 1,
                          C.OPN_SIN, C.OPN_POW, C.OPN_INC, C.OPN_DETUNE, C.OPN_PM, C.OPN_LFO_MAX, C.OPN_ALG)
     steps = np.unique(np.round(native[:, 0] * 6 * 260).astype(int))
     assert len(steps) <= 520                                                          # nine bits a channel

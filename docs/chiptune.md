@@ -1,7 +1,7 @@
-# Sound chips (`genny/chiptune.py`)
+# Sound chips (`genny/chiptune.py`, `genny/chiptune2.py`)
 
 Each chip is modelled on its own, from its hardware documentation, not as one generic "8-bit" oscillator:
-the NES 2A03, the Game Boy and the Yamaha YM2612.
+the NES 2A03, the Game Boy, the Yamaha YM2612, YM2151 and YM2610, the SN76489, the SID and the POKEY.
 
 | type | name | what it is |
 |---|---|---|
@@ -13,6 +13,11 @@ the NES 2A03, the Game Boy and the Yamaha YM2612.
 | instrument | `gb_wave` | Game Boy wave channel: 32 four-bit samples of wave RAM (C1-C6) |
 | instrument | `gb_noise` | Game Boy noise: 15-bit or 7-bit LFSR, hardware envelope (C3-C8) |
 | instrument | `ym2612` | Yamaha YM2612 (Mega Drive) FM channel: four operators, eight algorithms (C1-C7) |
+| instrument | `ym2151` | Yamaha YM2151 (arcade, X68000) FM channel: the same operators, the chip's pitch table, a second detune (C1-C7) |
+| instrument | `sn_tone`, `sn_noise` | SN76489 (Master System, BBC Micro): square from a 10-bit counter; white or looped-register noise |
+| instrument | `sid` | MOS 8580 SID voice (Commodore 64): four waveforms, the chip's ADSR, its resonant filter (C1-C7) |
+| instrument | `pokey` | Atari POKEY channel: pure tone, or the chip's polynomial counters for buzz and noise (C2-C7) |
+| effect | `dpcm` | NES delta-modulation channel: any sound as 1-bit delta samples at one of the 2A03's sixteen rates |
 
 The sfxr and ZzFX effect generators and the AY-3-8910 voice are in [`retro.md`](retro.md).
 
@@ -36,7 +41,7 @@ The sfxr and ZzFX effect generators and the AY-3-8910 voice are in [`retro.md`](
 
 | key | default | meaning |
 |---|---|---|
-| `system` | `nes` | `nes` (channels `pulse1`, `pulse2`, `triangle`, `noise`), `gb` (`pulse1`, `pulse2`, `wave`, `noise`) or `ym2612` (`fm1` .. `fm6`, see below) |
+| `system` | `nes` | `nes` (channels `pulse1`, `pulse2`, `triangle`, `noise`), `gb` (`pulse1`, `pulse2`, `wave`, `noise`), `ym2612` (`fm1` .. `fm6`), `ym2151` (`fm1` .. `fm8`), `ym2610` (`fm1` .. `fm4`, `ssg1` .. `ssg3`), `sn76489` (`tone1` .. `tone3`, `noise`), `sid` (`voice1` .. `voice3`), `pokey` (`ch1` .. `ch4`); see below |
 | `channels` | - | channel name -> a lane, or a list of lanes sharing the channel (the latest note cuts the one before, as when a driver shares the noise channel between its drums) |
 | `region` | `ntsc` | NES: `ntsc` (CPU 1789773 Hz) or `pal` (1662607 Hz); changes the pitch grid, the noise rates and the envelope clock |
 | `filters` | `nes` | NES output: `nes` (high-pass 90 Hz, high-pass 440 Hz, low-pass 14 kHz), `famicom` (high-pass 37 Hz), `none` |
@@ -131,7 +136,77 @@ The FM core is a port of ymfm (Aaron Giles, BSD 3-Clause): log-sine and power ta
 increment table and key scaling, phase generator with detune, the eight algorithms, the LFO. Not ported: SSG-EG
 envelopes, channel 3's multi-frequency mode, CSM, channel 6's PCM DAC.
 
-Not modelled: the NES DMC sample channel (only its resting level), length counters, the Game Boy's power-on and
-"zombie" quirks.
+## YM2151 and YM2610
+
+`"system": "ym2151"`: eight channels `fm1` .. `fm8`, with the lanes and patches of the YM2612. An operator may add
+`dt2` 0..3, the chip's second detune (0, +600, +781, +950 cents), which is where its bells and metal come from.
+The pitch is the chip's own: a key code and a 1/64-semitone fraction looked up in the table of phase steps measured
+on the chip. Not ported: the YM2151's LFO and the noise on channel 8.
+
+`"system": "ym2610"` (Neo Geo): four FM channels `fm1` .. `fm4` of the YM2612 family with a 13-bit output, `lfo` as
+for the YM2612, and three SSG channels `ssg1` .. `ssg3`, which are the AY-3-8910 voice of [`retro.md`](retro.md)
+(`level`, `noise`, `noise_period`, `shape`, `env_hz`). Not modelled: the ADPCM channels, which play recordings.
+
+## SN76489
+
+```json
+{"type": "chip", "system": "sn76489", "channels": {
+  "tone1": {"steps": "E5:0.5 G5:0.5 [C5,E5,G5]:1", "vol": [15, 12, 10, 8]},
+  "tone2": {"steps": "C4:2", "volume": 9},
+  "noise": [{"steps": "C3:1 G2:1", "white": false}, {"steps": "-:0.5 C7:0.25 -:1.25", "vol": [12, 8, 4, 0]}]}}
+```
+
+Three squares and a noise channel. A tone is `clock / (32 x register)` with a 10-bit register (109 Hz is the lowest
+note at 3.58 MHz); `volume` 0..15 in 2 dB steps. The noise is white (`"white": true`), or the shift register
+looped (`false`): one pulse every 16 shifts, the thin bass of the Master System. `rate` 0..2 picks one of the chip's
+three fixed shift rates instead of the note. Layer keys: `region` (`ntsc`, `pal`), `variant` (`sega`: 16-bit
+register tapped at bits 0 and 3; `ti`: 15-bit, bits 0 and 1). The chip has no envelope: use the driver tables
+`vol`, `arp`, `pitch`, `vib`.
+
+## SID
+
+```json
+{"type": "chip", "system": "sid",
+ "filter": {"cutoff": [200, 240, 280, 320, 360, 400], "res": 10, "mode": "lp", "voices": [1]},
+ "channels": {
+  "voice1": {"steps": "C2:0.5 C2:0.5 G2:0.5 C3:0.5", "wave": "saw", "s": 12, "r": 3},
+  "voice2": {"steps": "[C4,E4,G4]:2", "wave": "pulse", "pw": [0.1, 0.14, 0.18, 0.22, 0.26, 0.3], "s": 10},
+  "voice3": {"steps": "-:0.5 C6:0.25 -:1.25", "wave": "noise", "d": 5}}}
+```
+
+| key | meaning |
+|---|---|
+| `wave` | `triangle`, `saw`, `pulse`, `noise` |
+| `pw` | pulse width 0..1, or a table of widths, one per 1/60 s (the last one held): the moving pulse of the SID |
+| `a`, `d`, `r` | attack, decay, release 0..15: the chip's sixteen rates, 2 ms .. 8 s for the attack, three times that for the others |
+| `s` | sustain level 0..15 |
+| `sync`, `ring` | hard sync to, or ring modulation by, the voice before (voice 1 follows voice 3) |
+| `arp`, `pitch`, `vib` | driver tables, as for the other chips |
+
+Layer keys: `region` (`pal`, `ntsc`), `tail`, and `filter`: `cutoff` 0..2047 (linear to 12.5 kHz) or a table of
+values for a sweep, `res` 0..15, `mode` (`lp`, `bp`, `hp`, `notch`, `lp+bp`, `bp+hp`, `off`), `voices` (which
+voices pass through it). The model is the 8580. Not modelled: combined waveforms, the 6581's non-linear filter, the
+ADSR delay bug.
+
+## POKEY
+
+`"system": "pokey"`: four channels `ch1` .. `ch4`. `dist` says what a divider underflow does: `pure` (a square),
+`buzz` (the 4-bit counter: the Atari bass), `noise` (the 17-bit counter, or 9-bit with the layer's
+`"poly9": true`), `poly5`, `buzz5`, `noise5` (the same, gated by the 5-bit counter), or the AUDC number 0..7.
+`clock`: `64k`, `15k` (the chip's coarse grids: notes are audibly off, as on the machine), `1.79m` (above
+3.5 kHz, channels 1 and 3 only), or `auto`. `volume` 0..15, linear. Not modelled: 16-bit joined channels, the
+high-pass flip-flops, two-tone mode.
+
+## Effect `dpcm`
+
+```json
+{"type": "seq", "inst": "bass", "steps": "C2:0.5 G2:0.5", "fx": [{"type": "dpcm", "rate": 12}]}
+```
+
+The sound goes through the NES DMC: at each output clock the 7-bit level can only move two steps up or down, so
+loud, fast material is slope-limited and stepped. `rate` 0..15 is 4182 .. 33144 Hz; `drive` pushes harder into the
+limit.
+
+Not modelled: NES length counters, the Game Boy's power-on and "zombie" quirks.
 
 Examples: `examples/chiptune/nes_overworld.json`, `examples/chiptune/gb_cave.json`, `examples/chiptune/md_stage.json`.

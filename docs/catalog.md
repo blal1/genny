@@ -5,17 +5,17 @@ Use these names in JSON specs (`"inst"`, `"kind"`, fx `"type"`, layer `"type"`) 
 
 | section | count |
 |---|---|
-| Instruments | 136 |
+| Instruments | 141 |
 | Drums | 48 |
 | Sound effects | 234 |
-| Effects | 96 |
+| Effects | 97 |
 | Extra layer types | 14 |
 
-## Instruments (136)
+## Instruments (141)
 
 Usage: `{"type": "seq", "inst": "<name>", "steps": "C4:1 E4:1", "params": {...}}`
 
-Index by module: **acoustic**: `harp`, `guitar`, `strings`, `flute`, `wurli`, `clav`, `harpsichord`, `celesta`, `toy_piano`, `church_organ`, `accordion`, `xylophone`, `glockenspiel`, `handpan`, `tubular_bell`, `gamelan`, `singing_bowl`, `timpani`, `steel_guitar`, `electric_guitar`, `muted_guitar`, `dist_guitar`, `banjo`, `mandolin`, `koto`, `sitar`, `pizzicato`, `upright_bass`, `finger_bass`, `slap_bass`, `violin`, `cello`, `clarinet`, `oboe`, `sax`, `trumpet`, `french_horn`, `trombone`, `tuba`, `harmonica`, `pan_flute`, `whistle`, `ocarina`, `didgeridoo`; **chiptune**: `nes_pulse`, `nes_triangle`, `nes_noise`, `gb_pulse`, `gb_wave`, `gb_noise`, `ym2612`; **choir**: `voice`, `vocal_choir`, `hum`, `throat_singing`, `falsetto`, `boys_choir`, `chant`; **compose**: `ks_string`; **creatures**: `whistling`; **fdstring**: `fd_string`, `fd_piano`, `prepared_piano`, `slack_string`, `fd_bar`, `bowed_string_fd`; **foley**: `church_bell`, `handbell`, `china_bell`, `glass_harmonica`, `bowed_bowl`, `hurdy_gurdy`, `wind_chime`; **friction**: `cristal`, `rubbed_glass`, `bowed_bar`, `bowed_sheet`, `rod_bank`, `whistling_blades`, `tuning_fork`, `coil_spring`; **instruments**: `piano`, `felt_piano`, `epiano`, `organ`, `pluck`, `bass`, `sub`, `wobble`, `lead`, `pad`, `brass`, `choir`, `pwm`, `bell`, `glass`, `marimba`, `kalimba`, `vibraphone`, `music_box`, `steel_drum`, `chip`, `chiptri`, `board`, `sine`, `square`, `saw`, `synth`; **klang**: `viola`, `bassoon`, `cor_anglais`, `bass_clarinet`, `piccolo`, `recorder`, `hand_chime`; **retro**: `sfxr_voice`, `zzfx_voice`, `psg`; **reverbs**: `feedback_guitar`; **synths**: `soft_lead`, `square_lead`, `synth_pluck`, `theremin`, `warm_pad`, `glass_pad`, `string_machine`, `acid`, `reese`, `fm_bass`, `bass808`; **tubes**: `reed_tube`, `reed_cone`, `vowel_tube`, `piston_pipe`, `pvc_pipe`, `bottle`
+Index by module: **acoustic**: `harp`, `guitar`, `strings`, `flute`, `wurli`, `clav`, `harpsichord`, `celesta`, `toy_piano`, `church_organ`, `accordion`, `xylophone`, `glockenspiel`, `handpan`, `tubular_bell`, `gamelan`, `singing_bowl`, `timpani`, `steel_guitar`, `electric_guitar`, `muted_guitar`, `dist_guitar`, `banjo`, `mandolin`, `koto`, `sitar`, `pizzicato`, `upright_bass`, `finger_bass`, `slap_bass`, `violin`, `cello`, `clarinet`, `oboe`, `sax`, `trumpet`, `french_horn`, `trombone`, `tuba`, `harmonica`, `pan_flute`, `whistle`, `ocarina`, `didgeridoo`; **chiptune**: `nes_pulse`, `nes_triangle`, `nes_noise`, `gb_pulse`, `gb_wave`, `gb_noise`, `ym2612`; **chiptune2**: `sn_tone`, `sn_noise`, `ym2151`, `sid`, `pokey`; **choir**: `voice`, `vocal_choir`, `hum`, `throat_singing`, `falsetto`, `boys_choir`, `chant`; **compose**: `ks_string`; **creatures**: `whistling`; **fdstring**: `fd_string`, `fd_piano`, `prepared_piano`, `slack_string`, `fd_bar`, `bowed_string_fd`; **foley**: `church_bell`, `handbell`, `china_bell`, `glass_harmonica`, `bowed_bowl`, `hurdy_gurdy`, `wind_chime`; **friction**: `cristal`, `rubbed_glass`, `bowed_bar`, `bowed_sheet`, `rod_bank`, `whistling_blades`, `tuning_fork`, `coil_spring`; **instruments**: `piano`, `felt_piano`, `epiano`, `organ`, `pluck`, `bass`, `sub`, `wobble`, `lead`, `pad`, `brass`, `choir`, `pwm`, `bell`, `glass`, `marimba`, `kalimba`, `vibraphone`, `music_box`, `steel_drum`, `chip`, `chiptri`, `board`, `sine`, `square`, `saw`, `synth`; **klang**: `viola`, `bassoon`, `cor_anglais`, `bass_clarinet`, `piccolo`, `recorder`, `hand_chime`; **retro**: `sfxr_voice`, `zzfx_voice`, `psg`; **reverbs**: `feedback_guitar`; **synths**: `soft_lead`, `square_lead`, `synth_pluck`, `theremin`, `warm_pad`, `glass_pad`, `string_machine`, `acid`, `reese`, `fm_bass`, `bass808`; **tubes**: `reed_tube`, `reed_cone`, `vowel_tube`, `piston_pipe`, `pvc_pipe`, `bottle`
 
 ### `accordion` — keys, range C3-C6
 
@@ -771,6 +771,24 @@ Plucked string (Karplus-Strong), tuned on every key: generic guitar/harp-like pl
 | `damping` | `0.5` | 0 bright and wiry .. 1 soft and dull |
 | `decay` | `1.5` | seconds |
 
+### `pokey` — retro, range C2-C7
+
+Atari POKEY channel: an 8-bit divider that toggles (pure tone) or samples the chip's polynomial counters (buzz, noise).  *(module `chiptune2`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dist` | `'pure'` | pure / buzz (4-bit counter: the Atari bass) / noise (17-bit) / poly5 / buzz5 / noise5 (gated by the 5-bit counter), or the AUDC number 0..7 |
+| `clock` | `'auto'` | auto (the finest grid that reaches the note) / 64k / 15k (the chip's usual, coarse pitch grids) / 1.79m (above 3.5 kHz; ch1 and ch3 only on the chip) |
+| `volume` | `15` | 0..15, linear |
+| `vol` | `None` | driver table: a list of volumes 0..15, one per 1/60 s, the last one held (a plucked note: [15, 11, 8, 6, 4, 3]) |
+| `arp` | `None` | driver table: semitone offsets, one per 1/60 s, cycling (a chord on one channel: [0, 4, 7]) |
+| `pitch` | `None` | driver table: semitone offsets, one per 1/60 s, the last one held (a drum: [12, 7, 3, 0]) |
+| `vib` | `0.0` | vibrato depth in semitones, applied to the timer once per 1/60 s |
+| `vib_hz` | `6.0` | vibrato rate |
+| `vib_delay` | `0.15` | seconds before the vibrato starts |
+| `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
+| `bright` | `0.5` | retro_stylized: 0 = dull .. 0.5 = default .. 1 = unfiltered |
+
 ### `prepared_piano` — keys, range C2-C6
 
 Hammered stiff string with an object on it: loose rattle (buzz), rubber wedge (thud), heavy bolt (clank), screw (gong-like).  *(module `fdstring`)*
@@ -934,6 +952,29 @@ Raw sfxr oscillator as a pitched voice: square/saw/sine + duty, vibrato, resonan
 | `bright` | `0.5` | 0 = dull .. 0.5 = default .. 1 = raw unfiltered |
 | `seed` | `0` | noise seed |
 
+### `sid` — retro, range C1-C7
+
+MOS 8580 SID voice (Commodore 64): triangle, sawtooth, variable pulse or noise, the chip's ADSR and its resonant filter.  *(module `chiptune2`)*
+
+| param | default | meaning |
+|---|---|---|
+| `wave` | `'pulse'` | triangle / saw / pulse / noise |
+| `pw` | `0.5` | pulse width 0..1, or a list of widths one per 1/60 s (the last one held): [0.1, 0.15, 0.2, ...] is the SID's moving pulse |
+| `a` | `0` | attack 0..15: 2 ms .. 8 s |
+| `d` | `9` | decay 0..15: 6 ms .. 24 s |
+| `s` | `0` | sustain level 0..15 |
+| `r` | `4` | release 0..15: 6 ms .. 24 s |
+| `cutoff` | `None` | filter cutoff register 0..2047 (linear to 12.5 kHz), or a list one per 1/60 s for a sweep; null = filter off |
+| `res` | `8` | filter resonance 0..15 |
+| `filter` | `'lp'` | lp / bp / hp / notch / lp+bp / bp+hp |
+| `arp` | `None` | driver table: semitone offsets, one per 1/60 s, cycling (a chord on one channel: [0, 4, 7]) |
+| `pitch` | `None` | driver table: semitone offsets, one per 1/60 s, the last one held (a drum: [12, 7, 3, 0]) |
+| `vib` | `0.0` | vibrato depth in semitones, applied to the timer once per 1/60 s |
+| `vib_hz` | `6.0` | vibrato rate |
+| `vib_delay` | `0.15` | seconds before the vibrato starts |
+| `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
+| `bright` | `0.5` | retro_stylized: 0 = dull .. 0.5 = default .. 1 = unfiltered |
+
 ### `sine` — raw, range C2-C7
 
 Pure sine tone with soft envelope.  *(module `instruments`)*
@@ -969,6 +1010,37 @@ Loose string with tension modulation (Kirchhoff-Carrier): a hard pluck starts sh
 ### `slap_bass` — bass, range E1-G4
 
 Slapped electric bass: percussive pop on top of a scooped, punchy low end (funk, disco).  *(module `acoustic`)*
+
+### `sn_noise` — retro, range C2-C8
+
+SN76489 noise channel: white noise from its shift register, or the looped register as a thin bass.  *(module `chiptune2`)*
+
+| param | default | meaning |
+|---|---|---|
+| `white` | `True` | true = white noise; false = the 'periodic' mode, a 1/16 pulse an octave-and-more down (the Master System bass) |
+| `rate` | `None` | 0, 1 or 2 = the chip's three fixed shift rates; null = from the note |
+| `volume` | `15` | 0..15, 2 dB a step |
+| `vol` | `None` | driver table: a list of volumes 0..15, one per 1/60 s, the last one held (a plucked note: [15, 11, 8, 6, 4, 3]) |
+| `pitch` | `None` | driver table: semitone offsets, one per 1/60 s, the last one held (a drum: [12, 7, 3, 0]) |
+| `variant` | `'sega'` | sega = 16-bit register tapped at bits 0 and 3 / ti = 15-bit, bits 0 and 1 |
+| `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
+| `bright` | `0.5` | retro_stylized: 0 = dull .. 0.5 = default .. 1 = unfiltered |
+
+### `sn_tone` — retro, range A2-C7
+
+SN76489 tone channel (Master System, BBC Micro): a plain square from a 10-bit counter, 2 dB volume steps.  *(module `chiptune2`)*
+
+| param | default | meaning |
+|---|---|---|
+| `volume` | `15` | 0..15, 2 dB a step |
+| `vol` | `None` | driver table: a list of volumes 0..15, one per 1/60 s, the last one held (a plucked note: [15, 11, 8, 6, 4, 3]) |
+| `arp` | `None` | driver table: semitone offsets, one per 1/60 s, cycling (a chord on one channel: [0, 4, 7]) |
+| `pitch` | `None` | driver table: semitone offsets, one per 1/60 s, the last one held (a drum: [12, 7, 3, 0]) |
+| `vib` | `0.0` | vibrato depth in semitones, applied to the timer once per 1/60 s |
+| `vib_hz` | `6.0` | vibrato rate |
+| `vib_delay` | `0.15` | seconds before the vibrato starts |
+| `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
+| `bright` | `0.35` | retro_stylized: 0 = dull .. 0.5 = default .. 1 = unfiltered |
 
 ### `soft_lead` — synth, range C3-C7
 
@@ -1270,6 +1342,16 @@ Wurlitzer-style reed electric piano: hollow and a little nasal, growls when hit 
 ### `xylophone` — mallet, range C4-C8
 
 Physical struck wooden-bar model backed by modal-bar research tables.  *(module `acoustic`)*
+
+### `ym2151` — retro, range C1-C7
+
+Yamaha YM2151 (arcade boards, X68000) FM channel: the YM2612's four operators with the chip's own pitch table and a second detune.  *(module `chiptune2`)*
+
+| param | default | meaning |
+|---|---|---|
+| `patch` | `'epiano'` | a patch name (bass / bell / brass / clav / epiano / lead / organ / pluck / sine / strings) or the YM2612 patch form; each operator may add dt2 0..3 (0, +600, +781, +950 cents: bells and metal) |
+| `tail` | `0.6` | seconds rendered after the key goes up, for the release |
+| `mode` | `'retro_stylized'` | retro_stylized = the full-resolution operator sum / hardware_accurate = the chip's clipped 16-bit output |
 
 ### `ym2612` — retro, range C1-C7
 
@@ -4633,11 +4715,11 @@ The ZzFX 1.3.2 sound function: paste a ZzFX array as `p`, or use named slots / a
 | `tremolo` | `None` | tremolo depth 0..1 (period = repeat_time); default 0 |
 | `filter` | `None` | Hz: >0 high-pass, <0 low-pass (actual corner about 2x); default 0 |
 
-## Effects (96)
+## Effects (97)
 
 Usage: `"fx": [{"type": "<name>", ...params}]  on a layer, a group or the whole spec`
 
-Index by module: **contact**: `resonate`, `cavity`; **cyber**: `packet_loss`, `beat_repeat`, `paulstretch`, `waveset`, `formant_shift`, `cyber_voice`, `texturize`; **dsp**: `convolve`, `fir_eq`, `steep_lowpass`, `steep_highpass`, `steep_bandpass`, `overdrive`, `wavefold`, `mulaw`, `dither`, `codec`, `lofi`, `smooth`, `tape`, `wall`, `dc_block`; **fdstring**: `spring_reverb`; **friction**: `sheet_radiator`, `cone_radiator`, `sympathetic`; **fx**: `reverb`, `delay`, `vibrato`, `tremolo`, `distortion`, `bitcrush`, `lowpass`, `highpass`, `bandpass`, `notch`, `eq`, `lowshelf`, `highshelf`, `sweep`, `muffle`, `telephone`, `underwater`, `ringmod`, `compressor`, `limiter`, `gain`, `normalize`, `pan`, `autopan`, `width`, `fade`, `loop`, `reverse`, `speed`, `pitch`, `trim`, `stutter`, `mono`; **plates**: `plate_reverb`, `room2d`; **reverbs**: `chorus`, `flanger`, `phaser`, `jcrev`, `satrev`, `fdn_reverb`, `early_reflections`, `room`, `zita`, `distance`, `doppler`, `occlude`, `leslie`, `tape_delay`, `shimmer`, `gated_reverb`, `reverse_reverb`; **spectral**: `timestretch`, `pitch_shift`, `harmonizer`, `vocoder`, `cross_synth`, `spectral_gate`, `sines_only`, `noise_only`, `freeze`, `spectral_blur`, `freqshift`, `robotize`, `whisperize`, `spectral_tilt`; **tubes**: `formant_tract`, `tube`
+Index by module: **chiptune2**: `dpcm`; **contact**: `resonate`, `cavity`; **cyber**: `packet_loss`, `beat_repeat`, `paulstretch`, `waveset`, `formant_shift`, `cyber_voice`, `texturize`; **dsp**: `convolve`, `fir_eq`, `steep_lowpass`, `steep_highpass`, `steep_bandpass`, `overdrive`, `wavefold`, `mulaw`, `dither`, `codec`, `lofi`, `smooth`, `tape`, `wall`, `dc_block`; **fdstring**: `spring_reverb`; **friction**: `sheet_radiator`, `cone_radiator`, `sympathetic`; **fx**: `reverb`, `delay`, `vibrato`, `tremolo`, `distortion`, `bitcrush`, `lowpass`, `highpass`, `bandpass`, `notch`, `eq`, `lowshelf`, `highshelf`, `sweep`, `muffle`, `telephone`, `underwater`, `ringmod`, `compressor`, `limiter`, `gain`, `normalize`, `pan`, `autopan`, `width`, `fade`, `loop`, `reverse`, `speed`, `pitch`, `trim`, `stutter`, `mono`; **plates**: `plate_reverb`, `room2d`; **reverbs**: `chorus`, `flanger`, `phaser`, `jcrev`, `satrev`, `fdn_reverb`, `early_reflections`, `room`, `zita`, `distance`, `doppler`, `occlude`, `leslie`, `tape_delay`, `shimmer`, `gated_reverb`, `reverse_reverb`; **spectral**: `timestretch`, `pitch_shift`, `harmonizer`, `vocoder`, `cross_synth`, `spectral_gate`, `sines_only`, `noise_only`, `freeze`, `spectral_blur`, `freqshift`, `robotize`, `whisperize`, `spectral_tilt`; **tubes**: `formant_tract`, `tube`
 
 ### `autopan`
 
@@ -4855,6 +4937,16 @@ Fly-by: the sound passes the listener on a straight line, with the true Doppler 
 | `ref` | `None` | distance in metres where gain = 1 (default = `closest`, so the pass is at full level) |
 | `ground` | `0.0` | 0..1 strength of the reflection off the ground: a comb that sweeps as the source passes (0.35 = asphalt) |
 | `height` | `1.8` | source height + listener height in metres, for the ground path |
+
+### `dpcm`
+
+NES delta-modulation channel: the sound as 1-bit delta samples at one of the 2A03's sixteen rates.  *(module `chiptune2`)*
+
+| param | default | meaning |
+|---|---|---|
+| `rate` | `15` | rate index 0..15 = 4182 .. 33144 Hz (NTSC); most game samples use 12..15 |
+| `drive` | `1.0` | level into the 7-bit counter: above 1 the slope limit is hit sooner (grittier), below 1 it is quieter and noisier |
+| `mix` | `1.0` | 0..1 |
 
 ### `early_reflections`
 

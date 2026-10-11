@@ -46,7 +46,7 @@ def test_tuning():
     # autocorrelation pitch cannot follow; tests/test_foley.py checks that partial against the mode table
     inharmonic = {"church_bell", "china_bell"}
     # the chips' noise channels take a note only to choose a noise rate (tests/test_chiptune.py checks those rates)
-    inharmonic |= {"nes_noise", "gb_noise"}
+    inharmonic |= {"nes_noise", "gb_noise", "sn_noise"}
     for name, e in I.REGISTRY.items():
         if name in inharmonic:
             continue

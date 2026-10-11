@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+Module `chiptune2` (`docs/chiptune.md`, `tests/test_chiptune2.py`): six more chips for the `chip` layer and as voices.
+- `sn76489` (`sn_tone`, `sn_noise`): three squares and the white or looped-register noise, Sega and TI variants;
+- `ym2151` and `ym2610`: the YM2612's FM engine with the YM2151's measured pitch table and second detune, and the
+  YM2610's four FM channels beside three SSG channels;
+- `sid`: the 8580's oscillators (triangle, sawtooth, pulse, noise, sync, ring modulation), ADSR and filter;
+- `pokey`: 8-bit dividers on the chip's three clocks, pure tones and the 4, 5, 9 and 17-bit polynomial counters;
+- effect `dpcm`: any sound through the NES delta-modulation channel.
+
 ## 1.1.0
 
 Catalog: 136 instruments (was 129), 48 drums, 234 sound effects, 96 effects, 14 extra layer types (was 13).

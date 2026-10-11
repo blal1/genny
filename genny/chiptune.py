@@ -411,6 +411,7 @@ def _segments(system, lanes, region):
 
 
 SYSTEMS = {"nes": ("pulse1", "pulse2", "triangle", "noise"), "gb": ("pulse1", "pulse2", "wave", "noise")}
+SYSTEM_LAYERS: dict = {}   # system -> fn(layer, sr, q), for chips registered by other modules
 NES_GAIN = 2.4           # level trims: a full-volume 50 % pulse alone peaks near 0.35 on both chips
 GB_GAIN = 1.4
 
@@ -438,7 +439,8 @@ def render_chip(system, lanes, dur, sr, region="ntsc", filters=None, dmc=0, wave
         chain = {"nes": ((90.0, "high"), (440.0, "high"), (14000.0, "low")), "famicom": ((37.0, "high"),),
                  "none": ((20.0, "high"),)}[filters or "nes"]
         for fc, kind in chain:
-            y = lfilter(*butter(1, fc, kind, fs=sr), y)
+            if fc < 0.45 * sr:                             # a low sample rate has no room for the 14 kHz corner
+                y = lfilter(*butter(1, fc, kind, fs=sr), y)
         return y[:samples(dur, sr)] * NES_GAIN
     pan = pan or {}
     left = np.array([0.0 if pan.get(n, "C") == "R" else 1.0 for n in SYSTEMS["gb"]])
@@ -459,6 +461,8 @@ def chip_layer(layer: dict, sr: int, q: float) -> np.ndarray:
     a lane {"steps": "...", ...patch} or to a list of lanes sharing the channel, as a driver shares the noise
     channel between its drums: the latest note wins. A chord in `steps` is played as a 60 Hz arpeggio."""
     system = str(layer.get("system", "nes")).lower()
+    if system in SYSTEM_LAYERS:                            # chips added by other modules (genny.chiptune2)
+        return SYSTEM_LAYERS[system](layer, sr, q)
     if system not in SYSTEMS:
         raise SpecError(f"chip layer: system must be one of {sorted(SYSTEMS)}")
     if system == "ym2612":
@@ -628,31 +632,35 @@ def _opn_vol(ph, att, sin_tab, pow_tab):
 
 
 @nb.njit(cache=True)
-def _opn_core(n, ev, patches, lfo_rate, raw_dac, sin_tab, pow_tab, inc_tab, det_tab, pm_tab, lfo_max, alg_tab):
-    """Six FM channels at clock / 144. `ev` rows are (sample, channel, key 1|0, patch, block_freq, level): a key-on
-    loads `patches[patch]` = (alg, fb, ams, pms, pan, 4 x OP_KEYS) and adds `level` to the carriers' total level.
-    raw_dac = 1 keeps the chip's 9-bit channel output and DAC step, 0 the full 14-bit operator sum."""
+def _opn_core(n, nch, ev, patches, lfo_rate, raw_dac, sin_tab, pow_tab, inc_tab, det_tab, pm_tab, lfo_max, alg_tab):
+    """`nch` FM channels, one sample per call of the chip's FM clock. `ev` rows are (sample, channel, key 1|0, patch,
+    block_freq, level, keycode, step1..step4): a key-on loads `patches[patch]` = (alg, fb, ams, pms, pan, 4 x OP_KEYS)
+    and adds `level` to the carriers' total level. keycode >= 0 (YM2151) gives the key code and each operator's
+    phase step directly; -1 (the OPN family) derives them from block_freq.
+    raw_dac: 0 = the full 14-bit operator sum; 1 = YM2612 (9 bits a channel and the DAC step);
+    2 = YM2610 (13 bits); 3 = YM2151 (14 bits, clipped at 16)."""
     out = np.zeros((n, 2), np.float32)
-    phase = np.zeros((6, 4), np.int64)
-    step = np.zeros((6, 4), np.int64)
-    att = np.full((6, 4), 0x3FF, np.int64)
-    state = np.full((6, 4), 3, np.int64)                  # 0 attack, 1 decay, 2 sustain, 3 release
-    rate = np.zeros((6, 4, 4), np.int64)
-    sus = np.zeros((6, 4), np.int64)
-    tl = np.zeros((6, 4), np.int64)
-    am = np.zeros((6, 4), np.int64)
-    det = np.zeros((6, 4), np.int64)
-    mul = np.ones((6, 4), np.int64)
-    alg = np.zeros(6, np.int64)
-    fb = np.zeros(6, np.int64)
-    ams = np.zeros(6, np.int64)
-    pms = np.zeros(6, np.int64)
-    pan = np.full(6, 3, np.int64)
-    bf = np.zeros(6, np.int64)
-    fbk = np.zeros((6, 2), np.int64)
-    fin = np.zeros(6, np.int64)
+    phase = np.zeros((nch, 4), np.int64)
+    step = np.zeros((nch, 4), np.int64)
+    att = np.full((nch, 4), 0x3FF, np.int64)
+    state = np.full((nch, 4), 3, np.int64)                  # 0 attack, 1 decay, 2 sustain, 3 release
+    rate = np.zeros((nch, 4, 4), np.int64)
+    sus = np.zeros((nch, 4), np.int64)
+    tl = np.zeros((nch, 4), np.int64)
+    am = np.zeros((nch, 4), np.int64)
+    det = np.zeros((nch, 4), np.int64)
+    mul = np.ones((nch, 4), np.int64)
+    alg = np.zeros(nch, np.int64)
+    fb = np.zeros(nch, np.int64)
+    ams = np.zeros(nch, np.int64)
+    pms = np.zeros(nch, np.int64)
+    pan = np.full(nch, 3, np.int64)
+    bf = np.zeros(nch, np.int64)
+    fbk = np.zeros((nch, 2), np.int64)
+    fin = np.zeros(nch, np.int64)
     opout = np.zeros(8, np.int64)
-    used = np.zeros(6, np.int64)
+    used = np.zeros(nch, np.int64)
+    fixed = np.zeros(nch, np.int64)                       # 1: the phase steps were given, the LFO does not recompute them
     envc = 0
     lfoc = 0
     e = 0
@@ -666,6 +674,10 @@ def _opn_core(n, ev, patches, lfo_rate, raw_dac, sin_tab, pow_tab, inc_tab, det_
                 bf[c] = ev[e, 4]
                 used[c] = 1
                 keycode = ((bf[c] >> 10) & 0xF) << 1 | ((0xFE80 >> ((bf[c] >> 7) & 0xF)) & 1)
+                fixed[c] = 0
+                if ev[e, 6] >= 0:
+                    keycode = ev[e, 6]
+                    fixed[c] = 1
                 for o in range(4):
                     q = 5 + 10 * o
                     carrier = o == 3 or (alg_tab[alg[c]] >> (7 + o)) & 1 != 0
@@ -680,7 +692,10 @@ def _opn_core(n, ev, patches, lfo_rate, raw_dac, sin_tab, pow_tab, inc_tab, det_
                     det[c, o] = -d if P[q + 8] & 4 else d
                     mul[c, o] = P[q + 7] * 2 if P[q + 7] else 1
                     am[c, o] = P[q + 9]
-                    step[c, o] = ((((((bf[c] & 0x7FF) << 1) << ((bf[c] >> 11) & 7)) >> 2) + det[c, o]) & 0x1FFFF) * mul[c, o] >> 1
+                    if fixed[c]:
+                        step[c, o] = (ev[e, 7 + o] + det[c, o]) * mul[c, o] >> 1
+                    else:
+                        step[c, o] = ((((((bf[c] & 0x7FF) << 1) << ((bf[c] >> 11) & 7)) >> 2) + det[c, o]) & 0x1FFFF) * mul[c, o] >> 1
                     if state[c, o] != 0:                   # start_attack
                         state[c, o] = 0
                         phase[c, o] = 0
@@ -713,9 +728,9 @@ def _opn_core(n, ev, patches, lfo_rate, raw_dac, sin_tab, pow_tab, inc_tab, det_
             lfo_am = 0x3F
         al = 0
         ar = 0
-        for c in range(6):
+        for c in range(nch):
             if used[c] == 0:
-                if raw_dac:
+                if raw_dac == 1:
                     al += 4
                     ar += 4
                 continue
@@ -739,7 +754,7 @@ def _opn_core(n, ev, patches, lfo_rate, raw_dac, sin_tab, pow_tab, inc_tab, det_
                         else:
                             att[c, o] = min(att[c, o] + inc, 0x3FF)
                 st = step[c, o]
-                if pms[c] != 0 and lfo_rate >= 0:          # compute_phase_step with the LFO's pitch modulation
+                if pms[c] != 0 and lfo_rate >= 0 and fixed[c] == 0:   # compute_phase_step with the LFO's pitch modulation
                     fnum = (bf[c] & 0x7FF) << 1
                     apm = -lfo_pm if lfo_pm < 0 else lfo_pm
                     shifts = pm_tab[pms[c], apm & 7]
@@ -774,13 +789,13 @@ def _opn_core(n, ev, patches, lfo_rate, raw_dac, sin_tab, pow_tab, inc_tab, det_
                     opout[3] = v
                     opout[6] = opout[1] + v
                     opout[7] = opout[2] + v
-            rs = 5 if raw_dac else 0
-            lim = 256 if raw_dac else 8191 * 4
+            rs = 5 if raw_dac == 1 else (1 if raw_dac == 2 else 0)
+            lim = 256 if raw_dac == 1 else 32767
             res = v >> rs
             for o in range(3):
                 if (ops >> (7 + o)) & 1:
                     res = min(max(res + (opout[o + 1] >> rs), -lim - 1), lim)
-            if raw_dac:
+            if raw_dac == 1:
                 res = res - 3 if res < 0 else res + 4      # the YM2612's DAC steps across zero
                 if pan[c] & 1:
                     al += res
@@ -795,7 +810,7 @@ def _opn_core(n, ev, patches, lfo_rate, raw_dac, sin_tab, pow_tab, inc_tab, det_
                     al += res
                 if pan[c] & 2:
                     ar += res
-        k = 1.0 / (6.0 * 260.0) if raw_dac else 1.0 / (6.0 * 8191.0)
+        k = 1.0 / (6.0 * 260.0) if raw_dac == 1 else (1.0 / (6.0 * 4095.0) if raw_dac == 2 else 1.0 / (6.0 * 8191.0))
         out[i, 0] = al * k
         out[i, 1] = ar * k
     return out
@@ -847,9 +862,11 @@ def _fm_patch(patch) -> list:
     return row
 
 
-def render_opn(lanes, dur, sr, clock=OPN_CLOCK, lfo=None, raw_dac=True):
-    """lanes: channel index 0..5 -> notes (t0, t1, hz, vel, patch, pan 'L'|'R'|'C'). Returns stereo at `sr`."""
-    fs = clock / 144.0
+def render_opn(lanes, dur, sr, clock=OPN_CLOCK, lfo=None, raw_dac=True, divider=144.0, nch=6, steps_of=None):
+    """lanes: channel index -> notes (t0, t1, hz, vel, patch, pan 'L'|'R'|'C'). Returns stereo at `sr`.
+    raw_dac: False or 0 = full resolution, True or 1 = YM2612, 2 = YM2610, 3 = YM2151. `steps_of(hz, patch)` ->
+    (keycode, [four phase steps]) replaces the OPN block and F-number (genny.chiptune2 passes it for the YM2151)."""
+    fs = clock / divider
     rows, patches = [], []
     for c, notes in lanes.items():
         notes = sorted(notes, key=lambda n: n[0])
@@ -864,12 +881,13 @@ def render_opn(lanes, dur, sr, clock=OPN_CLOCK, lfo=None, raw_dac=True):
             block = int(min(max(math.ceil(math.log2(max(f, 1e-9) / 2047.0)), 0), 7))
             fnum = int(min(round(f / 2 ** block), 2047))
             level = int(round(min(-20.0 * math.log10(max(vel, 1e-3)) / 0.75, 127)))   # 0.75 dB per total-level step
-            rows.append((int(round(t0 * fs)), c, 1, patches.index(row), (block << 11) | fnum, level))
-            rows.append((int(round(max(t1, t0) * fs)), c, 0, 0, 0, 0))
+            kc, ps = steps_of(hz, patch) if steps_of else (-1, [-1, -1, -1, -1])
+            rows.append((int(round(t0 * fs)), c, 1, patches.index(row), (block << 11) | fnum, level, kc, *ps))
+            rows.append((int(round(max(t1, t0) * fs)), c, 0, 0, 0, 0, -1, -1, -1, -1, -1))
     rows.sort(key=lambda r: (r[0], r[2]))                  # at the same sample the key-off comes first
-    ev = np.array(rows, np.int64).reshape(-1, 6)
+    ev = np.array(rows, np.int64).reshape(-1, 11)
     pt = np.array(patches or [[0] * 45], np.int64)
-    x = _opn_core(int(dur * fs) + 1, ev, pt, -1 if lfo is None else int(lfo) & 7, 1 if raw_dac else 0,
+    x = _opn_core(int(dur * fs) + 1, nch, ev, pt, -1 if lfo is None else int(lfo) & 7, int(raw_dac),
                   OPN_SIN, OPN_POW, OPN_INC, OPN_DETUNE, OPN_PM, OPN_LFO_MAX, OPN_ALG).astype(np.float64)
     x -= x[0]
     return np.stack([_to_sr(x[:, 0], fs, sr), _to_sr(x[:, 1], fs, sr)], axis=1)[:samples(dur, sr)]

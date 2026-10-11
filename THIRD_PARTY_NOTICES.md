@@ -66,3 +66,16 @@ of **ymfm** by Aaron Giles (`ymfm_fm.ipp`, `ymfm_opn.cpp`), used under the BSD 3
 
 The NES and Game Boy sections contain no code from another project: they implement the hardware as described
 in the NESdev wiki and in Pan Docs. The FM patches (`FM_PATCHES`) and the wave shapes (`GB_WAVES`) are genny's own.
+
+## genny/chiptune2.py: sources read
+
+- `ym2151`, `ym2610`: the FM engine is the ymfm port above. `OPM_STEP` is ymfm's table of YM2151 phase steps, which
+  ymfm credits to David Viens' analysis of the chip (used there with his permission); the second-detune offsets and
+  the key-code arithmetic are ymfm's (`ymfm_fm.ipp`, `ymfm_opm.cpp`, BSD 3-Clause, notice above).
+- `sid`: no code is taken from another project. The rate-counter periods, the levels at which the decay slows, the
+  noise register's taps and output bits and the 8580 resonance table were read in **reSID** by Dag Lem (GPL);
+  they are measurements of the chip.
+- `pokey`: no code is taken. The polynomial counter formulas, the dividers and the AUDC logic were read in MAME's
+  `pokey.cpp` (Brad Oliver, Eric Smith, Juergen Buchmueller; BSD 3-Clause), which credits Perry McFarlane and the
+  Altirra Hardware Reference Manual.
+- `sn76489`: written from the SMS Power development wiki page "SN76489". `dpcm`: from the NESdev wiki, "APU DMC".

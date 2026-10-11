@@ -345,11 +345,77 @@ channel between its drums: the latest note wins. A chord in `steps` is played as
 
 
 
-### `render_opn(lanes, dur, sr, clock=7670453.0, lfo=None, raw_dac=True)`
+### `render_opn(lanes, dur, sr, clock=7670453.0, lfo=None, raw_dac=True, divider=144.0, nch=6, steps_of=None)`
 
-lanes: channel index 0..5 -> notes (t0, t1, hz, vel, patch, pan 'L'|'R'|'C'). Returns stereo at `sr`.
+lanes: channel index -> notes (t0, t1, hz, vel, patch, pan 'L'|'R'|'C'). Returns stereo at `sr`.
+raw_dac: False or 0 = full resolution, True or 1 = YM2612, 2 = YM2610, 3 = YM2151. `steps_of(hz, patch)` ->
+(keycode, [four phase steps]) replaces the OPN block and F-number (genny.chiptune2 passes it for the YM2151).
 
 ### `ym2612(freq, dur, sr=44100, vel=1.0, patch='epiano', lfo=None, tail=0.6, mode='retro_stylized')`
+
+
+
+## `genny.chiptune2`
+
+More sound chips: SN76489, NES delta modulation, Yamaha YM2151 and YM2610, the 8580 SID and the Atari POKEY.
+
+Registers
+    chip system  `sn76489`   for the `chip` layer of genny.chiptune: tone1, tone2, tone3, noise
+    instrument   `sn_tone`, `sn_noise`
+    effect       `dpcm`      any sound through the NES DMC: 1-bit delta samples at one of its sixteen rates
+
+Sources (pages kept in out/research/chips):
+    smspower_SN76489.txt   SMS Power development wiki, "SN76489".
+    nesdev_APU_DMC.wiki    NESdev wiki, "APU DMC".
+
+### `lanes_of(layer: 'dict', system: 'str', names: 'tuple', defaults: 'dict', q: 'float', mono_chord: 'str' = 'arp')`
+
+The `channels` of a chip layer -> {channel: [(t0, t1, hz, vel, patch)]} and the length in seconds.
+
+### `driver_rows(c0, c1, clk, freq, vel, p, period_of, rows, aux=0)`
+
+One note as register rows (cycle, period, volume 0..15, aux, reset), one per 60 Hz driver frame: the chip has
+no envelope of its own, so volume, arpeggio, pitch and vibrato tables are all the music routine's.
+
+### `render_sn(lanes, dur, sr, region='ntsc', variant='sega')`
+
+`dur` seconds of an SN76489. lanes: channel -> notes (t0, t1, hz, vel, patch).
+
+### `sn_tone(freq, dur, sr=44100, vel=1.0, volume=15, vol=None, arp=None, pitch=None, vib=0.0, vib_hz=6.0, vib_delay=0.15, mode='retro_stylized', bright=0.35)`
+
+
+
+### `sn_noise(freq, dur, sr=44100, vel=1.0, white=True, rate=None, volume=15, vol=None, pitch=None, variant='sega', mode='retro_stylized', bright=0.5)`
+
+
+
+### `dpcm(x, sr=44100, rate=15, drive=1.0, mix=1.0)`
+
+Each output clock the level can only move by 2 of its 128 steps, so fast, loud material slope-overloads:
+that, and the sample-and-hold at the playback rate, is the sound of NES samples. Source: NESdev, APU DMC.
+
+### `render_opm(lanes, dur, sr, raw=True)`
+
+
+
+### `ym2151(freq, dur, sr=44100, vel=1.0, patch='epiano', tail=0.6, mode='retro_stylized')`
+
+
+
+### `render_sid(lanes, dur, sr, region='pal', cutoff=1024, res=0, mode='off', routed=(1, 2, 3))`
+
+`dur` seconds of a SID. lanes: voice name -> notes (t0, t1, hz, vel, patch). `cutoff` 0..2047 or a list of
+values, one per 1/60 s (the last one held): a filter sweep.
+
+### `sid(freq, dur, sr=44100, vel=1.0, wave='pulse', pw=0.5, a=0, d=9, s=0, r=4, cutoff=None, res=8, filter='lp', arp=None, pitch=None, vib=0.0, vib_hz=6.0, vib_delay=0.15, mode='retro_stylized', bright=0.5)`
+
+
+
+### `render_pokey(lanes, dur, sr, poly9=False)`
+
+
+
+### `pokey(freq, dur, sr=44100, vel=1.0, dist='pure', clock='auto', volume=15, vol=None, arp=None, pitch=None, vib=0.0, vib_hz=6.0, vib_delay=0.15, mode='retro_stylized', bright=0.5)`
 
 
 
