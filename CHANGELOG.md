@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1
+
+- Python 3.10 works again: 1.2.0 failed on import there (tomllib is 3.11+); falls back to tomli.
+
 ## 1.2.0
 
 Catalog: 144 instruments (was 136), 50 drums (was 48), 242 sound effects (was 234), 98 effects, 14 extra layer types.

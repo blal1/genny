@@ -2104,7 +2104,7 @@ SELFTEST_PLACES = ("amb.place.campfire", "amb.place.cage_line", "amb.place.froze
 
 
 def _rows(ids) -> dict:
-    import tomllib
+    from .analysis import tomllib
     with open(MANIFEST, "rb") as fh:
         m = tomllib.load(fh)
     return {a["id"]: a for a in m["asset"] if a["id"] in ids}

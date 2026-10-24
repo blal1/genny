@@ -1,6 +1,6 @@
 [project]
 name = "genny"
-version = "1.2.0"
+version = "1.2.1"
 description = "Procedural and physically informed sound synthesis: DSP, modal bodies, waveguides, particles, fluids, voices, environments and acoustics."
 readme = "README.md"
 authors = [{ name = "blal1" }]
@@ -11,6 +11,7 @@ dependencies = [
     "numba>=0.59",
     "soundfile>=0.12",
     "pyloudnorm>=0.1.1",
+    "tomli>=1.1; python_version < '3.11'",
 ]
 
 [project.optional-dependencies]

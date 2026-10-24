@@ -1,5 +1,5 @@
 """genny - procedural and physically informed sound synthesis."""
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 # High-level physical API (existing module-level APIs remain backward compatible).
 from .physics import (Material, MATERIALS, ModalBody, ParticleMaterial, BubblePopulation,

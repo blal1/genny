@@ -768,7 +768,7 @@ def _lufs(x: np.ndarray) -> float:
 
 
 def _selftest() -> bool:
-    import tomllib
+    from .analysis import tomllib
     with open(MANIFEST, "rb") as fh:
         rows = [a for a in tomllib.load(fh)["asset"] if a["id"].startswith(FAMILY_PREFIXES[0])]
     ok = True

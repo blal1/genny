@@ -51,7 +51,10 @@ from __future__ import annotations
 
 import math
 import os
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:                   # Python 3.10
+    import tomli as tomllib
 from dataclasses import dataclass, replace
 from functools import lru_cache
 from pathlib import Path
