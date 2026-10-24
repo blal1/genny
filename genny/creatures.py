@@ -483,11 +483,13 @@ def night_insects(sr=DEFAULT_SR, density=0.5, temp=20.0, bright=0.5, dur=6.0, se
     return _fin(_lp(out, 4500.0 + 6000.0 * float(np.clip(bright, 0, 1))), sr, peak=0.4, hp=300.0)
 
 
-_WINGS = {"bird": (6.0, 1.0), "bat": (11.0, 1.6), "insect": (35.0, 3.0)}   # UNSOURCED: beats/s, band scale
+# insect beats/s: Farnell Practical 27 "between 50Hz for large insects with synchronous wing muscles,
+# and 2kHz for small flies" (the low end: audible flaps). UNSOURCED: bird and bat beats/s, band scales.
+_WINGS = {"bird": (6.0, 1.0), "bat": (11.0, 1.6), "insect": (50.0, 3.0)}
 
 
 @sfx("wings", "Wing flaps (Farnell fan pulse into band-passed air, swept by the stroke).",
-     kind=("bird", "bird|bat|insect"), rate=(0.0, "flaps per second, 0 = from kind (6 / 11 / 35)"),
+     kind=("bird", "bird|bat|insect"), rate=(0.0, "flaps per second, 0 = from kind (6 / 11 / 50)"),
      size=(1.0, "wing scale: bigger = lower band"), dur=(2.0, "s"), seed=(0, "variation"))
 def wings(sr=DEFAULT_SR, kind="bird", rate=0.0, size=1.0, dur=2.0, seed=0):
     r0, sc = _WINGS[_choice(kind, _WINGS, "kind")]

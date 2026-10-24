@@ -234,8 +234,8 @@ def bang(ms: float, magnitude: float = 1.0) -> np.ndarray:
 def contact_time(contact_ms: float, velocity: float) -> float:
     """Loudness -> brightness: louder contacts are shorter (JOS force-pulse synthesis).
 
-    # UNSOURCED: exponent -1/5 is the Hertz sphere-on-plane law (VdD-P cites Hertz/Johnson 1985
-    # but gives no formula); it only sets how fast the pulse narrows with velocity.
+    # Exponent -1/5: Hertz impact duration Tc = 2.87 (m^2 / (R E*^2 V))^(1/5) (Johnson 1985
+    # eq. 11.24, p. 353; VdD-P cites it without the formula); sets how fast the pulse narrows.
     """
     return contact_ms * max(velocity, 1e-3) ** -0.2
 
@@ -774,8 +774,8 @@ def propeller_tone(rpm, blades: int, radius: float, power_hp: float, dur: float,
         absorb = np.interp(f, [a for a, _ in _ABSORB], [v for _, v in _ABSORB], right=20.0) * r / 304.8
         hn = 26.0 * np.exp(-(-0.7 * mt + 0.79) * N) - 22.0
         g = P_REF * 10 ** ((L - hn - absorb) / 20.0)
-        # UNSOURCED: Q 30 for the loading harmonics (the paper gives none)
-        y += g * _bp(rng.standard_normal(n), f, np.full(n, 30.0))
+        # Q 75 for the loading harmonics, "set perceptually" (Selfridge 2019 PhD §5.3.4, pp. 144-145)
+        y += g * _bp(rng.standard_normal(n), f, np.full(n, 75.0))
     span = R / 7.0
     s2 = math.sin(math.radians(th)) ** 2
     for i in range(7):

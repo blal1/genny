@@ -69,7 +69,7 @@ for _k, _v in _NEW_SCALES.items():            # also visible to `genny list scal
 RATIO_SCALES = {
     "ptolemy": [1, 9 / 8, 5 / 4, 4 / 3, 3 / 2, 5 / 3, 15 / 8],      # syntonic diatonic, g08 s4.3
     "seven_eleven": [1, 7 / 6, 4 / 3, 3 / 2, 11 / 6],                # harmonics 6:7:8:9:11:12, g08 s4.3
-    "slendro_equal": [2 ** (i / 5) for i in range(5)],               # UNSOURCED: 5-tone equal idealisation
+    "slendro_equal": [2 ** (i / 5) for i in range(5)],               # octave in 5 equal parts (Ruiz i Carulla, Baschet annexes, citing Sethares p. 306)
 }
 RATIO_SCALES["7-11"] = RATIO_SCALES["seven_eleven"]
 # UNSOURCED: the usual 5-limit chromatic, used by "tuning": "just" to retune any 12-TET scale

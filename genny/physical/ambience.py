@@ -963,7 +963,9 @@ def rain(dur: float, rng: np.random.Generator, *, loop: bool = False, intensity:
         for c in (0, 1):
             # drops of 0.8-1.1 mm at terminal speed entrain bubbles of about 0.22 mm: the 14 kHz peak of rain
             # noise, smaller bubbles making its upper roll-off (Prosperetti, Crum & Pumphrey, JGR 94:3255, 1989);
-            # larger drops fill in below 7 kHz. UNSOURCED: the 3:1 rate split and the 0.20-0.25 mm spread (median 0.22 mm, 15 kHz).
+            # larger drops fill in below 7 kHz. The 0.20-0.25 mm spread (median 0.22 mm, 15 kHz) lies inside the 13-25 kHz
+            # "sound of drizzle" of small drops (Nystuen, NASA "Listening to raindrops", Table 1; 0.13-0.25 mm by
+            # f r = 3.29 m/s), its top at the band's 13 kHz edge. UNSOURCED: the 3:1 rate split.
             b = P.bubble_field(dur + 0.3, rng, rate=300.0 * intensity, alpha=2.9, r_range=(0.20e-3, 0.25e-3))
             b = b + P.bubble_field(dur + 0.3, rng, rate=100.0 * intensity, alpha=2.9, r_range=(0.25e-3, 1.5e-3))
             bw.append(dom.tile(dom.fold(b)))
@@ -1067,8 +1069,9 @@ def thunder(rng: np.random.Generator, *, dur: float = 24.0, distance: float = 0.
 
 C_AIR = 343.0
 THUNDER_PEAK_HZ = 60.0   # ground flashes peak at 40-80 Hz after wind-noise correction (Holmes et al. 1971, McCrory 1971)
-# UNSOURCED: a 4 km channel from the ground to the cloud, in 10 m segments turning by 16 degrees rms each
-CHANNEL_M, SEGMENT_M, TURN_DEG = 4000.0, 10.0, 16.0
+# a bolt "can be 2km long" and "changes direction about every 10m" (Farnell, Designing Sound, Practical 17
+# "Tortuosity", p. 459). UNSOURCED: the 16 degrees rms turn per segment.
+CHANNEL_M, SEGMENT_M, TURN_DEG = 2000.0, 10.0, 16.0
 
 
 def thunder_channel(rng: np.random.Generator, *, dur: float = 12.0, distance_m: float = 1000.0,

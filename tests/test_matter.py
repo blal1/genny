@@ -88,7 +88,7 @@ def test_vessel_resonance_rises_with_fill():
     cup = m.vessel_resonance(fill, 0.15, 0.035)
     bottle = m.vessel_resonance(fill, 0.25, 0.04, neck=0.01, neck_len=0.06)
     assert np.all(np.diff(cup) > 0) and np.all(np.diff(bottle) > 0)
-    assert abs(cup[0] - 343.0 / (4 * (0.15 + 0.61 * 0.035))) < 1e-6      # quarter wave + end correction
+    assert abs(cup[0] - 343.0 / (4 * (0.15 + 0.62 * 0.035))) < 1e-6      # quarter wave + end correction (0.62 R, Farnell)
     print(f"cup 15 cm: {cup[0]:.0f} -> {cup[50]:.0f} -> {cup[90]:.0f} Hz; bottle: {bottle[0]:.0f} -> {bottle[90]:.0f} Hz")
 
 

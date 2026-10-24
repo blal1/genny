@@ -17,7 +17,7 @@ recipes adapted to genny's registries. Every ported sound repeats the attributio
    docs/klang.md "klang quirks kept").
    ``klang_rain`` is NOT a port: ``procedural/nature/Nature.h`` holds only ``#pragma once`` (the
    README lists Rain as work in progress). It is a small original model built from the same klang
-   primitives; all its constants are marked UNSOURCED.
+   primitives; its constants are marked UNSOURCED.
 2. From the Python modules (48 kHz physical kernels in ``genny/physical``): ``ui_tick`` and
    ``ui_chime`` (interface.py), ``damage`` (impacts.py), ``sniff``, ``strain``, ``weight_shift``
    (body.py), ``hand_chime`` (charter.py); the orchestral voices the sampler map
@@ -693,7 +693,8 @@ def klang_rain(sr=DEFAULT_SR, intensity=0.5, hiss=1.0, tone=1.0, dur=4.0, seed=1
     (work-in-progress)"). Original model in the style of the library, built from klang's
     primitives (white noise, one-pole high-pass, biquad low-pass; klang.h Filters).
     UNSOURCED, all of it: drop = sine tick 1.5-7 kHz decaying in 1.5-5 ms with amplitude u^3;
-    bed = noise -> one-pole HPF 900 Hz -> LPF 5.5 kHz at 0.02 + 0.1 intensity."""
+    bed = noise -> one-pole HPF 900 Hz -> LPF 5.5 kHz at 0.02 + 0.1 intensity (Farnell 2010, Practical 15,
+    puts a 900 Hz high-pass on his summed rain clicks, not on a noise bed)."""
     it = float(np.clip(intensity, 0.0, 1.0))
     tn = float(np.clip(tone, 0.25, 3.0))
     n = _kn(dur)
@@ -1236,9 +1237,11 @@ def distant_bell(sr=DEFAULT_SR, distance=400.0, size=1.25, dur=2.0, seed=0):
 # ====================================================================== instruments
 # The sampler map (procedural/instrument_map.py) lists the orchestral voices of the CC0 libraries.
 # Those genny had no instrument for are added here on genny's own pitch-exact voicing helpers.
-# UNSOURCED (all formant tables below): typical formant centres of each instrument (Meyer,
-# "Acoustics and the Performance of Music"); none is in the research findings.
-VIOLA_BODY = [(230, 50, 1.2), (370, 80, 1.5), (900, 300, 0.8), (2000, 450, 0.9)]
+# Formant centres from Meyer 2009, "Acoustics and the Performance of Music": viola 220, 350, 600,
+# 1600 Hz (§3.3.2.1); bassoon main 500 Hz, secondary 1150 Hz (§3.2.4.1); cor anglais main formant a
+# whole step below the oboe's 1100 Hz (§3.2.2.1, §3.2.2.4): 1100 x 2^(-2/12) = 980 Hz.
+# UNSOURCED: every width and gain, the cor anglais 2300 Hz and the bass clarinet 1100 Hz formants.
+VIOLA_BODY = [(220, 50, 1.2), (350, 80, 1.5), (600, 300, 0.8), (1600, 450, 0.9)]
 
 
 @instrument("viola", "Viola, bowed: darker and more nasal than a violin, a fifth lower (inner voices, melancholy solos).",
@@ -1254,7 +1257,7 @@ def viola(freq, dur, sr=DEFAULT_SR, vel=1.0, attack=0.08, vibrato=1.0):
 @instrument("bassoon", "Bassoon: dry, woody double reed; comic in the bass, plaintive in the tenor.",
             family="wind", span=("Bb1", "E5"))
 def bassoon(freq, dur, sr=DEFAULT_SR, vel=1.0):
-    body = [(480, 140, 2.4), (1200, 300, 0.9)]
+    body = [(500, 140, 2.4), (1150, 300, 0.9)]
     return _blown(freq, dur, sr, vel, dict(tilt=1.2, formants=body, corner=1600.0, slope=3.5),
                   dict(tilt=0.8, formants=body, corner=2300.0, slope=3.5),
                   attack=0.035, release=0.09, bloom=0.05, vib=(5.2, 0.07, 0.3)) * 0.43
@@ -1263,7 +1266,7 @@ def bassoon(freq, dur, sr=DEFAULT_SR, vel=1.0):
 @instrument("cor_anglais", "Cor anglais (English horn): a darker, rounder oboe a fifth lower (pastoral, mournful solos).",
             family="wind", span=("E3", "A5"))
 def cor_anglais(freq, dur, sr=DEFAULT_SR, vel=1.0):
-    body = [(950, 220, 2.4), (2300, 400, 0.6)]
+    body = [(980, 220, 2.4), (2300, 400, 0.6)]
     return _blown(freq, dur, sr, vel, dict(tilt=1.2, formants=body, corner=1900.0, slope=3.5),
                   dict(tilt=0.8, formants=body, corner=2600.0, slope=3.5),
                   attack=0.035, release=0.09, bloom=0.05, vib=(5.3, 0.1, 0.25)) * 0.42

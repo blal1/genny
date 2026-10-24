@@ -47,7 +47,8 @@ def _row(midi: float) -> dict:
 
 
 def strings_per_key(midi: float) -> int:
-    # UNSOURCED: Steinway D stringing, singles to E1, bichords over the wound section (to E2), trichords above
+    # wound section to E2 (Chabassier & Durufle 2012, App. A: density above steel's up to E2, 7887 at F2).
+    # UNSOURCED: Steinway D stringing, singles to E1, bichords over the wound section, trichords above
     return 1 if midi < 29 else 2 if midi < 41 else 3
 
 
@@ -181,8 +182,8 @@ def soundboard(x: np.ndarray, sr: int, seed: int = 0) -> np.ndarray:
 
 def note(freq: float, dur: float, sr: int = 48000, vel: float = 0.8, *, tail: float = 1.0, loss: float = 1.0,
          hardness: float = 1.0, max_modes: int = 140, seed: int = 0) -> np.ndarray:
-    """One piano key: ``vel`` 0..1 maps to a hammer speed of 0.5..5.5 m/s (UNSOURCED: Askenfelt & Jansson's
-    pp-ff range); ``loss`` scales every string decay rate, ``hardness`` the felt stiffness K."""
+    """One piano key: ``vel`` 0..1 maps to a hammer speed of 0.5..4.5 m/s (piano 0.5, fortissimo 4.5:
+    Chabassier, Durufle & Joly 2016, Fig. 7; p 0.5, mf 1.5, f 4.0: Chaigne & Askenfelt 1994, Fig. 3); ``loss`` scales every string decay rate, ``hardness`` the felt stiffness K."""
     midi = 69.0 + 12.0 * math.log2(max(freq, 1.0) / 440.0)
     r = _row(midi)
     i_key = float(np.clip(midi - 20.0, 1.0, 88.0))

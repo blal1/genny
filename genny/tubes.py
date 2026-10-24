@@ -45,7 +45,7 @@ WALL_SIGMA, WALL_OMEGA, WALL_EPS, WALL_S0 = 8125.0, 0.0, 2718.0, 2.5e-4
 # Clarinet-like reed, Bilbao Fig 9.12 (g02 §17.1)
 REED = dict(Mr=3.37e-6, omega0=23250.0, sigma0=1500.0, H0=4e-4, omega1=316.0, alpha=3.0, Sr=1.46e-4)
 REED_S0 = 1.72e-4     # bore area at the reed, m^2 (same figure)
-REED_W = 0.013        # UNSOURCED: reed channel width w (m); Bilbao does not print it. Typical clarinet tip width.
+REED_W = 0.01315      # reed channel width w (m); Bilbao does not print it. Gaillard, Koehl & Gazengel 2024 Table A1: clarinet reed width 13.15 mm
 
 # Vocal tract area functions, non-dimensional [x, S] pairs with S(0) = 1 (S0 = 2.5 cm^2, L = 0.17 m).
 # /a/ and /e/ are verbatim from Bilbao's listing A.10 (Fant's Russian vowels).

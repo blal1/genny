@@ -117,11 +117,12 @@ def rhodes(freq, dur, sr=DEFAULT_SR, vel=1.0, voicing=0.35, bell=1.0, decay=1.0)
 # computationally efficient physical model", EURASIP JASP 2004(7):934. String loop: delay + first-order Thiran
 # fraction + dispersion allpasses + the "ripply" loss filter H(z) = g (1 + a) (r + z^-R) / (1 + a z^-1),
 # R = round(rrate L) (eqs 1-3), which lets neighbouring partials decay at different rates. A second-order
-# resonator a fraction of a hertz off one low partial, at its level, gives the beating (4.4). The soundboard is a
+# resonator a fraction of a hertz off one low partial, at its level, gives the beating (4.4; for the 197 Hz key the
+# 10th partial beats with a period of about 1.5 s, Fig. 9b: offset 1 / 1.5 = 0.67 Hz). The soundboard is a
 # reverberator with T60 6 s at DC and 0.13 of that at Nyquist on 8 lines of 1009-1999 samples, high-passed at
 # 350 Hz (4.5). Their calibrated values for the 197 Hz key (Fig. 8): g 0.996, a -0.0296, r -0.0015, rrate 1/12.
 # UNSOURCED: those values used on every key with g from a key-tracked T60, the quill excitation (a short pulse
-# plus scrape noise; theirs are recorded residuals), the beating offset and partial, the release knock (theirs
+# plus scrape noise; theirs are recorded residuals), the release knock (theirs
 # is a recorded sample) and the soundboard level.
 
 @numba.njit(cache=True)
@@ -338,10 +339,12 @@ def timpani(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=1.6):
 # frequencies spread by ~6 % (s.d.) and their Q by ~33 % (Fig. 7), against hearing thresholds of 1 % and
 # 20 %, so a body ``seed`` draws a different instrument with that spread. ``size`` warps every mode through
 # Penttinen, Harma & Karjalainen's first-order allpass map (DAFx-00): w' = w + 2 atan(l sin w / (1 - l cos w)),
-# l < 0 a bigger box, l > 0 a smaller one. UNSOURCED: the centre values (Helmholtz 98 Hz Q 18, top plate
-# 205 Hz Q 28), the higher modes (every ~70 Hz up to 3 kHz, Q 30, level falling as 1 / sqrt(f): "weaker and
-# denser", Penttinen) and the size range l = +-0.12.
-_GUITAR_LOW = ((98.0, 18.0, 1.0), (205.0, 28.0, 0.8))
+# l < 0 a bigger box, l > 0 a smaller one. Centre values: the means over 15 guitars with the string damping
+# compensated, i.e. the body alone (Woodhouse et al. 2012, Fig. 7, red open squares read off the plot):
+# Helmholtz 91 Hz Q 52, top plate 192 Hz Q 44; the higher modes take Q 49, the mean of the 0-2 kHz band-averaged
+# Q over the same guitars (Fig. 8c). UNSOURCED: the higher modes' spacing (every ~70 Hz up to 3 kHz) and level
+# (falling as 1 / sqrt(f): "weaker and denser", Penttinen) and the size range l = +-0.12.
+_GUITAR_LOW = ((91.0, 52.0, 1.0), (192.0, 44.0, 0.8))
 
 
 def guitar_body_modes(seed: int = 0, size: float = 0.5, sr: int = DEFAULT_SR, steel: bool = False):
@@ -354,7 +357,7 @@ def guitar_body_modes(seed: int = 0, size: float = 0.5, sr: int = DEFAULT_SR, st
     fk = 300.0
     while fk < 3000.0:
         fk += 70.0 * hf.uniform(0.5, 1.5)
-        f.append(fk); q.append(30.0); g.append(0.35 * math.sqrt(300.0 / fk))
+        f.append(fk); q.append(49.0); g.append(0.35 * math.sqrt(300.0 / fk))
     f, q, g = np.array(f), np.array(q), np.array(g)
     if seed:
         f = f * np.exp(0.058 * rng.standard_normal(len(f)))
@@ -1179,7 +1182,8 @@ def cello(freq,dur,sr=DEFAULT_SR,vel=1.0,attack=.1,vibrato=1.0,model="waveguide"
     if model == "elastoplastic":
         from .physical import bow
         v = float(np.clip(vel, 0.0, 1.0))
-        # their Guettler-diagram transients: f_N 0.8-3.9 N, a 0.35-2.1 m/s^2 (Tables IV-V); UNSOURCED: 0.1-0.3 m/s
+        # their Guettler-diagram transients: f_N 0.8-3.9 N, a 0.35-2.1 m/s^2 (Tables IV-V); bow speed 0.1-0.3 m/s,
+        # the soft end of the 0.10-1.25 m/s playing range (Meyer, Acoustics and the Performance of Music 2009, 3.3.1.2)
         y = bow.bowed(freq, dur, float(sr), force=0.8 + 3.1 * v, speed=0.1 + 0.2 * v, accel=0.35 + 1.7 * v)
         y = _body(y, sr, [(fc, fc / bw, 4.0 * g) for fc, bw, g in CELLO_BODY], min(3000., .38 * sr))   # UNSOURCED: 4 dB per gain unit
         return _physical_note_fade(y / (np.max(np.abs(y)) + 1e-12), sr, 0.005, .13) * 1.93   # as loud as the waveguide cello
@@ -1230,7 +1234,8 @@ def woodhouse_tau(freq, fk, material="nylon"):
     """Decay time (s) of the partials ``fk`` of a ``freq`` note on the guitar string that plays it (the highest
     open string at or below it, stopped to length L0 f_open / freq): Valette's loss factor as fitted by Woodhouse,
     eta_n = [T (eta_F + eta_A / w_n) + EI eta_B (n pi / L)^2] / [T + EI (n pi / L)^2] (eq. 4), tau = 2 / (eta w).
-    UNSOURCED: open length L0 = 0.65 m (a common classical / folk scale)."""
+    Open length L0 = 0.65 m: what the nylon rows of Woodhouse's Table I imply, L = sqrt(T / m) / (2 f) = 0.649-0.653 m
+    on every string. UNSOURCED for steel: its rows imply 0.70 m, 0.65 m is kept for both."""
     rows = _WOODHOUSE[material]
     row = next((r for r in rows if r[0] <= freq * 1.001), rows[-1])
     fo, T, m, EI, eF, eB, eA = row
@@ -1450,7 +1455,7 @@ def strings(freq, dur, sr=DEFAULT_SR, vel=1.0, attack=0.12, release=0.3, players
     players: the mean pitch differs by `scatter` cents standard deviation (Ternstrom 1993, pitch scatter in
     ensembles: listeners prefer 0-5 cents and tolerate 14), with the section's mean on the written pitch; onsets
     differ by 20 ms standard deviation (the timing spread reported for string quartet players); each has its own
-    vibrato rate (5.2-6.4 Hz, UNSOURCED range) and onset delay. The same section plays every note.
+    vibrato rate (5.2-6.4 Hz, inside the 5-8 Hz of string players, Meyer 2009, 2.3.6) and onset delay. The same section plays every note.
 
     Defaults are set by measurement of the level of a held note (standard deviation over mean): independent
     vibratos at 0.6 moved it by 30 % at A4 and 50 % at A5, a 3 cent scatter by 21-44 %; at vibrato 0.12 and no

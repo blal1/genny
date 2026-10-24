@@ -170,7 +170,7 @@ def _bristle_kernel(co, fn, vb, fw, mus, mud, vs, s0, s1, s2, og):
         if fn[i] > 1e-9:
             fc = mud * fn[i]
             fs = mus * fn[i]
-            zba = 0.7 * fc / s0          # eq. 8.28 with c = 0.7 (< 1)   # UNSOURCED: the book only requires c < 1
+            zba = 0.7 * fc / s0          # eq. 8.28 with c = 0.7 (< 1): Matusiak & Chatziioannou 2024 §II (after eq. 9) set z_ba = 0.7 mu_C f_N / sigma0
             zt = z + k2 * h
             vt = (vfree - vb[i] - b * (s0 * zt + fw[i])) / (1 + s2 * b)
             done = False

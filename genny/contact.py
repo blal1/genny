@@ -363,7 +363,7 @@ def body_mass(shape: str, size: float, mat="steel", *, aspect: float = 1.0, thic
     if shape == "string":
         return 0.005 * L                                    # UNSOURCED: 5 g/m string
     area = L * L / aspect if shape == "rect_membrane" else math.pi * (0.5 * L) ** 2
-    return 0.3 * area                                       # UNSOURCED: 0.3 kg/m^2 membrane
+    return 0.262 * area                                     # timpani head 0.262 kg/m^2 (Christian et al. 1984)
 
 
 # ==========================================================================================

@@ -54,8 +54,8 @@ from .sfx import sfx
 # a requested 4 s came out as 1.9 s. 3 ln10 / T60 makes the requested T60 the real 60 dB time.
 _L10 = 3.0 * math.log(10.0)
 RHO_AIR, C_AIR = 1.2, 343.0          # kg/m^3, m/s: air at room temperature (standard values)
-HEAD_DENSITY = 0.26                  # kg/m^2  # UNSOURCED: 0.19 mm Mylar drum head, not in the book
-BRONZE = (8700.0, 1.1e11, 0.3)       # rho, E, nu  # UNSOURCED: B20 cymbal bronze, the book gives kappa only
+HEAD_DENSITY = 0.26                  # kg/m^2: timpani head, 0.262 (Christian et al. 1984, sec. III)
+BRONZE = (8700.0, 1.24e11, 0.33)     # rho, E, nu: E and nu of cymbal bronze (Chadwick et al. 2009, Table 1); UNSOURCED: rho
 WOOD_K = (36.5, 8.41, 18.1, 1.248)   # kx, ky, kxy, aspect: wooden plate of Table 12.2 (g03 §4.6)
 
 
@@ -884,7 +884,8 @@ def tam_tam(sr=DEFAULT_SR, vel=1.0, size=1.0, thickness=2.5, force=2000.0, decay
 
 # Bilbao, Webb, Wang & Ducceschi, "Real-time gong synthesis", DAFx-23: steel (E 2e11 Pa, rho 7850, nu 0.3), 0.5 mm,
 # aspect 1.4, T60 20 s at 0 Hz and 10 s at 1 kHz; a small plate (0.01 m^2, 2 ms strike) crashes when hit hard, a
-# large one (0.16 m^2, 4 ms) swells. UNSOURCED: the strike point and the large plate's force (their Fig. 4 axis).
+# large one (0.16 m^2, 4 ms) swells; its force at vel 1 is 50 N, the strongest of their Fig. 4 (1-50 N).
+# UNSOURCED: the strike point.
 STEEL = (7850.0, 2e11, 0.3)
 _DAFX23 = dict(eps=1.4, material=STEEL, loss=(20.0, 1000.0, 10.0))
 
@@ -905,8 +906,8 @@ def steel_cymbal(sr=DEFAULT_SR, vel=1.0, force=80.0, dur=2.0, bright=0.6, scan=0
 
 
 @drum("steel_gong", "Large steel plate (DAFx-23 real-time gong model, 0.16 m^2): the gong swell, energy "
-      "migrating upwards over the first few hundred ms.", **_dafx23_params(60.0, 5.0))
-def steel_gong(sr=DEFAULT_SR, vel=1.0, force=60.0, dur=5.0, bright=0.6, scan=1.0, quality=1.0):
+      "migrating upwards over the first few hundred ms.", **_dafx23_params(50.0, 5.0))
+def steel_gong(sr=DEFAULT_SR, vel=1.0, force=50.0, dur=5.0, bright=0.6, scan=1.0, quality=1.0):
     return nl_plate(sr, vel, 0.451, 0.5, force, 4.0, (0.38, 0.45), 20.0, 0.0, "vk", quality=quality, dur=dur,
                     bright=bright, scan=(0.4, scan) if scan > 0 else None, accel=False, hp=30.0, **_DAFX23)
 

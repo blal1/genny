@@ -611,7 +611,7 @@ ABSORPTION = dict(_space.ABSORPTION)       # Farnell Table 5.1 (verbatim in phys
 ABSORPTION.update({
     "open": (1.0, 1.0, 1.0, 1.0, 1.0, 1.0),          # an opening: nothing comes back (definition of the sabin)
     "tile": ABSORPTION["marble"],                     # alias (glazed tile ~ marble in Table 5.1)
-    "rock": ABSORPTION["brick"],                      # alias: UNSOURCED, rough stone taken as brick
+    "rock": (0.02, 0.02, 0.03, 0.04, 0.05, 0.05),     # limestone walls (pyroomacoustics 0.10 materials database, limestone_wall)
     "foliage": (0.2, 0.3, 0.4, 0.5, 0.6, 0.7),        # UNSOURCED: dense vegetation edge, scattering counted as loss
     "soil": (0.15, 0.25, 0.4, 0.55, 0.6, 0.6),        # UNSOURCED: soft ground / grass
 })
@@ -1051,9 +1051,12 @@ def doppler(x, sr=DEFAULT_SR, speed=20.0, closest=5.0, pass_at=0.5, direction="l
     return _fade_end(y, sr, head_ms=2.0)
 
 
-# Volume density kg/m^3. UNSOURCED: handbook values, not in the findings files.
-_DENSITY = {"concrete": 2300.0, "brick": 1900.0, "marble": 2700.0, "rock": 2600.0, "tile": 2300.0, "wood": 600.0,
-            "glass": 2500.0, "plaster": 850.0, "metal": 7800.0, "fabric": 300.0, "carpet": 300.0, "water": 1000.0,
+# Volume density kg/m^3, Farnell 2010 Fig 3.3 p.16: red brick 1922, marble 2563, plaster 849, water 1000; concrete and
+# rock inside "brick, cement, rock" 2000-5000, soil inside "earth" 1500-2500, wood 500 = top of "woods" 200-500.
+# Metal = steel 7900 (Farnell 2010 p.21, Eq 3.8 example). UNSOURCED: tile, glass (Fig 3.3 lists 1500, not adopted),
+# fabric, carpet, foliage, people.
+_DENSITY = {"concrete": 2300.0, "brick": 1922.0, "marble": 2563.0, "rock": 2600.0, "tile": 2300.0, "wood": 500.0,
+            "glass": 2500.0, "plaster": 849.0, "metal": 7900.0, "fabric": 300.0, "carpet": 300.0, "water": 1000.0,
             "soil": 1500.0, "foliage": 30.0, "people": 1000.0}
 
 
@@ -1420,7 +1423,8 @@ def tape_delay(x, sr=DEFAULT_SR, time=0.3, feedback=0.45, mix=0.35, pingpong=Tru
                wow=0.3, flutter=0.2, drive=0.3, tail=None):
     """Delay line with filtered feedback and modulated, interpolated read (g13 §2.1: even-order
     Lagrange for swept delays). Ping-pong: input -> left line -> right line -> back to left.
-    Wow 0.6 Hz up to 0.4 % and flutter 7.3 Hz up to 0.08 % of the delay time.  # UNSOURCED: rates/depths"""
+    Wow 0.6 Hz up to 0.4 % and flutter 7.3 Hz up to 0.08 % of the delay time. Flutter rate inside "above 6 Hz"
+    (Zölzer 2002 DAFX glossary p.517).  # UNSOURCED: wow rate, depths"""
     x = np.asarray(x, float)
     fb = float(np.clip(feedback, 0.0, 0.95))
     T = float(np.clip(time, 0.002, 4.0))

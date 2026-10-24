@@ -20,7 +20,7 @@ Sources (findings files are in ``out/research``):
   (findings 03, explosion "mid" layer). Thunder is ``physical.ambience.thunder``.
 * **Wind** - Farnell Practical 18 through ``physical.ambience.wind_scene`` (findings 02 section 13).
 * **Jets** - Strouhal peak f = St U / D with St = 0.2 (Selfridge, findings 06 section 4.1).
-  The findings contain no jet-noise level law; the textbook velocity power laws are marked UNSOURCED.
+  Level: free-jet U^8 law (Lighthill, quoted by Verge et al. 1997, section V).
 * **Ice** - no findings file covers ice. The dispersive chirp is the textbook Kirchhoff thin-plate
   flexural wave (derivation in ``ice_chirp``); the material constants are marked UNSOURCED.
 """
@@ -425,16 +425,16 @@ def vessel_resonance(fill, height: float = 0.15, radius: float = 0.035, neck: fl
                      neck_len: float = 0.05, c: float = 343.0):
     """Air resonance (Hz) of a vessel filled to ``fill`` (0..1 of its height).
 
-    Open cylinder (neck = 0): quarter-wave tube, f = c / (4 (L_air + 0.61 a)) (Farnell Practical 14:
-    "the empty cavity above the liquid is a quarter-wave (semi-open) tube"; the 0.61 a unflanged end
-    correction is textbook, # UNSOURCED in the findings). Odd harmonics 1, 3, 5, 7.
+    Open cylinder (neck = 0): quarter-wave tube, f = c / (4 (L_air + 0.62 a)) (Farnell Practical 14:
+    "the empty cavity above the liquid is a quarter-wave (semi-open) tube"; end correction 0.62 R for
+    a straight pipe, Farnell "Designing Sound" section 5, p.73). Odd harmonics 1, 3, 5, 7.
     Bottle (0 < neck < radius): Helmholtz, f = (c / 2 pi) sqrt(A / (V L')), A = pi neck^2,
     V = pi radius^2 L_air (findings 01 section 3.5), L' = neck_len + 1.7 neck (textbook end
     correction, # UNSOURCED in the findings). Both rise monotonically as the vessel fills.
     """
     L = height * (1.0 - np.clip(np.asarray(fill, float), 0.0, 1.0))
     if neck <= 0.0 or neck >= radius:
-        return c / (4.0 * (L + 0.61 * radius))
+        return c / (4.0 * (L + 0.62 * radius))
     # + 2 mm of air: a brim-full bottle keeps a finite cavity (guard against V -> 0)
     return c / (2.0 * np.pi) * np.sqrt(neck * neck / (radius * radius * (L + 0.002) * (neck_len + 1.7 * neck)))
 
@@ -740,7 +740,8 @@ def jet_noise(n: int, rng, velocity, diameter: float, power: float = 8.0, u_ref:
     Shape: one Q 0.7 band-pass, i.e. 6 dB/octave skirts either side of the peak.
     Level: total power ~ (U / u_ref)^power; the amplitude is (U / u_ref)^(power / 2) divided by
     sqrt(f_p / 1 kHz) because a constant-Q band passes power in proportion to its centre.
-    # UNSOURCED: the findings give no jet level law. power = 8 is Lighthill's free-jet law (textbook);
+    # power = 8: free-jet turbulence is quadrupole, power ~ (U / c0)^8 (Lighthill, in Verge et al. 1997
+    # JASA 101(5) section V p.2931);
     # 6 is the dipole law Selfridge uses for solid obstacles (findings 06: "u^6 intensity").
     # UNSOURCED: the Q 0.7 skirt shape.
     ``velocity`` (m/s) may be a per-sample array; ``diameter`` in metres.

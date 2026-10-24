@@ -10,8 +10,9 @@ Parameters as in their Table 1 (normalised: L_s = L_x L_y = 1, rho_s A_s = 0.001
 - output: plate momentum at the pickup, rho_p h_p sum g_a,l d u_p,l / dt (eq. 16).
 Time stepping differs from theirs: each mode is advanced exactly over a step with the connection forces held
 (explicit coupling), the bridge mass by symplectic Euler, at 4x the output rate; they solve an implicit,
-energy-conserving scheme with an iterative solver. UNSOURCED: the excitation pulse (raised cosine, 0.1 N, 1 ms;
-their Fig. 6 shows forces of that order) and the ``flat`` preset's values (their Fig. 3c names only the springs).
+energy-conserving scheme with an iterative solver. Excitation peak 0.1 N: the peak of their Fig. 6 force signal.
+UNSOURCED: the pulse shape and length (raised cosine, 1 ms; Fig. 6 is a smooth three-lobe wavelet of about 34 ms,
+Fig. 4 "a short smooth pulse") and the ``flat`` preset's values (their Fig. 3c names only the springs).
 """
 from __future__ import annotations
 

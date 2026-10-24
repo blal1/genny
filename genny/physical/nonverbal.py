@@ -61,8 +61,9 @@ PRESETS = {
                              ampl=(0, -40)),
 }
 KINDS = sorted({k for k, _ in PRESETS})
-# UNSOURCED: soundgen has no male scream or cry preset; the female one an octave down in a 17 cm tract
-MALE_FROM_FEMALE = (0.5, 17.0)
+# UNSOURCED: soundgen has no male scream or cry preset; the female one an octave down (0.5). Tract 17.5 cm,
+# "typical adult male" (Story 2005, footnote 2)
+MALE_FROM_FEMALE = (0.5, 17.5)
 
 
 def preset(kind: str, voice: str = "female") -> dict:

@@ -507,7 +507,9 @@ def ir_tube(sr=DEFAULT_SR, decay=0.15, size=0.3, bright=0.5) -> np.ndarray:
 
 
 IR_KINDS = ("room", "hall", "plate", "spring", "cabinet", "tube", "car", "phone-speaker")
-_IR_DECAY = {"room": 0.45, "hall": 2.2, "plate": 1.6, "spring": 2.0, "tube": 0.15, "car": 0.09}  # UNSOURCED defaults
+_IR_DECAY = {"room": 0.3, "hall": 2.1, "plate": 1.6, "spring": 2.0, "tube": 0.15, "car": 0.09}
+# room 0.3 s ("living rooms", Kuttruff 2009 §3.6 p.98); hall 2.1 s, top of the 1.6-2.1 s optimum for occupied concert
+# halls (Kuttruff 2009 §7.5 p.231-232). UNSOURCED: plate, spring, tube, car defaults
 _SPACE_KINDS = ("room", "hall", "plate", "spring")
 
 
@@ -1180,7 +1182,8 @@ def tape(x, sr=DEFAULT_SR, wow=0.15, flutter=0.08, drive=1.5, bump=2.5, hf=12000
     rng = np.random.default_rng(int(seed))
     n = x.shape[0]
     t = np.arange(n) / sr
-    # UNSOURCED: wow 0.6 Hz, flutter 7.3 Hz plus a random component below 20 Hz; depths are typical consumer-deck figures
+    # flutter 7.3 Hz: inside "above 6 Hz" (Zölzer 2002 DAFX glossary p.517). UNSOURCED: wow 0.6 Hz, the random
+    # component below 20 Hz; depths are typical consumer-deck figures
     w = float(np.clip(wow, 0, 5)) / 100.0
     fl = float(np.clip(flutter, 0, 5)) / 100.0
     drift = moving_average(rng.standard_normal(n), int(sr / 20), 2)

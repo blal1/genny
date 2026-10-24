@@ -56,6 +56,13 @@ Space, mastering, analysis
   alpha/beta, McDermott texture SNR, Daniel & Weber roughness (`pip install genny[eval]`), and `genny eval` to make a
   webMUSHRA listening test.
 
+Constants checked against the delivered literature (about 430 texts): some 30 values now come from a source and
+some 25 are confirmed with a citation, among them the 2 km thunder channel, police siren, red alert, transporter,
+wind and pipe end correction (Farnell 2010), cello air mode and viola, bassoon and cor anglais formants (Meyer
+2009), `felt_piano` C4 string and hammer (Chaigne & Askenfelt 1994, Bensa 2003), guitar body modes (Woodhouse
+2012), room and hall decays (Kuttruff 2009), stone damping (Sterling 2019), bronze (Chadwick 2009), the /o/ vowel
+and male tract length (Story 1996, 2005), propeller Q (Selfridge 2019). Values no text gives stay marked UNSOURCED.
+
 Licences of borrowed numbers: see `THIRD_PARTY_NOTICES.md` (PTR exhaust values from CC BY-NC 4.0 checkpoints,
 soundgen preset values from a GPL package; no code taken from either).
 

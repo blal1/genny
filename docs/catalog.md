@@ -2309,7 +2309,7 @@ Large steel plate (DAFx-23 real-time gong model, 0.16 m^2): the gong swell, ener
 
 | param | default | meaning |
 |---|---|---|
-| `force` | `60.0` | peak strike force N at vel 1 (low: clean modes; higher: pitch glides; high: crash) |
+| `force` | `50.0` | peak strike force N at vel 1 (low: clean modes; higher: pitch glides; high: crash) |
 | `dur` | `5.0` | rendered length s |
 | `bright` | `0.6` | 0..1 output lowpass 1.5 kHz .. 12 kHz |
 | `scan` | `0.0` | Hz: the pickup circles an ellipse of R 0.4 at this rate (a gong swinging on its rope; DAFx-23 use 1 Hz), 0 = fixed |
@@ -4418,9 +4418,9 @@ Starship red alert: a rising klaxon whoop repeated.  *(module `foley`)*
 | param | default | meaning |
 |---|---|---|
 | `whoops` | `3` | repeats |
-| `low` | `440` | start: Hz or note name |
-| `high` | `880` | end: Hz or note name |
-| `rate` | `1.3` | whoops per second |
+| `low` | `360` | start: Hz or note name |
+| `high` | `847` | end: Hz or note name |
+| `rate` | `0.78` | whoops per second |
 
 ### `reload`
 
@@ -5156,7 +5156,7 @@ Sci-fi transporter beam: a shimmering whole-tone cluster of narrow noise bands t
 | param | default | meaning |
 |---|---|---|
 | `dur` | `3.0` | s |
-| `freq` | `'A4'` | lowest band: Hz or note name |
+| `freq` | `466.0` | lowest band: Hz or note name |
 | `bands` | `10` | whole-tone steps stacked |
 | `seed` | `0` | variation |
 
@@ -5334,7 +5334,7 @@ Wing flaps (Farnell fan pulse into band-passed air, swept by the stroke).  *(mod
 | param | default | meaning |
 |---|---|---|
 | `kind` | `'bird'` | bird/bat/insect |
-| `rate` | `0.0` | flaps per second, 0 = from kind (6 / 11 / 35) |
+| `rate` | `0.0` | flaps per second, 0 = from kind (6 / 11 / 50) |
 | `size` | `1.0` | wing scale: bigger = lower band |
 | `dur` | `2.0` | s |
 | `seed` | `0` | variation |

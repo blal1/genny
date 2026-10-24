@@ -16,9 +16,9 @@ def test_channel_peaks_in_the_measured_band_and_lasts_the_range_spread():
     Sm = np.convolve(S, np.ones(int(10 / f[1])) / int(10 / f[1]), "same")
     fp = f[np.argmax(Sm[f > 5]) + np.count_nonzero(f <= 5)]
     assert 30 < fp < 90, fp                                           # 40-80 Hz for ground flashes
-    # a 4 km channel 1 km away: arrivals spread over less than (sqrt(1^2 + 4^2) - 1) km / c = 9 s (it winds)
+    # a 2 km channel (Farnell) 1 km away: arrivals spread over less than (sqrt(1^2 + 2^2) - 1) km / c = 3.6 s
     last = np.flatnonzero(np.abs(y) > 10 ** (-50 / 20))[-1] / SR
-    assert 4.0 < last < 9.5, last
+    assert 1.5 < last < 3.8, last
     # close by, the near segments dominate: the crack comes first
     near = amb.thunder_channel(np.random.default_rng(1), dur=14.0, distance_m=50.0)
     assert np.argmax(np.abs(near)) < 0.5 * SR

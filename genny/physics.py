@@ -49,13 +49,14 @@ class Material:
 
 # Rayleigh pairs: glass, steel, wood from ObjectFolder 2.0 (supp. Table 1, = contact.OBJECTFOLDER_RAYLEIGH);
 # aluminium from Sterling & Lin 2016 Table 1 (alpha1 0.225, alpha2 1.45e-6). The old pairs (glass 0.4 / 2e-9 ...)
-# were UNSOURCED and rang 30-40 s at 1 kHz. UNSOURCED: stone and rubber damping, hardness, toughness.
+# were UNSOURCED and rang 30-40 s at 1 kHz. Stone = travertine tile, Sterling, Rewkowski, Klatzky & Lin
+# (TVCG 2019) Table 1 Rayleigh fit (alpha1 1.3, alpha2 2.5e-8). UNSOURCED: rubber damping, hardness, toughness.
 MATERIALS: dict[str, Material] = {
     "glass": Material("glass", 2500, 70e9, 0.22, 1.0, 1e-7, 0.95, 50.0),
     "steel": Material("steel", 7850, 200e9, 0.30, 5.0, 3e-8, 0.98, 120.0),
     "aluminum": Material("aluminum", 2700, 69e9, 0.33, 0.225, 1.45e-6, 0.8, 90.0),
     "wood": Material("wood", 650, 11e9, 0.35, 60.0, 2e-6, 0.55, 180.0),
-    "stone": Material("stone", 2600, 50e9, 0.25, 1.2, 8e-9, 0.9, 80.0),
+    "stone": Material("stone", 2600, 50e9, 0.25, 1.3, 2.5e-8, 0.9, 80.0),
     "rubber": Material("rubber", 1100, 0.01e9, 0.49, 20.0, 2e-6, 0.12, 500.0),
 }
 

@@ -212,7 +212,8 @@ It used to be a mix of three sources that did not agree: the jet model under-blo
 Decay time (s) of the partials ``fk`` of a ``freq`` note on the guitar string that plays it (the highest
 open string at or below it, stopped to length L0 f_open / freq): Valette's loss factor as fitted by Woodhouse,
 eta_n = [T (eta_F + eta_A / w_n) + EI eta_B (n pi / L)^2] / [T + EI (n pi / L)^2] (eq. 4), tau = 2 / (eta w).
-UNSOURCED: open length L0 = 0.65 m (a common classical / folk scale).
+Open length L0 = 0.65 m: what the nylon rows of Woodhouse's Table I imply, L = sqrt(T / m) / (2 f) = 0.649-0.653 m
+on every string. UNSOURCED for steel: its rows imply 0.70 m, 0.65 m is kept for both.
 
 ### `bank_loss_fit(f0, fk, tau, sr)`
 
@@ -248,7 +249,7 @@ Each player is the library's solo bowed voice (harmonics through the instrument'
 players: the mean pitch differs by `scatter` cents standard deviation (Ternstrom 1993, pitch scatter in
 ensembles: listeners prefer 0-5 cents and tolerate 14), with the section's mean on the written pitch; onsets
 differ by 20 ms standard deviation (the timing spread reported for string quartet players); each has its own
-vibrato rate (5.2-6.4 Hz, UNSOURCED range) and onset delay. The same section plays every note.
+vibrato rate (5.2-6.4 Hz, inside the 5-8 Hz of string players, Meyer 2009, 2.3.6) and onset delay. The same section plays every note.
 
 Defaults are set by measurement of the level of a held note (standard deviation over mean): independent
 vibratos at 0.6 moved it by 30 % at A4 and 50 % at A5, a 3 cent scatter by 21-44 %; at vibrato 0.12 and no
@@ -2712,9 +2713,10 @@ with a quartic decay x 0.1; dry plus the case resonator. Envelopes restart on ea
 
 "Much of the quality identifying a police siren comes from environmental factors" (Farnell,
 R05 §8.6): the horn is a rich pulse through a horn band, then the three-delay echo network.
-# UNSOURCED (the findings skipped the siren's oscillator): police 600-1350 Hz at 0.3 Hz with a
-fast rise; ambulance two-tone 450 / 600 Hz at 0.9 Hz; air raid: a rotor spinning up to 465 Hz
-with a second 5:6 port ring, 4 s on / 4 s coasting.
+Police: the LFO "sweeps over a range of 800Hz starting above 300Hz" = 300-1100 Hz, at 0.3 Hz,
+inside "typical sweep frequencies are between 0.1Hz and 3Hz" (Farnell 2010, Practical 5
+Police, pp. 357, 361). # UNSOURCED: the police fast rise (35 %); ambulance two-tone 450 / 600 Hz
+at 0.9 Hz; air raid: a rotor spinning up to 465 Hz with a second 5:6 port ring, 4 s on / 4 s coasting.
 
 ### `car_horn(sr=44100, dur=0.7, freq=420, freq2=500, bright=1.0)`
 
@@ -2734,17 +2736,21 @@ Farnell's hum (R02 §11): two sawtooth phasors 0.4 Hz apart, summed and hard-cli
 Pd D09 (R09 B18, R12 §4): sines an octave apart under a Gaussian amplitude exp(-x^2 dropoff)
 over position x in [-1, 1]; `dropoff` 10. The spectrum is the same at t and t + 1/rate.
 
-### `transporter(sr=44100, dur=3.0, freq='A4', bands=10, seed=0)`
+### `transporter(sr=44100, dur=3.0, freq=466.0, bands=10, seed=0)`
 
-"Transporter: whole-tone vocoder" is all the findings give (R03 §9). # UNSOURCED: every number.
+Farnell 2010, Practical 33 Transporter, pp. 630-632: ten parallel band-passes, base 466 Hz,
+whole-tone ratio 1.12247, resonance 1200 (lowest) to 800 (highest); Q 1000 here, inside that.
+# UNSOURCED: the 4.2 kHz cap, 3-9 Hz shimmer, onset stagger and envelope (the book sweeps 12 s).
 
 ### `robot_babble(sr=44100, dur=1.5, rate=11.0, low=300.0, high=2800.0, seed=0)`
 
 "R2D2 random FM" is all the findings give (R03 §9). # UNSOURCED: ranges, 30 % glides, 15 % rests.
 
-### `red_alert(sr=44100, whoops=3, low=440, high=880, rate=1.3)`
+### `red_alert(sr=44100, whoops=3, low=360, high=847, rate=0.78)`
 
-The findings only name it (R03 §9). # UNSOURCED: a two-saw sweep through a 3 kHz low-pass, 70 % duty.
+Farnell 2010, Practical 35 Red Alert, p. 645: the oscillator "starts at 360Hz ... and rises to
+847Hz in 900ms"; rate 0.78 makes the 70 % sweep 0.9 s. # UNSOURCED: the 70 % duty, the
+exponential curve (the book's is a square root), a two-saw sweep through a 3 kHz low-pass.
 
 ### `dark_drone(sr=44100, dur=6.0, note=52.0, ring=0.2, reverb_time=100.0, seed=0)`
 
@@ -3595,7 +3601,7 @@ recipes adapted to genny's registries. Every ported sound repeats the attributio
    docs/klang.md "klang quirks kept").
    ``klang_rain`` is NOT a port: ``procedural/nature/Nature.h`` holds only ``#pragma once`` (the
    README lists Rain as work in progress). It is a small original model built from the same klang
-   primitives; all its constants are marked UNSOURCED.
+   primitives; its constants are marked UNSOURCED.
 2. From the Python modules (48 kHz physical kernels in ``genny/physical``): ``ui_tick`` and
    ``ui_chime`` (interface.py), ``damage`` (impacts.py), ``sniff``, ``strain``, ``weight_shift``
    (body.py), ``hand_chime`` (charter.py); the orchestral voices the sampler map
@@ -3689,7 +3695,8 @@ NOT a port: ``procedural/nature/Nature.h`` contains only ``#pragma once`` (READM
 (work-in-progress)"). Original model in the style of the library, built from klang's
 primitives (white noise, one-pole high-pass, biquad low-pass; klang.h Filters).
 UNSOURCED, all of it: drop = sine tick 1.5-7 kHz decaying in 1.5-5 ms with amplitude u^3;
-bed = noise -> one-pole HPF 900 Hz -> LPF 5.5 kHz at 0.02 + 0.1 intensity.
+bed = noise -> one-pole HPF 900 Hz -> LPF 5.5 kHz at 0.02 + 0.1 intensity (Farnell 2010, Practical 15,
+puts a 900 Hz high-pass on his summed rain clicks, not on a noise bed).
 
 ### `ui_tick(sr=44100, kind='focus', seed=0)`
 
@@ -3881,7 +3888,7 @@ Sources (findings files are in ``out/research``):
   (findings 03, explosion "mid" layer). Thunder is ``physical.ambience.thunder``.
 * **Wind** - Farnell Practical 18 through ``physical.ambience.wind_scene`` (findings 02 section 13).
 * **Jets** - Strouhal peak f = St U / D with St = 0.2 (Selfridge, findings 06 section 4.1).
-  The findings contain no jet-noise level law; the textbook velocity power laws are marked UNSOURCED.
+  Level: free-jet U^8 law (Lighthill, quoted by Verge et al. 1997, section V).
 * **Ice** - no findings file covers ice. The dispersive chirp is the textbook Kirchhoff thin-plate
   flexural wave (derivation in ``ice_chirp``); the material constants are marked UNSOURCED.
 
@@ -3944,9 +3951,9 @@ cavity pinch-off delay 60-140 ms, heights, and the layer balance.
 
 Air resonance (Hz) of a vessel filled to ``fill`` (0..1 of its height).
 
-Open cylinder (neck = 0): quarter-wave tube, f = c / (4 (L_air + 0.61 a)) (Farnell Practical 14:
-"the empty cavity above the liquid is a quarter-wave (semi-open) tube"; the 0.61 a unflanged end
-correction is textbook, # UNSOURCED in the findings). Odd harmonics 1, 3, 5, 7.
+Open cylinder (neck = 0): quarter-wave tube, f = c / (4 (L_air + 0.62 a)) (Farnell Practical 14:
+"the empty cavity above the liquid is a quarter-wave (semi-open) tube"; end correction 0.62 R for
+a straight pipe, Farnell "Designing Sound" section 5, p.73). Odd harmonics 1, 3, 5, 7.
 Bottle (0 < neck < radius): Helmholtz, f = (c / 2 pi) sqrt(A / (V L')), A = pi neck^2,
 V = pi radius^2 L_air (findings 01 section 3.5), L' = neck_len + 1.7 neck (textbook end
 correction, # UNSOURCED in the findings). Both rise monotonically as the vessel fills.
@@ -4032,7 +4039,8 @@ aeolian case, findings 02 section 13: "centre frequency proportional to velocity
 Shape: one Q 0.7 band-pass, i.e. 6 dB/octave skirts either side of the peak.
 Level: total power ~ (U / u_ref)^power; the amplitude is (U / u_ref)^(power / 2) divided by
 sqrt(f_p / 1 kHz) because a constant-Q band passes power in proportion to its centre.
-# UNSOURCED: the findings give no jet level law. power = 8 is Lighthill's free-jet law (textbook);
+# power = 8: free-jet turbulence is quadrupole, power ~ (U / c0)^8 (Lighthill, in Verge et al. 1997
+# JASA 101(5) section V p.2931);
 # 6 is the dipole law Selfridge uses for solid obstacles (findings 06: "u^6 intensity").
 # UNSOURCED: the Q 0.7 skirt shape.
 ``velocity`` (m/s) may be a per-sample array; ``diameter`` in metres.
@@ -5293,8 +5301,8 @@ the numerators have unit magnitude and random sign (a flat, dense modal response
 
 ### `note(freq: 'float', dur: 'float', sr: 'int' = 48000, vel: 'float' = 0.8, *, tail: 'float' = 1.0, loss: 'float' = 1.0, hardness: 'float' = 1.0, max_modes: 'int' = 140, seed: 'int' = 0) -> 'np.ndarray'`
 
-One piano key: ``vel`` 0..1 maps to a hammer speed of 0.5..5.5 m/s (UNSOURCED: Askenfelt & Jansson's
-pp-ff range); ``loss`` scales every string decay rate, ``hardness`` the felt stiffness K.
+One piano key: ``vel`` 0..1 maps to a hammer speed of 0.5..4.5 m/s (piano 0.5, fortissimo 4.5:
+Chabassier, Durufle & Joly 2016, Fig. 7; p 0.5, mf 1.5, f 4.0: Chaigne & Askenfelt 1994, Fig. 3); ``loss`` scales every string decay rate, ``hardness`` the felt stiffness K.
 
 ## `genny.physical.bow`
 
@@ -5711,8 +5719,8 @@ VdD ``BangForce``: 0.5 (1 - cos(2 pi (i+1)/(N+1))), scaled to area ``magnitude``
 
 Loudness -> brightness: louder contacts are shorter (JOS force-pulse synthesis).
 
-# UNSOURCED: exponent -1/5 is the Hertz sphere-on-plane law (VdD-P cites Hertz/Johnson 1985
-# but gives no formula); it only sets how fast the pulse narrows with velocity.
+# Exponent -1/5: Hertz impact duration Tc = 2.87 (m^2 / (R E*^2 V))^(1/5) (Johnson 1985
+# eq. 11.24, p. 353; VdD-P cites it without the formula); sets how fast the pulse narrows.
 
 ### `faust_strike(n: 'int', rng: 'np.random.Generator', cutoff: 'float' = 7000.0, sharpness: 'float' = 0.25, gain: 'float' = 1.0, hp: 'float' = 10.0) -> 'np.ndarray'`
 
@@ -6114,8 +6122,9 @@ Parameters as in their Table 1 (normalised: L_s = L_x L_y = 1, rho_s A_s = 0.001
 - output: plate momentum at the pickup, rho_p h_p sum g_a,l d u_p,l / dt (eq. 16).
 Time stepping differs from theirs: each mode is advanced exactly over a step with the connection forces held
 (explicit coupling), the bridge mass by symplectic Euler, at 4x the output rate; they solve an implicit,
-energy-conserving scheme with an iterative solver. UNSOURCED: the excitation pulse (raised cosine, 0.1 N, 1 ms;
-their Fig. 6 shows forces of that order) and the ``flat`` preset's values (their Fig. 3c names only the springs).
+energy-conserving scheme with an iterative solver. Excitation peak 0.1 N: the peak of their Fig. 6 force signal.
+UNSOURCED: the pulse shape and length (raised cosine, 1 ms; Fig. 6 is a smooth three-lobe wavelet of about 34 ms,
+Fig. 4 "a short smooth pulse") and the ``flat`` preset's values (their Fig. 3c names only the springs).
 
 ### `render(f_s: 'float', dur: 'float', sr: 'float', preset: 'str' = 'body', *, force: 'float' = 0.1, os: 'int' = 4, max_plate_modes: 'int' = 1200) -> 'np.ndarray'`
 
@@ -6837,7 +6846,7 @@ the stiff-string law f_n = n f0 sqrt(1 + B n^2) / sqrt(1 + B) (JOS PASP/Stiff_St
 §7.4), fundamental exactly f0. Loop = DelayA D + 1 (lastOut) + 1 (FIR centre) + K allpasses.
 Returns (D, a, K).
 
-### `felt_piano(f0: 'float', velocity: 'float', dur: 'float', rng: 'np.random.Generator', felt: 'float' = 0.8, brightness: 'float' = 0.35, inharmonicity: 'float' = 0.0004, decay: 'float' = 0.5, soundboard: 'float' = 0.3) -> 'np.ndarray'`
+### `felt_piano(f0: 'float', velocity: 'float', dur: 'float', rng: 'np.random.Generator', felt: 'float' = 0.8, brightness: 'float' = 0.35, inharmonicity: 'float' = 0.00036, decay: 'float' = 0.5, soundboard: 'float' = 0.3) -> 'np.ndarray'`
 
 Felt piano note (JOS PASP hammer + commuted soundboard, research 10 §5; stiffness
 Cook §7.4; sc3 MdaPiano decay/muffle laws, research 11 §C6).
@@ -6848,10 +6857,11 @@ Cook §7.4; sc3 MdaPiano decay/muffle laws, research 11 §C6).
    gets velocity f/2R. ``felt`` softens Q0 (moderator felt; UNSOURCED amount).
 2. Excitation = pulse + ``soundboard`` * pulse convolved with a noise tail whose low-pass
    contracts (JOS 'soundboard tap', UNSOURCED numbers), then the strike-position comb at
-   1/8 of the string (UNSOURCED position).
+   0.12 of the string (Chaigne & Askenfelt 1994 Table I, C2/C4).
 3. Three unison strings detuned [-0.05, 0, 0.04] semitones (SC synthetic piano). Each loop:
    DelayA + K first-order allpasses fitted to f_n = n f0 sqrt(1 + B n^2) (B =
-   ``inharmonicity``, UNSOURCED default 4e-4; Cook gives ~0.004 for piano strings) + JOS
+   ``inharmonicity``, default 3.6e-4 = (pi kappa / c L)^2 for C4, Bensa et al. 2003 eq. 6 +
+   Table I: kappa 1.25 m^2/s, c 329.6 m/s, L 0.63 m; Cook gives ~0.004 for piano strings) + JOS
    loop FIR with sustain S = 6.91 / exp(-0.6 + 0.033 note - L) (MdaPiano decay law,
    note >= 44, L from ``decay``) and brightness B.
 4. MdaPiano muffle low-pass: l = 50 + felt^2 160 + 3.2 (vel - 64), clamp [55 + 0.25 note,
@@ -7375,7 +7385,7 @@ Linear Kirchhoff plate struck with force pulse 12.28, velocity pickup (g03 §3, 
 
 
 
-### `nl_plate(sr=44100, vel=1.0, size=0.4, thickness=1.0, force=80.0, contact_ms=16.0, pos=(0.2, 0.3), decay=10.0, damping=0.005, model='vk', eps=1.0, material=(8700.0, 110000000000.0, 0.3), bright=0.6, quality=1.0, dur=2.0, points=900, drive=None, level=0.85, info=None, accel=True, hp=150.0, loss=None, scan=None)`
+### `nl_plate(sr=44100, vel=1.0, size=0.4, thickness=1.0, force=80.0, contact_ms=16.0, pos=(0.2, 0.3), decay=10.0, damping=0.005, model='vk', eps=1.0, material=(8700.0, 124000000000.0, 0.33), bright=0.6, quality=1.0, dur=2.0, points=900, drive=None, level=0.85, info=None, accel=True, hp=150.0, loss=None, scan=None)`
 
 Nonlinear plate (g03 §6): `model` = "vk" (von Karman simple scheme, Airy stress solve every step),
 "berger" (tension modulation: glide only) or "linear". `size` is the diameter of the disc of equal
@@ -7411,7 +7421,7 @@ F / (rho H L^2 u0). `drive` (callable n, fs -> force array in N) replaces the si
 
 
 
-### `steel_gong(sr=44100, vel=1.0, force=60.0, dur=5.0, bright=0.6, scan=1.0, quality=1.0)`
+### `steel_gong(sr=44100, vel=1.0, force=50.0, dur=5.0, bright=0.6, scan=1.0, quality=1.0)`
 
 
 
@@ -7773,7 +7783,8 @@ function (the registered ``vibrato`` effect in fx.py is left alone).
 
 Delay line with filtered feedback and modulated, interpolated read (g13 §2.1: even-order
 Lagrange for swept delays). Ping-pong: input -> left line -> right line -> back to left.
-Wow 0.6 Hz up to 0.4 % and flutter 7.3 Hz up to 0.08 % of the delay time.  # UNSOURCED: rates/depths
+Wow 0.6 Hz up to 0.4 % and flutter 7.3 Hz up to 0.08 % of the delay time. Flutter rate inside "above 6 Hz"
+(Zölzer 2002 DAFX glossary p.517).  # UNSOURCED: wow rate, depths
 
 ### `shimmer(x, sr=44100, mix=0.35, shimmer=0.5, t60=3.0, size=10.0, tone=4500.0, tail=None)`
 
@@ -8543,7 +8554,7 @@ holes     [(x in (0,1), hole radius m, chimney height m), ...] side holes (9.40)
 - `.response(self, freqs, hole_state=None)` — Exact frequency response of the scheme for a closed, flow-driven left end: (Z_in, u_out/u_in, p_out/u_in) at `freqs` Hz.
 - `.resonances(self, fmax=None, kind='z', count=None, hole_state=None, comp=0.0)` — Frequencies (Hz) of the peaks of |Z_in| (kind "z": what a reed, lip or slap at a closed end excites) or of |u_out/u_in| (kind "u": formants), refined by parabolic interpolation. `comp` (seconds) loads the input with a compliance u = comp * dp/dt, i.e. a closed volume S0 * c * comp: the reed's own volume flow, c * S * Q / omega0^2 from `reed_params`.
 
-### `reed_params(S0=0.000172, c=343.0, w=0.013, volume=0.0, **over)`
+### `reed_params(S0=0.000172, c=343.0, w=0.01315, volume=0.0, **over)`
 
 Non-dimensional reed constants (Q, R, S, omega0, sigma0, omega1, alpha, C) of Bilbao (9.27) from the
 physical reed (`REED`, overridable by keyword) and the bore area S0 at the reed. `volume` (m^3) is an

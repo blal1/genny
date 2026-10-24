@@ -1338,7 +1338,7 @@ def almost_speech(dur: float = 3.0, rng: np.random.Generator | None = None, *,
     idx = _pd_lop(syl * syl, 130.0, float(SR)) * 6.0 + 0.5
     ph = _phasor(f0)
     y = 0.5 * (np.cos(TWO_PI * np.clip((ph - 0.5) * idx, -0.5, 0.5)) + 1.0)
-    y = _pd_hip(y, 5.0, float(SR))                # UNSOURCED: F01's hip~ 5 to drop the DC
+    y = _pd_hip(y, 5.0, float(SR))                # F01.pulse.pd hip~ 5 on the same pulse (F02 has none)
     return _edge_fade(y)
 
 
@@ -1752,9 +1752,9 @@ def syllable_track(n: int, rng: np.random.Generator, queries, *, syl=(0.14, 0.3)
 # ---- the rune tongue as material for "almost speech" (AUDIO_CHARTER.md §3.10, §8.5) ---------
 
 RUNE_VOWELS = {                       # (F1, F2) Hz, adult male; Farnell/CSLU table (research 03 §3.1)
-    "a": (710.0, 1100.0), "e": (550.0, 1770.0), "i": (280.0, 2250.0), "o": (450.0, 800.0),
+    "a": (710.0, 1100.0), "e": (550.0, 1770.0), "i": (280.0, 2250.0), "o": (540.0, 922.0),
     "u": (310.0, 870.0),
-}   # "o" is not in Farnell's table: UNSOURCED (between U 450/1030 and u 310/870, rounded back vowel)
+}   # "o" is not in Farnell's table: Story et al. 1996 Table IV, /o/ "hoe", one adult male, natural speech F1N/F2N
 RUNE_ONSETS = ("m", "n", "l", "r", "s", "sh", "h", "v", "th", "t", "k", "d")
 RUNE_CODAS = ("n", "m", "l", "s")
 # syllables of the charter lexicon (§3.10.5), scrambled so no word or grammar comes through

@@ -947,8 +947,9 @@ def _speed_curve(v, n: int, gust: float, rng) -> np.ndarray:
     a = np.atleast_1d(np.asarray(v, float))
     u = np.interp(np.linspace(0, a.size - 1, n), np.arange(a.size), a) if a.size > 1 else np.full(n, float(a[0]))
     if gust > 0:
-        # UNSOURCED: gusts as smooth noise below 0.5 Hz plus 2 Hz flutter (Farnell's wind is the paper's driver)
-        u = u * (1.0 + gust * (0.35 * _lfn(rng, n, 0.5) + 0.1 * _lfn(rng, n, 2.0)))
+        # gusts "in the 0.5Hz range" and squalls "in the 3Hz range" (Farnell 2010, Practical 18 Wind, p. 476).
+        # UNSOURCED: the 0.35 / 0.1 depths.
+        u = u * (1.0 + gust * (0.35 * _lfn(rng, n, 0.5) + 0.1 * _lfn(rng, n, 3.0)))
     return np.maximum(u, 0.05)
 
 
@@ -1133,8 +1134,9 @@ G_ACC = 9.81
 # size -> ticks per second, time scale of the mechanism, body scale s, hand-clunk level.
 # mantle = Farnell's clock-all1 (a tick or tock every 250 ms, body 0.09, hand clunk each second).
 # grandfather = a seconds pendulum (T = 2 pi sqrt(L/g) = 2 s for L = 0.994 m: one tick per second).
-# UNSOURCED: watch rate 5/s (inside Farnell's "4 to 8 times per second"), the time scales and body
-# scales of watch and grandfather ("scale the timings and the body together", R03 §1.2).
+# watch = 5 ticks/s, inside the balance-wheel escapement's "4 to 8 times per second" (Farnell 2010,
+# Practical 20 Clocks, p. 492). UNSOURCED: the time scales and body scales of watch and grandfather
+# ("scale the timings and the body together", R03 §1.2).
 CLOCKS = {"watch": (5.0, 0.5, 0.3, 0.0), "mantle": (4.0, 1.0, 0.09, 1.0), "grandfather": (1.0, 2.5, 0.03, 0.0)}
 
 
@@ -1691,9 +1693,10 @@ def _echo(y: np.ndarray, amount: float) -> np.ndarray:
 def siren_wail(sr=DEFAULT_SR, kind="police", dur=5.0, rate=0.0, echo=0.5, bright=1.0, seed=0):
     """"Much of the quality identifying a police siren comes from environmental factors" (Farnell,
     R05 §8.6): the horn is a rich pulse through a horn band, then the three-delay echo network.
-    # UNSOURCED (the findings skipped the siren's oscillator): police 600-1350 Hz at 0.3 Hz with a
-    fast rise; ambulance two-tone 450 / 600 Hz at 0.9 Hz; air raid: a rotor spinning up to 465 Hz
-    with a second 5:6 port ring, 4 s on / 4 s coasting."""
+    Police: the LFO "sweeps over a range of 800Hz starting above 300Hz" = 300-1100 Hz, at 0.3 Hz,
+    inside "typical sweep frequencies are between 0.1Hz and 3Hz" (Farnell 2010, Practical 5
+    Police, pp. 357, 361). # UNSOURCED: the police fast rise (35 %); ambulance two-tone 450 / 600 Hz
+    at 0.9 Hz; air raid: a rotor spinning up to 465 Hz with a second 5:6 port ring, 4 s on / 4 s coasting."""
     dur = float(np.clip(dur, 0.3, 120.0))
     n = _n(dur)
     t = np.arange(n) / P
@@ -1711,7 +1714,7 @@ def siren_wail(sr=DEFAULT_SR, kind="police", dur=5.0, rate=0.0, echo=0.5, bright
     else:
         r = float(rate) if rate > 0 else 0.3
         u = (t * r) % 1.0
-        f = 600.0 * (1350.0 / 600.0) ** np.where(u < 0.35, u / 0.35, 1.0 - (u - 0.35) / 0.65)
+        f = 300.0 * (1100.0 / 300.0) ** np.where(u < 0.35, u / 0.35, 1.0 - (u - 0.35) / 0.65)
         x = O.saw(f, n, P)
     b = float(np.clip(bright, 0.2, 4.0))
     x = pc.lowpass(amb.bp(x, 1300.0, 1.5) + 0.3 * x, 3200.0 * b)
@@ -1793,9 +1796,11 @@ def shepard(sr=DEFAULT_SR, direction="up", rate=0.125, dur=8.0, freq="C4", voice
 
 
 @sfx("transporter", "Sci-fi transporter beam: a shimmering whole-tone cluster of narrow noise bands that swells and dissolves upward.",
-     dur=(3.0, "s"), freq=("A4", "lowest band: Hz or note name"), bands=(10, "whole-tone steps stacked"), seed=(0, "variation"))
-def transporter(sr=DEFAULT_SR, dur=3.0, freq="A4", bands=10, seed=0):
-    """"Transporter: whole-tone vocoder" is all the findings give (R03 §9). # UNSOURCED: every number."""
+     dur=(3.0, "s"), freq=(466.0, "lowest band: Hz or note name"), bands=(10, "whole-tone steps stacked"), seed=(0, "variation"))
+def transporter(sr=DEFAULT_SR, dur=3.0, freq=466.0, bands=10, seed=0):
+    """Farnell 2010, Practical 33 Transporter, pp. 630-632: ten parallel band-passes, base 466 Hz,
+    whole-tone ratio 1.12247, resonance 1200 (lowest) to 800 (highest); Q 1000 here, inside that.
+    # UNSOURCED: the 4.2 kHz cap, 3-9 Hz shimmer, onset stagger and envelope (the book sweeps 12 s)."""
     rng = np.random.default_rng(int(seed))
     n = int(sr * float(np.clip(dur, 0.3, 30.0)))
     t = np.arange(n) / n
@@ -1806,7 +1811,7 @@ def transporter(sr=DEFAULT_SR, dur=3.0, freq="A4", bands=10, seed=0):
         f = f0 * 2.0 ** (2 * k / 12.0)
         if f > 4200.0:
             break
-        b = F.bandpass(nz, f, sr, 90.0)
+        b = F.bandpass(nz, f, sr, 1000.0)
         lfo = 0.6 + 0.4 * np.sin(2 * np.pi * rng.uniform(3.0, 9.0) * t * n / sr + rng.uniform(0, 6.28))
         y += b / (np.max(np.abs(b)) + 1e-12) * lfo * np.clip((t - 0.04 * k) / 0.15, 0, 1) * np.clip((1.0 - t) / (0.2 + 0.05 * k), 0, 1)
     return _fin(y, sr, 0.5, src=sr, fade=0.01)
@@ -1837,9 +1842,11 @@ def robot_babble(sr=DEFAULT_SR, dur=1.5, rate=11.0, low=300.0, high=2800.0, seed
 
 
 @sfx("red_alert", "Starship red alert: a rising klaxon whoop repeated.",
-     whoops=(3, "repeats"), low=(440, "start: Hz or note name"), high=(880, "end: Hz or note name"), rate=(1.3, "whoops per second"))
-def red_alert(sr=DEFAULT_SR, whoops=3, low=440, high=880, rate=1.3):
-    """The findings only name it (R03 §9). # UNSOURCED: a two-saw sweep through a 3 kHz low-pass, 70 % duty."""
+     whoops=(3, "repeats"), low=(360, "start: Hz or note name"), high=(847, "end: Hz or note name"), rate=(0.78, "whoops per second"))
+def red_alert(sr=DEFAULT_SR, whoops=3, low=360, high=847, rate=0.78):
+    """Farnell 2010, Practical 35 Red Alert, p. 645: the oscillator "starts at 360Hz ... and rises to
+    847Hz in 900ms"; rate 0.78 makes the 70 % sweep 0.9 s. # UNSOURCED: the 70 % duty, the
+    exponential curve (the book's is a square root), a two-saw sweep through a 3 kHz low-pass."""
     per = 1.0 / float(np.clip(rate, 0.2, 8.0))
     m = int(sr * per * 0.7)
     f = to_hz(low) * (to_hz(high) / to_hz(low)) ** (np.arange(m) / m)

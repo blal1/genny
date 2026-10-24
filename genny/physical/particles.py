@@ -620,7 +620,8 @@ def granular_footstep_texture(force: np.ndarray, ground: str, rng: np.random.Gen
 MINNAERT_FR = 3.29        # f0 * r0 for air in water, m/s (Moss eq. 1, derived in research 06 3.1): sqrt(3*1.4*101325/998)/2pi.
                           # Langlois et al. 2016 quote 6.52/d_mm kHz (3.26, denser water): 0.9 % apart, kept.
 DELTA_RAD = 0.0139        # radiative damping, water (derived in research 06 3.1)
-DELTA_TH = 0.02           # UNSOURCED: thermal damping, G_th not given by Moss; research 06 sketch value
+DELTA_TH = 0.02           # thermal damping: Zheng & James 2009 (Harmonic Fluids) eq. 38 + Table 3 give
+                          # 0.030-0.0096 for r 0.5-5 mm (0.021 at 1 mm); 0.02 picked inside
 MOSS_XI = 0.1             # rising-chirp constant (Moss, after van den Doel 2005)
 
 

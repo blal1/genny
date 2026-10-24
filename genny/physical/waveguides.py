@@ -73,12 +73,11 @@ UNSOURCED = {
     "pluck.level_bandwidth": "dynamic-level low-pass bandwidth L = 1000 + 7000*velocity Hz follows "
                              "the research-10 sketch ('L ~ 1-8 kHz by velocity'), not a measured law.",
     "body.synthetic": "synthetic commuted bodies: noise T60 (0.08-0.2 s), contracting low-pass "
-                      "8 kHz -> 400 Hz, air-mode weight 4, and air-mode frequencies for "
-                      "violin/cello/bass (275/100/60 Hz, general acoustics); guitar 100 Hz, Q 10, "
-                      ">= 100 ms is JOS.",
+                      "8 kHz -> 400 Hz, air-mode weight 4; guitar 100 Hz, Q 10, >= 100 ms is JOS, "
+                      "violin/cello/bass air modes 275/110/60 Hz are Meyer 2009 §3.3.",
     "bowed.body_scale": "cello/bass/hurdy-gurdy bodies are the Maestre violin body with poles and "
-                        "zeros moved down in frequency (Q kept) by 0.47 (cello/violin length), "
-                        "0.22 (bass/violin air mode ~60/275 Hz) and 0.8.",
+                        "zeros moved down in frequency (Q kept) by 0.47 (cello/violin length) "
+                        "and 0.8; 0.22 (bass/violin air mode) is inside Meyer 2009's 0.19-0.27.",
     "bowed.bow_noise": "bow-noise depth 0.08 and its 2 kHz two-pole low-pass (rjlib knob at full "
                        "scale) are chosen, the sources give the structure only.",
     "brass.normalisation": "breath expressed relative to the lip filter's DC gain, lip bandwidth "
@@ -90,11 +89,10 @@ UNSOURCED = {
                    "RMS displacement), integrator leak 0.995, wheel speed wobble (0.4 %, 1.1 Hz), "
                    "wheel spin-up 0.25 s and the string mix are all chosen; only the mechanism "
                    "(Cook §7.5 chattering bridge, wheel = constant bow) is sourced.",
-    "felt_piano": "string wave impedance R = 2.2 kg/s per side with 3 strings loading the "
-                  "hammer, hammer speed 0.4 + 4.6 v m/s, strike point 1/8, felt softening of Q0 "
-                  "(x (1 - 0.9 felt)), soundboard noise tail (T60 100 ms, 6 kHz -> 300 Hz, gain "
-                  "0.3), loop brightness 0.35, inharmonicity B = 4e-4 (Cook gives ~0.004), and "
-                  "the output scale are chosen.",
+    "felt_piano": "felt softening of Q0 (x (1 - 0.9 felt)), soundboard noise tail (T60 100 ms, "
+                  "6 kHz -> 300 Hz, gain 0.3), loop brightness 0.35 and the output scale are "
+                  "chosen (R, hammer speed, strike point and B are C4 values from Chaigne & "
+                  "Askenfelt 1994 / Bensa et al. 2003).",
     "banded.exact_pitch": "exact_pitch=True (fractional delay minus the lastOut sample, loop gain "
                           "capped at 0.99995) fixes STK's integer delay lengths; not STK behaviour.",
     "tuning": "STK leaves Brass (lip pull), Bowed, Flute and the chien string off pitch by a few to "
@@ -335,9 +333,9 @@ def _tv_lowpass_noise(n, f_start, f_end, rng):
 
 _BODY_AIR = {  # air (Helmholtz) mode Hz, Q, body T60 s
     "guitar": (100.0, 10.0, 0.10),   # JOS Body_Factoring_Example: ~100 Hz, Q 10 used, >=100 ms
-    "violin": (275.0, 10.0, 0.08),   # UNSOURCED: violin A0 ~275 Hz (general acoustics)
-    "cello": (100.0, 10.0, 0.15),    # UNSOURCED: cello A0 ~100 Hz
-    "bass": (60.0, 10.0, 0.20),      # UNSOURCED: double-bass A0 ~60 Hz
+    "violin": (275.0, 10.0, 0.08),   # Meyer 2009 §3.3.1.1: air resonance between C4 and D4 (262-294 Hz)
+    "cello": (110.0, 10.0, 0.15),    # Meyer 2009 §3.3.3.1: air resonance near 110 Hz (A2)
+    "bass": (60.0, 10.0, 0.20),      # Meyer 2009 §3.3.4.1: air resonance ~57-70 Hz
 }
 
 
@@ -529,8 +527,9 @@ _MAESTRE_BODY = np.array([
     [1.0, -1.9299, 0.9621, -1.9354, 0.9590],
     [1.0, -1.9800, 0.9888, -1.9867, 0.9923],
 ])
-# UNSOURCED: cello = body-length ratio (35.5/75.5 cm); bass = air-mode ratio (~60/275 Hz; the
-# length ratio 0.32 leaves the A1 fundamental 44 dB under its 3rd harmonic); hurdy-gurdy 0.8.
+# UNSOURCED: cello = body-length ratio (35.5/75.5 cm); hurdy-gurdy 0.8. bass = air-mode ratio
+# (Meyer 2009 §3.3.4.1 57-70 Hz / §3.3.1.1 262-294 Hz -> 0.19-0.27, 0.22 inside; the length
+# ratio 0.32 leaves the A1 fundamental 44 dB under its 3rd harmonic).
 _BODY_SCALE = {"violin": 1.0, "cello": 0.47, "bass": 0.22, "gurdy": 0.8}
 
 
@@ -1462,7 +1461,7 @@ def dispersion_design(f0: float, B: float, n_fit: int = 12, K: int = 4) -> tuple
 
 
 def felt_piano(f0: float, velocity: float, dur: float, rng: np.random.Generator,
-               felt: float = 0.8, brightness: float = 0.35, inharmonicity: float = 4e-4,
+               felt: float = 0.8, brightness: float = 0.35, inharmonicity: float = 3.6e-4,
                decay: float = 0.5, soundboard: float = 0.3) -> np.ndarray:
     """Felt piano note (JOS PASP hammer + commuted soundboard, research 10 §5; stiffness
     Cook §7.4; sc3 MdaPiano decay/muffle laws, research 11 §C6).
@@ -1473,10 +1472,11 @@ def felt_piano(f0: float, velocity: float, dur: float, rng: np.random.Generator,
        gets velocity f/2R. ``felt`` softens Q0 (moderator felt; UNSOURCED amount).
     2. Excitation = pulse + ``soundboard`` * pulse convolved with a noise tail whose low-pass
        contracts (JOS 'soundboard tap', UNSOURCED numbers), then the strike-position comb at
-       1/8 of the string (UNSOURCED position).
+       0.12 of the string (Chaigne & Askenfelt 1994 Table I, C2/C4).
     3. Three unison strings detuned [-0.05, 0, 0.04] semitones (SC synthetic piano). Each loop:
        DelayA + K first-order allpasses fitted to f_n = n f0 sqrt(1 + B n^2) (B =
-       ``inharmonicity``, UNSOURCED default 4e-4; Cook gives ~0.004 for piano strings) + JOS
+       ``inharmonicity``, default 3.6e-4 = (pi kappa / c L)^2 for C4, Bensa et al. 2003 eq. 6 +
+       Table I: kappa 1.25 m^2/s, c 329.6 m/s, L 0.63 m; Cook gives ~0.004 for piano strings) + JOS
        loop FIR with sustain S = 6.91 / exp(-0.6 + 0.033 note - L) (MdaPiano decay law,
        note >= 44, L from ``decay``) and brightness B.
     4. MdaPiano muffle low-pass: l = 50 + felt^2 160 + 3.2 (vel - 64), clamp [55 + 0.25 note,
@@ -1489,9 +1489,9 @@ def felt_piano(f0: float, velocity: float, dur: float, rng: np.random.Generator,
     p = 3.7 + 0.015 * key
     alpha = (248.0 + 1.83 * key - 0.055 * key * key) * 1e-6
     m = (11.074 - 0.074 * key + 0.0001 * key * key) * 1e-3
-    R = 2.2  # UNSOURCED: steel piano string wave impedance per side (kg/s)
+    R = 2.06  # string wave impedance sqrt(T Ms / L), C4: Chaigne & Askenfelt 1994 Table I (kg/s)
     R2 = 3 * 2 * R  # three unison strings, both sides
-    v0 = 0.4 + 4.6 * float(np.clip(velocity, 0.0, 1.0))  # UNSOURCED: hammer speed m/s
+    v0 = 0.5 + 3.5 * float(np.clip(velocity, 0.0, 1.0))  # hammer m/s, p..f 0.5-4.0 (Chaigne & Askenfelt 1994 §I.B)
     F = _hammer_force(int(0.05 * SR), float(SR), m, Q0, p, alpha, v0, R2, 16)
     F = np.trim_zeros(F, "b")
     vinj = F / (2 * R)
@@ -1501,7 +1501,7 @@ def felt_piano(f0: float, velocity: float, dur: float, rng: np.random.Generator,
     sb = soundboard * np.convolve(vinj, tail) * math.sqrt(SR / 1000.0)
     exc = np.pad(vinj, (0, len(sb) - len(vinj))) + sb
     N = SR / f0
-    mm = int(math.floor(N / 8.0 + 0.5))  # UNSOURCED: hammer at 1/8 of the string
+    mm = int(math.floor(0.12 * N + 0.5))  # strike point 0.12 (Chaigne & Askenfelt 1994 Table I)
     if mm > 0:
         exc[mm:] -= exc[:-mm].copy()
     nd = max(note, 44.0)
