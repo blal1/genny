@@ -4,6 +4,9 @@ Signature convention: fn(x, sr, **params) -> ndarray. Works on mono (n,) or ster
 """
 from __future__ import annotations
 
+import math
+
+import numba
 import numpy as np
 from scipy.signal import lfilter
 
@@ -204,9 +207,23 @@ def tremolo(x, sr=DEFAULT_SR, rate=6.0, depth=0.5, shape="sine"):
     return x * (g[:, None] if x.ndim == 2 else g)
 
 
+def _adaa_tanh(x: np.ndarray) -> np.ndarray:
+    """First-order antiderivative anti-aliasing of tanh: (F(x[n]) - F(x[n-1])) / (x[n] - x[n-1]) with
+    F = log cosh, or tanh of the midpoint when the step is tiny (Parker, Zavalishin & Le Bivic, DAFx-16;
+    aanl.lib ADAA1). 5-8 dB less aliasing than plain tanh at drive 8-30, half a sample of delay."""
+    x = np.asarray(x, float)
+    xp = np.concatenate((np.zeros((1,) + x.shape[1:]), x[:-1]))
+    d = x - xp
+    ok = np.abs(d) > 1e-5
+    y = np.tanh(0.5 * (x + xp))
+    F = lambda v: np.logaddexp(v, -v) - math.log(2.0)        # noqa: E731
+    y[ok] = (F(x[ok]) - F(xp[ok])) / d[ok]
+    return y
+
+
 @effect("distortion", "Waveshaping overdrive/fuzz.", drive=(4.0, "1..50"), mix=(1.0, "wet"), tone=(4000, "post lowpass Hz"))
 def distortion(x, sr=DEFAULT_SR, drive=4.0, mix=1.0, tone=4000):
-    wet = np.tanh(x * drive) / np.tanh(min(drive, 20))
+    wet = _adaa_tanh(x * drive) / np.tanh(min(drive, 20))
     if tone and tone < sr / 2:
         wet = F.lowpass(wet, tone, sr)
     return x * (1 - mix) + wet * mix
@@ -282,7 +299,7 @@ def muffle(x, sr=DEFAULT_SR, amount=0.7):
 def telephone(x, sr=DEFAULT_SR, drive=2.0, low=300, high=3400):
     y = F.highpass(x, low, sr, order=2)
     y = F.lowpass(y, high, sr, order=2)
-    return np.tanh(y * drive) / np.tanh(drive)
+    return _adaa_tanh(y * drive) / np.tanh(drive)
 
 
 @effect("underwater", "Submerged wobble + heavy lowpass.", amount=(0.8, "0..1"))
@@ -300,22 +317,40 @@ def ringmod(x, sr=DEFAULT_SR, freq=200, mix=1.0):
     return x * (1 - mix) + x * car * mix
 
 
-@effect("compressor", "Dynamics compressor (evens out level, adds punch).",
-        threshold=(-18, "dB"), ratio=(4.0, "n:1"), attack=(0.005, "s"), release=(0.1, "s"), makeup=(0.0, "dB gain after (auto if 0)"))
-def compressor(x, sr=DEFAULT_SR, threshold=-18, ratio=4.0, attack=0.005, release=0.1, makeup=0.0):
-    mono = np.abs(to_mono(x)) + 1e-9
-    a_coef = np.exp(-1 / (sr * max(attack, 1e-4)))
-    r_coef = np.exp(-1 / (sr * max(release, 1e-3)))
-    # two one-pole followers; take max of fast attack and slow release (cheap approximation)
-    fast = lfilter([1 - a_coef], [1, -a_coef], mono)
-    slow = lfilter([1 - r_coef], [1, -r_coef], mono)
-    envl = np.maximum(fast, slow)
-    lvl_db = 20 * np.log10(envl)
-    over = np.maximum(lvl_db - threshold, 0)
-    gain_db = -over * (1 - 1 / ratio)
+@numba.njit(cache=True)
+def _decoupled_peak(xl, a_att, a_rel):
+    """Smooth decoupled peak detector (Giannoulis, Massberg & Reiss, JAES 60(6) 2012, eq. 14):
+    y1 = max(x, aR y1); y = aA y + (1 - aA) y1."""
+    y = np.empty_like(xl)
+    y1 = 0.0
+    yl = 0.0
+    for n in range(xl.shape[0]):
+        y1 = max(xl[n], a_rel * y1)
+        yl = a_att * yl + (1.0 - a_att) * y1
+        y[n] = yl
+    return y
+
+
+@effect("compressor", "Dynamics compressor (evens out level, adds punch): feed-forward, soft knee, smooth peak detector on the gain.",
+        threshold=(-18, "dB"), ratio=(4.0, "n:1"), attack=(0.005, "s"), release=(0.1, "s"), makeup=(0.0, "dB gain after (auto if 0)"),
+        knee=(6.0, "dB width of the soft knee (0 = hard knee)"))
+def compressor(x, sr=DEFAULT_SR, threshold=-18, ratio=4.0, attack=0.005, release=0.1, makeup=0.0, knee=6.0):
+    """Giannoulis, Massberg & Reiss 2012, the configuration of their conclusion: feed-forward, gain computer
+    with a soft knee of width W (eq. 4) on the instantaneous level in dB, then the smooth decoupled peak
+    detector (eq. 14) on the gain reduction, in the log domain. alpha = exp(-1 / (tau fs)) (eq. 7)."""
+    xg = 20 * np.log10(np.abs(to_mono(x)) + 1e-9)
+    T, R, W = float(threshold), max(float(ratio), 1.0), max(float(knee), 0.0)
+    over = xg - T
+    yg = np.where(2 * over > W, T + over / R, xg)
+    if W > 0:
+        mid = np.abs(2 * over) <= W
+        yg = np.where(mid, xg + (1 / R - 1) * (over + W / 2) ** 2 / (2 * W), yg)
+    a_att = math.exp(-1 / (sr * max(attack, 1e-4)))
+    a_rel = math.exp(-1 / (sr * max(release, 1e-3)))
+    gr = _decoupled_peak(np.ascontiguousarray(xg - yg), a_att, a_rel)
     if makeup == 0.0:
-        makeup = min(-threshold * (1 - 1 / ratio) * 0.5, 12)
-    g = db_to_gain(gain_db + makeup)
+        makeup = min(-T * (1 - 1 / R) * 0.5, 12)
+    g = db_to_gain(makeup - gr)
     return x * (g[:, None] if x.ndim == 2 else g)
 
 

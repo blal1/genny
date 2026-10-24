@@ -278,6 +278,17 @@ def test_birdsong_matches_preset():
     REPORT["birdsong (syllables, preset range Hz, measured range Hz)"] = out
 
 
+def test_birdsong_normal_form_source_follows_the_contour():
+    seg = C.birdsong(SR, species="cuckoo", source="normal_form")
+    t = bursts(seg, ms=2.0, thresh=0.06, min_gap=0.012)
+    assert len(t) == 2
+    a = f0_of(seg[int((t[0] + 0.05) * SR):int((t[0] + 0.17) * SR)], SR, 400, 900)
+    b = f0_of(seg[int((t[1] + 0.05) * SR):int((t[1] + 0.25) * SR)], SR, 400, 900)
+    assert abs(a / 661 - 1) < 0.03 and abs(b / 525 - 1) < 0.03, (a, b)
+    for sp in C.BIRDS:
+        assert np.isfinite(C.birdsong(SR, species=sp, source="normal_form", seed=1)).all(), sp
+
+
 def test_syrinx_follows_tension():
     """Smyth-Smith valve: the call's f0 follows the membrane frequency (the kernel's stated working range)."""
     out = {}

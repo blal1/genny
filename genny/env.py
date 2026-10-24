@@ -17,7 +17,9 @@ def adsr(dur: float, attack: float = 0.01, decay: float = 0.1, sustain: float = 
     a = min(samples(attack, sr) if attack > 0 else 1, n_on)
     d = min(samples(decay, sr) if decay > 0 else 1, max(1, n_on - a))
     s = max(0, n_on - a - d)
-    env_a = np.linspace(0, 1, a) ** (1.0 / curve) if a > 1 else np.ones(a)
+    # concave rise 1 - (1 - x)^curve: same ease-in as x^(1/curve) but with a finite slope at the start, so
+    # the first samples of a note do not step (x^(1/2) put 6.7 % of full level on sample 1 of a 5 ms attack)
+    env_a = 1.0 - (1.0 - np.linspace(0, 1, a)) ** curve if a > 1 else np.ones(a)
     env_d = sustain + (1 - sustain) * (1 - np.linspace(0, 1, d)) ** curve if d > 1 else np.full(d, sustain)
     env_s = np.full(s, sustain)
     on = np.concatenate([env_a, env_d, env_s])[:n_on]

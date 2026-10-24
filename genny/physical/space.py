@@ -22,12 +22,13 @@ Ports
 * **Per-band T60** - Sabine T60 = 0.161 V / (S a) with Farnell Table 5.1 absorption
   coefficients (research 01 §6.1); mapped onto zita's (t60dc, t60m, f2).
 * **Distance** - spherical spreading 1/r (-6 dB per doubling) or line source 1/sqrt(r)
-  (-3 dB per doubling) (Farnell rule 19, research 01 §5); air absorption from JOS PASP
-  Table B.2 (dB/km at 1-4 kHz, RH 40-70 %, research 10 §2.5), extended outside 1-4 kHz with
-  the f^2 (Stokes) law (Farnell rule 20); propagation delay r / c, c = 345 m/s (JOS).
+  (-3 dB per doubling) (Farnell rule 19, research 01 §5); ISO 9613-1 air absorption
+  (temperature, humidity, pressure); propagation delay r / c(T), c = 343.2 m/s at 20 C.
 """
 
 from __future__ import annotations
+
+import math
 
 import numba
 import numpy as np
@@ -353,34 +354,73 @@ def zita_from_bands(t60s: np.ndarray, rdel: float = 40.0, f1: float = 200.0) -> 
 # Distance: spreading, air absorption, delay
 # ==========================================================================================
 
-C_AIR = 345.0
-AIR_BANDS = (1000.0, 2000.0, 3000.0, 4000.0)
-AIR_DB_PER_KM = {  # JOS PASP Air_Absorption Table B.2, 20 C (research 10 §2.5), verbatim
-    40: (5.6, 16.0, 30.0, 105.0),
-    50: (5.6, 12.0, 26.0, 90.0),
-    60: (5.6, 12.0, 24.0, 73.0),
-    70: (5.6, 12.0, 22.0, 63.0),
-}
+def speed_of_sound(temp_c: float = 20.0) -> float:
+    """c = 343.2 sqrt(T / 293.15) m/s (ISO 9613-1, as in acoustic-toolbox's atmosphere module)."""
+    return 343.2 * math.sqrt((float(temp_c) + 273.15) / 293.15)
 
 
-def air_db_per_m(freqs: np.ndarray, rh: int = 50) -> np.ndarray:
-    """Air absorption in dB/m: Table B.2 between 1 and 4 kHz (log-frequency interpolation),
-    f^2 (Stokes) extension below 1 kHz and above 4 kHz from the edge values."""
-    tab = np.asarray(AIR_DB_PER_KM[min(AIR_DB_PER_KM, key=lambda k: abs(k - rh))]) / 1000.0
-    f = np.maximum(np.asarray(freqs, float), 1.0)
-    inside = np.interp(np.log(f), np.log(AIR_BANDS), tab)
-    lo = tab[0] * (f / AIR_BANDS[0]) ** 2
-    hi = tab[-1] * (f / AIR_BANDS[-1]) ** 2
-    return np.where(f < AIR_BANDS[0], lo, np.where(f > AIR_BANDS[-1], hi, inside))
+C_AIR = speed_of_sound(20.0)       # 343.2 m/s
 
 
-def distance(x: np.ndarray, r: float, *, ref: float = 1.0, rh: int = 50, line_source: bool = False,
-             delay: bool = False, air: bool = True) -> np.ndarray:
+def air_db_per_m(freqs: np.ndarray, rh: float = 50.0, temp_c: float = 20.0, pressure_kpa: float = 101.325) -> np.ndarray:
+    """Pure-tone air absorption in dB/m, ISO 9613-1:1993 (oxygen and nitrogen relaxation; formula as
+    given by sengpielaudio "Damping of air", saturation pressure WMO-No.188). Valid 50 Hz-10 kHz,
+    -20..+50 C, 10..100 % RH; used beyond 10 kHz as is. 20 C / 50 %: 4.66 dB/km at 1 kHz, 29.7 at 4 kHz.
+    (The PASP Table B.2 used before read its 4 kHz column 3x too high.)"""
+    T, T0, T01, pr = float(temp_c) + 273.15, 293.15, 273.16, 101.325
+    pa = float(pressure_kpa)
+    psat = pr * 10 ** (-6.8346 * (T01 / T) ** 1.261 + 4.6151)
+    h = float(np.clip(rh, 0.0, 100.0)) * psat / pa                  # molar concentration of water vapour, %
+    fro = (pa / pr) * (24.0 + 4.04e4 * h * (0.02 + h) / (0.391 + h))
+    frn = (pa / pr) * (T / T0) ** -0.5 * (9.0 + 280.0 * h * math.exp(-4.170 * ((T / T0) ** (-1.0 / 3.0) - 1.0)))
+    f = np.asarray(freqs, float)
+    return 8.686 * f * f * (1.84e-11 * (pr / pa) * (T / T0) ** 0.5
+                            + (T / T0) ** -2.5 * (0.01275 * math.exp(-2239.1 / T) / (fro + f * f / fro)
+                                                  + 0.1068 * math.exp(-3352.0 / T) / (frn + f * f / frn)))
+
+
+def ground_impedance(freqs: np.ndarray, sigma: float = 300.0) -> np.ndarray:
+    """Normalised characteristic impedance Z/rho c of a porous ground (e^{-iwt} convention), Delany & Bazley
+    1970 (Applied Acoustics 3:105, Figs 1-2): 1 + 9.08 (f/sigma)^-0.75 + i 11.9 (f/sigma)^-0.73, sigma = flow
+    resistivity in cgs units (grass about 300). Fitted for 10 <= f/sigma <= 1000; used below that as is (a
+    stiffer ground, which is the right trend), capped above."""
+    x = np.minimum(np.maximum(np.asarray(freqs, float), 1e-3) / float(sigma), 1000.0)
+    return 1.0 + 9.08 * x ** -0.75 + 1j * 11.9 * x ** -0.73
+
+
+def ground_effect(freqs: np.ndarray, d: float, h_source: float = 1.5, h_listener: float = 1.5, sigma: float = 300.0,
+                  temp_c: float = 20.0) -> np.ndarray:
+    """Transfer function (direct + ground-reflected path) / (direct path) at ``freqs`` for a source and a
+    listener at the given heights, ``d`` metres apart (numpy's e^{+iwt} convention, ready for rfft).
+
+    Reflected wave = image source x the spherical-wave reflection coefficient Q = Rp + (1 - Rp) F(w): plane-wave
+    Rp = (Z sin psi - 1)/(Z sin psi + 1), boundary loss F(w) = 1 + i sqrt(pi) w wofz(w),
+    w = (1 + i)/2 sqrt(k r2) (sin psi + 1/Z) (Weyl-van der Pol). Over grass this gives the classic +6 dB
+    at low frequencies, a dip of 10-15 dB around 300-800 Hz at 100 m, and a comb above. ``sigma`` <= 0:
+    rigid ground (Q = 1)."""
+    from scipy.special import wofz
+    f = np.maximum(np.asarray(freqs, float), 1e-3)
+    r1 = math.hypot(d, h_source - h_listener)
+    r2 = math.hypot(d, h_source + h_listener)
+    sn = (h_source + h_listener) / r2
+    k = 2 * math.pi * f / speed_of_sound(temp_c)
+    if sigma <= 0:
+        q = np.ones_like(f, dtype=complex)
+    else:
+        z = ground_impedance(f, sigma)
+        rp = (z * sn - 1.0) / (z * sn + 1.0)
+        w = 0.5 * (1 + 1j) * np.sqrt(k * r2) * (sn + 1.0 / z)
+        q = rp + (1.0 - rp) * (1.0 + 1j * math.sqrt(math.pi) * w * wofz(w))
+    return np.conj(1.0 + (r1 / r2) * q * np.exp(1j * k * (r2 - r1)))
+
+
+def distance(x: np.ndarray, r: float, *, ref: float = 1.0, rh: float = 50, line_source: bool = False,
+             delay: bool = False, air: bool = True, temp_c: float = 20.0) -> np.ndarray:
     """Place a (mono or stereo) sound ``r`` metres away (it was recorded at ``ref`` metres).
 
     Spreading: ref/r (point, -6 dB per doubling) or sqrt(ref/r) (line source, -3 dB).
     Air: zero-phase magnitude filter from ``air_db_per_m`` over (r - ref) metres.
-    Delay: (r - ref) / 345 s of silence prepended when ``delay`` is True.
+    Delay: (r - ref) / c(T) s of silence prepended when ``delay`` is True.
     """
     x = np.asarray(x, float)
     r = max(r, 1e-3)
@@ -389,12 +429,12 @@ def distance(x: np.ndarray, r: float, *, ref: float = 1.0, rh: int = 50, line_so
     n = x.shape[0]
     pad = 1 << int(np.ceil(np.log2(n + seconds(0.05))))
     fr = np.fft.rfftfreq(pad, 1 / SR)
-    mag = 10 ** (-air_db_per_m(fr, rh) * extra / 20) if air else np.ones_like(fr)
+    mag = 10 ** (-air_db_per_m(fr, rh, temp_c) * extra / 20) if air else np.ones_like(fr)
     X = np.fft.rfft(x, pad, axis=0)
     X = X * (mag if x.ndim == 1 else mag[:, None])
     y = np.fft.irfft(X, pad, axis=0)[:n] * g
     if delay and extra > 0:
-        d = seconds(extra / C_AIR)
+        d = seconds(extra / speed_of_sound(temp_c))
         y = np.concatenate([np.zeros((d,) + y.shape[1:]), y])
     return y
 

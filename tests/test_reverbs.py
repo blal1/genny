@@ -16,7 +16,7 @@ from genny.notes import midi_to_freq, note_to_midi
 
 SR = 44100
 FX_NAMES = ["jcrev", "satrev", "fdn_reverb", "room", "zita", "early_reflections", "distance", "doppler", "occlude",
-            "leslie", "flanger", "phaser", "chorus", "tape_delay", "shimmer", "gated_reverb", "reverse_reverb"]
+            "leslie", "flanger", "phaser", "chorus", "tape_delay", "shimmer", "gated_reverb", "reverse_reverb", "velvet_reverb"]
 C = R.C_AIR
 
 
@@ -80,6 +80,17 @@ def test_fdn_t60_low_and_high():
         m_lo, m_hi = band_t60(y, sr, 250.0), band_t60(y, sr, 4000.0)
         assert abs(m_lo / tl - 1) < 0.2, (sr, "250 Hz", tl, round(m_lo, 3))
         assert abs(m_hi / th - 1) < 0.2, (sr, "4 kHz", th, round(m_hi, 3))
+
+
+def test_velvet_reverb_t60_and_density():
+    v = R.velvet_noise(44100, 44100, 2205.0, np.random.default_rng(1))
+    nz = np.flatnonzero(v)
+    assert set(np.unique(v[nz])) == {-1.0, 1.0} and abs(len(nz) - 2205) <= 2     # one +-1 per 20-sample cell
+    assert np.all(np.diff(nz) >= 1) and np.max(np.diff(nz)) <= 2 * 20
+    for sr, tl, th in ((44100, 2.0, 0.8), (48000, 1.0, 0.5)):
+        y = R.velvet_reverb(impulse(sr // 10), sr, t60_low=tl, t60_high=th, predelay=0.0, mix=1.0)[:, 0]
+        m_lo, m_hi = band_t60(y, sr, 250.0), band_t60(y, sr, 4000.0)
+        assert abs(m_lo / tl - 1) < 0.15 and abs(m_hi / th - 1) < 0.15, (sr, m_lo, m_hi)
 
 
 def test_fdn_lossless_prototype():
@@ -156,9 +167,11 @@ def test_distance_inverse_law_and_air():
     assert abs(g3 - 0.5) < 0.01                                           # line source: 1 / sqrt(r)
     far, ref = R.distance(nz, SR, metres=201.0), R.distance(nz, SR, metres=201.0, air=False)
     loss4k, loss1k = band_db(ref, 4000) - band_db(far, 4000), band_db(ref, 1000) - band_db(far, 1000)
-    assert abs(loss4k - 18.0) < 2.5 and abs(loss1k - 1.12) < 0.5, (loss4k, loss1k)   # PASP B.2: 90 and 5.6 dB/km
-    dry = R.distance(nz, SR, metres=201.0, humidity=40)
-    assert band_db(ref, 4000) - band_db(dry, 4000) > loss4k + 1.5         # drier air absorbs more at 4 kHz
+    assert abs(loss4k - 5.93) < 1.0 and abs(loss1k - 0.93) < 0.4, (loss4k, loss1k)   # ISO 9613-1 20 C 50 %: 29.7 and 4.66 dB/km
+    dry = R.distance(nz, SR, metres=201.0, humidity=20)
+    assert band_db(ref, 4000) - band_db(dry, 4000) > loss4k + 5.0         # drier air absorbs more at 4 kHz (ISO: 12.6 dB)
+    cold = R.distance(nz, SR, metres=201.0, temperature=-10.0, delay=True)
+    assert len(cold) - len(far) > 0.026 * SR                             # 200 m at 325 m/s instead of 343 (and no delay above)
     # reverb send: the direct / reverberant ratio falls with distance
     near, away = R.distance(nz, SR, metres=2.0, reverb=0.5), R.distance(nz, SR, metres=50.0, reverb=0.5)
     tail = slice(SR + 2000, SR + 20000)
@@ -451,6 +464,7 @@ VARIANTS = {
     "shimmer": [{"shimmer": 1.0, "t60": 6.0, "tail": 1.5}],
     "gated_reverb": [{"gate": 0.05, "boost": 12.0}],
     "reverse_reverb": [{"t60": 0.3, "dark": 1.0}],
+    "velvet_reverb": [{"t60_low": 0.3, "t60_high": 0.1, "density": 800.0, "width": 0.0}, {"t60_low": 8.0, "t60_high": 6.0, "predelay": 0.0, "mix": 1.0}],
 }
 
 
@@ -495,3 +509,20 @@ if __name__ == "__main__":
         if _k.startswith("test_") and callable(_fn):
             _fn()
             print("ok", _k)
+
+
+def test_ground_effect_over_grass():
+    # Delany-Bazley grass (300 cgs), source and listener 1.5 m high, 100 m apart: pressure doubling at the
+    # low end, the ground dip around 500 Hz, back to doubling-ish higher up (spherical-wave reflection)
+    nz = np.random.default_rng(3).standard_normal(SR)
+    free = R.distance(nz, SR, metres=100.0, air=False)
+    grass = R.distance(nz, SR, metres=100.0, air=False, ground="grass")
+    hard = R.distance(nz, SR, metres=100.0, air=False, ground="hard")
+    ea = {f: band_db(grass, f) - band_db(free, f) for f in (125, 500, 2000)}
+    assert ea[125] > 3 and ea[500] < -8 and ea[2000] > -2, ea
+    assert abs(band_db(hard, 250) - band_db(free, 250) - 6.0) < 1.0     # rigid ground: +6 dB below the comb
+    try:
+        R.distance(nz, SR, metres=10.0, ground="lava")
+        raise AssertionError("bad ground accepted")
+    except ValueError:
+        pass

@@ -830,7 +830,8 @@ def kettle(sr=DEFAULT_SR, dur=5.0, tone=1800.0, onset=2.5, breath=0.4, rumble=0.
     # UNSOURCED: no findings file has a kettle or edge-tone model beyond "centre frequency
     proportional to velocity / diameter" (findings 02 section 13) and the jet-drive remark in
     findings 08; the lock range, pull, gap (chosen so the free tone reaches 1.25 f_res) and harmonic
-    levels 1 : 0.25 : 0.08 are assumptions."""
+    levels 1 : 0.25 : 0.08 are assumptions. Selfridge's sourced edge tone (``edge_tone`` sfx) is not used:
+    a kettle whistle is a hole tone, and his fit (wedges, Re_d <= 4000) puts this 60 m/s jet at 10-17 kHz."""
     rng = _rng(seed, 23)
     n = _n(dur)
     t = np.arange(n) / SR

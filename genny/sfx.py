@@ -452,13 +452,24 @@ def wind(sr=DEFAULT_SR, dur=3.0, scale=1.0, seed=0):
     return y * 0.85
 
 
-@sfx("thunder", "Segmented procedural thunder with distance-dependent propagation.", dur=(2.5, "s"), distance=(80.0, "m"), seed=(0, "variation"))
-def thunder(sr=DEFAULT_SR, dur=2.5, distance=80.0, seed=0):
-    from .physics import Environment
-    y = Environment(seed=32 + int(seed)).thunder(max(float(dur), 0.2), distance=float(distance), sr=sr)
+@sfx("thunder", "Thunder: Farnell's layered patch blended with Few's tortuous channel of N-waves, heard from `distance`.",
+     dur=(2.5, "s"), distance=(80.0, "m from the strike"), channel=(0.5, "0 Farnell patch only .. 1 physical channel only"),
+     seed=(0, "variation"))
+def thunder(sr=DEFAULT_SR, dur=2.5, distance=80.0, channel=0.5, seed=0):
+    from .physics import Environment, _to_sr
+    from .physical import ambience as amb
+    dur = max(float(dur), 0.2)
+    # the patch's distance runs 0..1; 3 km = 1 as in matter.storm
+    y = Environment(seed=32 + int(seed)).thunder(dur, distance=float(np.clip(float(distance) / 3000.0, 0.0, 1.0)), sr=sr)
     if np.asarray(y).ndim == 2:
         y = np.mean(y, axis=1)
     y = np.asarray(y, float).copy()
+    c = float(np.clip(channel, 0.0, 1.0))
+    if c > 0:
+        ch = _to_sr(amb.thunder_channel(np.random.default_rng(32 + int(seed)), dur=dur, distance_m=max(float(distance), 1.0)), sr)
+        ch = np.pad(ch, (0, max(0, len(y) - len(ch))))[:len(y)]
+        rms = lambda v: float(np.sqrt(np.mean(v * v))) + 1e-12  # noqa: E731
+        y = (1.0 - c) * y / rms(y) + c * ch / rms(ch)
     k = min(len(y), max(2, int(round(0.02 * sr))))
     y[-k:] *= np.linspace(1.0, 0.0, k)
     return _full_scale(y)
@@ -551,10 +562,29 @@ def fan(sr=DEFAULT_SR,dur=2.0,rpm=1800,blades=5,seed=0):
     return Rotor(float(rpm),int(blades),.15,.48,.54).render(float(dur),sr=sr,seed=int(seed))
 
 
-@sfx("propeller", "Physical propeller: low blade-passing pulse train plus aerodynamic turbulence.", dur=(2.0,"s"), rpm=(2100,"RPM"), blades=(3,"count"), seed=(0,"variation"))
-def propeller(sr=DEFAULT_SR,dur=2.0,rpm=2100,blades=3,seed=0):
-    from .physics import Rotor
-    return Rotor(float(rpm),int(blades),1.05,.58,.72).render(float(dur),sr=sr,seed=int(seed))
+@sfx("propeller", "Propeller aircraft (Selfridge 2017): Hamilton Standard loading harmonics of the blade-passing frequency + Aeolian vortex noise along the blades.",
+     dur=(2.0, "s"), rpm=(2100, "RPM (overridden by aircraft unless given)"), blades=(3, "count"),
+     aircraft=("", "'' | c130 | b17 | tiger_moth | yak52 | cessna340 | p51: rpm, power, radius and blades of that plane"),
+     radius=(1.0, "m blade radius"), power=(200.0, "engine hp"), chord=(0.15, "m blade chord (sets the vortex pitch)"),
+     angle=(110.0, "degrees from the flight direction (loudest near 110-120)"), distance=(30.0, "m"), seed=(0, "variation"))
+def propeller(sr=DEFAULT_SR, dur=2.0, rpm=2100, blades=3, aircraft="", radius=1.0, power=200.0, chord=0.15, angle=110.0,
+              distance=30.0, seed=0):
+    from fractions import Fraction
+    from scipy.signal import resample_poly
+    from .physical import modal
+    from .physical.core import SR as P
+    if aircraft:
+        if aircraft not in modal.AIRCRAFT:
+            raise ValueError(f"unknown aircraft {aircraft!r}; choose from {sorted(modal.AIRCRAFT)}")
+        _, rpm_a, power, radius, blades = modal.AIRCRAFT[aircraft]
+        rpm = rpm if rpm != 2100 else rpm_a
+    d = float(np.clip(dur, 0.05, 60.0))
+    y = modal.propeller_tone(float(np.clip(rpm, 50, 20000)), int(np.clip(blades, 1, 12)), float(np.clip(radius, 0.05, 5.0)),
+                             float(power), d, np.random.default_rng(int(seed)), chord=float(np.clip(chord, 0.01, 1.0)),
+                             angle=float(angle), distance=float(distance))
+    fr = Fraction(int(sr), P)
+    y = resample_poly(y, fr.numerator, fr.denominator)
+    return 0.8 * y / (np.max(np.abs(y)) + 1e-30)
 
 
 @sfx("jet_engine", "Reduced physical multi-spool jet/turbofan model.", dur=(3.0,"s"), rpm=(9000,"fan/core RPM scale"), throttle=(.7,"0..1"), seed=(0,"variation"))
@@ -597,7 +627,7 @@ def gears(sr=DEFAULT_SR,dur=2.0,rpm=1800,driver_teeth=20,driven_teeth=40,backlas
         float(dur),sr=sr,seed=int(seed))
 
 
-@sfx("explosion", "Physical blast: N-wave shock, low-frequency expansion, debris and distance propagation.", dur=(1.5,"s"), energy=(1.0,"relative blast energy"), distance=(8.0,"m"), debris=(0.45,"0..1"), enclosure=(0.15,"0..1"), seed=(0,"variation"), boom=(None,"legacy name for energy"))
+@sfx("explosion", "Physical blast: Friedlander shock sized by charge and distance (JRC / Kinney fits), low-frequency expansion, debris and distance propagation.", dur=(1.5,"s"), energy=(1.0,"charge, kg of TNT: sets the shock's length with the distance"), distance=(8.0,"m"), debris=(0.45,"0..1"), enclosure=(0.15,"0..1"), seed=(0,"variation"), boom=(None,"legacy name for energy"))
 def explosion(sr=DEFAULT_SR,dur=1.5,energy=1.0,distance=8.0,debris=.45,enclosure=.15,seed=0,boom=None):
     # ``boom`` remains accepted for compatibility; map it to physical energy.
     if boom is not None: energy=float(boom)

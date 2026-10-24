@@ -5,17 +5,17 @@ Use these names in JSON specs (`"inst"`, `"kind"`, fx `"type"`, layer `"type"`) 
 
 | section | count |
 |---|---|
-| Instruments | 141 |
-| Drums | 48 |
-| Sound effects | 234 |
-| Effects | 97 |
+| Instruments | 144 |
+| Drums | 50 |
+| Sound effects | 242 |
+| Effects | 98 |
 | Extra layer types | 14 |
 
-## Instruments (141)
+## Instruments (144)
 
 Usage: `{"type": "seq", "inst": "<name>", "steps": "C4:1 E4:1", "params": {...}}`
 
-Index by module: **acoustic**: `harp`, `guitar`, `strings`, `flute`, `wurli`, `clav`, `harpsichord`, `celesta`, `toy_piano`, `church_organ`, `accordion`, `xylophone`, `glockenspiel`, `handpan`, `tubular_bell`, `gamelan`, `singing_bowl`, `timpani`, `steel_guitar`, `electric_guitar`, `muted_guitar`, `dist_guitar`, `banjo`, `mandolin`, `koto`, `sitar`, `pizzicato`, `upright_bass`, `finger_bass`, `slap_bass`, `violin`, `cello`, `clarinet`, `oboe`, `sax`, `trumpet`, `french_horn`, `trombone`, `tuba`, `harmonica`, `pan_flute`, `whistle`, `ocarina`, `didgeridoo`; **chiptune**: `nes_pulse`, `nes_triangle`, `nes_noise`, `gb_pulse`, `gb_wave`, `gb_noise`, `ym2612`; **chiptune2**: `sn_tone`, `sn_noise`, `ym2151`, `sid`, `pokey`; **choir**: `voice`, `vocal_choir`, `hum`, `throat_singing`, `falsetto`, `boys_choir`, `chant`; **compose**: `ks_string`; **creatures**: `whistling`; **fdstring**: `fd_string`, `fd_piano`, `prepared_piano`, `slack_string`, `fd_bar`, `bowed_string_fd`; **foley**: `church_bell`, `handbell`, `china_bell`, `glass_harmonica`, `bowed_bowl`, `hurdy_gurdy`, `wind_chime`; **friction**: `cristal`, `rubbed_glass`, `bowed_bar`, `bowed_sheet`, `rod_bank`, `whistling_blades`, `tuning_fork`, `coil_spring`; **instruments**: `piano`, `felt_piano`, `epiano`, `organ`, `pluck`, `bass`, `sub`, `wobble`, `lead`, `pad`, `brass`, `choir`, `pwm`, `bell`, `glass`, `marimba`, `kalimba`, `vibraphone`, `music_box`, `steel_drum`, `chip`, `chiptri`, `board`, `sine`, `square`, `saw`, `synth`; **klang**: `viola`, `bassoon`, `cor_anglais`, `bass_clarinet`, `piccolo`, `recorder`, `hand_chime`; **retro**: `sfxr_voice`, `zzfx_voice`, `psg`; **reverbs**: `feedback_guitar`; **synths**: `soft_lead`, `square_lead`, `synth_pluck`, `theremin`, `warm_pad`, `glass_pad`, `string_machine`, `acid`, `reese`, `fm_bass`, `bass808`; **tubes**: `reed_tube`, `reed_cone`, `vowel_tube`, `piston_pipe`, `pvc_pipe`, `bottle`
+Index by module: **acoustic**: `harp`, `guitar`, `strings`, `flute`, `wurli`, `clav`, `rhodes`, `harpsichord`, `celesta`, `toy_piano`, `church_organ`, `accordion`, `xylophone`, `glockenspiel`, `handpan`, `tubular_bell`, `gamelan`, `singing_bowl`, `timpani`, `steel_guitar`, `electric_guitar`, `muted_guitar`, `dist_guitar`, `banjo`, `mandolin`, `koto`, `sitar`, `pizzicato`, `upright_bass`, `finger_bass`, `slap_bass`, `violin`, `cello`, `clarinet`, `oboe`, `sax`, `trumpet`, `french_horn`, `trombone`, `tuba`, `harmonica`, `pan_flute`, `whistle`, `ocarina`, `didgeridoo`; **chiptune**: `nes_pulse`, `nes_triangle`, `nes_noise`, `gb_pulse`, `gb_wave`, `gb_noise`, `ym2612`; **chiptune2**: `sn_tone`, `sn_noise`, `ym2151`, `sid`, `pokey`; **choir**: `voice`, `vocal_choir`, `hum`, `throat_singing`, `falsetto`, `boys_choir`, `chant`; **compose**: `ks_string`; **creatures**: `whistling`; **fdstring**: `fd_string`, `fd_piano`, `prepared_piano`, `slack_string`, `string_bridge_plate`, `fd_bar`, `bowed_string_fd`; **foley**: `church_bell`, `handbell`, `china_bell`, `glass_harmonica`, `bowed_bowl`, `hurdy_gurdy`, `wind_chime`; **friction**: `cristal`, `rubbed_glass`, `bowed_bar`, `bowed_sheet`, `rod_bank`, `whistling_blades`, `tuning_fork`, `coil_spring`; **instruments**: `piano`, `felt_piano`, `epiano`, `organ`, `pluck`, `bass`, `sub`, `wobble`, `lead`, `pad`, `brass`, `choir`, `pwm`, `bell`, `glass`, `marimba`, `kalimba`, `vibraphone`, `music_box`, `steel_drum`, `chip`, `chiptri`, `board`, `sine`, `square`, `saw`, `synth`, `piano_wg`; **klang**: `viola`, `bassoon`, `cor_anglais`, `bass_clarinet`, `piccolo`, `recorder`, `hand_chime`; **retro**: `sfxr_voice`, `zzfx_voice`, `psg`; **reverbs**: `feedback_guitar`; **synths**: `soft_lead`, `square_lead`, `synth_pluck`, `theremin`, `warm_pad`, `glass_pad`, `string_machine`, `acid`, `reese`, `fm_bass`, `bass808`; **tubes**: `reed_tube`, `reed_cone`, `vowel_tube`, `piston_pipe`, `pvc_pipe`, `bottle`
 
 ### `accordion` — keys, range C3-C6
 
@@ -24,6 +24,9 @@ Accordion: two or three reeds tuned slightly apart (musette shimmer) under bello
 | param | default | meaning |
 |---|---|---|
 | `musette` | `9.0` | cents the reeds are tuned apart (0 = dry single reed) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `acid` — bass, range C1-C4
 
@@ -36,10 +39,20 @@ Acid bass line (303): saw or square through a squelchy resonant filter; high `ve
 | `env` | `2000` | Hz the filter jumps by |
 | `decay` | `0.2` | s filter decay |
 | `res` | `0.7` | 0..1 resonance |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `banjo` — plucked, range C3-C7
 
 Banjo: twangy string over a drum head, quick decay (bluegrass, country, folk).  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `bass` — bass, range C1-C4
 
@@ -50,6 +63,9 @@ Fat analog synth bass with filter envelope.  *(module `instruments`)*
 | `cutoff` | `1200` | Hz peak |
 | `res` | `1.5` | resonance |
 | `sub` | `0.5` | sine sub-oscillator 0..1 |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `bass808` — bass, range C1-C3
 
@@ -60,14 +76,29 @@ Fat analog synth bass with filter envelope.  *(module `instruments`)*
 | `decay` | `1.5` | seconds |
 | `drive` | `0.3` | 0 clean sine .. 1 fuzzy |
 | `punch` | `0.5` | 0..1 pitch drop at the onset |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `bass_clarinet` — wind, range D2-F5
 
 Bass clarinet: hollow, dark odd-harmonic reed an octave below the clarinet.  *(module `klang`)*
 
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `bassoon` — wind, range Bb1-E5
 
 Bassoon: dry, woody double reed; comic in the bass, plaintive in the tenor.  *(module `klang`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `bell` — mallet, range C3-C7
 
@@ -78,6 +109,8 @@ FM bell / chime (notifications, magic). The clang is capped by pitch, so high no
 | `decay` | `2.0` | seconds |
 | `ratio` | `3.5` | modulator ratio; 2=softer, 5.04=glassy |
 | `bright` | `1.0` | 0.4 soft chime .. 2 hard metallic strike |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `board` — retro, range C3-C6
 
@@ -89,6 +122,9 @@ FM bell / chime (notifications, magic). The clang is capped by pitch, so high no
 | `blip` | `7.0` | semitones the onset drops from |
 | `bits` | `5` | DAC bit depth (0 = clean) |
 | `vibrato` | `0.0` | semitones of 9 Hz warble |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `bottle` — wind, range C3-C6
 
@@ -100,6 +136,8 @@ Blown bottle / jug (STK BlowBotl): Helmholtz resonator with flow-modulated breat
 | `vibrato` | `0.0` | 0..1 breath vibrato depth (5.925 Hz, STK gain 0.4 at 1) |
 | `bright` | `1.0` | 0.25..4 output lowpass scale |
 | `seed` | `0` | noise seed |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `bowed_bar` — bowed, range F3-F6
 
@@ -112,6 +150,8 @@ Bowed free bar (vibraphone / Baschet blade played with a bow): Bilbao bow on bar
 | `position` | `0.03` | bow point from the bar end as a fraction of length (0-0.15) |
 | `speed` | `0.2` | bow speed, m/s (0.05-0.5): sets loudness |
 | `bright` | `1.0` | 0.5 mellow .. 2 bright |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `bowed_bowl` — bowed, range C3-C5
 
@@ -122,6 +162,9 @@ Tibetan singing bowl rubbed with a wooden puja (banded waveguide: twelve modes i
 | `mode` | `'bow'` | bow (rubbed rim) / strike |
 | `pressure` | `0.5` | 0..1 puja pressure: more upper modes |
 | `ring` | `3.0` | s of ring kept after the note |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `bowed_sheet` — bowed, range C2-C5
 
@@ -135,6 +178,8 @@ Bowed steel sheet (steel-cello-like): Bilbao bow on plate modes, radiated by the
 | `ring` | `0.5` | 0 dry bowed tone .. 1 mostly the sheet's own ringing modes |
 | `bright` | `1.0` | 0.5 mellow .. 2 bright |
 | `seed` | `0` | int: sheet modes |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `bowed_string_fd` — strings, range G2-C6
 
@@ -150,6 +195,8 @@ Bowed stiff string (finite difference, implicit friction solve) with a bow that 
 | `decay` | `2.5` | seconds of free ring at the note |
 | `pickup` | `0.3` | readout point 0..1 |
 | `bright` | `1.0` | 0.5 mellow .. 2 open |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `boys_choir` — voice, range C4-G5
 
@@ -162,6 +209,9 @@ Boys' / children's choir: treble voices, short tracts, nearly straight tone, a l
 | `vibrato` | `-1.0` | vibrato extent, +- cents peak (-1 = the style's own: classical solo 60, choir 30; 0 = straight tone) |
 | `breath` | `-1.0` | breathiness 0..1; -1 = style |
 | `seed` | `0` | take |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `brass` — brass, range C2-C6
 
@@ -171,10 +221,18 @@ Synth brass section with an opening filter (fanfares, stabs).  *(module `instrum
 |---|---|---|
 | `attack` | `0.06` | s |
 | `bright` | `1.0` | 0.5 mellow .. 2 blaring |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `celesta` — mallet, range C4-C8
 
 Celesta: felt hammers on steel plates over wooden resonators; a soft, round bell (lullabies, fairy music).  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `cello` — bowed, range C2-C5
 
@@ -184,6 +242,10 @@ Shared-core wound bowed cello with a pitch-stable body radiation anchor.  *(modu
 |---|---|---|
 | `attack` | `0.1` | s |
 | `vibrato` | `1.0` | 0 = none .. 2 = wide |
+| `model` | `'waveguide'` | waveguide / elastoplastic (Matusiak & Chatziioannou 2024: their measured cello G string and fitted bristle friction; the bow accelerates from rest, so the attack is a real Helmholtz transient; attack and vibrato ignored) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `chant` — voice, range A2-D4
 
@@ -196,6 +258,9 @@ Gregorian chant: unison men (tenors, baritones, basses), straight tone, soft ons
 | `vibrato` | `-1.0` | vibrato extent, +- cents peak (-1 = the style's own: classical solo 60, choir 30; 0 = straight tone) |
 | `breath` | `-1.0` | breathiness 0..1; -1 = style |
 | `seed` | `0` | take |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `china_bell` — mallet, range C3-C5
 
@@ -205,6 +270,8 @@ Chinese temple bell (Farnell's chinatown bell): six inharmonic partials with ver
 |---|---|---|
 | `decay` | `1.0` | ring-time scale (1 = 15-22 s partial decays) |
 | `bright` | `1.0` | 0.4 dark .. 2.5 bright |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `chip` — retro, range C3-C7
 
@@ -215,10 +282,18 @@ Chiptune pulse wave (NES/GameBoy), rounded like it came out of a small console s
 | `width` | `0.25` | pulse width 0.125/0.25/0.5 |
 | `vibrato` | `0.0` | 0..1 |
 | `bright` | `0.5` | 0 = dull .. 0.5 = default .. 1 = raw unfiltered pulse |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `chiptri` — retro, range C1-C6
 
 Chiptune triangle (NES bass/lead).  *(module `instruments`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `choir` — voice, range C2-C6
 
@@ -227,6 +302,9 @@ Vowel-formant synth choir ("aah").  *(module `instruments`)*
 | param | default | meaning |
 |---|---|---|
 | `vowel` | `'a'` | a/e/i/o/u |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `church_bell` — mallet, range C3-C5
 
@@ -239,6 +317,8 @@ Cast bell from a finite-element model (50 modes with split doublets): church, En
 | `decay` | `8.0` | s T60 of the hum |
 | `bright` | `1.0` | 0.4 soft clapper, distant .. 2.5 hard and close |
 | `tune` | `'hum'` | hum/prime: which partial plays the written note |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `church_organ` — keys, range C2-C6
 
@@ -248,10 +328,21 @@ Pipe organ: principal ranks at several octaves that speak slowly with a little c
 |---|---|---|
 | `sub` | `0.35` | 16-foot sub-octave rank 0..1 |
 | `mixture` | `0.5` | upper ranks 0..1 |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `clarinet` — wind, range D3-C6
 
 Physical clarinet: nonlinear reed coupled to a bore waveguide.  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `model` | `'waveguide'` | waveguide / impedance (Guillemain 2005 digital impedance, measured reed and mouthpiece: the tone thickens and brightens with velocity) |
+| `embouchure` | `0.5` | impedance only: 0 loose .. 1 tight lip on the reed |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `clav` — keys, range C2-C6
 
@@ -261,6 +352,9 @@ Clavinet: short, funky, nasal struck string (funk, disco, reggae skank).  *(modu
 |---|---|---|
 | `decay` | `0.9` | seconds |
 | `bright` | `1.0` | 0.5 muted .. 1.5 biting |
+| `release_drop` | `1.0` | 0..1 the brief 3-semitone drop when the key is let go and the yarn damps the string |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `coil_spring` — mallet, range C2-C5
 
@@ -274,10 +368,19 @@ Baschet coil spring, struck or scraped: a dispersive train of chirped echoes aro
 | `decay` | `4.0` | ring time, s (0.3-12); real springs ring > 8 s |
 | `hardness` | `0.5` | 0 soft mallet (dark) .. 1 hard stick (laser-like chirp) |
 | `seed` | `0` | int: scrape grains |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `cor_anglais` — wind, range E3-A5
 
 Cor anglais (English horn): a darker, rounder oboe a fifth lower (pastoral, mournful solos).  *(module `klang`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `cristal` — bowed, range C2-C6
 
@@ -290,6 +393,8 @@ Cristal Baschet: wet finger on a glass rod driving a clamped steel shaft by stic
 | `radiator` | `'sheet'` | sheet (ringing, saturates) / cone (dry, clean) / balloon (dry, mid-heavy) |
 | `bright` | `1.0` | 0.5 mellow .. 2 bright: friction harmonics and lowpass |
 | `wetness` | `1.0` | 0 too slippery .. 1 well-wetted finger (the paper's friction law) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `didgeridoo` — wind, range A1-G2
 
@@ -298,6 +403,9 @@ Didgeridoo: low drone whose vowel slowly shifts (hold one long low note: C2-G2).
 | param | default | meaning |
 |---|---|---|
 | `wow` | `1.4` | vowel movement Hz |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `dist_guitar` — plucked, range E2-E6
 
@@ -307,6 +415,9 @@ Overdriven electric guitar for riffs and leads; sustains while held (for crunchy
 |---|---|---|
 | `drive` | `6.0` | 1 = edge of breakup .. 15 = fuzz |
 | `tone` | `3000` | cabinet tone Hz |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `electric_guitar` — plucked, range E2-E6
 
@@ -315,6 +426,11 @@ Clean electric guitar: round single-coil tone with long sustain (add `distortion
 | param | default | meaning |
 |---|---|---|
 | `tone` | `2800` | pickup tone Hz |
+| `pickup` | `'linear'` | linear / single / humbucker / rail (measured magnetic nonlinearity, Novak 2018) |
+| `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `epiano` — keys, range C2-C6
 
@@ -324,6 +440,9 @@ Electric piano (Rhodes-style FM tine): round and warm, barks a little when hit h
 |---|---|---|
 | `tremolo` | `0.2` | 0..1 wobble |
 | `decay` | `1.8` | seconds |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `falsetto` — voice, range A3-E5
 
@@ -338,6 +457,9 @@ Male falsetto / head voice: breathy, flute-like, almost no upper partials.  *(mo
 | `breath` | `-1.0` | breathiness 0..1; -1 = style |
 | `style` | `'classical'` | classical/cathedral/gregorian/gospel/pop/children/epic/throat/bulgarian |
 | `seed` | `0` | take |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `fd_bar` — mallet, range C3-C7
 
@@ -354,6 +476,8 @@ Finite-difference bar struck by a mallet: wood/metal/glass, free (marimba, xylop
 | `decay` | `1.0` | ring-time scale |
 | `quality` | `1` | grid size 0 (20 points) / 1 (32) / 2 (48): finer = truer upper partials, slower |
 | `bright` | `1.0` | 0.5 mellow .. 2 open |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `fd_piano` — keys, range A0-C7
 
@@ -366,10 +490,12 @@ Felt hammer two-way coupled to 1-3 detuned stiff strings (finite difference): ve
 | `hammer_mass` | `1.0` | hammer mass scale (1 = 0.75 x string mass at C4): heavier = longer contact, darker |
 | `hardness` | `1.0` | felt stiffness scale 0.2..5: harder = shorter contact, brighter |
 | `position` | `0.12` | strike point 0..1 |
-| `B` | `0.0001` | inharmonicity at C4 (scaled by (f/C4)^2 across the keyboard) |
+| `B` | `0.0003` | inharmonicity at C4; across the keyboard it follows a Steinway D (least at the bass/tenor break) |
 | `decay` | `6.0` | seconds of ring at the note |
 | `t60_hi` | `1.0` | seconds of ring at max(4 kHz, 3x the note) |
 | `bright` | `1.0` | 0.5 mellow .. 2 open |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `fd_string` — strings, range E1-C6
 
@@ -384,6 +510,8 @@ Finite-difference stiff string (Bilbao): plucked, struck or bowed, with two-poin
 | `t60_hi` | `0.6` | seconds of ring at max(4 kHz, 3x the note): lower = duller, faster-fading top |
 | `pickup` | `0.3` | readout point 0..1 (a second one sits 0.43 further along) |
 | `bright` | `1.0` | 0.5 mellow .. 2 open (scales the output ceiling, about 6 partials inside 1.6..4.2 kHz) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `feedback_guitar` — plucked, range E2-E5
 
@@ -398,6 +526,9 @@ Overdriven electric guitar standing in front of its amplifier: the note sustains
 | `tone` | `2400.0` | speaker cabinet low-pass in Hz |
 | `asym` | `0.15` | clipper asymmetry 0..0.6 (even harmonics, tube-like) |
 | `seed` | `0` | pluck noise seed (int) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `felt_piano` — keys, range A1-C6
 
@@ -406,6 +537,9 @@ Soft felted upright (lo-fi / ambient / cinematic): muted hammers, slow attack, a
 | param | default | meaning |
 |---|---|---|
 | `decay` | `2.2` | seconds of ring |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `finger_bass` — bass, range E1-G3
 
@@ -414,6 +548,10 @@ Electric bass guitar, fingerstyle: round, even, sustaining (rock, pop, soul, reg
 | param | default | meaning |
 |---|---|---|
 | `tone` | `1700` | pickup tone Hz |
+| `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `flute` — wind, range C4-C7
 
@@ -423,6 +561,9 @@ Concert flute, jet-driven (STK Flute: jet delay, cubic jet, bore waveguide), blo
 |---|---|---|
 | `breath` | `0.15` | turbulence on the jet: 0 = none .. 0.4 (STK's noise gain; 0.15 is its default) |
 | `vibrato` | `0.0` | 0 = steady .. 1 = STK's breath vibrato (5.9 Hz) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `fm_bass` — bass, range C1-C4
 
@@ -431,10 +572,20 @@ FM bass (DX-style): tight, rubbery, punchy attack (house, city pop, funk, 80s an
 | param | default | meaning |
 |---|---|---|
 | `bite` | `1.0` | 0.3 round .. 2 hard |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `french_horn` — brass, range C2-F5
 
-Hybrid physical French horn with dark body radiation.  *(module `acoustic`)*
+French horn with dark body radiation (model=physical: lip-reed waveguide).  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `model` | `'formant'` | formant (default) / physical (lip-reed waveguide) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `gamelan` — mallet, range C4-C7
 
@@ -443,6 +594,9 @@ Gamelan metallophone (saron/gender): bronze bars tuned in beating pairs, so ever
 | param | default | meaning |
 |---|---|---|
 | `ombak` | `3.0` | beat rate Hz between the paired bars |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `gb_noise` — retro, range C3-C8
 
@@ -457,6 +611,9 @@ Game Boy noise channel: 15-bit LFSR, or 7-bit for a metallic pitched buzz, with 
 | `env` | `0` | Game Boy hardware envelope: -1..-7 falls one step every n/64 s, 1..7 rises, 0 = off |
 | `pitch` | `None` | driver table: semitone offsets, one per 1/60 s, the last one held (a drum: [12, 7, 3, 0]) |
 | `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `gb_pulse` — retro, range C2-C7
 
@@ -476,6 +633,8 @@ Game Boy pulse channel: 8-step duty, 4-bit volume with the hardware envelope, fr
 | `sweep` | `None` | hardware sweep. NES [period P 0..7, shift 1..7, negate 0/1] every (P + 1)/120 s; Game Boy pulse 1 [pace 1..7, step 1..7, direction 1 up / -1 down] every pace/128 s |
 | `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
 | `bright` | `0.5` | retro_stylized: 0 = dull .. 0.5 = default .. 1 = unfiltered |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `gb_wave` — retro, range C1-C6
 
@@ -492,10 +651,18 @@ Game Boy wave channel: 32 four-bit samples of wave RAM read at the note's rate (
 | `vib_delay` | `0.15` | seconds before the vibrato starts |
 | `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
 | `bright` | `1.0` | retro_stylized: 0 = dull .. 0.5 = default .. 1 = unfiltered |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `glass` — mallet, range C4-C7
 
 Glassy crystal tone (UI, sparkle): a singing wine glass, pure rather than sharp.  *(module `instruments`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `glass_harmonica` — bowed, range C4-G6
 
@@ -506,6 +673,9 @@ Glass harmonica: a rubbed glass bowl (banded waveguide, modes 1, 2.32, 4.25, 6.6
 | `mode` | `'bow'` | bow (rubbed rim) / strike (tapped glass) |
 | `pressure` | `0.5` | 0..1 finger pressure: more upper modes |
 | `ring` | `1.5` | s of ring kept after the note |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `glass_pad` — pad, range C3-C6
 
@@ -515,14 +685,32 @@ Glass pad: airy additive shimmer, each partial drifting on its own (new age, ice
 |---|---|---|
 | `attack` | `0.7` | s |
 | `release` | `1.5` | s |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `glockenspiel` — mallet, range G5-C8
 
 Physical bright struck-metal bell/bar model.  *(module `acoustic`)*
 
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `guitar` — plucked, range E2-E5
 
 Nylon-string classical guitar: warm, woody body.  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible) |
+| `body` | `0` | which guitar: 0 the nominal body, any other number a different instrument (real spread of mode pitch and Q) |
+| `body_size` | `0.5` | 0 small box .. 0.5 as built .. 1 big box (warps every body mode) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `hand_chime` — mallet, range G3-C7
 
@@ -531,6 +719,9 @@ Hand chime: a clapper-struck tuned tube, strong fundamental with its twelfth; so
 | param | default | meaning |
 |---|---|---|
 | `decay` | `1.2` | ring scale (seconds) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `handbell` — mallet, range G4-G6
 
@@ -541,22 +732,51 @@ Small bright handbell (Farnell's bell partial groups): hammer clang that settles
 | `decay` | `2.5` | s base decay |
 | `detune` | `0.3` | % the second bell is sharp (0 = one bell) |
 | `bright` | `1.0` | 0.3 dull .. 3 all hammer partials |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `handpan` — mallet, range C3-C5
 
 Handpan / hang drum: a hand-struck steel dome ringing its octave and fifth (ambient, meditative, world).  *(module `acoustic`)*
 
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `harmonica` — wind, range C4-C7
 
 Harmonica (blues harp): reedy, bends into notes, hand-cupped wah (blues, country, western).  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `harp` — plucked, range C2-C7
 
 Concert harp: nylon string plucked with the fingertip near the middle, long ring.  *(module `acoustic`)*
 
+| param | default | meaning |
+|---|---|---|
+| `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `harpsichord` — keys, range C2-C6
 
-Harpsichord: quill-plucked strings with a 4-foot octave rank; bright but thin, not velocity sensitive.  *(module `acoustic`)*
+Harpsichord (Valimaki et al. 2004): quill-plucked strings with ripple loss filter, beating partial and a ringing soundboard; 4-foot octave rank.  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `octave` | `0.3` | level of the 4-foot octave rank (0 = 8-foot only) |
+| `soundboard` | `0.35` | ringing soundboard and undamped strings behind the bridge 0..1 |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `hum` — voice, range C2-C5
 
@@ -571,6 +791,9 @@ Closed-mouth humming (mm): nasal murmur, soft and dark; solo or a section.  *(mo
 | `breath` | `-1.0` | breathiness 0..1; -1 = style |
 | `style` | `'classical'` | classical/cathedral/gregorian/gospel/pop/children/epic/throat/bulgarian |
 | `seed` | `0` | take |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `hurdy_gurdy` — bowed, range G2-G5
 
@@ -582,14 +805,30 @@ Hurdy-gurdy: a string bowed by a rosined wheel over a buzzing bridge (the trompe
 | `pressure` | `0.8` | 0.3..1 wheel pressure |
 | `drone` | `0.0` | 0..1 level of the bourdon an octave below |
 | `attack` | `0.06` | s for the wheel to reach speed |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `kalimba` — mallet, range C3-C7
 
 Thumb piano: soft metal tine over a wooden box.  *(module `instruments`)*
 
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `koto` — plucked, range C3-C6
 
 Koto: string plucked hard near the bridge with ivory picks (Japanese, East Asian).  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `ks_string` — plucked, range E2-E6
 
@@ -606,6 +845,8 @@ Extended Karplus-Strong string (Jaffe-Smith): decay stretching and shortening, p
 | `sympathetic` | `0.0` | 0..0.5: how hard the note drives an undamped second string |
 | `symp_interval` | `-12.0` | semitones from the note to the sympathetic string |
 | `seed` | `0` | int: pluck noise |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `lead` — synth, range C3-C6
 
@@ -615,6 +856,9 @@ Supersaw lead: full and smooth by default; raise `cutoff` for bite.  *(module `i
 |---|---|---|
 | `detune` | `0.3` | semitones spread |
 | `cutoff` | `3200` | Hz filter peak |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `mandolin` — plucked, range G3-E7
 
@@ -623,6 +867,10 @@ Mandolin: paired steel strings; set `tremolo` to re-pick held notes (Italian, bl
 | param | default | meaning |
 |---|---|---|
 | `tremolo` | `0.0` | picks per second on held notes (12 = classic tremolo, 0 = off) |
+| `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `marimba` — mallet, range C2-C7
 
@@ -631,14 +879,29 @@ Wooden mallet on a rosewood bar with resonator: round, woody, short.  *(module `
 | param | default | meaning |
 |---|---|---|
 | `decay` | `0.6` | seconds |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `music_box` — mallet, range C5-C8
 
 Tiny music-box comb tine: sweet and delicate, made to be played high.  *(module `instruments`)*
 
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `muted_guitar` — plucked, range E2-E5
 
 Palm-muted electric guitar: short woody chug (funk scratch, reggae skank, rock eighths).  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `nes_noise` — retro, range C3-C8
 
@@ -654,6 +917,9 @@ NES 2A03 noise channel: 15-bit LFSR at 16 fixed rates; the short mode is a buzzi
 | `loop` | `False` | NES hardware envelope: start again at 15 when it reaches 0 |
 | `pitch` | `None` | driver table: semitone offsets, one per 1/60 s, the last one held (a drum: [12, 7, 3, 0]) |
 | `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `nes_pulse` — retro, range C2-C7
 
@@ -674,6 +940,8 @@ NES 2A03 pulse channel: 8-step sequencer at four duties, 4-bit volume, hardware 
 | `sweep` | `None` | hardware sweep. NES [period P 0..7, shift 1..7, negate 0/1] every (P + 1)/120 s; Game Boy pulse 1 [pace 1..7, step 1..7, direction 1 up / -1 down] every pace/128 s |
 | `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
 | `bright` | `0.5` | retro_stylized: 0 = dull .. 0.5 = default .. 1 = unfiltered |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `nes_triangle` — retro, range C1-C6
 
@@ -689,10 +957,18 @@ NES 2A03 triangle channel: a 32-step, 4-bit staircase triangle with no volume co
 | `vib_delay` | `0.15` | seconds before the vibrato starts |
 | `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
 | `bright` | `1.0` | retro_stylized: 0 = dull .. 0.5 = default .. 1 = unfiltered |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `oboe` — wind, range Bb3-G6
 
 Oboe: reedy, nasal, plaintive (pastoral, baroque, Middle-Eastern flavoured lines).  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `ocarina` — wind, range A4-F6
 
@@ -701,6 +977,9 @@ Ocarina: round clay flute, almost a sine with a soft chiff (adventure themes, lu
 | param | default | meaning |
 |---|---|---|
 | `vibrato` | `0.3` | 0 = none .. 1 = wide |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `organ` — keys, range C2-C6
 
@@ -710,6 +989,9 @@ Drawbar organ with rotary wobble; the top drawbars fold back an octave on high n
 |---|---|---|
 | `rotary` | `0.3` | 0..1 |
 | `upper` | `1.0` | level of the upper drawbars: 0 = flute stops only .. 1.5 = full |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `pad` — pad, range C2-C5
 
@@ -720,6 +1002,9 @@ Warm slow-attack synth pad (stereo when chorused).  *(module `instruments`)*
 | `attack` | `0.4` | s |
 | `release` | `0.8` | s |
 | `cutoff` | `2000` | Hz |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `pan_flute` — wind, range C4-C7
 
@@ -729,15 +1014,31 @@ Pan flute: a stopped pipe blown across its end. Odd harmonics, a breath that sit
 |---|---|---|
 | `breath` | `0.3` | air 0..1 |
 | `vibrato` | `0.0` | 0 = steady .. 1 |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
-### `piano` — keys, range A0-C7
+### `piano` — keys, range A0-C8
 
-Physical acoustic piano: nonlinear felt hammer, stiff dispersive string and commuted soundboard.  *(module `instruments`)*
+Concert grand (Steinway D strings and hammers): modal strings with measured damping, hereditary felt hammer, beating unisons with two-stage decay, phantom partials, modal soundboard (Bank 2010).  *(module `instruments`)*
+
+| param | default | meaning |
+|---|---|---|
+| `decay` | `2.5` | ring: 2.5 as measured, higher rings longer |
+| `bright` | `1.0` | felt hardness: 0.5 mellow .. 2 bright |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `piano_wg` — keys, range A0-C7
+
+Earlier physical piano: waveguide string with a nonlinear felt hammer and a commuted soundboard.  *(module `instruments`)*
 
 | param | default | meaning |
 |---|---|---|
 | `decay` | `2.5` | seconds of ring |
 | `bright` | `1.0` | 0.5 mellow .. 2 bright |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `piccolo` — wind, range D5-C8
 
@@ -747,6 +1048,9 @@ Piccolo: the flute an octave up, jet-driven like it (marches, sparkle on top of 
 |---|---|---|
 | `breath` | `0.15` | turbulence on the jet: 0 = none .. 0.4 |
 | `vibrato` | `0.0` | 0 = steady .. 1 |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `piston_pipe` — organ, range C2-C4
 
@@ -757,10 +1061,20 @@ Baschet 'windless organ pipe': a membrane piston drives a quarter-wave pipe - de
 | `diameter` | `0.2` | pipe diameter 0.12..0.36 m (Baschet); wider = more radiation loss, faster speech, duller ring |
 | `rod` | `0.35` | 0..1 harmonic content of the driving rod (the pipe passes the odd harmonics) |
 | `detune` | `0.0` | cents the pipe is off the driving note: the tone weakens as they part |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `pizzicato` — plucked, range G2-E6
 
 Pizzicato strings: short, woody finger-plucked violin/cello notes (playful, sneaky, classical).  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `pluck` — plucked, range C2-C7
 
@@ -770,6 +1084,9 @@ Plucked string (Karplus-Strong), tuned on every key: generic guitar/harp-like pl
 |---|---|---|
 | `damping` | `0.5` | 0 bright and wiry .. 1 soft and dull |
 | `decay` | `1.5` | seconds |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `pokey` — retro, range C2-C7
 
@@ -788,6 +1105,8 @@ Atari POKEY channel: an 8-bit divider that toggles (pure tone) or samples the ch
 | `vib_delay` | `0.15` | seconds before the vibrato starts |
 | `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
 | `bright` | `0.5` | retro_stylized: 0 = dull .. 0.5 = default .. 1 = unfiltered |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `prepared_piano` — keys, range C2-C6
 
@@ -800,6 +1119,8 @@ Hammered stiff string with an object on it: loose rattle (buzz), rubber wedge (t
 | `amount` | `1.0` | strength of the preparation 0..3 (0 = plain string) |
 | `decay` | `4.0` | seconds of ring at the note |
 | `bright` | `1.0` | 0.5 mellow .. 2 open |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `psg` — retro, range C2-C6
 
@@ -815,6 +1136,8 @@ AY-3-8910 sound chip voice: square from a 12-bit clock divider, 16-step log DAC,
 | `env_hz` | `8.0` | envelope ramps per second (quantised to the 16-bit period EP = clock/(256*env_hz)); audio rates give buzz-bass |
 | `bright` | `0.5` | 0 = dull .. 0.5 = default .. 1 = raw unfiltered |
 | `seed` | `0` | noise LFSR start state |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `pvc_pipe` — percussion, range C2-C5
 
@@ -826,6 +1149,9 @@ Slapped plastic tube (thongophone / boomwhacker-like): a paddle slaps one end sh
 | `hardness` | `0.5` | 0..1 slap hardness: soft palm 0 (dull thud) .. hard paddle 1 (clicky, more overtones) |
 | `loss` | `1.5` | wall loss 0.5..10 (1 = smooth rigid pipe; higher = shorter ring) |
 | `seed` | `0` | seed for the slap's noise component |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `pwm` — synth, range C2-C6
 
@@ -834,6 +1160,9 @@ Pulse-width-modulated synth (retro/lush).  *(module `instruments`)*
 | param | default | meaning |
 |---|---|---|
 | `rate` | `0.7` | LFO Hz |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `recorder` — wind, range C4-D7
 
@@ -844,6 +1173,9 @@ Recorder: a fipple flute, jet-driven, with the tongued chiff of each note as a s
 | `breath` | `0.2` | turbulence on the jet: 0 = none .. 0.4 |
 | `chiff` | `1.0` | tongued attack 0..2 |
 | `vibrato` | `0.0` | 0 = steady .. 1 |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `reed_cone` — wind, range D3-C6
 
@@ -862,6 +1194,8 @@ Sax/oboe-like conical bore blown by the same dynamic reed: full harmonic series,
 | `hole` | `0.0` | 0..1 openness of a tonehole at 80 % of the bore: bends the note up (about a semitone at 0.5); fully open the cylinder may flip register. 0 keeps the note in tune |
 | `bright` | `1.0` | 0.25..4 output lowpass scale |
 | `seed` | `0` | noise seed |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `reed_tube` — wind, range D3-G5
 
@@ -879,6 +1213,8 @@ Clarinet-like cylinder blown by a dynamic beating reed (Webster tube + Bilbao re
 | `hole` | `0.0` | 0..1 openness of a tonehole at 80 % of the bore: bends the note up (about a semitone at 0.5); fully open the cylinder may flip register. 0 keeps the note in tune |
 | `bright` | `1.0` | 0.25..4 output lowpass scale |
 | `seed` | `0` | noise seed |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `reese` — bass, range C1-C3
 
@@ -888,6 +1224,22 @@ Reese bass: detuned saws beating against each other under a dark filter (drum an
 |---|---|---|
 | `cutoff` | `600` | Hz |
 | `detune` | `0.18` | semitones |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `rhodes` — keys, range E1-E6
+
+Rhodes tine piano: a struck cantilever tine read by a magnetic pickup whose field shapes the tone (bell attack, bark when played hard).  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `voicing` | `0.35` | 0..1 tine offset from the pickup axis: 0 = centred (2nd harmonic leads, hollow), 1 = far off (round, fundamental) |
+| `bell` | `1.0` | 0..2 level of the short inharmonic tine overtones in the attack |
+| `decay` | `1.0` | x the measured sustain (Q of a 1974 Mark I) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `rod_bank` — mallet, range G2-G5
 
@@ -901,6 +1253,9 @@ Baschet percussion: struck clamped rod whose vibration crosses a shared collecto
 | `sympathetic` | `0.35` | 0-1: how much the other seven rods of the set ring along through the collector |
 | `radiator` | `'sheet'` | sheet / cone / balloon / metal / none |
 | `seed` | `0` | int: sheet modes |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `rubbed_glass` — bowed, range C4-C7
 
@@ -913,10 +1268,18 @@ Wine glass / glass harmonica rubbed with a wet finger (elasto-plastic bristle fr
 | `roughness` | `0.2` | 0 smooth .. 1 gritty: surface noise in the friction force |
 | `bright` | `1.0` | 0.5 mellow .. 2 bright |
 | `seed` | `0` | int: roughness noise |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `saw` — raw, range C2-C6
 
 Saw wave with envelope and a key-tracked lowpass.  *(module `instruments`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `sax` — wind, range Bb2-F5
 
@@ -926,6 +1289,9 @@ Saxophone (alto/tenor): breathy, husky, scoops into notes (jazz, soul, noir, 80s
 |---|---|---|
 | `breath` | `0.1` | air noise 0..1 |
 | `growl` | `0.0` | 0..1 rasp |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `sfxr_voice` — retro, range C2-C6
 
@@ -951,6 +1317,8 @@ Raw sfxr oscillator as a pitched voice: square/saw/sine + duty, vibrato, resonan
 | `harmonics_falloff` | `0.5` | overtone falloff 0..1 |
 | `bright` | `0.5` | 0 = dull .. 0.5 = default .. 1 = raw unfiltered |
 | `seed` | `0` | noise seed |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `sid` — retro, range C1-C7
 
@@ -974,10 +1342,18 @@ MOS 8580 SID voice (Commodore 64): triangle, sawtooth, variable pulse or noise, 
 | `vib_delay` | `0.15` | seconds before the vibrato starts |
 | `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
 | `bright` | `0.5` | retro_stylized: 0 = dull .. 0.5 = default .. 1 = unfiltered |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `sine` — raw, range C2-C7
 
 Pure sine tone with soft envelope.  *(module `instruments`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `singing_bowl` — mallet, range C3-C5
 
@@ -986,6 +1362,9 @@ Singing bowl: very long ring with slowly beating partials (meditation, ambient, 
 | param | default | meaning |
 |---|---|---|
 | `decay` | `6.0` | seconds |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `sitar` — plucked, range C3-C5
 
@@ -994,6 +1373,11 @@ Sitar: long string over a buzzing bridge, the buzz blooms just after the pluck (
 | param | default | meaning |
 |---|---|---|
 | `buzz` | `0.45` | 0..1 amount of bridge buzz |
+| `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible) |
+| `model` | `'waveguide'` | waveguide / fd (Siddiq 2012: a stiff string striking its curved flat bridge; the buzz grows with velocity; glide ignored) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `slack_string` — strings, range E1-E5
 
@@ -1006,10 +1390,18 @@ Loose string with tension modulation (Kirchhoff-Carrier): a hard pluck starts sh
 | `decay` | `1.2` | seconds of ring |
 | `pickup` | `0.3` | readout point 0..1 |
 | `bright` | `1.0` | 0.5 mellow .. 2 open |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `slap_bass` — bass, range E1-G4
 
 Slapped electric bass: percussive pop on top of a scooped, punchy low end (funk, disco).  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `sn_noise` — retro, range C2-C8
 
@@ -1025,6 +1417,8 @@ SN76489 noise channel: white noise from its shift register, or the looped regist
 | `variant` | `'sega'` | sega = 16-bit register tapped at bits 0 and 3 / ti = 15-bit, bits 0 and 1 |
 | `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
 | `bright` | `0.5` | retro_stylized: 0 = dull .. 0.5 = default .. 1 = unfiltered |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `sn_tone` — retro, range A2-C7
 
@@ -1041,6 +1435,8 @@ SN76489 tone channel (Master System, BBC Micro): a plain square from a 10-bit co
 | `vib_delay` | `0.15` | seconds before the vibrato starts |
 | `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
 | `bright` | `0.35` | retro_stylized: 0 = dull .. 0.5 = default .. 1 = unfiltered |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `soft_lead` — synth, range C3-C7
 
@@ -1050,10 +1446,19 @@ Soft triangle lead with delayed vibrato: a clear melody voice that never bites (
 |---|---|---|
 | `vibrato` | `0.15` | semitones |
 | `cutoff` | `2400` | Hz |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `square` — raw, range C2-C6
 
 Square wave with envelope, corners rounded (for a truly raw one use `synth` with wave=square and a high cutoff).  *(module `instruments`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `square_lead` — synth, range C3-C6
 
@@ -1063,14 +1468,43 @@ Rounded square lead whose filter closes after the attack (classic game melody, s
 |---|---|---|
 | `vibrato` | `0.1` | semitones |
 | `width` | `0.5` | pulse width 0.1..0.5 |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `steel_drum` — mallet, range C3-C6
 
 Caribbean steel pan.  *(module `instruments`)*
 
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `steel_guitar` — plucked, range E2-E6
 
 Steel-string acoustic guitar: bright strum and fingerpicking (folk, country, pop).  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible) |
+| `body` | `0` | which guitar: 0 the nominal body, any other number a different instrument (real spread of mode pitch and Q) |
+| `body_size` | `0.5` | 0 small box .. 0.5 as built .. 1 big box (warps every body mode) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `string_bridge_plate` — strings, range E1-E4
+
+Plucked string driving a plate through a bridge mass on (nonlinear) springs (van Walstijn & Mehes DAFx-17): from a string on a soundboard to buzzing, rattling and cymbal-like plates.  *(module `fdstring`)*
+
+| param | default | meaning |
+|---|---|---|
+| `config` | `'body'` | body (heavy bridge: the string sings, the plate colours) / coupled (light bridge: plate-like, short) / plate (cubic springs: cymbal-like) / rattle (loose bridge, gravity: snare-like buzz) / flat (one-sided string contact: sitar-like) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `string_machine` — pad, range C2-C6
 
@@ -1080,6 +1514,9 @@ Steel-string acoustic guitar: bright strum and fingerpicking (folk, country, pop
 |---|---|---|
 | `attack` | `0.09` | s |
 | `release` | `0.45` | s |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `strings` — bowed, range C2-C6
 
@@ -1092,10 +1529,19 @@ String section: individual bowed players with their own vibrato, a few cents and
 | `players` | `6` | 2..12 players |
 | `scatter` | `0.0` | cents: standard deviation of the players' mean pitch (Ternstrom: 0-5 preferred, 14 tolerable); above 0 the section beats slowly |
 | `vibrato` | `0.12` | 0 = none .. 2 = wide; each player has their own, so more than about 0.2 makes the section's level heave |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `sub` — bass, range C1-C3
 
 Pure sine sub bass with soft click.  *(module `instruments`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `synth` — raw, range C1-C7
 
@@ -1115,6 +1561,9 @@ Generic subtractive synth: pick wave, ADSR and filter (nothing is tamed here: wh
 | `width` | `0.5` | pulse width |
 | `ratio` | `2.0` | fm ratio |
 | `index` | `1.0` | fm index |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `synth_pluck` — synth, range C2-C6
 
@@ -1124,6 +1573,8 @@ Synth pluck: saw + pulse through a fast-closing filter (trance and synthwave arp
 |---|---|---|
 | `decay` | `0.3` | seconds |
 | `bright` | `1.0` | 0.5 soft .. 2 sharp |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `theremin` — synth, range C3-C7
 
@@ -1132,6 +1583,9 @@ Theremin: eerie sliding sine with wide vibrato (sci-fi, spooky, retro B-movie). 
 | param | default | meaning |
 |---|---|---|
 | `vibrato` | `0.25` | semitones |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `throat_singing` — voice, range C2-C3
 
@@ -1144,6 +1598,9 @@ Overtone / throat singing: pressed low drone with a narrow formant locked on one
 | `sub` | `0.0` | kargyraa: strength of the octave-below period doubling 0..0.6 |
 | `singers` | `1` | number of singers |
 | `seed` | `0` | take |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `timpani` — mallet, range C2-C4
 
@@ -1152,26 +1609,53 @@ Physical kettle drum: circular membrane plus cavity coupling.  *(module `acousti
 | param | default | meaning |
 |---|---|---|
 | `decay` | `1.6` | seconds |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `toy_piano` — mallet, range C4-C7
 
 Toy piano: plastic hammers on metal rods; plinky, childlike, a little out of true.  *(module `acoustic`)*
 
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `trombone` — brass, range E2-C5
 
-Hybrid physical trombone with broad low-mid radiation.  *(module `acoustic`)*
+Trombone with broad low-mid radiation (model=physical: lip-reed waveguide).  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `model` | `'formant'` | formant (default) / physical (lip-reed waveguide) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `trumpet` — brass, range E3-C6
 
-Hybrid physical lip-reed trumpet with pitch-stable radiation anchor.  *(module `acoustic`)*
+Trumpet: formant voice, or the lip-reed waveguide with model=physical.  *(module `acoustic`)*
 
 | param | default | meaning |
 |---|---|---|
 | `mute` | `0.0` | 0 = open .. 1 = harmon mute |
+| `model` | `'formant'` | formant (default) / physical (lip-reed waveguide) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `tuba` — brass, range C1-C4
 
-Hybrid physical tuba with low lip-reed body and breath transient.  *(module `acoustic`)*
+Tuba with low body and breath transient (model=physical: lip-reed waveguide).  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `model` | `'formant'` | formant (default) / physical (lip-reed waveguide) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `tubular_bell` — mallet, range C3-C6
 
@@ -1180,6 +1664,9 @@ Physical additive/modal tubular bell with long inharmonic decay.  *(module `acou
 | param | default | meaning |
 |---|---|---|
 | `decay` | `3.5` | seconds |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `tuning_fork` — mallet, range G3-D7
 
@@ -1192,10 +1679,20 @@ Aluminium tuning fork struck by a felt hammer, radiating through a balloon or co
 | `swell` | `0.0` | s: time over which the balloon pressure is applied after the strike (crescendo); 0 = from the start |
 | `hardness` | `0.25` | 0 thick felt (pure tone) .. 1 bare hammer (clang partial at 6.27 x) |
 | `decay` | `6.0` | ring time, s (0.3-20) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `upright_bass` — bass, range E1-G3
 
 Upright (double) bass, plucked: deep woody thump with a short singing tail (jazz walking lines, rockabilly, folk).  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `vibraphone` — mallet, range F3-F6
 
@@ -1204,6 +1701,9 @@ Vibraphone: soft mallets on metal bars with motor tremolo.  *(module `instrument
 | param | default | meaning |
 |---|---|---|
 | `motor` | `4.5` | tremolo Hz (0 = motor off) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `viola` — bowed, range C3-E6
 
@@ -1213,6 +1713,9 @@ Viola, bowed: darker and more nasal than a violin, a fifth lower (inner voices, 
 |---|---|---|
 | `attack` | `0.08` | s |
 | `vibrato` | `1.0` | 0 = none .. 2 = wide |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `violin` — bowed, range G3-C7
 
@@ -1222,6 +1725,9 @@ Hybrid physical bowed violin: bow/string waveguide anchored to the requested pla
 |---|---|---|
 | `attack` | `0.07` | s |
 | `vibrato` | `1.0` | 0 = none .. 2 = wide |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `vocal_choir` — voice, range C2-C6
 
@@ -1239,6 +1745,8 @@ Choir section of individual singers (own tract, pitch, vibrato, timing each): so
 | `lang` | `'la'` | la/en/es |
 | `bright` | `1.0` | 0.5 dark .. 2 bright |
 | `seed` | `0` | which choir / take |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `voice` — voice, range C2-C6
 
@@ -1258,6 +1766,8 @@ Solo singer: LF glottal source through a five-formant vocal tract; sings a vowel
 | `lang` | `'la'` | how a syllable is read: la (Latin vowels)/en/es |
 | `bright` | `1.0` | 0.5 dark .. 2 bright (shelf above 3 kHz) |
 | `seed` | `0` | which singer / take |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `vowel_tube` — voice, range E2-C5
 
@@ -1265,14 +1775,18 @@ Sung vowel: glottal pulse train through a Webster vocal tract (a e i o u), glidi
 
 | param | default | meaning |
 |---|---|---|
-| `vowel` | `'a'` | a/e/i/o/u, tract shape at the start (/a/, /e/ = Bilbao/Fant tables) |
-| `vowel2` | `''` | a/e/i/o/u to glide to, '' = hold the first |
+| `vowel` | `'a'` | i ih eh ae ah aa ao uh ow uw (Story 2005 MRI vowels; a e o u = aa eh ow uw), tract shape at the start |
+| `vowel2` | `''` | vowel to glide to, along Story's modes; '' = hold the first |
 | `morph` | `1.0` | 0..1 how far the tract travels toward vowel2 during the note |
+| `consonant` | `''` | p t k m n ng f th s sh (b d g v z...: their place): start from that constriction over the vowel and release into it |
 | `breath` | `0.08` | 0..1 aspiration noise at the glottis |
 | `vibrato` | `0.4` | 0..2 pitch vibrato depth (1 = +-3 %, 5 Hz, comes in after 0.3 s) |
 | `size` | `1.0` | tract length scale: 1 = 17 cm adult, 0.8 small/bright, 1.4 giant (formants scale as 1/size) |
 | `tense` | `0.2` | 0..0.8 glottal closed fraction: 0 soft/breathy pulse, 0.6 pressed and buzzy |
 | `seed` | `0` | noise seed |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `warm_pad` — pad, range C2-C5
 
@@ -1283,6 +1797,9 @@ Warm analog pad: dark, slow, breathing filter (ambient beds, ballads, lo-fi).  *
 | `attack` | `0.6` | s |
 | `release` | `1.2` | s |
 | `cutoff` | `900` | Hz at rest; opens ~1.6x mid-note |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `whistle` — wind, range C5-C7
 
@@ -1291,6 +1808,9 @@ Human whistle: a near-pure tone that slides into each note, with a little breath
 | param | default | meaning |
 |---|---|---|
 | `vibrato` | `0.3` | 0 = steady .. 1 |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `whistling` — winds, range C5-C7
 
@@ -1301,6 +1821,9 @@ Human whistling: near-pure tone with breath noise around the pitch and a little 
 | `vibrato` | `0.15` | depth in semitones |
 | `breath` | `0.3` | 0..1 air noise |
 | `seed` | `0` | variation |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `whistling_blades` — mallet, range F#6-E8
 
@@ -1312,6 +1835,9 @@ Baschet whistling blades: iron blades struck on the narrow edge, two high partia
 | `second` | `0.2` | level of the second partial (0-1); the real blades are nearer 0.5-1, which blurs the pitch |
 | `spin` | `0.0` | rotation of the blade rack, turns/s (0-8): directivity tremolo 'waa-waa' |
 | `hardness` | `0.7` | 0 soft .. 1 hard stick |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `wind_chime` — mallet, range C5-C7
 
@@ -1321,6 +1847,8 @@ One tube of a metal wind chime: a struck free-hanging bar with its inharmonic ov
 |---|---|---|
 | `decay` | `3.0` | s T60 of the fundamental |
 | `bright` | `1.0` | 0.4 soft striker .. 2.5 hard |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `wobble` — bass, range C1-C3
 
@@ -1329,6 +1857,9 @@ Dubstep-style LFO filtered bass.  *(module `instruments`)*
 | param | default | meaning |
 |---|---|---|
 | `rate` | `4.0` | wobble Hz |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `wurli` — keys, range C2-C6
 
@@ -1338,10 +1869,19 @@ Wurlitzer-style reed electric piano: hollow and a little nasal, growls when hit 
 |---|---|---|
 | `tremolo` | `0.3` | 0..1 wobble |
 | `decay` | `1.4` | seconds |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `xylophone` — mallet, range C4-C8
 
 Physical struck wooden-bar model backed by modal-bar research tables.  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `ym2151` — retro, range C1-C7
 
@@ -1352,6 +1892,9 @@ Yamaha YM2151 (arcade boards, X68000) FM channel: the YM2612's four operators wi
 | `patch` | `'epiano'` | a patch name (bass / bell / brass / clav / epiano / lead / organ / pluck / sine / strings) or the YM2612 patch form; each operator may add dt2 0..3 (0, +600, +781, +950 cents: bells and metal) |
 | `tail` | `0.6` | seconds rendered after the key goes up, for the release |
 | `mode` | `'retro_stylized'` | retro_stylized = the full-resolution operator sum / hardware_accurate = the chip's clipped 16-bit output |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `ym2612` — retro, range C1-C7
 
@@ -1363,6 +1906,9 @@ Yamaha YM2612 (Mega Drive) FM channel: four operators, eight algorithms, the chi
 | `lfo` | `None` | LFO rate 0 (slowest) .. 7 (fastest) or null = off; it acts through the patch's pms (vibrato) and ams + am (tremolo) |
 | `tail` | `0.6` | seconds rendered after the key goes up, for the release |
 | `mode` | `'retro_stylized'` | retro_stylized = the full-resolution operator sum / hardware_accurate = the chip's 9-bit output and DAC step |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `zzfx_voice` — retro, range C2-C6
 
@@ -1379,12 +1925,14 @@ A ZzFX sound played as a pitched voice: slot 2 (frequency) follows the note, ran
 | `sustain_volume` | `None` | level of the held part; default: from p, else 1 |
 | `release` | `None` | s; default: from p, else 0.1 |
 | `bright` | `0.5` | 0 = dull .. 0.5 = default .. 1 = raw unfiltered |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
-## Drums (48)
+## Drums (50)
 
 Usage: `{"type": "drum", "kind": "<name>", "params": {...}}  or a "pattern" layer`
 
-Index by module: **compose**: `ks_drum`; **drums**: `kick`, `kick808`, `snare`, `clap`, `hihat`, `openhat`, `tom`, `rim`, `cowbell`, `crash`, `ride`, `shaker`, `tambourine`, `woodblock`, `taiko`, `zap_kick`; **foley**: `cabasa`, `sekere`, `maraca`, `bamboo_chimes`, `sandpaper`, `sleigh_bells`, `agogo`, `anvil`, `brake_drum`, `wind_chimes`; **percussion**: `conga`, `bongo`, `djembe`, `tabla`, `cajon`, `timbale`, `clave`, `guiro`, `triangle`, `gong`, `snap`, `brush`, `snare808`, `sleigh`; **plates**: `fd_drum`, `plate_crash`, `plate_ride`, `plate_china`, `plate_gong`, `tam_tam`, `thunder_sheet`
+Index by module: **compose**: `ks_drum`; **drums**: `kick`, `kick808`, `snare`, `clap`, `hihat`, `openhat`, `tom`, `rim`, `cowbell`, `crash`, `ride`, `shaker`, `tambourine`, `woodblock`, `taiko`, `zap_kick`; **foley**: `cabasa`, `sekere`, `maraca`, `bamboo_chimes`, `sandpaper`, `sleigh_bells`, `agogo`, `anvil`, `brake_drum`, `wind_chimes`; **percussion**: `conga`, `bongo`, `djembe`, `tabla`, `cajon`, `timbale`, `clave`, `guiro`, `triangle`, `gong`, `snap`, `brush`, `snare808`, `sleigh`; **plates**: `fd_drum`, `plate_crash`, `plate_ride`, `plate_china`, `plate_gong`, `tam_tam`, `steel_cymbal`, `steel_gong`, `thunder_sheet`
 
 ### `agogo`
 
@@ -1537,6 +2085,7 @@ Physical modal gong/tam-tam with inharmonic resonances.  *(module `percussion`)*
 |---|---|---|
 | `tune` | `90` | Hz |
 | `decay` | `6.0` | seconds |
+| `cascade` | `0.0` | 0..1 level of the 1:1:2 internal-resonance twins (Chaigne & Touze): a hard strike blooms a fifth-free subharmonic below the main groups a moment after the hit; soft strikes stay clean |
 
 ### `guiro`
 
@@ -1742,6 +2291,30 @@ Physical snare: membrane/cavity plus acceleration-driven snare wires.  *(module 
 | `tune` | `180` | Hz |
 | `snappy` | `0.6` | noise amount |
 
+### `steel_cymbal`
+
+Small steel plate (DAFx-23 real-time gong model, 0.01 m^2): clear modes when tapped, uneven pitch glides harder, a crash of wideband noise at full force.  *(module `plates`)*
+
+| param | default | meaning |
+|---|---|---|
+| `force` | `80.0` | peak strike force N at vel 1 (low: clean modes; higher: pitch glides; high: crash) |
+| `dur` | `2.0` | rendered length s |
+| `bright` | `0.6` | 0..1 output lowpass 1.5 kHz .. 12 kHz |
+| `scan` | `0.0` | Hz: the pickup circles an ellipse of R 0.4 at this rate (a gong swinging on its rope; DAFx-23 use 1 Hz), 0 = fixed |
+| `quality` | `1.0` | 0.25..3 internal sample rate / grid size (cost ~ quality^2.5) |
+
+### `steel_gong`
+
+Large steel plate (DAFx-23 real-time gong model, 0.16 m^2): the gong swell, energy migrating upwards over the first few hundred ms.  *(module `plates`)*
+
+| param | default | meaning |
+|---|---|---|
+| `force` | `60.0` | peak strike force N at vel 1 (low: clean modes; higher: pitch glides; high: crash) |
+| `dur` | `5.0` | rendered length s |
+| `bright` | `0.6` | 0..1 output lowpass 1.5 kHz .. 12 kHz |
+| `scan` | `0.0` | Hz: the pickup circles an ellipse of R 0.4 at this rate (a gong swinging on its rope; DAFx-23 use 1 Hz), 0 = fixed |
+| `quality` | `1.0` | 0.25..3 internal sample rate / grid size (cost ~ quality^2.5) |
+
 ### `tabla`
 
 Physical loaded-head tabla: harmonicized membrane with na/ge/ke strokes.  *(module `percussion`)*
@@ -1853,11 +2426,26 @@ Electronic laser-kick hybrid.  *(module `drums`)*
 |---|---|---|
 | `decay` | `0.3` | s |
 
-## Sound effects (234)
+## Sound effects (242)
 
 Usage: `{"type": "sfx", "kind": "<name>", "params": {...}}`
 
-Index by module: **contact**: `roll`, `scrape`, `impact`, `bounce`, `drop`, `smash`, `crumple`, `avalanche`, `rumble`, `modal_engine`; **creatures**: `heartbeat`, `roar`, `growl`, `bark`, `meow`, `purr`, `moo`, `howl`, `monster`, `animal`, `cricket`, `cicada`, `fly`, `mosquito`, `bee`, `night_insects`, `wings`, `birdsong`, `bird_call`, `dawn_chorus`, `frog`, `rattlesnake`, `hiss`, `breath`, `grunt`, `cough`, `sneeze`, `snore`, `gulp`, `eat`, `handclap`, `applause`, `crowd_murmur`, `whistle_human`, `footsteps`; **cyber**: `transformer`, `gearbox`, `bearing`, `pipe_engine`, `turbo`, `tyre_squeal`, `pass_by`, `cyber_ui`; **dsp**: `noise_bed`; **fdstring**: `twang`; **foley**: `hit`, `clang`, `clink`, `thud`, `knock`, `shake`, `chain`, `keys`, `cloth`, `creak`, `zipper`, `velcro`, `paper`, `coin_spin`, `dice`, `cork_pop`, `boing`, `ratchet`, `drawer`, `book_drop`, `gunshot`, `reload`, `casing`, `sword`, `clash`, `stab`, `slash`, `bow_shot`, `whip`, `shield_bash`, `clock`, `switch`, `button`, `keyboard_typing`, `mouse_click`, `camera_shutter`, `servo`, `printer`, `drill`, `saw`, `hammering`, `ratchet_wrench`, `piston`, `steam_engine`, `train`, `sonar`, `dtmf`, `phone_tone`, `phone_bell`, `siren_wail`, `car_horn`, `bike_bell`, `buzzer`, `shepard`, `transporter`, `robot_babble`, `red_alert`, `dark_drone`, `force_field`, `teleport`, `energy_blade`, `warp`, `charge_up`, `scanner`; **friction**: `stick_slip`, `squeak`, `brake_squeal`, `rub`; **klang**: `toy_boat`, `klang_car`, `harrier`, `bicycle`, `klang_rain`, `ui_tick`, `ui_chime`, `damage`, `sniff`, `strain`, `weight_shift`, `handle`, `tide`, `distant_bell`; **matter**: `fire`, `pour`, `drip`, `drops`, `splash`, `babble`, `bubbles`, `boil`, `sizzle`, `fizz`, `gurgle`, `drain`, `surf`, `cave_drips`, `waterfall`, `underwater_ambience`, `steam`, `air_leak`, `spray`, `kettle`, `balloon`, `gust`, `flame`, `match`, `spark`, `arc`, `mains_hum`, `tesla`, `neon`, `lightning`, `ice_crack`, `ice_cubes`, `freeze`; **pinball**: `solenoid`, `knocker`, `steel_ball`, `ball_roll`, `chirp`, `flipper`, `pop_bumper`, `slingshot`, `spinner`, `spring`; **plates**: `metal_plate`, `glass_pane`, `wood_panel`, `plate_bow`; **retro**: `sfxr`, `zzfx`; **sfx**: `beep`, `blip`, `click`, `pop`, `coin`, `powerup`, `powerdown`, `laser`, `zap`, `punch`, `explosion`, `jump`, `whoosh`, `swoosh`, `alarm`, `siren`, `error`, `success`, `proximity`, `radar`, `riser`, `sweep_up`, `sweep_down`, `bubble`, `glitch`, `static`, `wind`, `thunder`, `footstep`, `door`, `engine`, `magic`, `tone`, `noise`, `typewriter`, `countdown`, `vinyl`, `rain`, `stream`, `fan`, `propeller`, `jet_engine`, `helicopter`, `shatter`, `electric_motor`, `gears`; **tubes**: `pipe_blow`; **vehicle**: `car_engine`
+Index by module: **contact**: `roll`, `scrape`, `impact`, `bounce`, `drop`, `interaction`, `smash`, `crumple`, `avalanche`, `rumble`, `modal_engine`; **creatures**: `heartbeat`, `roar`, `growl`, `bark`, `meow`, `purr`, `moo`, `howl`, `monster`, `animal`, `cricket`, `cicada`, `fly`, `mosquito`, `bee`, `night_insects`, `wings`, `birdsong`, `bird_call`, `dawn_chorus`, `frog`, `rattlesnake`, `hiss`, `breath`, `grunt`, `laugh`, `scream`, `cry`, `moan`, `cough`, `sneeze`, `snore`, `gulp`, `eat`, `handclap`, `applause`, `crowd_murmur`, `whistle_human`, `footsteps`; **cyber**: `transformer`, `gearbox`, `bearing`, `pipe_engine`, `turbo`, `tyre_squeal`, `pass_by`, `cyber_ui`; **dsp**: `noise_bed`; **fdstring**: `twang`; **foley**: `hit`, `clang`, `clink`, `thud`, `knock`, `shake`, `chain`, `keys`, `cloth`, `creak`, `zipper`, `velcro`, `paper`, `coin_spin`, `dice`, `cork_pop`, `boing`, `ratchet`, `drawer`, `book_drop`, `gunshot`, `reload`, `casing`, `sword`, `cavity_tone`, `edge_tone`, `aeolian_harp`, `clash`, `stab`, `slash`, `bow_shot`, `whip`, `shield_bash`, `clock`, `switch`, `button`, `keyboard_typing`, `mouse_click`, `camera_shutter`, `servo`, `printer`, `drill`, `saw`, `hammering`, `ratchet_wrench`, `piston`, `steam_engine`, `train`, `sonar`, `dtmf`, `phone_tone`, `phone_bell`, `siren_wail`, `car_horn`, `bike_bell`, `buzzer`, `shepard`, `transporter`, `robot_babble`, `red_alert`, `dark_drone`, `force_field`, `teleport`, `energy_blade`, `warp`, `charge_up`, `scanner`; **friction**: `stick_slip`, `squeak`, `brake_squeal`, `rub`; **klang**: `toy_boat`, `klang_car`, `harrier`, `bicycle`, `klang_rain`, `ui_tick`, `ui_chime`, `damage`, `sniff`, `strain`, `weight_shift`, `handle`, `tide`, `distant_bell`; **matter**: `fire`, `pour`, `drip`, `drops`, `splash`, `babble`, `bubbles`, `boil`, `sizzle`, `fizz`, `gurgle`, `drain`, `surf`, `cave_drips`, `waterfall`, `underwater_ambience`, `steam`, `air_leak`, `spray`, `kettle`, `balloon`, `gust`, `flame`, `match`, `spark`, `arc`, `mains_hum`, `tesla`, `neon`, `lightning`, `ice_crack`, `ice_cubes`, `freeze`; **pinball**: `solenoid`, `knocker`, `steel_ball`, `ball_roll`, `chirp`, `flipper`, `pop_bumper`, `slingshot`, `spinner`, `spring`; **plates**: `metal_plate`, `glass_pane`, `wood_panel`, `plate_bow`; **retro**: `sfxr`, `zzfx`; **sfx**: `beep`, `blip`, `click`, `pop`, `coin`, `powerup`, `powerdown`, `laser`, `zap`, `punch`, `explosion`, `jump`, `whoosh`, `swoosh`, `alarm`, `siren`, `error`, `success`, `proximity`, `radar`, `riser`, `sweep_up`, `sweep_down`, `bubble`, `glitch`, `static`, `wind`, `thunder`, `footstep`, `door`, `engine`, `magic`, `tone`, `noise`, `typewriter`, `countdown`, `vinyl`, `rain`, `stream`, `fan`, `propeller`, `jet_engine`, `helicopter`, `shatter`, `electric_motor`, `gears`; **tubes**: `pipe_blow`; **vehicle**: `car_engine`
+
+### `aeolian_harp`
+
+Strings singing in the wind: Aeolian tones that lock in to a string harmonic and sing (Selfridge ICSV24 2017).  *(module `foley`)*
+
+| param | default | meaning |
+|---|---|---|
+| `wind` | `6.0` | m/s; number or list of breakpoints |
+| `gust` | `0.5` | 0..1 slow gusts (they sweep the strings in and out of lock-in) |
+| `notes` | `'D3 A3 D4 F#4'` | the strings' fundamentals |
+| `diameter` | `0.5` | mm string diameter (thinner = higher shedding) |
+| `index` | `1.0` | FM index of the singing tone (more = richer sidebands) |
+| `damping` | `0.05` | mass-damping of the fundamental (Govardhan-Williamson alpha): lower sings louder and higher up |
+| `dur` | `6.0` | s |
+| `seed` | `0` | variation |
 
 ### `air_leak`
 
@@ -2077,6 +2665,7 @@ Bird song / call from a syllable grammar driving Farnell's FM syrinx (12 species
 | `tempo` | `1.0` | speed scale |
 | `two_voice` | `0.0` | 0..1 level of the second syrinx source |
 | `bright` | `1.0` | 0.3..2 top-end |
+| `source` | `'fm'` | fm (Farnell) / normal_form (Amador 2013 labial dynamics + trachea) |
 | `seed` | `0` | variation |
 
 ### `blip`
@@ -2245,6 +2834,8 @@ Physically-modelled combustion engine loop (firing pulses, exhaust pipe, intake,
 | `bright` | `0.0` | 0..1 open muffler / sporty rasp (0 = road car heard from the cabin) |
 | `seed` | `7` | per-engine character |
 | `dur` | `3.0` | s |
+| `model` | `'classic'` | classic / ptr (Doerfler 2026 pulse-train-resonator: shaped exhaust pulses per cylinder bank, a Karplus-Strong manifold per bank and a shared tailpipe) |
+| `exhaust` | `'auto'` | ptr only: the exhaust the PTR paper learned, inline4 / v8 (low, resonant) / v8_metal (mid-range, metallic); auto = inline4 below 6 cylinders, else v8 |
 
 ### `car_horn`
 
@@ -2277,6 +2868,21 @@ Several dripping sources in a reverberant cave.  *(module `matter`)*
 | `dur` | `6.0` | s |
 | `sources` | `5` | number of dripping points, 1..12 |
 | `wet` | `0.6` | 0..1 cave reverb level |
+| `seed` | `0` | variation |
+
+### `cavity_tone`
+
+Wind over an opening (window gap, bottle mouth, wheel well, slot): Rossiter tones + the cavity's depth resonance (Selfridge DAFx-17).  *(module `foley`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `15.0` | m/s air speed; number or list of breakpoints |
+| `length` | `0.05` | m along the flow |
+| `depth` | `0.05` | m: deep (L/d < 1) = the depth resonance rules; very shallow (L/d > 8-11) closes the cavity |
+| `width` | `0.05` | m across the flow |
+| `elevation` | `90.0` | degrees between the flow and the listener (90 = overhead) |
+| `gust` | `0.0` | 0..1 slow gusts |
+| `dur` | `2.0` | s |
 | `seed` | `0` | variation |
 
 ### `chain`
@@ -2503,6 +3109,17 @@ Crumpling / crushing: stochastic impact bursts with power-law energies; facets s
 | `bright` | `0.5` | 0 dark .. 1 bright |
 | `seed` | `0` | variation |
 
+### `cry`
+
+Crying: long falling wail with slow jitter and amplitude modulation (Anikin's soundgen model with its presets: syllables, jitter, AM, aspiration, formants).  *(module `creatures`)*
+
+| param | default | meaning |
+|---|---|---|
+| `voice` | `'female'` | female / male |
+| `syllables` | `0` | syllables in the bout, 0 = as the preset |
+| `pitch` | `1.0` | f0 scale |
+| `seed` | `0` | variation |
+
 ### `cyber_ui`
 
 Sci-fi interface cue: scan, confirm, deny, hack, decrypt, upload, warning, target_lock, implant or neural_link. Every seed is another cue of the same family.  *(module `cyber`)*
@@ -2679,6 +3296,21 @@ Eating: crunch (brittle bites, PhISEM 'Crunch'), chew (soft, closed mouth) or sl
 | `rate` | `1.7` | per second |
 | `seed` | `0` | variation |
 
+### `edge_tone`
+
+Air jet on a sharp edge (whistle, recorder mouth, slot on a blade): stepped modes with hysteresis (Selfridge AES 2018).  *(module `foley`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `15.0` | m/s jet speed; number or list of breakpoints (sweep it to hear the mode jumps) |
+| `gap` | `10.0` | mm nozzle-to-edge distance; number or list of breakpoints |
+| `nozzle` | `1.0` | mm nozzle exit width (gap / nozzle 2..61) |
+| `profile` | `'parabolic'` | parabolic (long flue) / top_hat (short flue, modes 1-3) |
+| `elevation` | `0.0` | degrees off the dipole axis (90 = silent) |
+| `gust` | `0.0` | 0..1 slow gusts |
+| `dur` | `2.0` | s |
+| `seed` | `0` | variation |
+
 ### `electric_motor`
 
 Physical electric motor: rotor, commutation, imbalance, bearings and housing.  *(module `sfx`)*
@@ -2727,12 +3359,12 @@ Harsh error buzz (two low tones).  *(module `sfx`)*
 
 ### `explosion`
 
-Physical blast: N-wave shock, low-frequency expansion, debris and distance propagation.  *(module `sfx`)*
+Physical blast: Friedlander shock sized by charge and distance (JRC / Kinney fits), low-frequency expansion, debris and distance propagation.  *(module `sfx`)*
 
 | param | default | meaning |
 |---|---|---|
 | `dur` | `1.5` | s |
-| `energy` | `1.0` | relative blast energy |
+| `energy` | `1.0` | charge, kg of TNT: sets the shock's length with the distance |
 | `distance` | `8.0` | m |
 | `debris` | `0.45` | 0..1 |
 | `enclosure` | `0.15` | 0..1 |
@@ -3142,7 +3774,7 @@ One object struck by another: analytic modal body + Hunt-Crossley contact (harde
 | `position` | `0.28` | 0..1 strike point (bars: 0 end .. 0.5 middle; circles: 0 centre .. 1 rim); near an edge = brighter |
 | `position2` | `0.37` | 0..1 second coordinate of the strike point on rectangles |
 | `striker_mass` | `0.02` | kg: heavier = louder, longer contact, darker |
-| `hardness` | `0.6` | 0..1 striker hardness, rubber mallet .. steel (contact stiffness 5e6 .. 1e10 N/m^1.5) |
+| `hardness` | `0.6` | 0..1 striker hardness, rubber mallet .. steel ball (Hertz stiffness from both materials and the striker size) |
 | `velocity` | `1.5` | m/s strike speed: louder and brighter |
 | `hollow` | `0.0` | 0..1 share of a hollow air-cavity resonance of the same size |
 | `damping` | `2.0` | external damping 1/s: 0 freely hanging .. 30 lying on a table / held |
@@ -3151,6 +3783,28 @@ One object struck by another: analytic modal body + Hunt-Crossley contact (harde
 | `modes` | `24` | number of modes |
 | `dur` | `0.0` | s, 0 = until it has rung out (max 4 s) |
 | `seed` | `0` | variation of the mode decays |
+| `law` | `'friction'` | mode decay law: friction (default) / rayleigh (Ren) / objectfolder (free objects, glass rings 2.8 s at 1 kHz) / power (Sterling, fitted to recordings); the last three exist for some materials only, and `damping` is added on top |
+| `material_angle` | `-1.0` | degrees on Aramaki's perceived-material disk, overriding the decays: 0 glass, 120 metal, 240 wood, in between = a continuous blend (-1 = off) |
+| `material_radius` | `1.0` | 0..1 distance from the disk centre (0 = the average of glass, metal and wood) |
+
+### `interaction`
+
+Rubbing, scratching or rolling, and anything between: one impact-train model (Conan) morphing on a circle, driving any body.  *(module `contact`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `1.0` | s |
+| `action` | `0.0` | degrees on Conan's circle: 0 rub, 120 scratch, 240 roll; between = a blend |
+| `blend` | `1.0` | 0..1 distance from the centre: 1 = the pure action, 0 = an equal mix of all three |
+| `speed` | `0.3` | m/s; number or list of breakpoints: brightness (low-pass) and the rolling wobble |
+| `roughness` | `0.5` | 0 smooth .. 1 rough surface (Conan's Table I) |
+| `ball` | `0.5` | 0.1..1 size of the rolling object: longer contacts, slower wobble |
+| `body` | `'rect_plate'` | string/bar/bar_clamped/bar_supported/rect_membrane/rect_plate/circ_membrane/circ_plate or a modal table (sy_vase, sy_sword1...) |
+| `material` | `'wood'` | rubber/plastic/wood/glass/ceramic/metal/steel/aluminium/bronze/ice/stone/concrete: the surface |
+| `size` | `0.4` | m: size of the surface |
+| `position` | `0.3` | 0..1 where it is touched |
+| `bright` | `0.5` | 0 dark .. 1 bright |
+| `seed` | `0` | variation |
 
 ### `jet_engine`
 
@@ -3268,6 +3922,17 @@ Descending laser / pew.  *(module `sfx`)*
 | `dur` | `0.25` | s |
 | `wave` | `'saw'` | saw/square/sine |
 
+### `laugh`
+
+Laugh: a bout of short voiced syllables with breathy onsets (Anikin's soundgen model with its presets: syllables, jitter, AM, aspiration, formants).  *(module `creatures`)*
+
+| param | default | meaning |
+|---|---|---|
+| `voice` | `'female'` | female / male |
+| `syllables` | `0` | syllables in the bout, 0 = as the preset |
+| `pitch` | `1.0` | f0 scale |
+| `seed` | `0` | variation |
+
 ### `lightning`
 
 Lightning strike: close crack (electric snap), then Farnell's multi-layer thunder.  *(module `matter`)*
@@ -3340,6 +4005,17 @@ Struck steel plate with free edges (Kirchhoff plate, finite differences): clang 
 | `vel` | `0.8` | strike strength 0..1 (harder = shorter contact, brighter) |
 | `bright` | `0.5` | 0..1 output lowpass 1.5 kHz .. 12 kHz |
 | `quality` | `1.0` | 0.25..3 internal sample rate / grid size |
+
+### `moan`
+
+Moan: falling voiced syllable with aspiration (Anikin's soundgen model with its presets: syllables, jitter, AM, aspiration, formants).  *(module `creatures`)*
+
+| param | default | meaning |
+|---|---|---|
+| `voice` | `'female'` | female / male |
+| `syllables` | `0` | syllables in the bout, 0 = as the preset |
+| `pitch` | `1.0` | f0 scale |
+| `seed` | `0` | variation |
 
 ### `modal_engine`
 
@@ -3636,13 +4312,19 @@ Desktop printer: the carriage stepping back and forth with the head buzzing, and
 
 ### `propeller`
 
-Physical propeller: low blade-passing pulse train plus aerodynamic turbulence.  *(module `sfx`)*
+Propeller aircraft (Selfridge 2017): Hamilton Standard loading harmonics of the blade-passing frequency + Aeolian vortex noise along the blades.  *(module `sfx`)*
 
 | param | default | meaning |
 |---|---|---|
 | `dur` | `2.0` | s |
-| `rpm` | `2100` | RPM |
+| `rpm` | `2100` | RPM (overridden by aircraft unless given) |
 | `blades` | `3` | count |
+| `aircraft` | `''` | '' / c130 / b17 / tiger_moth / yak52 / cessna340 / p51: rpm, power, radius and blades of that plane |
+| `radius` | `1.0` | m blade radius |
+| `power` | `200.0` | engine hp |
+| `chord` | `0.15` | m blade chord (sets the vortex pitch) |
+| `angle` | `110.0` | degrees from the flight direction (loudest near 110-120) |
+| `distance` | `30.0` | m |
 | `seed` | `0` | variation |
 
 ### `proximity`
@@ -3874,6 +4556,17 @@ Scraping / sliding: a surface profile read at the sliding speed x normal force, 
 | `size` | `0.4` | m: size of the body |
 | `position` | `0.3` | 0..1 where it is scraped |
 | `bright` | `0.5` | 0 dark .. 1 bright |
+| `seed` | `0` | variation |
+
+### `scream`
+
+Scream: high, rough voice with jitter, shimmer and amplitude modulation (Anikin's soundgen model with its presets: syllables, jitter, AM, aspiration, formants).  *(module `creatures`)*
+
+| param | default | meaning |
+|---|---|---|
+| `voice` | `'female'` | female / male |
+| `syllables` | `0` | syllables in the bout, 0 = as the preset |
+| `pitch` | `1.0` | f0 scale |
 | `seed` | `0` | variation |
 
 ### `servo`
@@ -4386,12 +5079,13 @@ Dull soft impact with no ring: a long contact on a box or a soft mass landing.  
 
 ### `thunder`
 
-Segmented procedural thunder with distance-dependent propagation.  *(module `sfx`)*
+Thunder: Farnell's layered patch blended with Few's tortuous channel of N-waves, heard from `distance`.  *(module `sfx`)*
 
 | param | default | meaning |
 |---|---|---|
 | `dur` | `2.5` | s |
-| `distance` | `80.0` | m |
+| `distance` | `80.0` | m from the strike |
+| `channel` | `0.5` | 0 Farnell patch only .. 1 physical channel only |
 | `seed` | `0` | variation |
 
 ### `tide`
@@ -4715,11 +5409,11 @@ The ZzFX 1.3.2 sound function: paste a ZzFX array as `p`, or use named slots / a
 | `tremolo` | `None` | tremolo depth 0..1 (period = repeat_time); default 0 |
 | `filter` | `None` | Hz: >0 high-pass, <0 low-pass (actual corner about 2x); default 0 |
 
-## Effects (97)
+## Effects (98)
 
 Usage: `"fx": [{"type": "<name>", ...params}]  on a layer, a group or the whole spec`
 
-Index by module: **chiptune2**: `dpcm`; **contact**: `resonate`, `cavity`; **cyber**: `packet_loss`, `beat_repeat`, `paulstretch`, `waveset`, `formant_shift`, `cyber_voice`, `texturize`; **dsp**: `convolve`, `fir_eq`, `steep_lowpass`, `steep_highpass`, `steep_bandpass`, `overdrive`, `wavefold`, `mulaw`, `dither`, `codec`, `lofi`, `smooth`, `tape`, `wall`, `dc_block`; **fdstring**: `spring_reverb`; **friction**: `sheet_radiator`, `cone_radiator`, `sympathetic`; **fx**: `reverb`, `delay`, `vibrato`, `tremolo`, `distortion`, `bitcrush`, `lowpass`, `highpass`, `bandpass`, `notch`, `eq`, `lowshelf`, `highshelf`, `sweep`, `muffle`, `telephone`, `underwater`, `ringmod`, `compressor`, `limiter`, `gain`, `normalize`, `pan`, `autopan`, `width`, `fade`, `loop`, `reverse`, `speed`, `pitch`, `trim`, `stutter`, `mono`; **plates**: `plate_reverb`, `room2d`; **reverbs**: `chorus`, `flanger`, `phaser`, `jcrev`, `satrev`, `fdn_reverb`, `early_reflections`, `room`, `zita`, `distance`, `doppler`, `occlude`, `leslie`, `tape_delay`, `shimmer`, `gated_reverb`, `reverse_reverb`; **spectral**: `timestretch`, `pitch_shift`, `harmonizer`, `vocoder`, `cross_synth`, `spectral_gate`, `sines_only`, `noise_only`, `freeze`, `spectral_blur`, `freqshift`, `robotize`, `whisperize`, `spectral_tilt`; **tubes**: `formant_tract`, `tube`
+Index by module: **chiptune2**: `dpcm`; **contact**: `resonate`, `cavity`; **cyber**: `packet_loss`, `beat_repeat`, `paulstretch`, `waveset`, `formant_shift`, `cyber_voice`, `texturize`; **dsp**: `convolve`, `fir_eq`, `steep_lowpass`, `steep_highpass`, `steep_bandpass`, `overdrive`, `wavefold`, `mulaw`, `dither`, `codec`, `lofi`, `smooth`, `tape`, `wall`, `dc_block`; **fdstring**: `spring_reverb`; **friction**: `sheet_radiator`, `cone_radiator`, `sympathetic`; **fx**: `reverb`, `delay`, `vibrato`, `tremolo`, `distortion`, `bitcrush`, `lowpass`, `highpass`, `bandpass`, `notch`, `eq`, `lowshelf`, `highshelf`, `sweep`, `muffle`, `telephone`, `underwater`, `ringmod`, `compressor`, `limiter`, `gain`, `normalize`, `pan`, `autopan`, `width`, `fade`, `loop`, `reverse`, `speed`, `pitch`, `trim`, `stutter`, `mono`; **plates**: `plate_reverb`, `room2d`; **reverbs**: `chorus`, `flanger`, `phaser`, `jcrev`, `satrev`, `fdn_reverb`, `velvet_reverb`, `early_reflections`, `room`, `zita`, `distance`, `doppler`, `occlude`, `leslie`, `tape_delay`, `shimmer`, `gated_reverb`, `reverse_reverb`; **spectral**: `timestretch`, `pitch_shift`, `harmonizer`, `vocoder`, `cross_synth`, `spectral_gate`, `sines_only`, `noise_only`, `freeze`, `spectral_blur`, `freqshift`, `robotize`, `whisperize`, `spectral_tilt`; **tubes**: `formant_tract`, `tube`
 
 ### `autopan`
 
@@ -4801,7 +5495,7 @@ Speech/streaming codec artefacts.  *(module `dsp`)*
 
 ### `compressor`
 
-Dynamics compressor (evens out level, adds punch).  *(module `fx`)*
+Dynamics compressor (evens out level, adds punch): feed-forward, soft knee, smooth peak detector on the gain.  *(module `fx`)*
 
 | param | default | meaning |
 |---|---|---|
@@ -4810,6 +5504,7 @@ Dynamics compressor (evens out level, adds punch).  *(module `fx`)*
 | `attack` | `0.005` | s |
 | `release` | `0.1` | s |
 | `makeup` | `0.0` | dB gain after (auto if 0) |
+| `knee` | `6.0` | dB width of the soft knee (0 = hard knee) |
 
 ### `cone_radiator`
 
@@ -4894,12 +5589,16 @@ Put a sound some metres away: 1/r level drop, air absorption that dulls it with 
 |---|---|---|
 | `metres` | `10.0` | distance to the source, metres (the input is the sound at `ref` metres) |
 | `air` | `True` | true = air absorption low-pass |
-| `humidity` | `50` | relative humidity % (40..70; drier air absorbs more highs) |
+| `humidity` | `50` | relative humidity % (10..100; drier air absorbs more highs) |
+| `temperature` | `20.0` | air temperature, C (-20..50): sets the absorption and the speed of sound |
+| `ground` | `'none'` | reflection off the ground between them: none / grass (flow resistivity 300 cgs) / hard (rigid) / a number = flow resistivity in cgs units; over grass the low end gains 6 dB and a dip opens at 300-800 Hz |
+| `source_height` | `1.5` | metres, for `ground` |
+| `listener_height` | `1.5` | metres, for `ground` |
 | `reverb` | `0.0` | reverb send 0..1: reverberant level stays constant while the direct sound falls with distance (stereo out when > 0) |
 | `reverb_time` | `1.5` | decay time of that reverb, seconds |
 | `ref` | `1.0` | reference distance in metres where gain = 1 (closer than this the gain is capped at +6 dB) |
 | `line_source` | `False` | true = line source (road, river): 1/sqrt(r), -3 dB per doubling |
-| `delay` | `False` | true = prepend the travel time (r - ref) / 345 s |
+| `delay` | `False` | true = prepend the travel time (r - ref) / c, c = 343 m/s at 20 C |
 
 ### `distortion`
 
@@ -5725,6 +6424,20 @@ Submerged wobble + heavy lowpass.  *(module `fx`)*
 |---|---|---|
 | `amount` | `0.8` | 0..1 |
 
+### `velvet_reverb`
+
+Velvet-noise convolution reverb: a sparse +-1 noise shaped per octave into a decaying tail. Dense and smooth from the first milliseconds, no metallic ringing, no modulation. Stereo output.  *(module `reverbs`)*
+
+| param | default | meaning |
+|---|---|---|
+| `t60_low` | `2.0` | decay time at 250 Hz, seconds (0.1..20) |
+| `t60_high` | `1.0` | decay time at 4 kHz, seconds (<= t60_low) |
+| `predelay` | `0.02` | seconds before the tail starts |
+| `mix` | `0.3` | wet amount 0..1 |
+| `width` | `1.0` | stereo width 0..1 (two independent velvet tails) |
+| `density` | `2205.0` | impulses per second (1000 = grainy, 2205 = smooth, 4000 = dense) |
+| `seed` | `0` | variation of the tail |
+
 ### `vibrato`
 
 Pitch wobble.  *(module `fx`)*
@@ -5885,7 +6598,8 @@ channel between its drums: the latest note wins. A chord in `steps` is played as
 ### `resynth`  *(module `spectral`)*
 
 {"type": "resynth", "path": "in.wav", "stretch": 1.0, "transpose": 0, "formant": 0, "sines": 1, "noise": 1}
-optional: "window_ms" (46; analysis window, at least 4 periods of the lowest pitch), "seed" (noise).
+optional: "window_ms" (46; analysis window, at least 4 periods of the lowest pitch), "seed" (noise),
+"transients" (false; a gain: true or 1 keeps attacks and clicks sharp and unstretched, 0.5 halves them).
 
 **sampler** — Play a folder of recordings as an instrument:
 

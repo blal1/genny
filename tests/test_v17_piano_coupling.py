@@ -58,3 +58,15 @@ def test_soft_pedal_hammer_contact_is_lower_energy():
     f2=np.sum(h2.last_force_n**2)
     assert f2 < f1
     assert rms(b) < rms(a)
+
+
+def test_hammer_contact_matches_chaigne_askenfelt():
+    # mezzo forte (1.5 m/s) contact durations measured by Chaigne & Askenfelt 1994 II: 3.1 / 2.0 / 0.6 ms
+    for note, want in ((36, 3.1e-3), (60, 2.0e-3), (96, 0.6e-3)):
+        h=genny.PianoHammerAction(note,sr=44100)
+        h.strike(0.53)
+        assert abs(h.last_contact_time_s-want) < 0.08*want, (note, h.last_contact_time_s)
+    # harder blows are shorter in the treble; the bass hammer stays in contact longest
+    hs=[genny.PianoHammerAction(96,sr=44100) for _ in range(2)]
+    hs[0].strike(0.1); hs[1].strike(1.0)
+    assert hs[1].last_contact_time_s < hs[0].last_contact_time_s

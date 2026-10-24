@@ -48,7 +48,7 @@ Where a `shape` / `body` is accepted you can also name a measured object from th
 | `position` | 0.28 | 0..1 strike point. Bars: 0 = end, 0.5 = middle. Circles: 0 = centre, 1 = rim. Near a held edge = brighter, thinner |
 | `position2` | 0.37 | 0..1 second coordinate on rectangles |
 | `striker_mass` | 0.02 | kg. Heavier = longer contact = darker, and it can mute the lowest mode |
-| `hardness` | 0.6 | 0..1 striker hardness, rubber mallet to steel. Harder = shorter contact = brighter attack |
+| `hardness` | 0.6 | 0..1 striker hardness, rubber mallet to steel ball. The contact stiffness is Hertz's k = 4/3 E* sqrt(R) from both materials and the striker size. Harder = shorter contact = brighter attack |
 | `velocity` | 1.5 | m/s. Faster = louder and brighter (the contact gets shorter) |
 | `hollow` | 0.0 | 0..1 share of an air-cavity resonance of the object's size |
 | `damping` | 2.0 | 1/s external loss: 0 = hanging freely, 30 = lying on a table or held in the hand |
@@ -57,6 +57,12 @@ Where a `shape` / `body` is accepted you can also name a measured object from th
 | `modes` | 24 | number of modes |
 | `dur` | 0 | s; 0 = until it has rung out (at most 4 s) |
 | `seed` | 0 | variation of the individual mode decays |
+| `law` | `friction` | mode decay law: `friction` (internal friction, the default), `rayleigh` (Ren's measured pairs), `objectfolder` (the ObjectFolder 2.0 pairs: a free-standing glass rings 2.8 s at 1 kHz, steel 2.2 s, wood 0.1 s) or `power` (Sterling & Lin's power law fitted to recordings of plastic, porcelain, wood and aluminium). `damping` is added on top |
+| `material_angle` | -1 | degrees on Aramaki et al.'s perceived-material disk, replacing the decays: 0 glass, 120 metal, 240 wood; in between, a continuous blend of the two neighbours. -1 = off |
+| `material_radius` | 1 | 0..1 distance from the disk centre; 0 = the average of glass, metal and wood |
+
+Small objects cannot radiate wavelengths much larger than themselves: every mode is weighted like a pulsating
+sphere of the object's size, ka / sqrt(1 + (ka)^2) (6 dB per octave below ka = 1).
 
 A node of a mode at the strike point removes that mode: a bar struck in the middle loses every second
 partial; a drum struck dead centre keeps only its symmetric modes.
@@ -208,6 +214,37 @@ normal force, and that force drives the body. A steady scrape is hard to recogni
 {"type": "sfx", "kind": "scrape", "params": {"dur": 1.2, "speed": [0.05, 0.6, 0.1], "force": [0.4, 1, 0.3], "texture": "wood", "material": "wood"}}
 {"type": "sfx", "kind": "scrape", "params": {"body": "sy_sword1", "material": "steel", "texture": "metal", "speed": [0.2, 1.5], "grain": 0.05, "dur": 0.6}}
 {"type": "sfx", "kind": "scrape", "params": {"body": "rect_plate", "material": "stone", "size": 1.0, "texture": "gritty", "speed": 0.15, "grain": 0.5, "dur": 2}}
+```
+
+### `interaction`
+
+Conan's continuous-interaction synthesizer (DAFx-13; IEEE TASLP 2014). Rubbing, scratching and rolling are
+all a train of small impacts. They differ in how dense the impacts are, how strongly each depends on the last,
+and how long each contact lasts:
+
+- **rub**: an impact on every sample (white noise);
+- **scratch**: sparse impacts at random, independent intervals;
+- **roll**: correlated impacts every 3-6 ms whose contacts lengthen with the ball, plus a slow wobble.
+
+The three sit on a circle (`action` in degrees) and every point between is a blend. The train is low-passed by
+the sliding `speed` and drives the body. Use it to morph between actions; `roll` and `scrape` remain the
+physically coupled single-action models.
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | 1.0 | s |
+| `action` | 0 | degrees: 0 rub, 120 scratch, 240 roll; 60 = half rub half scratch |
+| `blend` | 1.0 | 0..1 distance from the centre of the circle: 0 = equal mix of all three |
+| `speed` | 0.3 | m/s, number or list: brightness, and the rolling wobble rate |
+| `roughness` | 0.5 | 0 smooth .. 1 rough (Conan's Table I): sparser, more irregular rolling |
+| `ball` | 0.5 | 0.1..1 size of the rolling object: longer contacts, slower wobble |
+| `body`, `material`, `size`, `position` | `rect_plate`, `wood`, 0.4, 0.3 | the surface |
+| `bright`, `seed` | 0.5, 0 | |
+
+```json
+{"type": "sfx", "kind": "interaction", "params": {"action": 0, "speed": [0.1, 0.5, 0.1], "dur": 1.5}}
+{"type": "sfx", "kind": "interaction", "params": {"action": 120, "material": "plastic", "dur": 1.0}}
+{"type": "sfx", "kind": "interaction", "params": {"action": 240, "ball": 0.8, "body": "bar", "material": "metal", "speed": [0.6, 0.1], "dur": 2.5}}
 ```
 
 ### `rumble` and `avalanche`

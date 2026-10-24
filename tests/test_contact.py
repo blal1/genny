@@ -169,6 +169,59 @@ def test_material_table_anchors():
     assert abs(ray("ceramic", 3000) - 15.0) < 0.2
 
 
+def test_objectfolder_and_power_damping_laws():
+    # ObjectFolder 2.0 Rayleigh pairs: T60 at 1 kHz glass 2.8 s, steel 2.2 s, wood 0.10 s
+    t60 = {m: 6.91 / C.material_damping([1000.0], m, law="objectfolder")[0] for m in ("glass", "steel", "wood")}
+    assert abs(t60["glass"] - 2.79) < 0.05 and abs(t60["steel"] - 2.24) < 0.05 and abs(t60["wood"] - 0.099) < 0.005, t60
+    # Sterling power law c = mu1 w^(2 mu2), d = c/2: wood at 1 kHz, and the exponent shows in the slope
+    d = C.material_damping([500.0, 1000.0, 2000.0], "wood", law="power")
+    assert abs(d[1] - 0.5 * 6.7 * (2 * math.pi * 1000) ** 0.36) < 1e-9
+    assert abs(math.log(d[2] / d[1], 2) - 0.36) < 1e-9 and d[0] < d[1] < d[2]
+    # ext adds on top for the two new laws; a material without data is refused with the list
+    assert abs(C.material_damping([1000.0], "glass", law="objectfolder", ext=3.0)[0] - (6.91 / t60["glass"] + 3.0)) < 1e-9
+    for law, mat in (("power", "glass"), ("objectfolder", "bronze"), ("nope", "wood")):
+        try:
+            C.material_damping([1000.0], mat, law=law)
+            raise AssertionError((law, mat))
+        except ValueError:
+            pass
+    # the impact sfx takes the law; a free glass under objectfolder rings far longer than under friction
+    y0 = SFX["impact"]["fn"](SR, material="glass", damping=0.0, law="friction")
+    y1 = SFX["impact"]["fn"](SR, material="glass", damping=0.0, law="objectfolder")
+    assert len(y1) > 2 * len(y0), (len(y0), len(y1))
+
+
+def test_hertz_stiffness_and_radiation_rolloff():
+    # Johnson 1985 eq. 4.23: k = 4/3 E* sqrt(R); steel ball (1 cm) on steel: E* = E / (2 (1 - nu^2))
+    k = C.hertz_k(200e9, 0.3, 200e9, 0.3, 0.01)
+    assert abs(k - 4 / 3 * 200e9 / (2 * 0.91) * 0.1) < 1e-3 * k
+    wood = C.get_material("wood")
+    soft, hard = C._striker_k(wood, 0.0, 0.02), C._striker_k(wood, 1.0, 0.02)
+    assert 1e6 < soft < 1e7 and 1e9 < hard < 1e10 and hard > 100 * soft     # rubber mallet .. steel ball
+    # a 3 cm body radiates its 300 Hz mode far less than its 6 kHz one; a 3 m one hardly differs
+    small = C._make_body("bar", "steel", 0.03, freq=300.0)
+    big = C._make_body("bar", "steel", 3.0, freq=300.0)
+    rs = small.audio_weights(0.0) / small.aw0
+    rb = big.audio_weights(0.0) / big.aw0
+    ka = 2 * math.pi * small.freqs[0] * 0.015 / 343.2
+    assert abs(rs[0] - ka / math.sqrt(1 + ka * ka)) < 1e-9 and rs[0] < 0.1 and rb[0] > 0.99
+
+
+def test_aramaki_material_disk():
+    # Table II reference points on the rim, eq. 21 blends two neighbours, eq. 22 pulls towards the mean
+    for ang, ref in ((0, (2.5, 1.5e-4)), (120, (0.6, 2e-4)), (240, (3.0, 4e-4))):
+        assert np.allclose(C.aramaki_point(ang), ref, rtol=1e-9, atol=0), ang
+    half = C.aramaki_point(60)
+    assert abs(half[0] - 1.55) < 1e-9 and abs(half[1] - 1.75e-4) < 1e-12
+    c = C.aramaki_point(77.0, 0.0)
+    assert abs(c[0] - (2.5 + 0.6 + 3.0) / 3) < 1e-9
+    d = C.aramaki_damping([1000.0], 120.0)[0]
+    assert abs(d - math.exp(0.6 + 2e-4 * 2 * math.pi * 1000)) < 1e-9
+    # metal rings longest, wood shortest, and the blend sits in between
+    n = {a: len(SFX["impact"]["fn"](SR, material="steel", material_angle=a, damping=0.0)) for a in (0, 60, 120, 240)}
+    assert n[240] < n[0] < n[60] < n[120], n
+
+
 def test_decay_proportional_to_frequency_under_the_phi_law():
     f = np.array([200.0, 800.0, 3200.0])
     d = C.material_damping(f, "wood", scatter=0.0, ext=0.0)
@@ -549,3 +602,43 @@ if __name__ == "__main__":
         if name.startswith("test_"):
             fn()
             print("ok", name)
+
+
+def test_conan_circle_weights():
+    assert np.allclose(C.conan_weights(0), [1, 0, 0]) and np.allclose(C.conan_weights(120), [0, 1, 0])
+    assert np.allclose(C.conan_weights(240), [0, 0, 1]) and np.allclose(C.conan_weights(60), [0.5, 0.5, 0])
+    assert np.allclose(C.conan_weights(33, 0.0), 1 / 3) and abs(C.conan_weights(301, 0.6).sum() - 1) < 1e-12
+
+
+def _impacts(f):
+    """Onset sample and length (samples) of each separate pulse."""
+    on = np.abs(f) > 1e-12
+    starts = np.flatnonzero(on & ~np.r_[False, on[:-1]])
+    ends = np.flatnonzero(on & ~np.r_[on[1:], False])
+    return starts, ends - starts + 1
+
+
+def test_conan_force_rub_scratch_roll():
+    rub = C.conan_force(SR, SR, C.conan_weights(0), seed=2)
+    scr = C.conan_force(SR, SR, C.conan_weights(120), seed=2)
+    roll = C.conan_force(SR, SR, C.conan_weights(240), seed=2)
+    assert np.mean(np.abs(rub) > 0) > 0.99                                  # an impact on every sample: white noise
+    s_on, _ = _impacts(scr)
+    r_on, r_len = _impacts(roll)
+    assert len(s_on) < len(r_on) < SR / 100                                 # scratching sparser than rolling
+    d = np.diff(r_on) / SR
+    assert 3.1e-3 < np.mean(d) < 6.4e-3                                     # Table I mean interval
+    assert np.corrcoef(d[:-1], d[1:])[0, 1] > 0.5                           # rolling intervals are correlated (a1 = -0.95)
+    ds = np.diff(s_on)
+    assert abs(np.corrcoef(ds[:-1], ds[1:])[0, 1]) < 0.2                    # scratching: independent intervals
+    big = _impacts(C.conan_force(SR, SR, C.conan_weights(240), size=1.0, seed=2))[1]
+    assert np.median(big) > 1.5 * np.median(r_len)                          # t0 grows with the ball (TASLP eq. 16)
+
+
+def test_interaction_sfx():
+    fn = SFX["interaction"]["fn"]
+    for a in (0, 120, 240, 300):
+        y = fn(SR, dur=0.5, action=a)
+        assert y.shape == (int(0.5 * SR),) and np.isfinite(y).all() and np.abs(y).max() > 0.1
+    quiet = fn(SR, dur=0.5, speed=0.0)
+    assert np.abs(quiet).max() < 1e-6

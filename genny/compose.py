@@ -260,6 +260,17 @@ def mask_hits(mask: str, rng=None, gate_steps: dict | None = None) -> list[tuple
     return out
 
 
+def _pink_white(n: int, rng, white: float = 0.5) -> np.ndarray:
+    """Zero-mean, unit-sd mix of 1/f (Voss, enough generators to span the sequence) and white noise;
+    ``white`` is the white share of the variance."""
+    if n < 1:
+        return np.zeros(0)
+    p = voss(n, rng, generators=max(4, int(np.ceil(np.log2(max(n, 2))))))
+    p = (p - p.mean()) / (p.std() + 1e-12) if n > 1 else np.zeros(1)
+    w = rng.standard_normal(n)
+    return np.sqrt(1.0 - white) * p + np.sqrt(white) * w
+
+
 def voss(n: int, rng, generators: int = 4) -> np.ndarray:
     """1/f ("pink") sequence in 0..1, Voss-McCartney: generator g is re-rolled every 2^g steps and
     the generators are summed (MIT 21M.380: gamma about 1 for melodic walks, 12-music s3.5)."""
@@ -552,8 +563,10 @@ def harmony(layer: dict, bpm=None) -> list[dict]:
 
 
 def _weight(c, s):
-    """Metric weight of a step. # UNSOURCED: bar start 1, beats 0.8, half beats 0.5, the rest 0.12."""
-    if s == 0:
+    """Metric weight of a step: bar start and half bar 1, beats 0.8, half beats 0.5, the rest 0.12.
+    Order after Colley & Dean 2019 (PLoS ONE e0216088): drummers accent 16ths 1 and 9 > 3, 5, 7... > the rest.
+    # UNSOURCED: the weight values themselves."""
+    if s == 0 or (_strong(c, s) and c.meter == 4):
         return 1.0
     if s % c.spb == 0:
         return 0.8
@@ -998,22 +1011,26 @@ def _perform(ev, c, L, tag):
             if abs(k - round(k)) < 1e-6 and int(round(k)) % 2:
                 e["t"] += sw * sg
     hum = L.get("humanize", 0)
-    hum = hum if isinstance(hum, dict) else {"time": 10.0 * float(hum), "vel": 0.13 * float(hum)}
-    # UNSOURCED default (12-music s5): onset jitter sigma 5-10 ms. Velocity spread: Beta(0.2, 0.2)
-    # over 110..127 of 127 (= 0.13 of the range), MIT 21M.380 p.56.
+    # humanize 1: onset sigma 0.98 % of a beat (Rasanen et al. 2015, PLoS ONE e0127902: Porcaro's 16th hi-hat,
+    # IOI 157 ms, interval sd 8.7 ms with lag-1 r = -0.48, i.e. about 6 ms of onset jitter = 3.9 % of a 16th);
+    # 6 ms at 96 bpm, 10 ms at 60. A dict gives "time" in ms instead. Velocity spread 13 % (MIT 21M.380 p.56).
+    hum = hum if isinstance(hum, dict) else {"time": 1000.0 * 0.0098 * c.q * float(hum), "vel": 0.13 * float(hum)}
     sig, vs = float(hum.get("time", 0.0)) / 1000.0 / c.q, float(hum.get("vel", 0.0))
     if sig > 0 or vs > 0:
         rng = _rng(c.seed, tag, "perform")
-        jit = {}
-        for e in sorted(ev, key=lambda e: e["t"]):
-            if sig > 0:
-                if e["t"] not in jit:                   # notes of one chord move together
-                    jit[e["t"]] = float(rng.normal(0, sig))
-                e["_j"] = jit[e["t"]]
-            if vs > 0:
-                e["vel"] *= 1.0 - vs * float(rng.beta(0.2, 0.2))
+        order = sorted(ev, key=lambda e: e["t"])
+        onsets = sorted({e["t"] for e in order})        # notes of one chord move together
+        # Deviations are 1/f, which listeners prefer to white jitter at the same sigma (Hennig et al. 2011,
+        # PLoS ONE e26457), plus an equal white part: real drumming is long-range correlated over phrases
+        # (DFA alpha 0.72) and anticorrelated hit to hit (alpha 0.31, Rasanen 2015).
+        tdev = dict(zip(onsets, sig * _pink_white(len(onsets), rng))) if sig > 0 else {}
+        # velocity: 1/f too (Rasanen: hi-hat amplitudes alpha 0.63), mapped to 0..1 like the old Beta draw
+        vdev = _pink_white(len(order), rng, white=0.3) if vs > 0 else None
+        for i, e in enumerate(order):
+            if vdev is not None:
+                e["vel"] *= 1.0 - vs * float(np.clip(0.5 + 0.25 * vdev[i], 0.0, 1.0))
         for e in ev:
-            e["t"] = max(0.0, e["t"] + e.pop("_j", 0.0))
+            e["t"] = max(0.0, e["t"] + tdev.get(e["t"], 0.0))
     a = float(L.get("drift", 0.0))
     if a:
         # periodic tempo drift, +-a around the tempo with a whole number of ~20 s cycles so the piece

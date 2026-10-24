@@ -18,6 +18,7 @@ from scipy.signal import lfilter
 
 from .core import DEFAULT_SR, samples
 from .osc import _polyblep
+from .physical.voice import PRAAT_LOCAL, cycle_jitter
 
 # ----------------------------------------------------------------------------------------------
 # Phoneme inventory
@@ -33,25 +34,28 @@ FNP = 270.0  # nasal pole (cancelled by the nasal zero outside nasals)
 
 # name: kind, formants (F1,F2,F3) [, f2 end target for diphthongs], dur (inherent, min) ms, voiced, place
 PH: dict[str, dict] = {
-    # English vowels (Peterson & Barney / Klatt male targets)
-    "IY": dict(k=VOW, f=(270, 2290, 3010), dur=(155, 55)),
-    "IH": dict(k=VOW, f=(390, 1990, 2550), dur=(135, 40)),
-    "EH": dict(k=VOW, f=(530, 1840, 2480), dur=(150, 70)),
-    "AE": dict(k=VOW, f=(660, 1720, 2410), dur=(230, 80)),
-    "AA": dict(k=VOW, f=(730, 1090, 2440), dur=(240, 100)),
-    "AO": dict(k=VOW, f=(570, 840, 2410), dur=(240, 130)),
-    "UH": dict(k=VOW, f=(440, 1020, 2240), dur=(160, 60)),
-    "UW": dict(k=DIPH, f=(330, 1150, 2250), f2=(300, 900, 2200), dur=(210, 70)),
-    "AH": dict(k=VOW, f=(640, 1190, 2390), dur=(140, 60)),
+    # English vowels: men's means of Hillenbrand et al. 1995 (vowdata.dat, 45 talkers), F1-F3 at 20 % of the
+    # vowel as f and at 50 % as f2 (vowel-inherent change). The 80 % values are pulled by the /d/ coda of
+    # the hVd words, which genny's locus coarticulation already adds; the diphthongs EY and OW glide
+    # 20 % -> 80 %. AX, IX, AXR (no data) and AY, OY, AW (not in the set) keep Peterson & Barney / Klatt.
+    "IY": dict(k=VOW, f=(346, 2312, 3010), f2=(340, 2338, 2994), dur=(155, 55)),
+    "IH": dict(k=VOW, f=(434, 2032, 2683), f2=(459, 1941, 2641), dur=(135, 40)),
+    "EH": dict(k=VOW, f=(584, 1817, 2603), f2=(592, 1774, 2602), dur=(150, 70)),
+    "AE": dict(k=VOW, f=(592, 1923, 2597), f2=(613, 1863, 2566), dur=(230, 80)),
+    "AA": dict(k=VOW, f=(754, 1304, 2528), f2=(757, 1326, 2523), dur=(240, 100)),
+    "AO": dict(k=VOW, f=(654, 1020, 2516), f2=(670, 1046, 2509), dur=(240, 130)),
+    "UH": dict(k=VOW, f=(468, 1122, 2440), f2=(483, 1208, 2438), dur=(160, 60)),
+    "UW": dict(k=DIPH, f=(385, 1015, 2346), f2=(375, 971, 2359), dur=(210, 70)),
+    "AH": dict(k=VOW, f=(622, 1181, 2548), f2=(618, 1243, 2549), dur=(140, 60)),
     "AX": dict(k=VOW, f=(500, 1400, 2400), dur=(120, 55)),
     "IX": dict(k=VOW, f=(420, 1800, 2500), dur=(110, 40)),
-    "ER": dict(k=VOW, f=(490, 1350, 1690), dur=(180, 80)),
+    "ER": dict(k=VOW, f=(485, 1371, 1720), f2=(460, 1406, 1704), dur=(180, 80)),
     "AXR": dict(k=VOW, f=(490, 1350, 1690), dur=(120, 60)),
-    "EY": dict(k=DIPH, f=(480, 1760, 2500), f2=(330, 2200, 2750), dur=(190, 100)),
+    "EY": dict(k=DIPH, f=(479, 2089, 2699), f2=(400, 2229, 2742), dur=(190, 100)),
     "AY": dict(k=DIPH, f=(700, 1220, 2600), f2=(400, 1950, 2600), dur=(250, 150)),
     "OY": dict(k=DIPH, f=(550, 960, 2400), f2=(380, 1850, 2500), dur=(280, 150)),
     "AW": dict(k=DIPH, f=(720, 1240, 2500), f2=(450, 1000, 2350), dur=(260, 100)),
-    "OW": dict(k=DIPH, f=(560, 1000, 2400), f2=(420, 850, 2300), dur=(220, 80)),
+    "OW": dict(k=DIPH, f=(511, 936, 2455), f2=(435, 898, 2448), dur=(220, 80)),
     # Spanish pure vowels (short, monophthongal)
     "A": dict(k=VOW, f=(700, 1300, 2550), dur=(150, 70)),
     "E": dict(k=VOW, f=(460, 1850, 2550), dur=(140, 60)),
@@ -707,10 +711,25 @@ def _nearest_vowel(segs, i):
     return None
 
 
-def _bw(f1, f2, kind):
+# Hawks & Miller 1995 (JASA 97:1343, eqs 1-3): formant bandwidth from the formant frequency alone, 5th-order
+# fits to Fujimura & Lindqvist / Fant closed-glottis data, one set below and one above 500 Hz (37 Hz at 500 Hz,
+# 360 Hz at 5 kHz, for F0 = 132 Hz).
+_HM_LO = (165.327516, -6.73636734e-01, 1.80874446e-03, -4.52201682e-06, 7.49514000e-09, -4.70219241e-12)
+_HM_HI = (15.8146139, 8.10159009e-02, -9.79728215e-05, 5.28725064e-08, -1.07099364e-11, 7.91528509e-16)
+
+
+def formant_bandwidth(f: float, f0: float = 132.0) -> float:
+    """Hawks & Miller bandwidth (Hz) of a formant at ``f`` Hz, widened by S = 1 + 0.25 (F0 - 132)/88 (eq. 4)."""
+    f = float(np.clip(f, 100.0, 5000.0))
+    c = _HM_LO if f < 500.0 else _HM_HI
+    s = 1.0 + 0.25 * (float(f0) - 132.0) / 88.0
+    return max(s, 0.5) * sum(ci * f ** i for i, ci in enumerate(c))
+
+
+def _bw(fs, kind):
     if kind in VOWELISH:
-        b1 = 55 + max(0.0, f1 - 300) * 0.07
-        return [b1, 85 + max(0.0, f2 - 1000) * 0.02, 140, 250, 320]
+        # ponytail: the male reference S = 1; the voice's own F0 is applied later only through formant_shift
+        return [formant_bandwidth(f) for f in fs[:5]]
     if kind == NAS:
         return [100, 300, 300, 350, 400]
     if kind in (LIQ, GLI):
@@ -736,13 +755,13 @@ def _targets(segs):
         k = info["k"]
         if k in VOWELISH:
             a, z = _vowel_target(p)
-            out.append((a + _bw(a[0], a[1], k), z + _bw(z[0], z[1], k)))
+            out.append((a + _bw(a, k), z + _bw(z, k)))
             continue
         if k in (LIQ, GLI):
             f = list(info["f"]) + [F4, F5]
             if p == "L" and sg.get("wend") and not sg.get("wstart"):
                 f[1] = 900  # dark final l
-            out.append((f + _bw(*f[:2], k),) * 2)
+            out.append((f + _bw(f, k),) * 2)
             continue
         vt = _nearest_vowel(segs, i)
         if k == ASP:
@@ -768,7 +787,7 @@ def _targets(segs):
             f[0] = 300
             if vt is not None:
                 f[1] = 1700 + 0.5 * (vt[1] - 1700)
-        out.append((f + _bw(f[0], f[1], k),) * 2)
+        out.append((f + _bw(f, k),) * 2)
     return out
 
 
@@ -1165,13 +1184,6 @@ def _smooth(x, width):
     return np.convolve(xp, k, mode="valid")
 
 
-def _slow_noise(n, sr, rate_hz, rng):
-    """Smooth random signal ~N(0,1) varying at about rate_hz."""
-    m = max(4, int(n / sr * rate_hz) + 4)
-    pts = rng.standard_normal(m)
-    return np.interp(np.linspace(0, m - 3, n), np.arange(m), pts)
-
-
 def _resolve(params: dict) -> dict:
     unknown = [k for k in params if k not in PARAMS]
     if unknown:
@@ -1279,8 +1291,8 @@ def _synth(segs, T: _Tracks, vs: dict, sr: int, vibrato: float, seed: int) -> np
     # ---- source
     f0c = _smooth(T.curve("F0", tc, vs["pitch"]), 0.045 * sr / blk)
     f0 = up(f0c)
-    if vs["jitter"] > 0:
-        f0 = f0 * (1 + vs["jitter"] * _slow_noise(n, sr, 25, rng))
+    if vs["jitter"] > 0:           # per-cycle period scatter, Praat local jitter = vs["jitter"]
+        f0 = cycle_jitter(f0, vs["jitter"], rng, sr)
         f0 = f0 * (1 + 0.004 * (np.sin(2 * np.pi * 4.7 * ts) + np.sin(2 * np.pi * 7.1 * ts + 1.0)))
     if vs.get("quantize"):
         f0 = 440.0 * 2 ** (np.round(12 * np.log2(np.maximum(f0, 1) / 440.0)) / 12)
@@ -1318,12 +1330,13 @@ def _synth(segs, T: _Tracks, vs: dict, sr: int, vibrato: float, seed: int) -> np
         ph2 = (ph / 2) % 1.0
         sq = np.where(ph2 < 0.5, 1.0, -1.0) + _polyblep(ph2, dt / 2) - _polyblep((ph2 + 0.5) % 1.0, dt / 2)
         src = src + sq * vs["sub"] * 0.6
+    if vs["shimmer"] > 0:          # per-cycle amplitude, Praat local shimmer = vs["shimmer"]
+        cyc = np.floor(ph).astype(np.int64)
+        src = src * (1 + vs["shimmer"] * PRAAT_LOCAL * rng.standard_normal(cyc[-1] + 1)[cyc])
     if vs.get("tilt"):
         a = np.exp(-2 * np.pi * vs["tilt"] / sr)
         src = lfilter([1 - a], [1, -a], src)
         src = src / (np.sqrt(np.mean(src ** 2)) + 1e-9) * 0.35
-    if vs["shimmer"] > 0:
-        src = src * (1 + vs["shimmer"] * _slow_noise(n, sr, 30, rng))
 
     AV = up(T.curve("AV", tc, 0.0))
     AH = up(T.curve("AH", tc, 0.0))

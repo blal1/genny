@@ -120,13 +120,50 @@ MATERIALS: dict[str, ContactMaterial] = {m.name: m for m in (
     _m("aluminium", 1590.0, 0.55, 0.0, 1e10, 0.08, 2700, 69e9, 0.33, (0.0, 1e-7)),
     # church bell f/d read off the plot: 800-3500 (g06 B1)
     _m("bronze", 2000.0, 0.55, 0.0, 1e10, 0.08, 8800, 110e9, 0.34),
-    # UNSOURCED: ice, stone, concrete have no damping data in the findings; minimal glass-like guesses.
+    # UNSOURCED: ice and stone have no damping data in the findings; minimal glass-like guesses.
     _m("ice", 90.0, 0.55, 15.0, 1.495e9, 0.2, 917, 9e9, 0.33),
     _m("stone", 120.0, 0.55, 20.0, 1.495e9, 0.15, 2600, 50e9, 0.25),
-    _m("concrete", 60.0, 0.55, 40.0, 1.495e9, 0.2, 2400, 30e9, 0.2),
+    # concrete loss factor 0.02-0.05 (COMSOL "Damping in structural dynamics" table), order 1e-2 for dense
+    # concrete (NPTEL 112104040 lecture 9.6, after Cremer & Heckl): eta = 0.02 -> fd = 1/(pi eta) = 15.9.
+    # UNSOURCED: ext 40.
+    _m("concrete", 15.9, 0.55, 40.0, 1.495e9, 0.2, 2400, 30e9, 0.2),
 )}
 _ALIAS = {"aluminum": "aluminium", "porcelain": "ceramic", "iron": "metal", "plexiglass": "plastic"}
-K_SOFT, K_HARD = 5e6, 1e10          # rubber mallet .. steel mallet (g04 §1.4)
+
+# Rayleigh pairs (alpha 1/s, beta s), d = (alpha + beta w^2)/2, of the ObjectFolder 2.0 audio simulation
+# (Gao et al., CVPR 2022, supplementary Table 1; validated against recordings of the real objects).
+# Glass rings 2.8 s at 1 kHz here against 0.58 s with Ren's glass bowl: a free glass, not one on a table.
+OBJECTFOLDER_RAYLEIGH = {"ceramic": (6.0, 1e-7), "glass": (1.0, 1e-7), "wood": (60.0, 2e-6), "plastic": (30.0, 1e-6),
+                        "metal": (5.0, 1e-7), "steel": (5.0, 3e-8)}
+# Power-law damping c = mu1 w^(2 mu2), d = c/2, fitted to recordings of real objects (Sterling & Lin, I3D 2016,
+# "Interactive modal sound synthesis using generalized proportional damping", Table 1: plastic 1 = rigid bowl,
+# porcelain, wood block, aluminium). Listeners rated it at least as realistic as Rayleigh (their Table 2).
+STERLING_POWER = {"plastic": (1.13, 0.30), "ceramic": (163.0, 0.01), "wood": (6.7, 0.18), "aluminium": (0.02, 0.445)}
+# Aramaki, Besson, Kronland-Martinet & Ystad, IEEE TASLP 19(2) 2011: damping law alpha(w) = exp(aG + aR w) (eq. 4),
+# reference sounds of the "material space" (Table II): (aG, aR) per category
+ARAMAKI_REFS = {"glass": (2.5, 1.5e-4), "metal": (0.6, 2e-4), "wood": (3.0, 4e-4)}
+DAMPING_LAWS = ("friction", "rayleigh", "objectfolder", "power")
+
+
+def aramaki_point(angle_deg: float, radius: float = 1.0) -> tuple[float, float]:
+    """(aG, aR) at a point of Aramaki et al.'s material disk: glass at 0 degrees, metal at 120, wood at 240 on
+    the rim; along the rim only two neighbours are mixed (eqs 20-21); inside, (1 - r) P_C + r P(theta) with C the
+    mean of the three (eq. 22)."""
+    th = math.radians(float(angle_deg)) % (2 * math.pi)
+
+    def T(t):
+        t %= 2 * math.pi
+        if t < 2 * math.pi / 3:
+            return 1.0 - 3 * t / (2 * math.pi)
+        if t <= 4 * math.pi / 3:
+            return 0.0
+        return 3 * t / (2 * math.pi) - 2.0
+    g, m, w = ARAMAKI_REFS["glass"], ARAMAKI_REFS["metal"], ARAMAKI_REFS["wood"]
+    tg, tm, tw = T(th), T(th - 2 * math.pi / 3), T(th - 4 * math.pi / 3)
+    rim = [tg * g[i] + tm * m[i] + tw * w[i] for i in (0, 1)]
+    r = float(np.clip(radius, 0.0, 1.0))
+    c = [(g[i] + m[i] + w[i]) / 3.0 for i in (0, 1)]
+    return (1 - r) * c[0] + r * rim[0], (1 - r) * c[1] + r * rim[1]
 
 
 def get_material(name) -> ContactMaterial:
@@ -138,6 +175,13 @@ def get_material(name) -> ContactMaterial:
     return MATERIALS[key]
 
 
+def aramaki_damping(freqs, angle: float = 240.0, radius: float = 1.0) -> np.ndarray:
+    """Mode decay rates (1/s) alpha(w) = exp(aG + aR w), w = 2 pi f, at ``angle``/``radius`` of the material disk
+    (`aramaki_point`). At 1 kHz: metal 6.4/s (T60 1.1 s), glass 31/s (0.22 s), wood 247/s (28 ms)."""
+    ag, ar = aramaki_point(angle, radius)
+    return np.exp(ag + ar * TWO_PI * np.asarray(freqs, float))
+
+
 def material_damping(freqs, mat="steel", *, law: str = "friction", ext: float | None = None,
                      scatter: float | None = None, seed: int = 0) -> np.ndarray:
     """Decay rate d_n (1/s, amplitude envelope exp(-d t); T60 = 6.91/d) of each mode.
@@ -147,14 +191,23 @@ def material_damping(freqs, mat="steel", *, law: str = "friction", ext: float | 
     per-mode log-normal scatter ``J_n`` of relative spread ``scatter`` ("draw each mode's damping
     as d = f/R with R scattered 50-100 %", g06 B1). ``law="rayleigh"``:
     ``d_n = (alpha + beta (2 pi f_n)^2)/2`` (O'Brien eq. 9, Ren eq. 6; g07 §1.1, §4.1).
+    ``law="objectfolder"``: the same with the ObjectFolder 2.0 pairs. ``law="power"``:
+    ``d_n = mu1 (2 pi f_n)^(2 mu2) / 2`` (Sterling & Lin 2016). These two carry the losses of the
+    measured objects; ``ext`` (extra support loss) is added only when given. ``rayleigh`` ignores ``ext``.
     """
     mat = get_material(mat)
     f = np.asarray(freqs, float)
-    if law == "rayleigh":
-        if mat.rayleigh is None:
-            raise ValueError(f"no sourced Rayleigh pair for {mat.name}")
-        a, b = mat.rayleigh
-        return 0.5 * (a + b * (TWO_PI * f) ** 2)
+    if law not in DAMPING_LAWS:
+        raise ValueError(f"unknown damping law {law!r}; choose from {DAMPING_LAWS}")
+    if law != "friction":
+        table = {"rayleigh": {mat.name: mat.rayleigh} if mat.rayleigh else {}, "objectfolder": OBJECTFOLDER_RAYLEIGH,
+                 "power": STERLING_POWER}[law]
+        if mat.name not in table:
+            raise ValueError(f"no sourced {law} damping for {mat.name}; materials with one: {sorted(table)}")
+        a, b = table[mat.name]
+        w = TWO_PI * f
+        d = 0.5 * a * w ** (2 * b) if law == "power" else 0.5 * (a + b * w ** 2)
+        return d + (0.0 if ext is None or law == "rayleigh" else float(ext))
     cv = mat.scatter if scatter is None else float(scatter)
     j = np.ones_like(f)
     if cv > 0:
@@ -337,6 +390,7 @@ class ModalObject:
         self.mass = float(mass)
         self.name = name
         self._desc: dict = {}
+        self.radiator_radius: float | None = None   # m; set to roll off what a small body cannot radiate
 
     @classmethod
     def from_table(cls, table, f_scale: float = 1.0, position: float = 0.0, mass: float = 1.0) -> "ModalObject":
@@ -352,7 +406,13 @@ class ModalObject:
         return self.phi
 
     def audio_weights(self, bright: float = 0.5) -> np.ndarray:
-        return self.aw0 * (self.freqs / self.freqs.min()) ** (2.0 * float(np.clip(bright, 0.0, 1.0)))
+        w = self.aw0 * (self.freqs / self.freqs.min()) ** (2.0 * float(np.clip(bright, 0.0, 1.0)))
+        if self.radiator_radius:
+            # a body of radius a radiates like a pulsating sphere: |p| ~ ka / sqrt(1 + (ka)^2), rising 6 dB/oct
+            # below ka = 1 and flat above (Chaigne & Kergomard, Acoustics of Musical Instruments, eq. 12.5)
+            ka = TWO_PI * self.freqs * self.radiator_radius / 343.2
+            w = w * ka / np.sqrt(1.0 + ka * ka)
+        return w
 
     def gains(self, position=None, bright: float = 0.0) -> np.ndarray:
         """van den Doel's heard amplitudes ``a_n = Psi_n(p) / (w_n Q(p))``, ``Q = sqrt(sum Psi^2)``
@@ -1104,9 +1164,23 @@ def _out(y, sr: int, peak: float = 0.8, fade_ms: float = 8.0) -> np.ndarray:
     return y * (peak / (float(np.max(np.abs(y))) + 1e-30))
 
 
-def _k_of(hardness: float) -> float:
-    """0..1 -> log-spaced contact stiffness over the sourced range, rubber mallet 5e6 ... steel 1e10."""
-    return K_SOFT * (K_HARD / K_SOFT) ** float(np.clip(hardness, 0.0, 1.0))
+def hertz_k(e1: float, nu1: float, e2: float, nu2: float, radius: float) -> float:
+    """Hertz contact stiffness k (N/m^1.5, F = k d^1.5) of a sphere of radius ``radius`` on a flat:
+    k = 4/3 E* sqrt(R), 1/E* = (1 - nu1^2)/E1 + (1 - nu2^2)/E2 (Johnson, Contact Mechanics 1985, eqs 4.18-4.23)."""
+    e_star = 1.0 / ((1.0 - nu1 * nu1) / e1 + (1.0 - nu2 * nu2) / e2)
+    return 4.0 / 3.0 * e_star * math.sqrt(max(float(radius), 1e-6))
+
+
+def _striker_k(mat, hardness: float, mass: float) -> float:
+    """Hertz k of a spherical striker on ``mat``: hardness 0..1 runs from a rubber mallet (E 0.01 GPa, nu 0.49,
+    1100 kg/m3) to steel (200 GPa, 0.30, 7850 kg/m3), log-interpolated; radius from the mass and density.
+    UNSOURCED: the log interpolation between the two ends."""
+    h = float(np.clip(hardness, 0.0, 1.0))
+    e = 0.01e9 * (200e9 / 0.01e9) ** h
+    nu = 0.49 + (0.30 - 0.49) * h
+    rho = 1100.0 * (7850.0 / 1100.0) ** h
+    r = (3.0 * max(float(mass), 1e-6) / (4.0 * math.pi * rho)) ** (1.0 / 3.0)
+    return hertz_k(e, nu, mat.young, mat.poisson, r)
 
 
 def _series(*ks) -> float:
@@ -1122,7 +1196,7 @@ def _split_shape(shape: str):
 
 
 def _make_body(shape, mat, size, position=0.3, position2=0.37, *, freq=0.0, modes=24, damping=0.0, seed=0,
-               fmax=12000.0, scatter=None, aspect=1.3):
+               fmax=12000.0, scatter=None, aspect=1.3, law="friction"):
     """A catalog body: an analytic shape (pitch and mass from size and material) or a measured
     ``modal_data`` table name (frequencies scaled by 0.3 / size)."""
     mat = get_material(mat)
@@ -1137,9 +1211,12 @@ def _make_body(shape, mat, size, position=0.3, position2=0.37, *, freq=0.0, mode
         pos = float(np.clip(position, lo, 0.98))
         if shape.startswith("rect"):
             pos = (pos, float(np.clip(position2, 0.02, 0.98)))
-        return ShapeBody(shape, float(np.clip(f1, 20.0, 8000.0)), material=mat, boundary=boundary, aspect=asp,
+        body = ShapeBody(shape, float(np.clip(f1, 20.0, 8000.0)), material=mat, boundary=boundary, aspect=asp,
                          position=pos, n_modes=modes, fmax=fmax, mass=body_mass(shape, size, mat, aspect=asp),
-                         ext=mat.ext + max(float(damping), 0.0), scatter=scatter, seed=seed)
+                         ext=(mat.ext if law == "friction" else 0.0) + max(float(damping), 0.0), scatter=scatter,
+                         law=law, seed=seed)
+        body.radiator_radius = 0.5 * size
+        return body
     if shape not in _modal.md.TABLES:
         raise ValueError(f"unknown body {shape!r}: use one of {SHAPES} (bar_clamped, bar_supported, "
                          f"bar_clamped_clamped) or a modal table such as 'sy_vase'")
@@ -1148,6 +1225,7 @@ def _make_body(shape, mat, size, position=0.3, position2=0.37, *, freq=0.0, mode
     if freq and freq > 0:
         b.freqs = b.freqs * (float(freq) / b.freqs.min())
     b.decays = b.decays + max(float(damping), 0.0)
+    b.radiator_radius = 0.5 * size
     return b.pruned(keep=modes) if len(b.freqs) > modes else b
 
 
@@ -1286,21 +1364,30 @@ _SHAPE_HELP = "string|bar|bar_clamped|bar_supported|rect_membrane|rect_plate|cir
      position=(0.28, "0..1 strike point (bars: 0 end .. 0.5 middle; circles: 0 centre .. 1 rim); near an edge = brighter"),
      position2=(0.37, "0..1 second coordinate of the strike point on rectangles"),
      striker_mass=(0.02, "kg: heavier = louder, longer contact, darker"),
-     hardness=(0.6, "0..1 striker hardness, rubber mallet .. steel (contact stiffness 5e6 .. 1e10 N/m^1.5)"),
+     hardness=(0.6, "0..1 striker hardness, rubber mallet .. steel ball (Hertz stiffness from both materials and the striker size)"),
      velocity=(1.5, "m/s strike speed: louder and brighter"),
      hollow=(0.0, "0..1 share of a hollow air-cavity resonance of the same size"),
      damping=(2.0, "external damping 1/s: 0 freely hanging .. 30 lying on a table / held"),
      bright=(0.5, "0 dark .. 1 bright radiation"), freq=(0.0, "Hz: lowest mode, 0 = from size and material"),
-     modes=(24, "number of modes"), dur=(0.0, "s, 0 = until it has rung out (max 4 s)"), seed=(0, "variation of the mode decays"))
+     modes=(24, "number of modes"), dur=(0.0, "s, 0 = until it has rung out (max 4 s)"), seed=(0, "variation of the mode decays"),
+     law=("friction", "mode decay law: friction (default) | rayleigh (Ren) | objectfolder (free objects, glass rings 2.8 s at 1 kHz) | "
+                      "power (Sterling, fitted to recordings); the last three exist for some materials only, and `damping` is added on top"),
+     material_angle=(-1.0, "degrees on Aramaki's perceived-material disk, overriding the decays: 0 glass, 120 metal, 240 wood, "
+                           "in between = a continuous blend (-1 = off)"),
+     material_radius=(1.0, "0..1 distance from the disk centre (0 = the average of glass, metal and wood)"))
 def impact(sr=DEFAULT_SR, material="wood", shape="bar", size=0.3, position=0.28, position2=0.37, striker_mass=0.02,
-           hardness=0.6, velocity=1.5, hollow=0.0, damping=2.0, bright=0.5, freq=0.0, modes=24, dur=0.0, seed=0):
+           hardness=0.6, velocity=1.5, hollow=0.0, damping=2.0, bright=0.5, freq=0.0, modes=24, dur=0.0, seed=0, law="friction",
+           material_angle=-1.0, material_radius=1.0):
     mat = get_material(material)
     body = _make_body(shape, mat, size, position, position2, freq=freq, modes=modes, damping=damping, seed=seed,
-                      fmax=min(12000.0, 0.45 * sr))
+                      fmax=min(12000.0, 0.45 * sr), law=str(law))
+    if material_angle is not None and float(material_angle) >= 0:
+        body.decays = aramaki_damping(body.freqs, float(material_angle), float(material_radius)) + max(float(damping), 0.0)
     velocity = float(np.clip(velocity, 0.01, 30.0))
     hardness = float(np.clip(hardness, 0.0, 1.0))
     # UNSOURCED: striker dissipation vs. hardness (soft mallets lose more); the body's own mu is sourced/table.
-    it = ImpactInteractor(body, mass=float(np.clip(striker_mass, 1e-5, 50.0)), k=_series(mat.k, _k_of(hardness)),
+    m_s = float(np.clip(striker_mass, 1e-5, 50.0))
+    it = ImpactInteractor(body, mass=m_s, k=_striker_k(mat, hardness, m_s),
                           mu=max(mat.mu, 0.05 + 0.55 * (1.0 - hardness)), bright=bright)
     T = float(np.clip(dur, 0.03, 12.0)) if dur and dur > 0 else _tail(body) + 0.02
     y = it.strike(velocity, T, sr).audio
@@ -1480,6 +1567,99 @@ def scrape(sr=DEFAULT_SR, dur=0.8, speed=0.3, force=1.0, roughness=0.5, texture=
     fade = np.minimum(1.0, np.minimum(np.arange(n), n - 1 - np.arange(n)) / max(1.0, 0.005 * sr))
     f = scrape_force(prof, np.clip(_curve(speed, n), 0.0, 50.0), np.clip(_curve(force, n), 0.0, 10.0) * fade,
                      float(np.clip(grain, 0.005, 20.0)) * 1e-3, sr)
+    return _out(modal_bank(f, b, sr, bright)[0], sr, 0.7, 15.0)
+
+
+# ---------------------------------------------------------------- continuous interactions (Conan)
+# Conan et al., "Navigating in a space of synthesized interaction-sounds: rubbing, scratching and rolling"
+# (DAFx-13, eqs 3-9) and "A synthesis model with intuitive control capabilities for rolling sounds" (IEEE TASLP
+# 22(8):1260, 2014, eqs 6-9, 16-17, Table I). Every action is a train of raised-cosine impacts whose amplitudes A
+# and intervals dT come from one shared white process W through inverse CDFs and 1-pole 1-zero ARMA filters:
+# rubbing = one impact per sample (white noise), scratching = sparse impacts with exponential intervals, rolling =
+# strongly correlated Gaussian series whose contact time grows with the ball (t0 = 7.88e-4 S A^-0.29 s) plus an
+# amplitude modulation at 3 V / S Hz. The three parameter sets are mixed linearly on Conan's circle (eqs 6-9),
+# and the train is low-passed at a cutoff that follows the sliding speed (van den Doel) before driving the body.
+_CONAN_ROLL = {  # Table I, roughness 0 -> 1: sigma, a1, b1, mean; dT in s
+    "A": ((0.04, 0.04), (-0.97, -0.93), (0.07, 0.32), (0.43, 0.27)),
+    "dT": ((0.19e-3, 0.85e-3), (-0.97, -0.93), (-0.34, 0.35), (3.1e-3, 6.4e-3)),
+}
+CONAN_SCRATCH_DT = 0.012   # UNSOURCED: mean scratch interval; Conan only says "low density, exponential"
+CONAN_RUB_SIGMA = 0.43     # UNSOURCED: rub/scratch amplitude spread, set to the rolling mean amplitude
+
+
+def conan_weights(angle: float = 0.0, radius: float = 1.0) -> np.ndarray:
+    """(rub, scratch, roll) weights at ``angle`` degrees (0 rub, 120 scratch, 240 roll) and ``radius`` 0..1
+    (0 = the centre, an equal mix): T(theta) of DAFx-13 eq. 7 around the rim, eq. 8 inwards."""
+    def T(t):
+        t = t % TWO_PI
+        return 1.0 - 3.0 * t / TWO_PI if t <= TWO_PI / 3 else (3.0 * t / TWO_PI - 2.0 if t >= 2 * TWO_PI / 3 else 0.0)
+    th = math.radians(float(angle))
+    rim = np.array([T(th), T(th - TWO_PI / 3), T(th - 2 * TWO_PI / 3)])
+    r = float(np.clip(radius, 0.0, 1.0))
+    return (1.0 - r) / 3.0 + r * rim
+
+
+@numba.njit(cache=True)
+def _pulse_train(n, idx, amp, length):
+    """Raised-cosine impacts (TASLP eq. 9), each centred over its own length in samples."""
+    f = np.zeros(n)
+    for e in range(len(idx)):
+        L = length[e]
+        s = idx[e] - L // 2
+        for k in range(L):
+            j = s + k
+            if 0 <= j < n:
+                f[j] += amp[e] * 0.5 * (1.0 + math.cos(TWO_PI * (k + 0.5 - 0.5 * L) / L))
+    return f
+
+
+def conan_force(n: int, sr: int, weights, roughness: float = 0.5, size: float = 0.5, speed: float = 0.3,
+                seed: int = 0) -> np.ndarray:
+    """The interaction force (before the speed low-pass) for (rub, scratch, roll) ``weights``. roughness 0..1 is
+    Table I's rho, size the normalised ball radius S (0.1..1), speed in m/s sets the rolling modulation."""
+    w = np.asarray(weights, float) / max(float(np.sum(weights)), 1e-12)
+    rho = float(np.clip(roughness, 0.0, 1.0))
+    S = float(np.clip(size, 0.1, 1.0))
+    roll = {k: [lo + rho * (hi - lo) for lo, hi in v] for k, v in _CONAN_ROLL.items()}
+    sa, a1a, b1a, ma = roll["A"]
+    sd, a1d, b1d, md = roll["dT"]
+    mean_dt = w[0] / sr + w[1] * CONAN_SCRATCH_DT + w[2] * md
+    m = int(n / sr / mean_dt * 1.3) + 64
+    rng = np.random.default_rng(seed)
+    W = np.clip(rng.random(m), 1e-9, 1 - 1e-9)
+    g = special.ndtri(W)                                     # one W drives both series (TASLP Fig. 5)
+    expo = -np.log1p(-W) - 1.0                               # centred unit exponential
+    cA = lfilter([1.0, w[2] * b1a], [1.0, w[2] * a1a], (w[0] + w[1]) * CONAN_RUB_SIGMA * g + w[2] * sa * g)
+    cD = lfilter([1.0, w[2] * b1d], [1.0, w[2] * a1d], w[1] * CONAN_SCRATCH_DT * expo + w[2] * sd * g)
+    A = w[2] * ma + cA
+    dT = np.maximum(mean_dt + cD, 1.0 / sr)
+    t = np.cumsum(dT) - dT[0]
+    keep = t < n / sr
+    t, A = t[keep], A[keep]
+    t0 = (w[0] + w[1]) / sr + w[2] * 7.88e-4 * S * np.abs(np.maximum(np.abs(A), 1e-3)) ** (-0.29 * w[2])
+    L = np.maximum(np.round(t0 * sr), 1).astype(np.int64)
+    f = _pulse_train(n, np.round(t * sr).astype(np.int64), A, L)
+    V = float(np.clip(speed, 0.1, 1.0))                      # UNSOURCED: Conan's normalised V read as m/s
+    return f * (1.0 + 0.3 * w[2] * np.sin(TWO_PI * 3.0 * V / S * np.arange(n) / sr))
+
+
+@sfx("interaction", "Rubbing, scratching or rolling, and anything between: one impact-train model (Conan) morphing on a circle, driving any body.",
+     dur=(1.0, "s"), action=(0.0, "degrees on Conan's circle: 0 rub, 120 scratch, 240 roll; between = a blend"),
+     blend=(1.0, "0..1 distance from the centre: 1 = the pure action, 0 = an equal mix of all three"),
+     speed=(0.3, "m/s; number or list of breakpoints: brightness (low-pass) and the rolling wobble"),
+     roughness=(0.5, "0 smooth .. 1 rough surface (Conan's Table I)"),
+     ball=(0.5, "0.1..1 size of the rolling object: longer contacts, slower wobble"),
+     body=("rect_plate", _SHAPE_HELP + " or a modal table (sy_vase, sy_sword1...)"),
+     material=("wood", _MAT_HELP + ": the surface"), size=(0.4, "m: size of the surface"),
+     position=(0.3, "0..1 where it is touched"), bright=(0.5, "0 dark .. 1 bright"), seed=(0, "variation"))
+def interaction(sr=DEFAULT_SR, dur=1.0, action=0.0, blend=1.0, speed=0.3, roughness=0.5, ball=0.5, body="rect_plate",
+                material="wood", size=0.4, position=0.3, bright=0.5, seed=0):
+    n = samples(float(np.clip(dur, 0.03, 120.0)), sr)
+    v = np.clip(_curve(speed, n), 0.0, 50.0)
+    f = conan_force(n, sr, conan_weights(action, blend), roughness, ball, float(np.mean(v)), seed)
+    # UNSOURCED: cutoff = 15 kHz per m/s (van den Doel and Conan give only the proportionality), and silence at rest
+    f = F.svf(f, "lowpass", np.clip(15000.0 * v, 150.0, 0.45 * sr), sr) * np.clip(v / 0.02, 0.0, 1.0)
+    b = _make_body(body, material, size, position, modes=28, damping=8.0, seed=seed, fmax=min(10000.0, 0.45 * sr))
     return _out(modal_bank(f, b, sr, bright)[0], sr, 0.7, 15.0)
 
 

@@ -528,6 +528,21 @@ def _powerlaw(rng, n, lo, hi, gamma):
     return (lo ** a + u * (hi ** a - lo ** a)) ** (1.0 / a)
 
 
+def broken_powerlaw(rng, n, lo, hi, r_break, g_small, g_large):
+    """Samples of a continuous broken power law p(x) ~ x**g_small below ``r_break`` and ~ x**g_large above."""
+    lo, hi = float(lo), float(hi)
+    rb = float(np.clip(r_break, lo, hi))
+    def mass(a, b, g):
+        return (math.log(b / a) if abs(g + 1) < 1e-9 else (b ** (g + 1) - a ** (g + 1)) / (g + 1)) if b > a else 0.0
+    m1 = mass(lo, rb, g_small)
+    m2 = mass(rb, hi, g_large) * rb ** (g_small - g_large)            # continuous at the break
+    small = rng.random(n) < m1 / (m1 + m2 + 1e-300)
+    out = np.empty(n)
+    out[small] = _powerlaw(rng, int(small.sum()), lo, rb, g_small)
+    out[~small] = _powerlaw(rng, int((~small).sum()), rb, hi, g_large)
+    return out
+
+
 def granular_footstep_texture(force: np.ndarray, ground: str, rng: np.random.Generator, *,
                               energy: float | None = None, density: float = 1.0,
                               gamma: float = VISELL_GAMMA, tone_coherence: bool = True,
@@ -602,7 +617,8 @@ def granular_footstep_texture(force: np.ndarray, ground: str, rng: np.random.Gen
 # Bubbles
 # --------------------------------------------------------------------------------------------
 
-MINNAERT_FR = 3.29        # f0 * r0 for air in water, m/s (Moss eq. 1, derived in research 06 3.1)
+MINNAERT_FR = 3.29        # f0 * r0 for air in water, m/s (Moss eq. 1, derived in research 06 3.1): sqrt(3*1.4*101325/998)/2pi.
+                          # Langlois et al. 2016 quote 6.52/d_mm kHz (3.26, denser water): 0.9 % apart, kept.
 DELTA_RAD = 0.0139        # radiative damping, water (derived in research 06 3.1)
 DELTA_TH = 0.02           # UNSOURCED: thermal damping, G_th not given by Moss; research 06 sketch value
 MOSS_XI = 0.1             # rising-chirp constant (Moss, after van den Doel 2005)
@@ -635,7 +651,9 @@ def bubble_field(dur: float, rng: np.random.Generator, rate: float | np.ndarray 
 
     rate: bubbles per second (Poisson), a number or a per-sample envelope (Moss: formation follows
       Gamma = u**2 kappa, i.e. bursts at crests / fast flow - pass that envelope here).
-    alpha: radius power law p(r) ~ r**-alpha (surf 1.5-3.3, rain 2.9), truncated to r_range (metres).
+    alpha: radius power law p(r) ~ r**-alpha (rain 2.9), truncated to r_range (metres); or a tuple
+      (alpha_small, alpha_large, r_break) for a broken law, e.g. breaking waves (1.5, 10/3, 1e-3): jet and drop
+      impact below the Hinze scale, turbulent fragmentation above (Deane & Stokes, Nature 418:839, 2002).
     eps: (lo, hi, mu) initial displacement, power law g(eps) ~ eps**-mu on [lo, hi] (Moss: [0.01, 0.1],
       most below 10 %; mu = 2 is UNSOURCED, research 06 sketch).
     Each bubble: p(t) = eps r sin(2 pi f0 (t + xi b0 t^2/2)) exp(-b0 t), f0 = 3.29/r,
@@ -651,7 +669,11 @@ def bubble_field(dur: float, rng: np.random.Generator, rate: float | np.ndarray 
         lam[: len(r_)] = r_
     starts = np.flatnonzero(rng.random(n) < np.clip(lam / SR, 0, 1)).astype(np.int64)
     k = len(starts)
-    r = _powerlaw(rng, k, r_range[0], r_range[1], -alpha)
+    if np.ndim(alpha):
+        a_s, a_l, rb = alpha
+        r = broken_powerlaw(rng, k, r_range[0], r_range[1], rb, -a_s, -a_l)
+    else:
+        r = _powerlaw(rng, k, r_range[0], r_range[1], -alpha)
     e = _powerlaw(rng, k, eps[0], eps[1], -eps[2])
     f0 = MINNAERT_FR / r
     beta = np.pi * f0 * (DELTA_RAD + delta_th)

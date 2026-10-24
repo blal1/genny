@@ -206,18 +206,22 @@ def test_register_hole_overblows():
 
 # ------------------------------------------------------------------------------------------ voice
 def test_vowel_formants():
-    """F1/F2 of the tract shapes vs Peterson & Barney (1952) adult-male averages, +-15 %. /a/ is Bilbao's table
-    (Fant's Russian /a/, usually quoted near 650 / 1080 Hz)."""
-    pb = {"a": (730, 1090), "i": (270, 2290), "u": (300, 870)}
+    """F1/F2 of the tract shapes vs the formants Story computed for the same MRI area functions (JASA 123, 2008,
+    Table II, rows F1C/F2C), +-15 %. Exception: F1 of /i/ and /u/, 25 %: Story's calculation has yielding walls, which
+    raise the first formant of closed vowels; this tube is rigid (257 / 253 Hz against his 325 / 314)."""
+    pb = {"a": (694, 942), "i": (325, 2139), "u": (314, 702)}
     for v, want in pb.items():
         tr = T._tract(v)
         got = tr.resonances(4000.0, kind="u")[:2]
         sim = _peaks(tr.run(_impulse(SR))["u_out"], 4000.0)[:2]            # the kernel says the same
-        assert np.max(np.abs(got / np.array(want) - 1)) < 0.15, (v, got)
-        assert np.max(np.abs(sim / got - 1)) < 0.01, (v, sim, got)
-        print("/%s/  F1 %.0f  F2 %.0f   (Peterson-Barney %d, %d)" % (v, got[0], got[1], want[0], want[1]))
+        tol = np.array([0.25, 0.15]) if v in ("i", "u") else 0.15
+        assert np.all(np.abs(got / np.array(want) - 1) < tol), (v, got)
+        # 2 %: at 48 kHz the kernel has about 24 cells along the tract, coarser than Story's 44 measured sections,
+        # so it smooths the /a/ constriction (F1 680 Hz against 690 from the exact transfer matrix)
+        assert np.max(np.abs(sim / got - 1)) < 0.02, (v, sim, got)
+        print("/%s/  F1 %.0f  F2 %.0f   (Story 2008 %d, %d)" % (v, got[0], got[1], want[0], want[1]))
     fa = T._tract("a").resonances(4000.0, kind="u")[:2]
-    assert abs(fa[0] / 650 - 1) < 0.05 and abs(fa[1] / 1080 - 1) < 0.05
+    assert abs(fa[0] / 694 - 1) < 0.05 and abs(fa[1] / 942 - 1) < 0.05   # the open vowel: Story's own value
 
 
 def test_vowel_morph():

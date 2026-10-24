@@ -21,6 +21,48 @@ from .notes import parse_pitch_list, parse_sequence
 
 DEFAULT_MAX_LOUDNESS = -6.0   # ear-weighted dB (see analysis.ear_loudness); "max_loudness": null disables
 
+# "loudness" presets: integrated LUFS (ITU-R BS.1770) with true peak <= -1 dBTP.
+# streaming: Spotify normalisation (-14 LUFS, -1 dBTP); broadcast: EBU R128 (-23 LUFS);
+# console: Sony ASWG (-23 LUFS +-2 LU for PS3/PS4 games); mobile: Sony ASWG handheld (-18 LUFS).
+LOUDNESS_PRESETS = {"streaming": -14.0, "broadcast": -23.0, "console": -23.0, "mobile": -18.0}
+
+
+def master_loudness(y: np.ndarray, sr: int, target, true_peak: float = -1.0, loop: bool = False) -> np.ndarray:
+    """Gain ``y`` to an integrated loudness (preset name or LUFS), then hold the true peak under ``true_peak`` dBTP.
+
+    Short sounds are measured padded to 0.5 s. A peak over the limit is soft-kneed (tanh), or for loops
+    turned down with plain gain so the seam stays whole.
+    """
+    import pyloudnorm
+    from .physical.core import _true_peak
+    if isinstance(target, str):
+        if target not in LOUDNESS_PRESETS:
+            raise SpecError(f"unknown loudness preset {target!r}; use a LUFS number or one of {sorted(LOUDNESS_PRESETS)}")
+        target = LOUDNESS_PRESETS[target]
+    x = np.asarray(y, dtype=np.float64)
+    if not np.any(x):
+        return x
+    need = int(0.5 * sr)
+    measure = x if x.shape[0] >= need else np.pad(x, [(0, need - x.shape[0])] + [(0, 0)] * (x.ndim - 1))
+    loud = pyloudnorm.Meter(sr).integrated_loudness(measure)
+    if not np.isfinite(loud):
+        # every block under the -70 LUFS absolute gate: lift the peak to -20 dBFS and measure again
+        g = 0.1 / float(np.max(np.abs(x)))
+        x, measure = x * g, measure * g
+        loud = pyloudnorm.Meter(sr).integrated_loudness(measure)
+    if np.isfinite(loud):
+        x = x * 10 ** ((float(target) - loud) / 20)
+    limit = 10 ** (float(true_peak) / 20)
+    peak = _true_peak(x)
+    if peak > limit:
+        if loop:
+            x = x * (limit / peak)
+        else:
+            x = x * min(1.0, 2 * limit / peak)
+            x = limit * np.tanh(x / limit)
+            x = x * min(1.0, limit / _true_peak(x))
+    return x
+
 
 class SpecError(ValueError):
     pass
@@ -217,6 +259,11 @@ def render_spec(spec: dict, sr: int | None = None) -> tuple[np.ndarray, int]:
             y = trim_tail(y, sr=sr)
         if spec.get("declick", True):
             y = declick(y, sr)
+    if spec.get("loudness") is not None:
+        # integrated-loudness mastering replaces peak normalising and the ear-weighted ceiling
+        y = master_loudness(y, sr, spec["loudness"], float(spec.get("true_peak", -1.0)), loop=bool(loop) and not fold)
+        y = y * float(spec.get("gain", 1.0))
+        return np.clip(y, -1, 1), sr
     lvl = spec.get("normalize", -1.0)
     if lvl is not None and lvl is not False:
         y = normalize(y, float(lvl))
@@ -258,7 +305,7 @@ def load_specs(source: str | Path | dict | list) -> list[dict]:
         specs = []
         for sp in data["sounds"]:
             sp = dict(sp)
-            for k in ("sr", "fx", "normalize", "max_loudness", "bpm"):
+            for k in ("sr", "fx", "normalize", "max_loudness", "loudness", "true_peak", "bpm"):
                 if k in data and k not in sp:
                     sp[k] = data[k]
             if out_dir and "out" in sp and not Path(sp["out"]).is_absolute():

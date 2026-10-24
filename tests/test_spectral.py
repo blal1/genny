@@ -229,6 +229,34 @@ def test_sines_noise_model():
     assert abs(np.corrcoef(S.noise_only(ton + nz, SR)[sl], ton[sl])[0, 1]) < 0.1
 
 
+def test_transients_move_with_the_stretch_but_keep_their_length():
+    """Verma & Meng's S+T+N: clicks found as sines in the block DCT land at stretch * onset, still short."""
+    rng = np.random.default_rng(0)
+    n = 2 * SR
+    t = np.arange(n) / SR
+    clicks, L, at = np.zeros(n), int(0.01 * SR), (0.2, 0.7, 1.1, 1.6)
+    for t0 in at:
+        i = int(t0 * SR)
+        clicks[i:i + L] += rng.standard_normal(L) * np.exp(-np.arange(L) / (0.002 * SR)) * 0.8
+    x = clicks + 0.3 * np.sin(2 * np.pi * 440 * t) + 0.02 * rng.standard_normal(n)
+    m = S.analyze(x, SR, transients=True)
+    T = S.resynth(m, sines_gain=0, noise_gain=0)
+    near = np.zeros(n, bool)
+    for t0 in at:
+        near[int(t0 * SR) - 200:int(t0 * SR) + 2 * L] = True
+    assert np.sum(T[near] ** 2) > 0.6 * np.sum(clicks ** 2) and np.sum(T[~near] ** 2) < 0.05 * np.sum(T ** 2)
+    T2 = S.resynth(m, stretch=2.0, sines_gain=0, noise_gain=0)
+    near2 = np.zeros(2 * n, bool)
+    for t0 in at:
+        near2[int(2 * t0 * SR) - 200:int(2 * t0 * SR) + 2 * L] = True                # same 2 L window: not stretched
+    assert np.sum(T2[near2] ** 2) > 0.8 * np.sum(T2 ** 2)
+    assert abs(np.sum(T2 ** 2) / np.sum(T ** 2) - 1) < 0.2
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "m.json")
+        S.save_model(m, p)
+        assert np.allclose(S.resynth(S.load_model(p)), S.resynth(m))
+
+
 def test_formant_in_resynth():
     """transpose with formant 0 keeps the envelope peak; formant == transpose moves it."""
     m = S.analyze(voice(), SR)

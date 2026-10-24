@@ -782,12 +782,16 @@ def cyber_voice(x, sr=DEFAULT_SR, formant=-3.0, pitch=110.0, vocode=0.6, ring=70
 # imposed on noise by iteration while each band keeps its own fine structure.
 # ponytail: a reduced statistic set. Kept: the envelope marginals (as 64 quantiles, which carry the
 # paper's mean, variance, skew and kurtosis), the full band-to-band envelope correlation, and the
-# modulation power in 9 octave bands from 0.5 Hz. Dropped: the C1 and C2 modulation correlations, so
-# sharp asymmetric onsets (fire crackle, applause) come out softer. Imposed by projection (Cholesky
-# recolouring, band rescaling, rank matching) instead of the paper's conjugate-gradient search.
+# modulation power in 9 octave bands from 0.5 Hz, the C1 correlations (each octave modulation band
+# 2-128 Hz across all cochlear bands, where the paper keeps the two nearest neighbours over 3-100 Hz)
+# and the C2 correlations (frequency-doubled analytic band against the next octave up, 1-128 Hz:
+# the phase that tells an abrupt onset from an offset or a click). Imposed by projection (Cholesky
+# recolouring, rotation onto the target complex correlation, band rescaling, rank matching) instead
+# of the paper's conjugate-gradient search.
 
 TEX_BANDS, TEX_ENV_SR, TEX_POW, TEX_Q = 30, 400.0, 0.3, 64
 _TEX_MOD = 0.5 * 2.0 ** np.arange(10)                        # modulation band edges, Hz
+_TEX_C1, _TEX_C2 = range(2, 8), range(1, 7)                  # modulation bands with C1; lower band of each C2 pair
 
 
 def _erb(f):
@@ -828,16 +832,38 @@ def _tex_masks(m: int):
     return [(fm >= lo) & (fm < hi) for lo, hi in zip(_TEX_MOD[:-1], _TEX_MOD[1:])]
 
 
+def _tex_analytic(Zf: np.ndarray, k: np.ndarray, m: int) -> np.ndarray:
+    """Analytic signals (bands, m) of the envelopes' modulation band ``k`` (a mask on the rfft bins)."""
+    A = np.zeros((len(Zf), m), complex)
+    k = np.flatnonzero(k)
+    A[:, k] = 2.0 * Zf[:, k]
+    return np.fft.ifft(A, axis=1)
+
+
+def _tex_double(a: np.ndarray) -> np.ndarray:
+    """McDermott & Simoncelli's frequency doubling d = a^2 / |a|: twice the phase, same magnitude."""
+    return a * a / (np.abs(a) + 1e-30)
+
+
+def _tex_unit(a: np.ndarray) -> np.ndarray:
+    return a / (np.linalg.norm(a, axis=1, keepdims=True) + 1e-30)
+
+
 def texture_stats(x: np.ndarray, sr: int = DEFAULT_SR) -> dict:
     """Envelope statistics of a recording (at least a second or two of a steady texture)."""
     x = to_mono(np.asarray(x, float))
     n = _tex_len(len(x))
     m = int(n * TEX_ENV_SR / sr)
     env, _ = _tex_envelopes(x[:n], _tex_bank(n, sr), m)
-    P = np.abs(np.fft.rfft(env - env.mean(axis=1, keepdims=True), axis=1)) ** 2
-    mod = np.stack([P[:, k].sum(axis=1) for k in _tex_masks(m)], axis=1) / (P[:, 1:].sum(axis=1, keepdims=True) + 1e-30)
+    Zf = np.fft.rfft(env - env.mean(axis=1, keepdims=True), axis=1)
+    P = np.abs(Zf) ** 2
+    masks = _tex_masks(m)
+    mod = np.stack([P[:, k].sum(axis=1) for k in masks], axis=1) / (P[:, 1:].sum(axis=1, keepdims=True) + 1e-30)
+    A = [_tex_analytic(Zf, k, m) for k in masks]
+    c1 = np.nan_to_num(np.stack([np.corrcoef(A[j].real) for j in _TEX_C1]))
+    c2 = np.stack([np.sum(np.conj(_tex_unit(_tex_double(A[j]))) * _tex_unit(A[j + 1]), axis=1) for j in _TEX_C2], axis=1)
     return {"sr": int(sr), "quantiles": np.quantile(env, np.linspace(0, 1, TEX_Q), axis=1).T, "modulation": mod,
-            "corr": np.corrcoef(env)}
+            "corr": np.corrcoef(env), "c1": c1, "c2": c2}
 
 
 def texture_synth(stats: dict, dur: float, seed: int = 0, iters: int = 12) -> np.ndarray:
@@ -853,6 +879,8 @@ def texture_synth(stats: dict, dur: float, seed: int = 0, iters: int = 12) -> np
     eye = 1e-3 * np.eye(B)
     Lt = np.linalg.cholesky(stats["corr"] + eye)
     masks = _tex_masks(m)
+    Lc1 = [np.linalg.cholesky(c + eye) for c in stats["c1"]]
+    c2 = stats["c2"]
     x = np.random.default_rng(int(seed)).standard_normal(n)
     for _ in range(max(1, int(iters))):
         env, ph = _tex_envelopes(x, H, m)
@@ -860,6 +888,26 @@ def texture_synth(stats: dict, dur: float, seed: int = 0, iters: int = 12) -> np
         z /= z.std(axis=1, keepdims=True) + 1e-12
         z = Lt @ np.linalg.solve(np.linalg.cholesky(np.corrcoef(z) + eye), z)
         Zf = np.fft.rfft(z, axis=1)
+        for i, j in enumerate(_TEX_C1):                        # C1: recolour each modulation band across bands
+            k = masks[j]
+            if k.sum() < 2 or not np.trace(stats["c1"][i]):        # band empty in the source
+                continue
+            Zb = np.zeros_like(Zf)
+            Zb[:, k] = Zf[:, k]
+            b = np.fft.irfft(Zb, m, axis=1)
+            s = b.std(axis=1, keepdims=True) + 1e-12
+            w = Lc1[i] @ np.linalg.solve(np.linalg.cholesky(np.corrcoef(b / s) + eye), b / s)
+            Zf[:, k] = np.fft.rfft(w * s, axis=1)[:, k]
+        for i, j in enumerate(_TEX_C2):                        # C2: rotate the upper band onto the target phase
+            k = masks[j + 1]
+            if k.sum() < 2 or masks[j].sum() < 2:
+                continue
+            dn = _tex_unit(_tex_double(_tex_analytic(Zf, masks[j], m)))
+            a = _tex_analytic(Zf, k, m)
+            r = _tex_unit(a - np.sum(np.conj(dn) * a, axis=1, keepdims=True) * dn)
+            c = c2[:, i:i + 1]
+            a = np.linalg.norm(a, axis=1, keepdims=True) * (c * dn + np.sqrt(np.maximum(1.0 - np.abs(c) ** 2, 0.0)) * r)
+            Zf[:, k] = np.fft.rfft(a.real, axis=1)[:, k]
         P = np.abs(Zf) ** 2
         tot = P[:, 1:].sum(axis=1)
         for j, k in enumerate(masks):

@@ -52,7 +52,7 @@ All the common layer keys (`at`, `gain`, `fx`, `repeat` / `every`, `bpm`) work o
 | `range` | by role | `"C4-C6"`; melody C4–C6, bass E1–G3, chords and pad C3–C5, counter G3–G5 |
 | `seed` | 0 | the take |
 | `swing` | style's | delays every other grid step by this fraction of a step (as in `pattern`); `swing_grid` picks the step |
-| `humanize` | 0 | 0..1, or `{"time": ms, "vel": 0..1}`: Gaussian onset jitter (1 → 10 ms) and Beta(0.2, 0.2) velocity spread (1 → 13 %) |
+| `humanize` | 0 | 0..1, or `{"time": ms, "vel": 0..1}`: onset deviations that are half 1/f, half white (long-range drift over phrases, hit-to-hit anticorrelation, as measured on real drummers), 1 → 0.98 % of a beat (6 ms at 96 bpm); 1/f velocity spread (1 → 13 %). Notes of a chord move together |
 | `drift` | 0 | tempo drift ±fraction (0.04 = ±4 %) in slow ~20 s waves; the total length does not change |
 
 Per role:

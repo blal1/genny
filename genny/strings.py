@@ -13,6 +13,29 @@ import numpy as np
 from .graphsolver import ThiranDelay, FrequencyDependentLoss, StiffStringDispersion
 
 
+def rauhala_dispersion(f0: float, B: float, sr: int, M: int = 4) -> tuple:
+    """Coefficients of M identical first-order allpasses (a + z^-1)/(1 + a z^-1) that make a waveguide
+    loop's partials follow f_k = k f0 sqrt(1 + B k^2): Rauhala & Valimaki's closed form (DAFx-06 eqs 3-8,
+    Table 2), fitted at 44.1 kHz, so it is evaluated at the same normalised frequency f0 * 44100 / sr.
+    Within ~7 cents over 15 partials for guitar and piano values up to B 3e-4. M drops until the
+    cascade's DC delay M*D fits in half a period."""
+    if B < 1e-7 or f0 <= 0:
+        return ()
+    ikey = 12.0 * math.log2(f0 * 44100.0 / sr / 27.5) + 1.0
+    # ponytail: B held at 4e-4, the top of the piano data the formula was fitted on; the wound bass strings'
+    # geometry gives up to 3e-3 on E1, which would put the low notes 20-30 cents sharp to the ear
+    lb = math.log(min(B, 4e-4))
+    kd = math.exp(-0.00179 * lb * lb - 0.0233 * lb - 2.93)
+    while M > 1:
+        cd = math.exp((0.0126 * math.log(M) + 0.0606) * lb - 0.00825 * math.log(M) + 1.97)
+        if M * math.exp(cd - ikey * kd) < 0.5 * sr / f0:
+            break
+        M -= 1
+    cd = math.exp((0.0126 * math.log(M) + 0.0606) * lb - 0.00825 * math.log(M) + 1.97)
+    D = math.exp(cd - ikey * kd)
+    return ((1.0 - D) / (1.0 + D),) * M
+
+
 @dataclass(frozen=True)
 class StringMaterial:
     name: str
@@ -220,10 +243,17 @@ class WoundStringPhysicalProperties:
 
 @numba.njit(cache=True)
 def _string_kernel(exc, n, dx, dy, maxd, pc, damp_gain,
-                   xdc, xhf, xs, ydc, yhf, ys, xa, ya, la1, la2, dc_r):
+                   xdc, xhf, xs, ydc, yhf, ys, xa, ya, la1, la2, dc_r, glide=0.0):
     """The whole `DispersiveString.step` loop for a fresh string with a fixed length and no bridge
     input: two polarisation delay lines (integer delay + Thiran allpass), dispersion allpasses,
-    loss filters, longitudinal resonator, output DC blocker. Same arithmetic as the class, compiled."""
+    loss filters, longitudinal resonator, output DC blocker. Same arithmetic as the class, compiled.
+
+    glide > 0: tension modulation (Tolonen, Valimaki & Karjalainen, IEEE TSAP 8(3), 2000). The string's
+    elongation is taken as the energy in one loop of the delay line (eq. 15 summed over a period, where
+    its twice-frequency cross terms average out), smoothed by a leaky integrator with a one-loop time
+    constant (eqs 11-13), and shortens both delays by the relative speed rise (eq. 18). ``glide`` is that
+    rise at the first full loop (the paper fits its scale to recordings; genny's waves carry no units),
+    so the pitch starts sharp by 1200 log2(1 + glide) cents and falls as the note decays."""
     size = maxd + 8
     bx = np.zeros(size); by = np.zeros(size)
     out = np.zeros(n)
@@ -235,7 +265,18 @@ def _string_kernel(exc, n, dx, dy, maxd, pc, damp_gain,
     dyx = np.zeros(len(ya)); dyy = np.zeros(len(ya))
     lsx = 0.0; lsy = 0.0; ly1 = 0.0; ly2 = 0.0; px = 0.0; py = 0.0
     w = 0
+    esum = 0.0; esm = 0.0; kap = 0.0
+    nl = max(2, int(dx))
+    ap_ = -math.exp(-1.0 / nl)                          # eq. 13: tau = one loop
+    ref = nl + len(exc)
     for i in range(n):
+        if glide > 0.0:
+            if i == ref:
+                kap = glide / max(esm, 1e-30)
+            dd = dx * (1.0 - kap * esm); de = dy * (1.0 - kap * esm)
+            ix = int(math.floor(dd - 0.5)); fx = dd - ix   # Thiran fraction kept in [0.5, 1.5)
+            iy = int(math.floor(de - 0.5)); fy = de - iy
+            ax = (1.0-fx)/(1.0+fx); ay = (1.0-fy)/(1.0+fy)
         v = bx[(w-ix) % size]
         if fx < 1e-8:
             x = v; tx1 = v; ty1 = v
@@ -256,6 +297,10 @@ def _string_kernel(exc, n, dx, dy, maxd, pc, damp_gain,
         lsx = xs*lsx + (1.0-xs)*xv; xv = xdc*lsx + xhf*(xv-lsx)
         lsy = ys*lsy + (1.0-ys)*yv; yv = ydc*lsy + yhf*(yv-lsy)
         xv *= damp_gain; yv *= damp_gain
+        if glide > 0.0:
+            old = bx[(w-nl) % size]
+            esum += xv*xv - old*old
+            esm = -ap_*esm + (1.0+ap_)*esum              # eq. 12, unit DC gain
         bx[w] = xv; by[w] = yv; w = (w+1) % size
         ly = la1*ly1 + la2*ly2 + 0.0015*(-0.5*(xv+yv)); ly2 = ly1; ly1 = ly
         raw = xv + 0.25*yv + 0.03*ly
@@ -289,9 +334,9 @@ class DispersiveString:
         hf_gain = max(0.0, loop_gain - min(0.12, 0.015 + 12.0 * p.inharmonicity_B))
         self.x_loss = FrequencyDependentLoss(loop_gain, hf_gain, 0.45)
         self.y_loss = FrequencyDependentLoss(loop_gain**1.0002, max(0.0, hf_gain*0.999), 0.48)
-        disp_amount = float(np.clip(math.sqrt(max(p.inharmonicity_B, 0.0)) * 18.0, 0.0, 1.0))
-        self.x_disp = StiffStringDispersion(disp_amount, sections=3)
-        self.y_disp = StiffStringDispersion(min(1.0, disp_amount*1.05), sections=3)
+        disp = rauhala_dispersion(p.frequency_hz, p.inharmonicity_B, self.sr)
+        self.x_disp = StiffStringDispersion(coefficients=disp)
+        self.y_disp = StiffStringDispersion(coefficients=rauhala_dispersion(f2, p.inharmonicity_B, self.sr))
         self.x_delay.delay = self.loop_delay(p.frequency_hz)
         self.y_delay.delay = self.loop_delay(f2, plane="y")
         self.x_in = 0.0; self.y_in = 0.0; self._read = None
@@ -397,7 +442,7 @@ class DispersiveString:
     def energy_proxy(self) -> float:
         return float(self.x_in*self.x_in + self.y_in*self.y_in + 0.1*(self._ly1*self._ly1+self._ly2*self._ly2))
 
-    def _run(self, exc: np.ndarray, n: int, position: float, damper: float = 0.0) -> np.ndarray:
+    def _run(self, exc: np.ndarray, n: int, position: float, damper: float = 0.0, glide: float = 0.0) -> np.ndarray:
         """Render `n` samples of a fresh string driven by `exc` (compiled). The excitation first goes
         through the pluck-position comb: a string released at a fraction `position` of its length
         has no partials with a node there (JOS, extended Karplus-Strong)."""
@@ -414,15 +459,16 @@ class DispersiveString:
                               xl.dc_gain, xl.hf_gain, xl.smoothing, yl.dc_gain, yl.hf_gain, yl.smoothing,
                               np.array([f.coefficient for f in self.x_disp.filters]),
                               np.array([f.coefficient for f in self.y_disp.filters]),
-                              self._la1, self._la2, self._dc_r)
+                              self._la1, self._la2, self._dc_r, float(max(glide, 0.0)))
 
     def render_pluck(self, dur: float, *, velocity: float = 0.8, position: float = 0.2,
-                     bridge_velocity: float = 0.0) -> np.ndarray:
+                     bridge_velocity: float = 0.0, glide_cents: float = 0.0) -> np.ndarray:
+        """glide_cents: tension-modulation pitch excess at the start of the note (see _string_kernel)."""
         n=max(1,int(round(float(dur)*self.sr)))
         width=max(2,int(round(0.0025*self.sr)))
         exc=float(velocity)*np.sin(np.pi*np.arange(width)/max(1,width-1))
         if bridge_velocity == 0.0:
-            y=self._run(exc,n,position)
+            y=self._run(exc,n,position,glide=2.0**(max(float(glide_cents),0.0)/1200.0)-1.0)
         else:
             y=np.zeros(n,float)
             for i in range(n):
@@ -452,7 +498,8 @@ class StringExciter:
         # ~0.25 ms hard pick to ~4.5 ms fingertip contact.
         ms=4.5*(1.0-h)+0.25*h
         if self.kind.lower()=="finger": ms=max(ms,2.2)
-        elif self.kind.lower()=="nail": ms=min(ms,1.0)
+        # a nail releases in 0.25-1 ms, shorter the harder the stroke (min(ms, 1) pinned every guitar note to 1 ms)
+        elif self.kind.lower()=="nail": ms=0.25+0.75*(1.0-h)
         n=max(2,int(round(ms*1e-3*sr)))
         x=np.arange(n,dtype=float)/max(1,n-1)
         # Smooth displacement release with finite slope at both ends.
@@ -481,13 +528,14 @@ class FretboardGeometry:
 
 def _render_exciter(self: DispersiveString, dur: float, exciter: StringExciter, *,
                     velocity: float=.8, bridge_velocity: float=0.0,
-                    palm_mute: float=0.0) -> np.ndarray:
+                    palm_mute: float=0.0, glide_cents: float=0.0) -> np.ndarray:
     n=max(1,int(round(float(dur)*self.sr))); out=np.zeros(n,float)
     pulse=exciter.pulse(self.sr,velocity)
     mute=float(np.clip(palm_mute,0.0,1.0))
     if bridge_velocity == 0.0:
         # Palm contact is local bridge damping, not a post-render envelope.
-        out=self._run(np.asarray(pulse,float),n,exciter.position,damper=.72*mute)
+        out=self._run(np.asarray(pulse,float),n,exciter.position,damper=.72*mute,
+                      glide=2.0**(max(float(glide_cents),0.0)/1200.0)-1.0)
     else:
         for i in range(n):
             e=float(pulse[i]) if i<len(pulse) else 0.0

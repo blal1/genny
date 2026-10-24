@@ -436,6 +436,51 @@ A shield slammed into something: a heavy long contact on a wooden or iron shield
 | `size` | `1.0` | shield size (bigger = lower) |
 | `seed` | `0` | variation |
 
+## Wind and air (Selfridge's aeroacoustic models)
+
+### `cavity_tone`
+
+Air flowing over an opening (DAFx-17). The shear layer hits the far edge and feeds back, giving four
+Rossiter tones that rise with the speed. A deep opening also rings at its depth resonance c / 4(d + end
+correction), the bottle note. Gains follow Howe's far-field solution and the bandwidth widens with the
+Reynolds number. A shallow, long opening (L/d over 8-11) closes and loses its Rossiter tones.
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `15.0` | m/s air speed; number or list of breakpoints |
+| `length`, `depth`, `width` | `0.05` each | m: along the flow, into the opening, across the flow |
+| `elevation` | `90.0` | degrees between the flow and the listener |
+| `gust` | `0.0` | 0..1 slow gusts |
+| `dur`, `seed` | `2.0`, `0` | |
+
+```json
+{"type": "sfx", "kind": "cavity_tone", "params": {"speed": 12, "length": 0.02, "depth": 0.15, "width": 0.02, "gust": 0.4, "dur": 3}}
+{"type": "sfx", "kind": "cavity_tone", "params": {"speed": [5, 30, 8], "length": 0.3, "depth": 0.04, "width": 0.5, "dur": 4}}
+```
+
+### `aeolian_harp`
+
+Strings in the wind (ICSV24 2017). Each string sheds an Aeolian tone that rises with the wind. When that
+tone comes near one of the string's harmonics (reduced velocity 0.8-1.27), the shedding locks to the
+string and it sings: a steady FM tone whose loudness comes from the Govardhan-Williamson amplitude law.
+Gusts sweep the strings in and out of lock-in.
+
+| param | default | meaning |
+|---|---|---|
+| `wind` | `6.0` | m/s; number or list |
+| `gust` | `0.5` | 0..1 |
+| `notes` | `D3 A3 D4 F#4` | the strings' fundamentals |
+| `diameter` | `0.5` | mm (thinner = higher shedding, so higher harmonics sing) |
+| `index` | `1.0` | FM index: richer sidebands |
+| `damping` | `0.05` | mass-damping of the fundamental: lower sings louder and on higher harmonics |
+| `dur`, `seed` | `6.0`, `0` | |
+
+`propeller` (core sfx) uses the same family: Hamilton Standard loading harmonics of the blade-passing frequency
+plus Aeolian vortex sources along each blade (Audio Mostly 2017), with `aircraft` presets from the paper
+(`c130`, `b17`, `tiger_moth`, `yak52`, `cessna340`, `p51`) and `angle` / `distance` to the listener. The `b17` preset
+keeps the paper's 2500 rpm, which looks like engine rpm (it gives a supersonic tip); pass `rpm` around 1400 for the
+propeller.
+
 ## Machines
 
 ### `clock`

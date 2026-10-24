@@ -941,6 +941,61 @@ def sword(sr=DEFAULT_SR, blade="sword", speed=1.0, thickness=1.0, model="loq", s
     return _fin(_swing(blade, speed, np.random.default_rng(int(seed)), model, float(np.clip(thickness, 0.2, 5))), sr, 0.7)
 
 
+def _speed_curve(v, n: int, gust: float, rng) -> np.ndarray:
+    """Number or breakpoint list -> per-sample speed at P, with slow 1/f-ish gusts of relative size ``gust``."""
+    from .matter import _lfn
+    a = np.atleast_1d(np.asarray(v, float))
+    u = np.interp(np.linspace(0, a.size - 1, n), np.arange(a.size), a) if a.size > 1 else np.full(n, float(a[0]))
+    if gust > 0:
+        # UNSOURCED: gusts as smooth noise below 0.5 Hz plus 2 Hz flutter (Farnell's wind is the paper's driver)
+        u = u * (1.0 + gust * (0.35 * _lfn(rng, n, 0.5) + 0.1 * _lfn(rng, n, 2.0)))
+    return np.maximum(u, 0.05)
+
+
+@sfx("cavity_tone", "Wind over an opening (window gap, bottle mouth, wheel well, slot): Rossiter tones + the cavity's depth resonance (Selfridge DAFx-17).",
+     speed=(15.0, "m/s air speed; number or list of breakpoints"), length=(0.05, "m along the flow"),
+     depth=(0.05, "m: deep (L/d < 1) = the depth resonance rules; very shallow (L/d > 8-11) closes the cavity"),
+     width=(0.05, "m across the flow"), elevation=(90.0, "degrees between the flow and the listener (90 = overhead)"),
+     gust=(0.0, "0..1 slow gusts"), dur=(2.0, "s"), seed=(0, "variation"))
+def cavity_tone(sr=DEFAULT_SR, speed=15.0, length=0.05, depth=0.05, width=0.05, elevation=90.0, gust=0.0, dur=2.0, seed=0):
+    rng = np.random.default_rng(int(seed))
+    d = _c01(dur, 0.05, 60.0)
+    u = _speed_curve(speed, pc.seconds(d), _c01(gust), rng)
+    return _fin(modal.cavity_tone(u, _c01(length, 0.002, 5.0), _c01(depth, 0.002, 5.0), _c01(width, 0.002, 5.0), d, rng,
+                                  elevation=float(elevation)), sr, 0.7, fade=0.05)
+
+
+@sfx("edge_tone", "Air jet on a sharp edge (whistle, recorder mouth, slot on a blade): stepped modes with hysteresis (Selfridge AES 2018).",
+     speed=(15.0, "m/s jet speed; number or list of breakpoints (sweep it to hear the mode jumps)"),
+     gap=(10.0, "mm nozzle-to-edge distance; number or list of breakpoints"), nozzle=(1.0, "mm nozzle exit width (gap / nozzle 2..61)"),
+     profile=("parabolic", "parabolic (long flue) | top_hat (short flue, modes 1-3)"),
+     elevation=(0.0, "degrees off the dipole axis (90 = silent)"), gust=(0.0, "0..1 slow gusts"), dur=(2.0, "s"), seed=(0, "variation"))
+def edge_tone(sr=DEFAULT_SR, speed=15.0, gap=10.0, nozzle=1.0, profile="parabolic", elevation=0.0, gust=0.0, dur=2.0, seed=0):
+    rng = np.random.default_rng(int(seed))
+    d = _c01(dur, 0.05, 60.0)
+    n = pc.seconds(d)
+    u = _speed_curve(speed, n, _c01(gust), rng)
+    h = np.clip(_speed_curve(gap, n, 0.0, rng), 0.02, 500.0) * 1e-3
+    prof = "top_hat" if str(profile).replace("-", "_") in ("top_hat", "tophat") else "parabolic"
+    return _fin(modal.edge_tone(u, h, _c01(nozzle, 0.05, 20.0) * 1e-3, d, rng, profile=prof,
+                                elevation=_c01(elevation, 0.0, 89.0)), sr, 0.7, fade=0.03)
+
+
+@sfx("aeolian_harp", "Strings singing in the wind: Aeolian tones that lock in to a string harmonic and sing (Selfridge ICSV24 2017).",
+     wind=(6.0, "m/s; number or list of breakpoints"), gust=(0.5, "0..1 slow gusts (they sweep the strings in and out of lock-in)"),
+     notes=("D3 A3 D4 F#4", "the strings' fundamentals"), diameter=(0.5, "mm string diameter (thinner = higher shedding)"),
+     index=(1.0, "FM index of the singing tone (more = richer sidebands)"),
+     damping=(0.05, "mass-damping of the fundamental (Govardhan-Williamson alpha): lower sings louder and higher up"),
+     dur=(6.0, "s"), seed=(0, "variation"))
+def aeolian_harp(sr=DEFAULT_SR, wind=6.0, gust=0.5, notes="D3 A3 D4 F#4", diameter=0.5, index=1.0, damping=0.05, dur=6.0, seed=0):
+    rng = np.random.default_rng(int(seed))
+    d = _c01(dur, 0.2, 120.0)
+    u = _speed_curve(wind, pc.seconds(d), _c01(gust), rng)
+    f = [to_hz(s) for s in str(notes).replace(",", " ").split()] or [146.8]
+    return _fin(modal.aeolian_harp(u, f, d, rng, diameter=_c01(diameter, 0.05, 10.0) * 1e-3, mass_damping=_c01(damping, 0.0, 2.0),
+                                   index=_c01(index, 0.0, 10.0)), sr, 0.7, fade=0.2)
+
+
 @sfx("clash", "Blade on blade: both measured swords ring from one shared steel-on-steel contact.",
      force=(0.8, "0..1"), size=(1.0, "blade size (bigger = lower)"), damping=(2.0, "decay-rate scale (hands damp the blades)"), seed=(0, "variation"))
 def clash(sr=DEFAULT_SR, force=0.8, size=1.0, damping=2.0, seed=0):

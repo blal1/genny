@@ -49,7 +49,7 @@ REED_W = 0.013        # UNSOURCED: reed channel width w (m); Bilbao does not pri
 
 # Vocal tract area functions, non-dimensional [x, S] pairs with S(0) = 1 (S0 = 2.5 cm^2, L = 0.17 m).
 # /a/ and /e/ are verbatim from Bilbao's listing A.10 (Fant's Russian vowels).
-VOWELS = {
+BILBAO_VOWELS = {   # Bilbao / Fant tables, before Story's model
     "a": ((0, 1), (0.03, 0.60), (0.09, 0.4), (0.12, 1.6), (0.18, 0.6), (0.29, 0.2), (0.35, 0.4), (0.41, 0.8),
           (0.47, 1), (0.50, 0.6), (0.59, 2), (0.65, 3.2), (0.85, 3.2), (0.94, 2), (1, 2)),
     "e": ((0, 1), (0.09, 0.4), (0.11, 2.4), (0.24, 2.4), (0.26, 3.2), (0.29, 3.2), (0.32, 4.2), (0.41, 4.2),
@@ -85,7 +85,7 @@ def _halves(S):
 
 @numba.njit(cache=True)
 def _webster(n, k, gamma, HA, HB, wt, lbc, rbc, radL, radR, sig0, sig1, wall, uin, lin,
-             reed, pm, emb, hidx, hpar, hphi, pick):
+             reed, pm, emb, hidx, hpar, hphi, pick, diam=False):
     """Webster scheme (9.13) / time-varying form (9.23) with lumped ends. Scaled units: x/L, S/S(0),
     p/(rho c^2), u/(c S0).
 
@@ -113,9 +113,13 @@ def _webster(n, k, gamma, HA, HB, wt, lbc, rbc, radL, radR, sig0, sig1, wall, ui
     ishole = np.zeros(N + 1, np.bool_)
     for j in range(nh):
         ishole[hidx[j]] = True
+    # diam: the two bores are blended in diameter, (sqrt A + w (sqrt B - sqrt A))^2 (Story 2005: the vowel modes
+    # deform the diameter), else in area
+    DA = np.sqrt(HA)
+    DB = np.sqrt(HB)
     w0 = wt[0]
     for l in range(N + 2):
-        Hc[l] = HA[l] + w0 * (HB[l] - HA[l])
+        Hc[l] = (DA[l] + w0 * (DB[l] - DA[l])) ** 2 if diam else HA[l] + w0 * (HB[l] - HA[l])
     for l in range(N + 1):
         Sa[l] = 0.5 * (Hc[l] + Hc[l + 1])
         Sb[l] = Sa[l]
@@ -149,14 +153,20 @@ def _webster(n, k, gamma, HA, HB, wt, lbc, rbc, radL, radR, sig0, sig1, wall, ui
             wa = 0.5 * (wn + wc)
             wb = 0.5 * (wc + wp)
             for l in range(N + 2):
-                Hc[l] = HA[l] + w4 * (HB[l] - HA[l])
+                Hc[l] = (DA[l] + w4 * (DB[l] - DA[l])) ** 2 if diam else HA[l] + w4 * (HB[l] - HA[l])
             for l in range(N + 1):
-                a = 0.5 * (HA[l] + HA[l + 1])
-                d = 0.5 * (HB[l] + HB[l + 1]) - a
-                Sa[l] = a + wa * d
-                Sb[l] = a + wb * d
+                if diam:
+                    Sa[l] = 0.5 * ((DA[l] + wa * (DB[l] - DA[l])) ** 2 + (DA[l + 1] + wa * (DB[l + 1] - DA[l + 1])) ** 2)
+                    Sb[l] = 0.5 * ((DA[l] + wb * (DB[l] - DA[l])) ** 2 + (DA[l + 1] + wb * (DB[l + 1] - DA[l + 1])) ** 2)
+                    sc = 0.5 * ((DA[l] + wc * (DB[l] - DA[l])) ** 2 + (DA[l + 1] + wc * (DB[l + 1] - DA[l + 1])) ** 2)
+                else:
+                    a = 0.5 * (HA[l] + HA[l + 1])
+                    d = 0.5 * (HB[l] + HB[l + 1]) - a
+                    Sa[l] = a + wa * d
+                    Sb[l] = a + wb * d
+                    sc = a + wc * d
                 if haswall:
-                    q4[l] = wall[0] * math.sqrt(math.sqrt(a + wc * d))
+                    q4[l] = wall[0] * math.sqrt(math.sqrt(sc))
         # ---- interior
         for l in range(1, N):
             Fl = Hc[l + 1] * (psi[l + 1] - psi[l]) - Hc[l] * (psi[l] - psi[l - 1])
@@ -356,7 +366,8 @@ class WebsterTube:
     """
 
     def __init__(self, length_m, area=1.0, area2=None, radius_m=0.0074, left="closed", right="unflanged",
-                 loss=0.0, wall=0.0, holes=(), c=C_AIR, sr=FS):
+                 loss=0.0, wall=0.0, holes=(), c=C_AIR, sr=FS, diam=False):
+        self.diam = bool(diam)
         self.L = float(max(length_m, 4.0 * c / sr))          # at least 4 grid cells
         self.c, self.sr, self.k = float(c), int(sr), 1.0 / sr
         self.gamma = self.c / self.L
@@ -429,7 +440,7 @@ class WebsterTube:
         pick = int(np.clip(round(pick_pos * self.N), 0, self.N))
         p, uo, pi, y, pk = _webster(n, self.k, self.gamma, self.HA, self.HB, wt, self.lbc, self.rbc, self.radL,
                                     self.radR, self.sig0, self.sig1, self.wall, u, lin, rp, pmv, ev, self.hidx,
-                                    self.hpar, hphi, pick)
+                                    self.hpar, hphi, pick, self.diam)
         return {"p_out": p, "u_out": uo, "p_in": pi, "y": y, "p_pick": pk}
 
     def response(self, freqs, hole_state=None):
@@ -639,15 +650,22 @@ def reed_cone(freq, dur, sr=DEFAULT_SR, vel=1.0, cone=1.0, pressure=1.0, embouch
 
 
 # ------------------------------------------------------------------------------------------ vocal tract
-def _tract(vowel, vowel2=None, size=1.0, wall=1.0):
-    def area(v):
-        v = str(v).strip("/").lower()
-        if v not in VOWELS:
-            raise ValueError(f"unknown vowel {v!r}; choose from {sorted(VOWELS)}")
-        return np.array(VOWELS[v], dtype=np.float64)
-    L = TRACT_L * float(np.clip(size, 0.4, 2.5))
-    return WebsterTube(L, area(vowel), None if not vowel2 else area(vowel2), radius_m=math.sqrt(TRACT_S0 / math.pi),
-                       left="closed", right="flanged", wall=wall, c=TRACT_C)
+def _tract(vowel, vowel2=None, size=1.0, wall=1.0, consonant=""):
+    """Story tract (physical/story.py): measured vowel areas and lengths (Story 2008). With ``vowel2`` the
+    two shapes are blended in diameter, i.e. along q1, q2 (eq. 3); with ``consonant`` the tract starts at the
+    consonant's constriction (Table I) laid over the vowel and opens to the vowel, linear in the activation m_c
+    (eq. 5), which is linear in area."""
+    from .physical import story
+    A1 = story.vowel_area(vowel)
+    if consonant:
+        A0, A2, diam = story.consonant_area(consonant, A1), A1, False
+    else:
+        A0, A2, diam = A1, None if not vowel2 else story.vowel_area(vowel2), True
+    L = story.vowel_length(vowel) if not vowel2 else 0.5 * (story.vowel_length(vowel) + story.vowel_length(vowel2))
+    L *= float(np.clip(size, 0.4, 2.5))
+    return WebsterTube(L, story.breakpoints(A0), None if A2 is None else story.breakpoints(A2),
+                       radius_m=math.sqrt(max(float(A0[0]), 0.02) * 1e-4 / math.pi), left="closed", right="flanged",
+                       wall=wall, c=TRACT_C, diam=diam)
 
 
 def glottal_pulses(f0, n, vibrato=0.0, vib_hz=5.0, duty=0.2, sr=FS):
@@ -664,27 +682,39 @@ def glottal_pulses(f0, n, vibrato=0.0, vib_hz=5.0, duty=0.2, sr=FS):
 
 @instrument("vowel_tube", "Sung vowel: glottal pulse train through a Webster vocal tract (a e i o u), gliding between two vowels.",
             family="voice", span=("E2", "C5"),
-            vowel=("a", "a|e|i|o|u, tract shape at the start (/a/, /e/ = Bilbao/Fant tables)"),
-            vowel2=("", "a|e|i|o|u to glide to, '' = hold the first"),
+            vowel=("a", "i ih eh ae ah aa ao uh ow uw (Story 2005 MRI vowels; a e o u = aa eh ow uw), tract shape at the start"),
+            vowel2=("", "vowel to glide to, along Story's modes; '' = hold the first"),
             morph=(1.0, "0..1 how far the tract travels toward vowel2 during the note"),
+            consonant=("", "p t k m n ng f th s sh (b d g v z...: their place): start from that constriction over the vowel and release into it"),
             breath=(0.08, "0..1 aspiration noise at the glottis"),
             vibrato=(0.4, "0..2 pitch vibrato depth (1 = +-3 %, 5 Hz, comes in after 0.3 s)"),
             size=(1.0, "tract length scale: 1 = 17 cm adult, 0.8 small/bright, 1.4 giant (formants scale as 1/size)"),
             tense=(0.2, "0..0.8 glottal closed fraction: 0 soft/breathy pulse, 0.6 pressed and buzzy"),
             seed=(0, "noise seed"))
 def vowel_tube(freq, dur, sr=DEFAULT_SR, vel=1.0, vowel="a", vowel2="", morph=1.0, breath=0.08, vibrato=0.4,
-               size=1.0, tense=0.2, seed=0):
+               size=1.0, tense=0.2, seed=0, consonant=""):
     """Bilbao ch. 9.2: scheme (9.13)/(9.23) with the flanged radiation end (9.10) and yielding walls (9.18);
-    area functions `VOWELS` (g02 §16, listing A.10). Output is the radiated pressure."""
-    tr = _tract(vowel, vowel2, size)
+    area functions of Story 2005 (``_tract``). Output is the radiated pressure. A consonant onset holds the
+    constriction 50 ms and releases it over 60 ms; voiceless ones (p t k f th s sh) start voicing 40 ms after
+    the release with aspiration in the gap. UNSOURCED: those three timings."""
+    tr = _tract(vowel, vowel2, size, consonant=consonant)
     n = int((dur + 0.10) * FS)
     hold = int((dur + 0.04) * FS)
     env = np.zeros(n)
     env[:hold] = _edge(hold, 0.03 * FS, 0.06 * FS)
     u = glottal_pulses(freq, n, vibrato, duty=tense)
-    u = env * (u + 0.25 * float(breath) * _noise(n, seed, 4000.0) * (0.4 + u))
+    asp = 0.25 * float(breath) * _noise(n, seed, 4000.0)
     w = None
-    if vowel2:                    # smooth trajectory: "do not interpolate area functions linearly for speech" (g02 §16)
+    if consonant:
+        t = np.arange(n) / FS
+        w = np.clip((t - 0.05) / 0.06, 0.0, 1.0)
+        w = w * w * (3.0 - 2.0 * w)
+        if str(consonant).lower() in ("p", "t", "k", "f", "th", "s", "sh", "θ", "ʃ"):
+            voice = np.clip((t - 0.15) / 0.02, 0.0, 1.0)
+            u = u * voice
+            asp = asp + 0.6 * _noise(n, seed + 1, 4000.0) * ((t > 0.11) & (t < 0.16))
+    u = env * (u + asp * (0.4 + u))
+    if vowel2 and not consonant:  # smooth trajectory: "do not interpolate area functions linearly for speech" (g02 §16)
         x = np.clip(np.arange(n) / max(hold, 1), 0.0, 1.0)
         w = float(np.clip(morph, 0.0, 1.0)) * x * x * (3.0 - 2.0 * x)
     p = tr.run(u, morph=w)["p_out"]

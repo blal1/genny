@@ -235,6 +235,21 @@ def test_performance():
     vr = np.array([b["vel"] / a["vel"] for a, b in zip(straight, hum)])
     print(f"  humanize: onset jitter sd {dt.std():.1f} ms (asked 8), velocity ratio {vr.min():.2f}..{vr.max():.2f}")
     assert 5 < dt.std() < 11 and 0.86 <= vr.min() and vr.max() <= 1.0 + 1e-6
+    # deviations are 1/f + white: more power at low than high frequencies, and hit-to-hit intervals
+    # anticorrelated (Rasanen 2015: lag-1 r = -0.48 on a real drummer)
+    long = C.generate(dict(L, bars=64, humanize={"time": 8, "vel": 0}), 120)
+    ref = C.generate(dict(L, bars=64), 120)
+    d = np.array([b["t"] - a["t"] for a, b in zip(ref, long)])[1:]
+    P = np.abs(np.fft.rfft(d - d.mean())) ** 2
+    lo, hi = P[1:len(P) // 8].mean(), P[len(P) // 2:].mean()
+    iv = np.diff(d)
+    r1 = np.corrcoef(iv[:-1], iv[1:])[0, 1]
+    print(f"  humanize 1/f: low/high power {lo / hi:.1f}, interval lag-1 r {r1:.2f}")
+    assert lo / hi > 3 and -0.5 < r1 < -0.1
+    # humanize as a number scales with the beat: 0.98 % of a beat at humanize 1
+    h1 = C.generate(dict(L, bars=64, humanize=1), 96)
+    s1 = np.array([b["t"] - a["t"] for a, b in zip(C.generate(dict(L, bars=64), 96), h1)])[1:] * 60 / 96 * 1000
+    assert 4.5 < s1.std() < 7.5, s1.std()
     # tempo drift bends time but keeps the length: +-4 % (MIT 21M.380), ends on the bar line
     dr = C.generate(dict(BASE, role="pad", bars=16, drift=0.04), 100)
     st = C.generate(dict(BASE, role="pad", bars=16), 100)

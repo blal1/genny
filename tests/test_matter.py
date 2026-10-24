@@ -288,3 +288,17 @@ def test_kinds_and_parameter_extremes():
              ("babble", dict(flow=3.0, size=2.0, turbulence=1.0, dur=1.0)), ("drip", dict(size=1.0, secondary=1.0, bubbles=9))]
     for name, params in cases:
         _check(render_sfx(name, sr, **params), sr, (name, params))
+
+
+def test_bubble_size_laws():
+    from genny.physical import particles as P
+    # Deane & Stokes 2002: r^-3/2 below the 1 mm Hinze scale, r^-10/3 above, continuous at the break
+    r = P.broken_powerlaw(np.random.default_rng(0), 200000, 0.3e-3, 20e-3, 1e-3, -1.5, -10 / 3)
+    h, e = np.histogram(np.log(r), bins=40)
+    c, d = np.exp((e[1:] + e[:-1]) / 2), h / np.diff(np.exp(e))
+    lo, hi = c < 0.9e-3, (c > 1.2e-3) & (h > 50)
+    assert abs(np.polyfit(np.log(c[lo]), np.log(d[lo]), 1)[0] + 1.5) < 0.1
+    assert abs(np.polyfit(np.log(c[hi]), np.log(d[hi]), 1)[0] + 10 / 3) < 0.15
+    # rain on water: bubbles of about 0.22 mm, the 14-15 kHz peak (Prosperetti, Crum & Pumphrey 1989)
+    _, info = P.bubble_field(1.0, np.random.default_rng(1), rate=300, alpha=2.9, r_range=(0.20e-3, 0.25e-3), return_info=True)
+    assert 14000 < np.median(info["f0"]) < 15500

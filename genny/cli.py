@@ -184,7 +184,7 @@ def cmd_info(args):
         out.append(d)
         if not args.json:
             print(f"{f}: {d['seconds']:.3f}s {'stereo' if d['channels'] == 2 else 'mono'} {sr}Hz peak={d['peak_db']:.1f}dB rms={d['rms_db']:.1f}dB "
-                  f"loud={d['loudness']:.1f} ear={d['ear']:.1f} sharp={d['sharpness']:.2f} above5k={100 * d['above_5k']:.1f}%")
+                  f"loud={d['loudness']:.1f} ear={d['ear']:.1f} sharp={d['sharpness']:.2f} above5k={100 * d['above_5k']:.1f}% crest={d['crest_db']:.1f}dB tp={d['true_peak_db']:.1f}dBTP lat={d['log_attack']:.2f} flux={d['flux']:.1e}")
     if args.json:
         print(json.dumps(out, indent=2))
 
@@ -196,6 +196,13 @@ def cmd_identify(args):
         y, sr = read_wav(f)
         out.append({"file": str(f), **identify_machine(y, sr, rpm=args.rpm)})
     print(json.dumps(out, indent=2))
+
+
+def cmd_eval(args):
+    from .calibrate import webmushra
+    conds = {Path(f).stem: f for f in args.conditions}
+    cfg = webmushra(args.reference, conds, args.out, name=args.name, anchors=not args.no_anchors)
+    print(f"wrote {cfg} ({len(conds)} conditions); copy {Path(args.out) / 'configs'} into a webMUSHRA install")
 
 
 def cmd_play(args):
@@ -308,7 +315,15 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--rpm", type=float, default=None, help="shaft speed, if known")
     s.set_defaults(fn=cmd_identify)
 
-    s = sub.add_parser("play", help="play wav files through the system player")
+    s = sub.add_parser("eval", help="make a webMUSHRA listening test: the reference against each condition (config YAML + audio)")
+    s.add_argument("reference")
+    s.add_argument("conditions", nargs="+", help="wav files to rate (named after their file)")
+    s.add_argument("-o", "--out", default="mushra", help="output folder (default mushra)")
+    s.add_argument("--name", default="genny listening test", help="test name")
+    s.add_argument("--no-anchors", action="store_true", help="leave out the 3.5 and 7 kHz low-pass anchors")
+    s.set_defaults(fn=cmd_eval)
+
+    s = sub.add_parser("play",help="play wav files through the system player")
     s.add_argument("files", nargs="+")
     s.set_defaults(fn=cmd_play)
 

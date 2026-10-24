@@ -54,4 +54,19 @@ y1, _ = SP.render_spec(tone)
 y2, _ = SP.render_spec({**tone, "max_loudness": None})
 k, _ = SP.render_spec({"layers": [{"type": "drum", "kind": "kick"}]})
 assert np.max(np.abs(y1)) < 0.5 and abs(np.max(np.abs(y2)) - 10 ** (-1 / 20)) < 1e-3 and abs(np.max(np.abs(k)) - 10 ** (-1 / 20)) < 1e-3
+# loudness presets: integrated LUFS on target, true peak held under -1 dBTP
+import pyloudnorm
+from genny.physical.core import _true_peak
+pad = {"layers": [{"type": "synth", "inst": "warm_pad", "notes": "C4:maj", "dur": 2.0}]}
+for preset, lufs in (("streaming", -14.0), ("broadcast", -23.0), (-18.0, -18.0)):
+    m, _ = SP.render_spec({**pad, "loudness": preset})
+    assert abs(pyloudnorm.Meter(sr).integrated_loudness(m) - lufs) < 0.5, preset
+    assert _true_peak(m) <= 10 ** (-1 / 20) + 1e-3, preset
+hot, _ = SP.render_spec({"layers": [{"type": "drum", "kind": "kick"}], "loudness": -8.0})
+assert _true_peak(hot) <= 10 ** (-1 / 20) + 1e-3
+try:
+    SP.render_spec({**pad, "loudness": "loud"})
+    raise AssertionError("unknown preset accepted")
+except SP.SpecError:
+    pass
 print("all ok")

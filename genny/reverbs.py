@@ -11,7 +11,7 @@ Sources (findings files in ``out/research``; PASP = J.O. Smith, *Physical Audio 
   tapped delay line (PASP/Early_Reflections, findings 10 §2.1); stereo pick-up = two opposite
   cardioids ``(1 + cos mu)`` (Takala & Hahn, *Sound Rendering*, findings 04 / g15 §11.10).
 * Existing kernels exposed: ``zita_rev1``, ``puckette_rev``, ``farnell_room`` (``physical/space.py``).
-* Propagation: 1/r spreading, air absorption (PASP Table B.2), Doppler from a time-varying delay
+* Propagation: 1/r spreading, air absorption (ISO 9613-1), Doppler from a time-varying delay
   (PASP ch. 5; g13 §3.2, findings 10 §10), occlusion (Farnell p.87; *Sound Rendering* "occluders damp
   smoothly rather than cut").
 * Delay-line interpolation: 4th-order (even order) Lagrange for every swept delay (g13 §2.1 rule).
@@ -35,7 +35,7 @@ from .instruments import instrument
 from .physical import space as _space
 from .physical.core import tv_one_pole_lp as _tv_one_pole
 
-C_AIR = _space.C_AIR            # 345 m/s (PASP, 22 C)
+C_AIR = _space.C_AIR            # 343.2 m/s (20 C)
 _PHYS_SR = 48000                # rate of the kernels in physical/space.py
 
 
@@ -537,6 +537,71 @@ def fdn_reverb(x, sr=DEFAULT_SR, t60_low=2.2, t60_high=1.1, size=8.0, predelay=0
     return _fade_end(_wetdry(_pad(x, ne), _ms_width(wl, wr, width), mix), sr)
 
 
+def velvet_noise(n: int, sr: int, density: float = 2205.0, rng=None) -> np.ndarray:
+    """Velvet noise (Karjalainen & Jarvelainen 2007; Valimaki et al., Appl. Sci. 7:483, 2017, eqs 1-3):
+    one +-1 impulse per grid cell of Td = sr/density samples, at k(m) = round(m Td + r1 (Td - 1)).
+    2205 /s (Td = 20 at 44.1 kHz) already sounds smoother than Gaussian noise."""
+    rng = np.random.default_rng(0) if rng is None else rng
+    td = sr / float(density)
+    m = np.arange(int(n / td) + 1)
+    k = np.round(m * td + rng.random(m.size) * (td - 1)).astype(int)
+    k = k[k < n]
+    s = np.zeros(n)
+    s[k] = 2.0 * np.round(rng.random(k.size)) - 1.0
+    return s
+
+
+def velvet_ir(sr: int, t60_low: float, t60_high: float, length: float | None = None, density: float = 2205.0,
+              seed: int = 0) -> np.ndarray:
+    """Late-reverb impulse response: velvet noise split into octave bands (zero-phase, complementary
+    raised-cosine crossovers), each band decaying as exp(-6.91 t / T60(f)); T60 is t60_low at 250 Hz and
+    t60_high at 4 kHz, log-frequency interpolated and held outside. Energy-normalised to 1."""
+    t60_low = float(np.clip(t60_low, 0.05, 30.0))
+    t60_high = float(np.clip(t60_high, 0.05, t60_low))
+    n = samples(min(1.2 * t60_low + 0.05, 12.0) if length is None else length, sr)
+    v = velvet_noise(n, sr, density, np.random.default_rng(seed))
+    nfft = 1 << int(np.ceil(np.log2(n)))
+    V = np.fft.rfft(v, nfft)
+    f = np.fft.rfftfreq(nfft, 1.0 / sr)
+    lf = np.log2(np.maximum(f, 1.0))
+    t = np.arange(n) / sr
+    ir = np.zeros(n)
+    for c in 2.0 ** np.arange(5, 15):                       # octave centres 32 Hz .. 16 kHz
+        if c > 0.45 * sr:
+            break
+        w = np.cos(np.clip(lf - math.log2(c), -1.0, 1.0) * math.pi / 2) ** 2      # sums to 1 across bands
+        if c == 32.0:
+            w[f < c] = 1.0
+        if 2 * c > 0.45 * sr:
+            w[f > c] = 1.0
+        x = float(np.clip((math.log2(c) - math.log2(250.0)) / 4.0, 0.0, 1.0))
+        t60 = t60_low * (t60_high / t60_low) ** x
+        ir += np.fft.irfft(V * w, nfft)[:n] * np.exp(-6.91 * t / t60)
+    return ir / (np.sqrt(np.sum(ir * ir)) + 1e-12)
+
+
+@effect("velvet_reverb", "Velvet-noise convolution reverb: a sparse +-1 noise shaped per octave into a decaying tail. Dense and smooth from the first milliseconds, no metallic ringing, no modulation. Stereo output.",
+        t60_low=(2.0, "decay time at 250 Hz, seconds (0.1..20)"),
+        t60_high=(1.0, "decay time at 4 kHz, seconds (<= t60_low)"),
+        predelay=(0.02, "seconds before the tail starts"),
+        mix=(0.3, "wet amount 0..1"), width=(1.0, "stereo width 0..1 (two independent velvet tails)"),
+        density=(2205.0, "impulses per second (1000 = grainy, 2205 = smooth, 4000 = dense)"),
+        seed=(0, "variation of the tail"))
+def velvet_reverb(x, sr=DEFAULT_SR, t60_low=2.0, t60_high=1.0, predelay=0.02, mix=0.3, width=1.0, density=2205.0, seed=0):
+    """Velvet-noise late reverberation (Valimaki, Holm-Rasmussen, Alary & Lehtonen 2017): octave-band
+    exponential envelopes on velvet noise, convolved by FFT."""
+    x = np.asarray(x, float)
+    dens = float(np.clip(density, 200.0, 0.25 * sr))
+    irl = velvet_ir(sr, t60_low, t60_high, density=dens, seed=int(seed))
+    irr = velvet_ir(sr, t60_low, t60_high, density=dens, seed=int(seed) + 7919)
+    pd = samples(predelay, sr) if predelay > 0 else 0
+    ne = x.shape[0] + len(irl) + pd
+    xl, xr = _lr(x)
+    wl = _pad(fftconvolve(xl, irl), ne - pd - len(xl) - len(irl) + 1, front=pd)[:ne]
+    wr = _pad(fftconvolve(xr, irr), ne - pd - len(xr) - len(irr) + 1, front=pd)[:ne]
+    return _fade_end(_wetdry(_pad(x, len(wl) - x.shape[0]), _ms_width(wl, wr, width), mix), sr)
+
+
 # ==========================================================================================
 # Rooms: Sabine per band, shoebox image sources, presets
 # ==========================================================================================
@@ -574,7 +639,7 @@ def room_info(preset: str = "hall", lx=None, ly=None, lz=None, walls=None, floor
     """Geometry and Sabine decay of a preset or an explicit shoebox.
 
     T60(band) = 0.161 V / (sum S_i a_i + 4 m V): Sabine (Farnell §6.1, findings 01) with the air term
-    4 m V, m = intensity attenuation per metre from PASP Table B.2 (``space.air_db_per_m``).
+    4 m V, m = intensity attenuation per metre from ISO 9613-1 (``space.air_db_per_m``).
     A preset comes with its furnishing; as soon as a dimension or material is given the room is a bare
     shoebox of those materials (values not given come from the preset) plus ``furnish`` m^2 of soft
     absorbers. Returns dims, surfaces, volume, area, t60 (6 bands 125..4000 Hz), mfp = 4V/S (mean free path) and
@@ -862,18 +927,18 @@ def zita(x, sr=DEFAULT_SR, mix=0.3, preset="default", t60_low=None, t60_mid=None
 # Propagation: distance, Doppler fly-by, occlusion
 # ==========================================================================================
 
-def _air_filter(x, sr, metres, rh):
-    """Zero-phase magnitude filter of ``metres`` of air (PASP Table B.2 via space.air_db_per_m)."""
+def _air_filter(x, sr, metres, rh, temp_c=20.0):
+    """Zero-phase magnitude filter of ``metres`` of air (ISO 9613-1 via space.air_db_per_m)."""
     n = x.shape[0]
     nfft = 1 << int(np.ceil(np.log2(n + int(0.02 * sr))))
     f = np.fft.rfftfreq(nfft, 1.0 / sr)
-    mag = 10.0 ** (-_space.air_db_per_m(f, rh) * metres / 20.0)
+    mag = 10.0 ** (-_space.air_db_per_m(f, rh, temp_c) * metres / 20.0)
     X = np.fft.rfft(x, nfft, axis=0)
     return np.fft.irfft(X * (mag if x.ndim == 1 else mag[:, None]), nfft, axis=0)[:n]
 
 
 def air_cutoff(metres, rh: int = 50):
-    """Frequency (Hz) at which ``metres`` of air removes 3 dB (table + f^2 law, inverted numerically)."""
+    """Frequency (Hz) at which ``metres`` of air removes 3 dB (ISO 9613-1, inverted numerically)."""
     f = np.geomspace(100.0, 40000.0, 400)
     r3 = 3.0 / np.maximum(_space.air_db_per_m(f, rh), 1e-12)        # metres for 3 dB at f
     r3 = np.minimum.accumulate(r3)                                   # monotone decreasing in f
@@ -883,24 +948,39 @@ def air_cutoff(metres, rh: int = 50):
 @effect("distance", "Put a sound some metres away: 1/r level drop, air absorption that dulls it with distance and humidity, and optionally more reverberation relative to the direct sound.",
         metres=(10.0, "distance to the source, metres (the input is the sound at `ref` metres)"),
         air=(True, "true = air absorption low-pass"),
-        humidity=(50, "relative humidity % (40..70; drier air absorbs more highs)"),
+        humidity=(50, "relative humidity % (10..100; drier air absorbs more highs)"),
+        temperature=(20.0, "air temperature, C (-20..50): sets the absorption and the speed of sound"),
+        ground=("none", "reflection off the ground between them: none | grass (flow resistivity 300 cgs) | hard (rigid) | a number = flow resistivity in cgs units; over grass the low end gains 6 dB and a dip opens at 300-800 Hz"),
+        source_height=(1.5, "metres, for `ground`"), listener_height=(1.5, "metres, for `ground`"),
         reverb=(0.0, "reverb send 0..1: reverberant level stays constant while the direct sound falls with distance (stereo out when > 0)"),
         reverb_time=(1.5, "decay time of that reverb, seconds"),
         ref=(1.0, "reference distance in metres where gain = 1 (closer than this the gain is capped at +6 dB)"),
         line_source=(False, "true = line source (road, river): 1/sqrt(r), -3 dB per doubling"),
-        delay=(False, "true = prepend the travel time (r - ref) / 345 s"))
+        delay=(False, "true = prepend the travel time (r - ref) / c, c = 343 m/s at 20 C"))
 def distance(x, sr=DEFAULT_SR, metres=10.0, air=True, humidity=50, reverb=0.0, reverb_time=1.5, ref=1.0,
-             line_source=False, delay=False):
+             line_source=False, delay=False, temperature=20.0, ground="none", source_height=1.5, listener_height=1.5):
     """Spreading ref/r (point source, -6 dB per doubling; Farnell rule 19) or sqrt(ref/r); air
-    absorption over (r - ref) metres from PASP Table B.2 with the f^2 extension; c = 345 m/s."""
+    absorption over (r - ref) metres from ISO 9613-1; c = 343.2 sqrt(T/293.15) m/s."""
     x = np.asarray(x, float)
     r = float(np.clip(metres, 0.01, 1e5))
     ref = float(max(ref, 0.01))
     g = min(math.sqrt(ref / r) if line_source else ref / r, 2.0)      # closer than `ref`: at most +6 dB
     extra = max(r - ref, 0.0)
-    y = _air_filter(x, sr, extra, humidity) * g if (air and extra > 0) else x * g
+    y = _air_filter(x, sr, extra, humidity, float(temperature)) * g if (air and extra > 0) else x * g
+    if str(ground) != "none":
+        sigma = {"grass": 300.0, "hard": 0.0}.get(str(ground))
+        if sigma is None:
+            try:
+                sigma = float(ground)
+            except ValueError:
+                raise ValueError(f"ground must be none, grass, hard or a flow resistivity in cgs units, not {ground!r}")
+        nfft = 1 << int(np.ceil(np.log2(y.shape[0] + int(0.05 * sr))))
+        H = _space.ground_effect(np.fft.rfftfreq(nfft, 1.0 / sr), r, float(source_height), float(listener_height),
+                                 sigma, float(temperature))
+        Y = np.fft.rfft(y, nfft, axis=0)
+        y = np.fft.irfft(Y * (H if y.ndim == 1 else H[:, None]), nfft, axis=0)[:y.shape[0] + int(0.05 * sr)]
     if delay and extra > 0:
-        y = _pad(y, 0, front=int(round(extra / C_AIR * sr)))
+        y = _pad(y, 0, front=int(round(extra / _space.speed_of_sound(float(temperature)) * sr)))
     send = float(np.clip(reverb, 0.0, 1.0))
     if send > 0:
         t = float(np.clip(reverb_time, 0.1, 20.0))

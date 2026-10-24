@@ -31,13 +31,13 @@ decay time, pitch, event rate). Nothing here was validated by listening tests.
 | Bells | Measured / FEM mode tables, Risset additive bell | `church_bell` `handbell` `china_bell` `tubular_bell` `bell` `wind_chime` `hand_chime` | `foley`, `physical.modal` | Faust physmodels; STK; Farnell |
 | Arbitrary solid body | Analytic modes of strings, bars, membranes, plates with gains from the mode shape at the strike point; internal-friction damping d = pi f tan(phi) | `impact`, fx `resonate`, `ShapeBody` | `contact` | van den Doel & Pai 1996; van den Doel 1998 |
 | Single reed + bore | Webster's equation (arbitrary bore), dynamic beating reed, toneholes, radiation end | `reed_tube` `reed_cone` `clarinet` `bass_clarinet` `sax` `oboe` `cor_anglais` `bassoon` | `tubes`, `physical.waveguides` | Bilbao ch. 9; STK |
-| Lip reed | Lip-valve waveguide | `trumpet` `trombone` `french_horn` `tuba` | `physical.waveguides` | STK Brass |
+| Lip reed | Lip-valve waveguide (with `model=physical`; formant voice by default) | `trumpet` `trombone` `french_horn` `tuba` | `physical.waveguides` | STK Brass, tuned; breath <= 0.6 keeps it off the subharmonic |
 | Air jet | Jet-driven pipe, blown bottle (Helmholtz), piston-driven pipe | `flute` `recorder` `piccolo` `pan_flute` `bottle` `piston_pipe` `pipe_blow` | `tubes`, `physical.waveguides` | STK Recorder, BlowBotl |
 | Voice, speech | Klatt-style formant synthesiser, English and Spanish | `speech` layer | `speech` | Klatt |
 | Voice, sung | LF glottal pulse, 5-formant cascade per voice type, formant tuning, singer's formant, sung consonants; N independent singers | `voice` `vocal_choir` `hum` `chant` `boys_choir` `falsetto` `throat_singing`, layers `sing` `satb` | `choir` | Fant; Csound formant tables; Cook 2002 |
 | Vocal tract tube | Webster tract with yielding walls; Pink Trombone | `vowel_tube`, fx `formant_tract` | `tubes`, `physical.voice` | Bilbao ch. 9 |
-| Animal voices | Flapping multi-pulse source, tract comb, size scaling; FM and physical syrinx with song grammar | `roar` `growl` `bark` `meow` `purr` `moo` `howl` `monster` `animal` `birdsong` `bird_call` `frog` | `creatures` | Farnell 2010 |
-| Insects | Stridulation pulse trains (Dolbear's law), wingbeat tones | `cricket` `cicada` `fly` `mosquito` `bee` `night_insects` `wings` | `creatures` | Farnell 2010 |
+| Animal voices | Flapping multi-pulse source, tract comb, size scaling; FM and physical syrinx with song grammar | `roar` `growl` `bark` `meow` `purr` `moo` `howl` `monster` `animal` `birdsong` `bird_call` `frog` | `creatures` | Farnell 2010; `birdsong source=normal_form`: Amador et al. 2013 |
+| Insects | Stridulation pulse trains (Dolbear's law), wingbeat tones | `cricket` `cicada` `fly` `mosquito` `bee` `night_insects` `wings` | `creatures` | Farnell 2010; `birdsong source=normal_form`: Amador et al. 2013 |
 
 ## Interactions between solids
 
@@ -62,12 +62,13 @@ decay time, pitch, event rate). Nothing here was validated by listening tests.
 | Turbulent jet | Strouhal peak proportional to velocity over diameter | `steam` `air_leak` `spray` `kettle` `balloon` | `matter` | Lighthill (level law unsourced in the findings) |
 | Wind | Vortex shedding around obstacles, gusting speed process | `wind` `gust` | `physical.ambience`, `matter` | Farnell 2010 |
 | Aeolian tone | Reynolds-dependent Strouhal shedding along a moving edge | `swoosh` `sword` `whip` | `physical.modal`, `foley` | Selfridge et al. 2017 |
+| Cavity and lock-in | Rossiter feedback tones + depth-mode monopole with Howe's far-field gains; Aeolian shedding locking to string harmonics | `cavity_tone` `aeolian_harp` | `physical.modal`, `foley` | Selfridge, Reiss & Avital DAFx-17; Selfridge et al. ICSV24 2017 |
 | Combustion | Flame-flux derivative below 180 Hz, f^-alpha noise extension above; crackle events | `flame` `fire` `match` | `matter` | Chadwick & James 2011 |
 | Explosion, gunshot | N-wave, expansion rumble, debris, distance and reflections | `explosion` `gunshot` | `physics`, `foley` | Farnell 2010 |
 | Thunder | Segmented channel with distance-dependent propagation | `thunder` `lightning` | `physical.ambience`, `matter` | Farnell 2010 |
 | Electricity | Spark snap, mains-modulated arc, hum with harmonics | `spark` `arc` `mains_hum` `tesla` `neon` | `matter` | Farnell 2010 |
 | Ice | Flexural-wave dispersion chirp of a thin plate, brittle cracks | `ice_crack` `ice_cubes` `freeze` | `matter` | Textbook plate dispersion (constants unsourced) |
-| Engines, rotors | Firing pulses into exhaust resonances; blade-passing tones plus tip turbulence | `car_engine` `klang_car` `toy_boat` `harrier` `jet_engine` `helicopter` `fan` `propeller` `electric_motor` `gears` `modal_engine` `bicycle` | `vehicle`, `physics`, `klang`, `contact` | Farnell 2010; Klang procedural library |
+| Engines, rotors | Firing pulses into exhaust resonances; blade-passing tones plus tip turbulence | `car_engine` `klang_car` `toy_boat` `harrier` `jet_engine` `helicopter` `fan` `propeller` `electric_motor` `gears` `modal_engine` `bicycle` | `vehicle`, `physics`, `klang`, `contact` | Farnell 2010; Klang procedural library; `propeller`: Selfridge et al., Audio Mostly 2017 (Hamilton Standard loading + Aeolian vortex sources) |
 
 ## Propagation, rooms and signal processing
 

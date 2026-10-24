@@ -1,6 +1,63 @@
 # Changelog
 
-## Unreleased
+## 1.2.0
+
+Catalog: 144 instruments (was 136), 50 drums (was 48), 242 sound effects (was 234), 98 effects, 14 extra layer types.
+
+Physical-synthesis bibliography (`reports/Bibliographie synthèse physique genny.md`, roadmap P0 to P5): every value
+below comes from the paper or data set named in the code, or is marked UNSOURCED there.
+
+Keys
+- `piano` is now Bank, Zambon & Fontana's modal piano (TASLP 2010): Steinway D strings and hammers (Chabassier &
+  Duruflé), hereditary felt, Weinreich unisons with two-stage decay, the longitudinal bus driven by y² (phantom
+  partials), parallel-filter soundboard. The waveguide piano is still there as `piano_wg`. `piano_data.py` holds the
+  Steinway D table; `fd_piano` and `felt_piano` use it.
+- `clav` (Gabrielli 2013 measurements), physical `rhodes`, `wurli` with Pfeifle's capacitive pickup.
+- `harpsichord`: Välimäki's model (ripply loss filter, beating partial, FDN soundboard).
+
+Strings
+- Closed-form dispersion (Rauhala), tension modulation (`glide` on every plucked instrument), modal guitar body with
+  Woodhouse spread (`body`) and Penttinen warp (`body_size`).
+- `sitar model=fd`: Siddiq's string striking its curved flat bridge; the buzz grows with velocity.
+- `cello model=elastoplastic`: Matusiak & Chatziioannou's measured cello G string and fitted elasto-plastic bow.
+- New instrument `string_bridge_plate` (van Walstijn & Mehes, DAFx-17): a string driving a plate through a bridge on
+  nonlinear springs, `config` body | coupled | plate | rattle | flat.
+
+Winds and brass
+- `clarinet model=impedance`: Guillemain's digital-impedance clarinet with Dalmont's measured mouthpiece, a
+  tone-hole cutoff, self-tuning; `embouchure`.
+- Brass `model=physical` (lip-reed waveguide, in tune); flute jet ratio checked against de la Cuadra.
+
+Voice
+- Exact LF inversion from Rd (Wang & Gobl), Hillenbrand vowel trajectories, Hawks & Miller bandwidths, jitter and
+  shimmer that measure as Praat's, effort-dependent perturbation in `choir`, Story area functions with CV onsets.
+- New sfx `laugh`, `scream`, `cry`, `moan` (Anikin's soundgen model with its presets; `voice`, `syllables`, `pitch`).
+
+Percussion and plates
+- New drums `steel_cymbal` and `steel_gong` (Bilbao et al., DAFx-23): clean, gliding, crashing; the gong swell; the
+  scanned elliptical output. `nl_plate` takes `loss=(T60_0, f_c, T60_c)` and `scan=(R, f_o)`.
+- `gong cascade=`: Chaigne & Touzé's 1:1:2 internal resonance, twins blooming after a hard strike.
+- ObjectFolder / Sterling damping laws, Aramaki material blend (`impact material_angle`), Hertz contact stiffness.
+
+Sound effects
+- `thunder`: Few's tortuous channel of N-waves blended with Farnell's patch (`channel`); `distance` is now in metres
+  as documented (it was fed to the patch's 0..1 control).
+- `interaction` (Conan's rub / scratch / roll), `cavity_tone`, `aeolian_harp`, `edge_tone`, `propeller` rewritten,
+  `explosion` (Friedlander, Kingery-Bulmash), `birdsong source=normal_form` (Amador), surf (Deane & Stokes), rain
+  (Prosperetti peak).
+- `car_engine model=ptr exhaust=`: the exhaust resonators Doerfler & Wyse's PTR learned (inline4, v8, v8_metal).
+
+Space, mastering, analysis
+- ISO 9613-1 air absorption, Delany-Bazley ground effect, `velvet_reverb`, TPT state-variable filters, a
+  Giannoulis compressor with knee, `loudness` presets, 1/f humanize, polyBLAMP and ADAA.
+- `genny info` prints the log-attack time and the spectral flux; `onset_lag`, `bright` and `warmth` on every
+  instrument.
+- New module `calibrate`: inharmonicity from a recording (Rauhala's PFD), ESPRIT modes with band residuals, Rayleigh
+  alpha/beta, McDermott texture SNR, Daniel & Weber roughness (`pip install genny[eval]`), and `genny eval` to make a
+  webMUSHRA listening test.
+
+Licences of borrowed numbers: see `THIRD_PARTY_NOTICES.md` (PTR exhaust values from CC BY-NC 4.0 checkpoints,
+soundgen preset values from a GPL package; no code taken from either).
 
 Module `chiptune2` (`docs/chiptune.md`, `tests/test_chiptune2.py`): six more chips for the `chip` layer and as voices.
 - `sn76489` (`sn_tone`, `sn_noise`): three squares and the white or looped-register noise, Sega and TI variants;

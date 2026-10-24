@@ -52,3 +52,17 @@ def test_moving_propagation():
     assert y.shape == x.shape
     assert np.all(np.isfinite(y))
     assert np.max(np.abs(y)) > 1e-8
+
+
+def test_blast_wave_matches_kinney_table():
+    from genny.physics import blast_wave
+    # Kinney & Graham Table XI part B, 1 ton TNT at 100 ft: Z = 3.149 m/kg^(1/3), Ps 0.57 atm, td 17.3 ms
+    w = 907.18
+    ps, td, a = blast_wave(w, 100 * 0.3048)
+    assert abs(ps / (0.57 * 101325) - 1) < 0.15 and abs(td / 17.3e-3 - 1) < 0.25 and abs(a - 0.9) < 0.05
+    # cube-root scaling: same Z, duration scales with W^(1/3), pressure unchanged
+    ps1, td1, _ = blast_wave(1.0, 100 * 0.3048 / w ** (1 / 3))
+    assert abs(ps1 / ps - 1) < 1e-9 and abs(td / td1 - w ** (1 / 3)) < 1e-6
+    # farther = weaker and longer
+    near, far = blast_wave(1.0, 5.0), blast_wave(1.0, 50.0)
+    assert far[0] < near[0] / 10 and far[1] > near[1]

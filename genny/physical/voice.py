@@ -650,28 +650,97 @@ def _simplex_lf(seed: int, rate, n: int, fs: float) -> np.ndarray:
 
 
 @numba.njit(cache=True)
+def _lf_eps(ta, tb):
+    """LF return-phase constant: eps*Ta = 1 - exp(-eps*Tb), by Newton from 1/Ta (Wang & Gobl 2023, eqs. 8-9)."""
+    e = 1.0 / ta
+    for _ in range(50):
+        x = math.exp(-e * tb)
+        d = (e * ta - 1.0 + x) / (ta - tb * x)
+        e -= d
+        if abs(d) < 1e-12 * e:
+            break
+    return e
+
+
+@numba.njit(cache=True)
+def _lf_resid(te, w, al, ra, rd):
+    """(Up - 0.11 Rd, net flow) of the LF pulse with T0 = Ee = 1; both are 0 for the transformed model."""
+    tb = 1.0 - te
+    eps = _lf_eps(ra, tb)
+    s = math.sin(w * te)
+    e0 = -1.0 / (math.exp(al * te) * s)
+    q = al * al + w * w
+    up = e0 * w * (math.exp(al * math.pi / w) + 1.0) / q
+    a_open = e0 * (math.exp(al * te) * (al * s - w * math.cos(w * te)) + w) / q
+    shift = math.exp(-eps * tb)
+    a_ret = -((1.0 - shift) / eps - tb * shift) / (1.0 - shift)
+    return up - 0.11 * rd, a_open + a_ret
+
+
+@numba.njit(cache=True)
 def _lf_coefs(rd):
-    """pinktrombone.lib ``_lfCoefficients`` (the original's setupWaveform)."""
-    if rd < 0.5:
-        rd = 0.5
+    """LF pulse (T0 = Ee = 1) whose measured Rd is the asked Rd: the transformed LF model solved exactly
+    (Wang & Gobl, Interspeech 2023), in the tuple layout of pinktrombone.lib ``_lfCoefficients``.
+
+    Ra and Rk come from Fant's regressions (eqs. 2-3); Te and alpha are found by two-variable Newton so that
+    Up/(Ee T0) = 0.11 Rd and the net flow is 0 (eqs. 7-19), and eps solves eps Ta = 1 - exp(-eps Tb). The
+    Pink Trombone stylisation (eps = 1/Ta, closed-form Rg) gave a pulse of Rd 0.42 for 0.3 and 1.96 for 2.7.
+    Above Rd 1.71 Fant's Rk has no LF pulse: Rk is raised to its minimum (k_k of eq. 30; Wang & Gobl's
+    eq. 29 for the Oq of that minimum is misprinted, so Oq comes from a fit of the minimum found
+    numerically, max error 2e-4 over 1.71..2.7, which reproduces eq. 30 to 4 decimals) and omega, alpha are
+    solved at that Oq. Rd is held in 0.3..2.7: Ra is valid down to 0.21 (Huber et al., Interspeech 2012,
+    eq. 13) and the regressions up to 2.7."""
+    if rd < 0.3:
+        rd = 0.3
     elif rd > 2.7:
         rd = 2.7
     ra = -0.01 + 0.048 * rd
     rk = 0.224 + 0.118 * rd
+    # start: the Pink Trombone stylisation
     rg = (rk / 4.0) * (0.5 + 1.2 * rk) / (0.11 * rd - ra * (0.5 + 1.2 * rk))
-    ta = ra
     tp = 1.0 / (2.0 * rg)
     te = tp + tp * rk
-    eps = 1.0 / ta
+    w = math.pi / tp
+    s = math.sin(w * te)
+    eps = 1.0 / ra
+    shift = math.exp(-eps * (1.0 - te))
+    rhs = ((1.0 / eps) * (shift - 1.0) + (1.0 - te) * shift) / (1.0 - shift)
+    al = math.log(-math.pi * s * -(rhs - (te - tp) / 2.0) / (tp * 2.0)) / (tp / 2.0 - te)
+    fixed_te = rd > 1.71
+    if fixed_te:
+        te = (0.02076431 * rd - 0.11738928) * rd + 0.96445575
+        rk *= ((0.031978 * rd - 0.32428) * rd + 1.0706) * rd - 0.044299
+    w = math.pi * (1.0 + rk) / te
+    for _ in range(40):
+        f1, f2 = _lf_resid(te, w, al, ra, rd)
+        if fixed_te:                     # unknowns omega, alpha
+            h = 1e-7 * w
+            a1, a2 = _lf_resid(te, w + h, al, ra, rd)
+        else:                            # unknowns Te, alpha (omega follows Te)
+            h = 1e-7
+            a1, a2 = _lf_resid(te + h, math.pi * (1.0 + rk) / (te + h), al, ra, rd)
+        ha = 1e-6 * max(1.0, abs(al))
+        b1, b2 = _lf_resid(te, w, al + ha, ra, rd)
+        j11, j21, j12, j22 = (a1 - f1) / h, (a2 - f2) / h, (b1 - f1) / ha, (b2 - f2) / ha
+        det = j11 * j22 - j12 * j21
+        dx = (j22 * f1 - j12 * f2) / det
+        da = (j11 * f2 - j21 * f1) / det
+        if fixed_te:
+            w -= dx
+        else:
+            if abs(dx) > 0.05:           # keep Te inside the period
+                da *= 0.05 / abs(dx)
+                dx = math.copysign(0.05, dx)
+            te -= dx
+            w = math.pi * (1.0 + rk) / te
+        al -= da
+        if abs(f1) + abs(f2) < 1e-13:
+            break
+    eps = _lf_eps(ra, 1.0 - te)
     shift = math.exp(-eps * (1.0 - te))
     delta = 1.0 - shift
-    rhs = ((1.0 / eps) * (shift - 1.0) + (1.0 - te) * shift) / delta
-    tot_upper = -(rhs - (te - tp) / 2.0)
-    omega = math.pi / tp
-    s = math.sin(omega * te)
-    alpha = math.log(-math.pi * s * tot_upper / (tp * 2.0)) / (tp / 2.0 - te)
-    e0 = -1.0 / (s * math.exp(alpha * te))
-    return eps, shift, delta, te, omega, alpha, e0
+    e0 = -1.0 / (math.sin(w * te) * math.exp(al * te))
+    return eps, shift, delta, te, w, al, e0
 
 
 @numba.njit(cache=True)
@@ -1555,13 +1624,33 @@ def recorded_segment(family: str, queries, pick: float, rng: np.random.Generator
     return row, tr, e
 
 
+# Jitter and shimmer are given as Praat's "local" measures: mean |x_i - x_(i-1)| / mean x over consecutive
+# periods or amplitudes (Praat manual, Voice 2-3). An i.i.d. normal per-cycle deviation of sd s measures
+# 2 s / sqrt(pi), so the sd to draw is the asked value times sqrt(pi) / 2.
+PRAAT_LOCAL = math.sqrt(math.pi) / 2.0
+
+
+def cycle_jitter(f0, jitter: float, rng: np.random.Generator, sr: float = SR) -> np.ndarray:
+    """f0 (per sample) with every glottal cycle scaled by its own factor 1 + d, d normal, so that the
+    periods measure a Praat local jitter of ``jitter``. The factor is held over the jittered cycle itself
+    (cycle k spans 1/(1 + d_k) cycles of the plain phase), not over a cycle of the plain phase, which would
+    smear each draw over two periods and measure about 0.6 of the asked value."""
+    f = np.asarray(f0, float)
+    sd = jitter * PRAAT_LOCAL
+    ph = np.cumsum(f) / sr
+    d = np.clip(rng.normal(0.0, sd, int(ph[-1] * (1 + 3 * sd)) + 3), -3 * sd, 3 * sd)
+    edges = np.concatenate(([0.0], np.cumsum(1.0 / (1.0 + d))))
+    return f * (1.0 + d[np.searchsorted(edges, ph, side="right") - 1])
+
+
 def roughness(f0, rng: np.random.Generator, *, jitter: float = 0.03, shimmer: float = 0.3,
               subharmonic=0.0, sub_rate: float = 2.5) -> tuple[np.ndarray, np.ndarray]:
     """Per-cycle irregularity of a pulse source, returned as (f0 with cycle jitter, amplitude
     multiplier per sample):
 
     * cycle-to-cycle jitter and shimmer: each glottal cycle gets its own relative period
-      deviation (normal, sd ``jitter``) and its own amplitude (log-normal, sd ``shimmer``) -
+      deviation (normal) and its own amplitude (log-normal), scaled so that ``jitter`` and
+      ``shimmer`` are what Praat's local jitter and shimmer would measure (``PRAAT_LOCAL``) -
       Farnell's rippling / flapping mechanism, "the intensity and density of the pulses depend on
       the air velocity over the membrane" (research 03 §3.1): the pulses are not identical;
     * period doubling: alternate cycles scaled by 1 -/+ d, i.e. the carrier ring-modulated at f0/2
@@ -1573,15 +1662,11 @@ def roughness(f0, rng: np.random.Generator, *, jitter: float = 0.03, shimmer: fl
     Amplitude changes happen at cycle starts only (held per cycle), so no clicks inside a pulse."""
     f = np.asarray(f0, float)
     n = len(f)
-    ph = np.cumsum(f) / SR
-    cyc = np.floor(ph).astype(np.int64)
-    nc = int(cyc[-1]) + 2
-    jit = rng.normal(0.0, jitter, nc)
-    f2 = f * (1.0 + np.clip(jit[cyc], -3 * jitter, 3 * jitter))
+    f2 = cycle_jitter(f, jitter, rng)
     ph2 = np.cumsum(f2) / SR
     c2 = np.floor(ph2).astype(np.int64)
     nc2 = int(c2[-1]) + 2
-    amp = np.exp(rng.normal(0.0, shimmer, nc2))[c2]
+    amp = np.exp(rng.normal(0.0, shimmer * PRAAT_LOCAL, nc2))[c2]
     d = np.broadcast_to(np.asarray(subharmonic, float), (n,))
     if np.any(d > 0):
         gate = np.zeros(n)

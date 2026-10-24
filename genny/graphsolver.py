@@ -133,10 +133,15 @@ class FirstOrderAllpass:
 
 @dataclass
 class StiffStringDispersion:
-    """Small cascade of stable allpasses approximating stiff-string dispersion."""
+    """Small cascade of stable allpasses approximating stiff-string dispersion. ``coefficients`` (one per
+    section, e.g. from ``physical.piano_data.dispersion_allpass``) override the ``amount`` heuristic."""
     amount: float=.0
     sections: int=3
+    coefficients: tuple | None=None
     def __post_init__(self):
+        if self.coefficients is not None:
+            self.filters=[FirstOrderAllpass(float(c)) for c in self.coefficients]
+            return
         a=float(np.clip(self.amount,0.0,1.0))
         self.filters=[FirstOrderAllpass(.04 + .18*a*(i+1)/max(1,self.sections)) for i in range(max(1,int(self.sections)))]
     def process(self,x:float)->float:

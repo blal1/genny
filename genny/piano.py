@@ -78,10 +78,14 @@ class FrequencyDependentBridge(BridgeImpedance):
 class PianoHammerAction:
     """Reduced hammer/action contact model with nonlinear felt and rebound.
 
-    The contact force follows ``F = K*x**p`` while the hammer is compressing the
-    felt against the string.  The returned waveform is normalized for the
-    realtime string renderer, while ``last_force_n`` retains the force-domain
-    pulse for diagnostics and future fully unit-preserving coupling.
+    The contact force follows ``F = K*(y_h - y_s)**p`` while the felt is compressed; the string
+    yields as a dashpot ``dy_s/dt = F/R``. Hammer mass, ``p`` and ``K`` are Chaigne & Askenfelt's
+    measured hammers (JASA 95(3) 1994, Table I: C2 4.9 g / 2.3 / 4.0e8, C4 2.97 g / 2.5 / 4.5e9,
+    C7 2.2 g / 3.0 / 1.0e12; log K interpolated). ``R`` is fitted so the contact at 1.5 m/s (their
+    mezzo forte) lasts their measured 3.1 / 2.0 / 0.6 ms: 7.9 / 7.8 kg/s in the bass and middle (the
+    strings' own impedance is 12-15), 82 at C7 where the agraffe reflection returns within 30 us.
+    The returned waveform is normalized for the realtime string renderer, while ``last_force_n``
+    retains the force-domain pulse for diagnostics and future fully unit-preserving coupling.
     """
     midi_note: int
     sr: int = 48000
@@ -89,42 +93,47 @@ class PianoHammerAction:
     felt_exponent: float | None = None
     hammer_mass_kg: float | None = None
     restitution: float = 0.28
+    string_impedance: float | None = None
+
+    _NOTES = (36.0, 60.0, 96.0)
 
     def __post_init__(self):
-        pos=float(np.clip((self.midi_note-21)/87.0,0.0,1.0))
-        # Reduced-order keyboard scaling: bass hammers are heavier and softer.
+        n=float(self.midi_note); N=self._NOTES
         self.hammer_mass_kg = float(self.hammer_mass_kg if self.hammer_mass_kg is not None
-                                    else (0.012 - 0.0075*pos))
+                                    else np.interp(n, N, (4.9e-3, 2.97e-3, 2.2e-3)))
         self.felt_exponent = float(self.felt_exponent if self.felt_exponent is not None
-                                   else (2.75 + 0.75*pos))
+                                   else np.interp(n, N, (2.3, 2.5, 3.0)))
         self.felt_stiffness = float(self.felt_stiffness if self.felt_stiffness is not None
-                                    else (1.1e9 * (1.0 + 1.7*pos)))
+                                    else np.exp(np.interp(n, N, np.log((4.0e8, 4.5e9, 1.0e12)))))
+        self.string_impedance = float(self.string_impedance if self.string_impedance is not None
+                                      else np.exp(np.interp(n, N, np.log((7.89, 7.82, 82.1)))))
         self.last_force_n=np.zeros(0,float)
         self.last_rebound_velocity_m_s=0.0
         self.last_contact_time_s=0.0
 
     def strike(self, velocity: float, *, soft: bool=False) -> np.ndarray:
         vel=float(np.clip(velocity,0.0,1.0))
-        # Map MIDI-like velocity to a plausible hammer speed range.
-        v=(0.45 + 2.75*vel**1.35) * (0.78 if soft else 1.0)
+        # hammer speed 0.5 (pp) .. 1.5 (mf, vel 0.53) .. 4 m/s (ff): Chaigne & Askenfelt's three levels
+        v=0.5*8.0**vel * (0.78 if soft else 1.0)
         m=max(self.hammer_mass_kg,1e-5); k=max(self.felt_stiffness,1.0); p=max(self.felt_exponent,1.1)
-        dt=1.0/self.sr; x=0.0; force=[]
-        max_n=max(8,int(round(0.018*self.sr)))
-        for _ in range(max_n):
-            x=max(0.0,x+v*dt)
-            f=k*(x**p) if x>0 else 0.0
+        R=max(self.string_impedance,1e-3)
+        os=max(1,int(math.ceil(192000/self.sr)))       # the treble contact is a few samples long
+        dt=1.0/(self.sr*os); yh=ys=0.0; force=[]
+        for i in range(max(8,int(round(0.018*self.sr)))*os):
+            yh+=v*dt
+            c=yh-ys
+            if c<=0.0 and i>0:
+                break
+            f=k*c**p if c>0.0 else 0.0
             force.append(f)
-            v += (-f/m)*dt
-            if v < 0.0:
-                # Follow decompression until separation.
-                x=max(0.0,x+v*dt)
-                if x <= 0.0:
-                    break
+            v-=f/m*dt
+            ys+=f/R*dt
         arr=np.asarray(force,float)
+        arr=np.pad(arr,(0,(-len(arr))%os)).reshape(-1,os).mean(axis=1)
         if len(arr)==0 or not np.any(arr):
             arr=np.array([0.0],float)
         self.last_force_n=arr
-        self.last_contact_time_s=len(arr)/self.sr
+        self.last_contact_time_s=len(force)*dt
         self.last_rebound_velocity_m_s=-abs(v)*float(np.clip(self.restitution,0.0,1.0))
         peak=max(float(np.max(np.abs(arr))),1e-12)
         return arr/peak * (0.18 + 0.82*vel**1.4) * (0.78 if soft else 1.0)
@@ -167,18 +176,23 @@ class PianoStringCourse:
         self.lines = []
         self.orthogonal_lines = []
         self._x_dispersion=[]; self._y_dispersion=[]
+        # Dispersion: the Steinway D inharmonicity of this key (Chabassier & Durufle 2012) through a cascade of
+        # identical first-order allpasses designed to put the loop's partials on n f0 sqrt(1 + B n^2)
+        # (Rauhala & Valimaki, DAFx-06); their phase delay at f0 comes off the delay line so the note stays in tune.
+        from .physical.piano_data import dispersion_allpass, steinway_B
+        self.inharmonicity_B = steinway_B(self.midi_note)
         for f,q in zip(self.frequencies,self.physical_properties):
-            d = max(2.05, self.sr / max(f, 1.0))
+            a1, dd, nsec = dispersion_allpass(f, self.inharmonicity_B, self.sr)
+            d = max(2.05, self.sr / max(f, 1.0) - dd)
             self.lines.append((ThiranDelay(d, max(64, int(self.sr / 8))),
                                FrequencyDependentLoss(self.loss_dc, self.loss_hf, 0.45)))
             # Second transverse polarization with a tiny frequency split.
             f2=f*2.0**(q.polarization_split_cents/1200.0)
-            d2=max(2.05,self.sr/max(f2,1.0))
+            d2=max(2.05,self.sr/max(f2,1.0) - dd)
             self.orthogonal_lines.append((ThiranDelay(d2,max(64,int(self.sr/8))),
                                           FrequencyDependentLoss(self.loss_dc**1.0003, self.loss_hf*0.999, 0.48)))
-            da=float(np.clip(math.sqrt(max(q.inharmonicity_B,0.0))*18.0,0.0,1.0))
-            self._x_dispersion.append(StiffStringDispersion(da,3))
-            self._y_dispersion.append(StiffStringDispersion(min(1.0,da*1.05),3))
+            self._x_dispersion.append(StiffStringDispersion(coefficients=(a1,) * nsec))
+            self._y_dispersion.append(StiffStringDispersion(coefficients=(a1,) * nsec))
         self.key_down = False
         self.sustain_held = False
         self.sostenuto_held = False

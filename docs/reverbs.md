@@ -19,10 +19,11 @@ same thing whatever the decay time (a steady sound is as loud wet as dry).
 | `jcrev` | fx | Chowning's JCRev (1972) Schroeder reverb; `variant=samson` = Samson-box version | stereo |
 | `satrev` | fx | Chowning's SATREV (1971): small, bright, vintage | as input |
 | `fdn_reverb` | fx | Jot feedback delay network, 8/16 lines, separate low and high decay times | stereo |
+| `velvet_reverb` | fx | velvet-noise convolution tail, shaped per octave: smooth from the first ms, never metallic | stereo |
 | `room` | fx | physical room: preset or dimensions + materials (early reflections + late reverb) | stereo |
 | `zita` | fx | zita-rev1 (the existing `physical/space.py` kernel) | stereo |
 | `early_reflections` | fx | first wall/floor/ceiling echoes of a box room, no tail | stereo (or as input) |
-| `distance` | fx | 1/r level, air absorption, reverb send | as input (stereo with `reverb`) |
+| `distance` | fx | 1/r level, ISO 9613-1 air absorption, ground reflection, reverb send | as input (stereo with `reverb`) |
 | `doppler` | fx | fly-by with true Doppler shift, swell, air, pan | stereo (mono with `pan=false`) |
 | `occlude` | fx | sound from behind a wall / door / window | as input |
 | `leslie` | fx | rotary speaker: horn + drum, slow / fast / brake | stereo |
@@ -84,6 +85,21 @@ spread exponentially around the mean free path `size`.
 | `tonal` | 1 | tonal correction 0..1: gives back the highs that the faster HF decay takes out of the tail |
 | `tail` | auto | seconds appended (1.2 x `t60_low`, max 10) |
 
+### `velvet_reverb`
+Velvet noise (Karjalainen & Jarvelainen; Valimaki et al. 2017) is a sparse noise with one +-1 impulse per grid
+cell of 20 samples at 2205 impulses/s: it already sounds smoother than Gaussian noise. The tail is that noise
+split into octave bands, each band decaying in its own T60, convolved with the input.
+
+| param | default | meaning |
+|---|---|---|
+| `t60_low` | 2.0 | decay time at 250 Hz, seconds |
+| `t60_high` | 1.0 | decay time at 4 kHz, seconds (at most `t60_low`) |
+| `predelay` | 0.02 | seconds before the tail starts |
+| `mix` | 0.3 | wet amount |
+| `width` | 1 | stereo width (two independent tails) |
+| `density` | 2205 | impulses per second: 1000 grainy, 2205 smooth, 4000 dense |
+| `seed` | 0 | variation of the tail |
+
 ### `zita`
 `physical/space.py` `zita_rev1` at its native 48 kHz, resampled at the boundary. Params: `mix` 0.3, `preset`
 (`default`, `instrument`, `exterior_dry`, `stone_hall`, `cave`), `t60_low` (decay below `xover`, s), `t60_mid`
@@ -142,13 +158,16 @@ Only the image-source taps. Params: `mix` 0.5 (1 = direct + reflections at their
 | param | default | meaning |
 |---|---|---|
 | `metres` | 10 | distance to the source; the input is the sound at `ref` metres |
-| `air` | true | air absorption (5.6 dB/km at 1 kHz, 90 dB/km at 4 kHz at 50 % humidity, f^2 beyond) |
-| `humidity` | 50 | %, 40..70; drier air absorbs more highs |
+| `air` | true | air absorption, ISO 9613-1 (at 20 C and 50 %: 4.7 dB/km at 1 kHz, 29.7 at 4 kHz, 105 at 8 kHz) |
+| `humidity` | 50 | %, 10..100; drier air absorbs more highs |
+| `temperature` | 20 | C, -20..50: air absorption and speed of sound (343 m/s at 20 C) |
+| `ground` | `none` | reflection off the ground: `grass` (flow resistivity 300 cgs), `hard` (rigid), or a flow resistivity in cgs units. Delany-Bazley impedance with the spherical-wave correction: over grass the low end gains 6 dB and a 10-15 dB dip opens around 300-800 Hz at 100 m |
+| `source_height`, `listener_height` | 1.5 | metres, for `ground` |
 | `reverb` | 0 | reverb send 0..1: the reverberant level stays put while the direct sound drops as 1/r |
 | `reverb_time` | 1.5 | seconds |
 | `ref` | 1 | metres where gain = 1 (closer than this is capped at +6 dB) |
 | `line_source` | false | true = 1/sqrt(r) (road, river) |
-| `delay` | false | true = prepend the travel time (r - ref) / 345 s |
+| `delay` | false | true = prepend the travel time (r - ref) / c |
 
 ### `doppler`
 The source moves on a straight line past the listener; each output sample reads the input at its emission time

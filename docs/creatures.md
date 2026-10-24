@@ -70,7 +70,7 @@ high-pass.
 
 | name | params (default) |
 |---|---|
-| `birdsong` | `species` (`robin`), `repeats` (1), `syllables` (0 = preset), `pitch` (1), `tempo` (1), `two_voice` (0), `bright` (1), `seed` |
+| `birdsong` | `species` (`robin`), `repeats` (1), `syllables` (0 = preset), `pitch` (1), `tempo` (1), `two_voice` (0), `bright` (1), `source` (`fm`; `normal_form` = Amador et al. 2013 labial normal form into a quarter-wave trachea: pressure crosses a Hopf threshold at each onset, so notes scoop up into pitch), `seed` |
 | `bird_call` | `freq` (450 Hz, 150-900), `freq_end` (0 = no glide), `pressure` (3 kPa, 1.5-6), `attack` (0.3), `two_voice` (5 Hz), `species` (`raven`: oil_bird, raven, budgie), `dur` (0.5) |
 | `dawn_chorus` | `birds` (6), `dur` (8), `bright` (1), `seed` |
 

@@ -961,7 +961,11 @@ def rain(dur: float, rng: np.random.Generator, *, loop: bool = False, intensity:
     if on_water > 0:
         bw = []
         for c in (0, 1):
-            b = P.bubble_field(dur + 0.3, rng, rate=400.0 * intensity, alpha=2.9, r_range=(0.25e-3, 1.5e-3))
+            # drops of 0.8-1.1 mm at terminal speed entrain bubbles of about 0.22 mm: the 14 kHz peak of rain
+            # noise, smaller bubbles making its upper roll-off (Prosperetti, Crum & Pumphrey, JGR 94:3255, 1989);
+            # larger drops fill in below 7 kHz. UNSOURCED: the 3:1 rate split and the 0.20-0.25 mm spread (median 0.22 mm, 15 kHz).
+            b = P.bubble_field(dur + 0.3, rng, rate=300.0 * intensity, alpha=2.9, r_range=(0.20e-3, 0.25e-3))
+            b = b + P.bubble_field(dur + 0.3, rng, rate=100.0 * intensity, alpha=2.9, r_range=(0.25e-3, 1.5e-3))
             bw.append(dom.tile(dom.fold(b)))
         bw = np.stack(bw, axis=1)
         out = out + _norm(bw) * on_water
@@ -1059,6 +1063,62 @@ def thunder(rng: np.random.Generator, *, dur: float = 24.0, distance: float = 0.
     if return_info:
         return y, dict(strikes=len(events), strike_span_ms=events[-1][0])
     return y
+
+
+C_AIR = 343.0
+THUNDER_PEAK_HZ = 60.0   # ground flashes peak at 40-80 Hz after wind-noise correction (Holmes et al. 1971, McCrory 1971)
+# UNSOURCED: a 4 km channel from the ground to the cloud, in 10 m segments turning by 16 degrees rms each
+CHANNEL_M, SEGMENT_M, TURN_DEG = 4000.0, 10.0, 16.0
+
+
+def thunder_channel(rng: np.random.Generator, *, dur: float = 12.0, distance_m: float = 1000.0,
+                    peak_hz: float = THUNDER_PEAK_HZ) -> np.ndarray:
+    """Few's "string of pearls" thunder (Few 1969, as reviewed by Gutjahr & Holmes, ONR report ADA051954, 1977):
+    the tortuous channel is a chain of cylindrical segments, each radiating an N-wave as it relaxes; the listener
+    hears them in order of distance, so the thunder lasts as long as the channel's range spread over c and the
+    tortuosity sets the clicks and the ripples of the spectrum. A segment seen broadside sends its N-wave at
+    once, one seen end-on smears it over its length l cos(psi) / c (Wright & Medendorp's finite line source);
+    1/r spreading and ISO 9613-1 air absorption at each segment's range. Mono, at SR, peak 1, starting at the
+    first arrival.
+
+    The N-wave lasts T = 0.66 / peak_hz (an N-wave's spectrum peaks at 0.66 / T), +-30 % from segment to segment
+    (UNSOURCED spread, it keeps the peaks inside the measured 40-80 Hz)."""
+    n = seconds(dur)
+    m = int(CHANNEL_M / SEGMENT_M)
+    # random walk upward from the strike point, x towards the listener
+    d = np.array([0.0, 0.0, 1.0])
+    pts, dirs = [np.zeros(3)], []
+    s = math.radians(TURN_DEG)
+    for _ in range(m):
+        d = d + rng.normal(0.0, s, 3)
+        d[2] = abs(d[2]) + 0.2                         # keep climbing (a ground flash goes up to the cloud)
+        d /= np.linalg.norm(d)
+        dirs.append(d)
+        pts.append(pts[-1] + SEGMENT_M * d)
+    mid = (np.array(pts[:-1]) + np.array(pts[1:])) / 2
+    ear = np.array([float(distance_m), 0.0, 1.5])
+    los = mid - ear
+    r = np.maximum(np.linalg.norm(los, axis=1), 1.0)
+    cospsi = np.abs(np.sum(np.array(dirs) * los, axis=1)) / r
+    # range bands for the absorption: 16 log-spaced bins
+    edges = np.geomspace(r.min() * 0.999, r.max() * 1.001, 17)
+    band = np.clip(np.searchsorted(edges, r) - 1, 0, 15)
+    bufs = np.zeros((16, n))
+    for i in range(m):
+        T = 0.66 / peak_hz * rng.uniform(0.7, 1.3)
+        nw = np.linspace(1.0, -1.0, max(4, seconds(T)))
+        w = max(1, seconds(SEGMENT_M * cospsi[i] / C_AIR))
+        pulse = np.convolve(nw, np.full(w, 1.0 / w)) / r[i]
+        _place(bufs[band[i]], pulse, seconds((r[i] - r.min()) / C_AIR))   # t = 0 at the first arrival
+    nf = n + seconds(1.0)                              # room for the zero-phase absorption, no wrap-around
+    f = np.fft.rfftfreq(nf, 1.0 / SR)
+    a = S.air_db_per_m(np.maximum(f, 1.0))
+    out = np.zeros(n)
+    for b in range(16):
+        if np.any(band == b):
+            rb = float(np.mean(r[band == b]))
+            out += np.fft.irfft(np.fft.rfft(bufs[b], nf) * 10 ** (-a * rb / 20.0), nf)[:n]
+    return out / (np.max(np.abs(out)) + 1e-12)
 
 
 # ==========================================================================================
@@ -1167,8 +1227,8 @@ def surf(dur: float, rng: np.random.Generator, *, loop: bool = False, distance: 
             k = np.arange(seg_len)
             idx = (i0 + k) % n if loop else np.clip(i0 + k, 0, n - 1)
             rr[:] = rate[idx]
-            alpha = rng.uniform(1.5, 3.3)
-            bb = P.bubble_field(seg_len / SR, rng, rate=rr, alpha=alpha, r_range=(0.3e-3, 20e-3))
+            # breaking-wave bubble sizes: r^-3/2 below the 1 mm Hinze scale, r^-10/3 above (Deane & Stokes 2002)
+            bb = P.bubble_field(seg_len / SR, rng, rate=rr, alpha=(1.5, 10.0 / 3.0, 1e-3), r_range=(0.3e-3, 20e-3))
             _place(b, bb, i0)
             for _ in range(int(rng.integers(2, 5))):              # large tube bubbles at the break
                 tb = tube_bubble(rng.uniform(5e-3, 40e-3), rng)

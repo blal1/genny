@@ -11,7 +11,7 @@ Model and sources (research notes are in ``synthgen/out/research``)
 -------------------------------------------------------------------
 * **Source** - Liljencrants-Fant glottal flow derivative in Fant's one-parameter Rd form
   (Fant, Liljencrants & Lin 1985; Fant 1995; coefficients = ``genny.physical.voice._lf_coefs``,
-  the Pink Trombone glottis, research 08 §5.4). Rd 0.5 pressed .. 1 modal .. 2.7 breathy. One
+  solved exactly for Rd as in Wang & Gobl 2023). Rd 0.3 pressed (Huber 2012) .. 1 modal .. 2.7 breathy. One
   wavetable per Rd, band-limited per pitch (mip-maps: no aliasing at any sample rate), every table
   normalised on its first harmonic so that effort raises the upper partials rather than the
   fundamental (Sundberg 1987 ch.4, as in procedural/choir.py). The flow derivative already holds
@@ -88,7 +88,7 @@ from .analysis import loudness
 from .core import DEFAULT_SR
 from .instruments import instrument
 from .notes import midi_to_freq, parse_pitch_list, parse_sequence
-from .physical.voice import STK_PHONEMES, _autobend, formant_table, lf_waveform
+from .physical.voice import PRAAT_LOCAL, STK_PHONEMES, _autobend, formant_table, lf_waveform
 from .spec import SpecError, layer_type
 
 # ==============================================================================================
@@ -621,7 +621,7 @@ def parse_dynamics(text, total: float):
 # Glottal source tables (LF, Rd form), mip-mapped - procedural/choir.py _tables
 # ==============================================================================================
 
-RD_GRID = np.round(np.arange(0.5, 2.71, 0.1), 2)
+RD_GRID = np.round(np.arange(0.3, 2.71, 0.1), 2)
 TAB_N = 2048
 LEVEL_H = np.array([512, 362, 256, 181, 128, 90, 64, 45, 32, 23, 16, 11, 8, 5, 3, 2, 1], dtype=np.float64)
 
@@ -1206,7 +1206,7 @@ def _render_singer(sg: dict, notes: list[dict], P: dict, n: int, sr: int, cons_g
     rdv = rd + st["rd"] + sg["rd_off"] - 1.5 * (eff - 0.6) + 0.7 * P["breath"] \
         + 0.4 * np.clip((mt - (V["lo"] + 7.0)) / 12.0, 0.0, 2.5)
     rdv = rdv + falt * 0.85 * (2.3 - rdv)
-    rdv = np.clip(rdv, 0.5, 2.7)
+    rdv = np.clip(rdv, RD_GRID[0], 2.7)        # Huber et al. 2012: 0.3 pressed
     lev = 10 ** ((-LEVEL_DB * (1.0 - np.clip(eff, 0, 1.2)) + sg["level_db"] - 4.0 * falt) / 20.0)
     # ---- formants of this singer -------------------------------------------------------------
     Fs = FB[:, :NF] * sg["vtl"]
@@ -1251,9 +1251,17 @@ def _render_singer(sg: dict, notes: list[dict], P: dict, n: int, sr: int, cons_g
     na /= np.sqrt(np.mean(na * na)) + 1e-12
     tabs, flows = _tables()
     Pn = int(n * 2200 / sr) + 64
-    rj = np.clip(rng.normal(0, sg["jitter"], Pn), -3 * sg["jitter"], 3 * sg["jitter"])
-    rs = np.clip(rng.normal(0, sg["shimmer"], Pn), -0.2, 0.2)
-    y, yf = _kernel(up(f0b), amp, (rds - 0.5) / 0.1, up(tla), np.full(n, float(P["sub"]) if sg["idx"] % 3 == 1 or solo else 0.0),
+    # Softer singing is rougher: jitter and shimmer relative to medium phonation are x2.6 / x3.2 soft and
+    # x0.65 / x0.35 loud (Brockmann et al., JSLHR 51:1152, 2008, Table 2, mean of women and men; soft / medium /
+    # loud = 64-69 / 73-79 / 97-99 dB SPL), here at effort 0.3 / 0.6 / 0.9.
+    # ponytail: one factor per singer from the mean effort, not per period; follow the effort if crescendos matter.
+    e_mean = float(np.mean(eff)) if np.size(eff) else 0.6
+    kj = float(np.exp(np.interp(e_mean, (0.3, 0.6, 0.9), np.log((2.6, 1.0, 0.65)))))
+    ks = float(np.exp(np.interp(e_mean, (0.3, 0.6, 0.9), np.log((3.2, 1.0, 0.35)))))
+    jit, shim = sg["jitter"] * kj * PRAAT_LOCAL, sg["shimmer"] * ks * PRAAT_LOCAL
+    rj = np.clip(rng.normal(0, jit, Pn), -3 * jit, 3 * jit)
+    rs = np.clip(rng.normal(0, shim, Pn), -0.2, 0.2)
+    y, yf = _kernel(up(f0b), amp, (rds - RD_GRID[0]) / 0.1, up(tla), np.full(n, float(P["sub"]) if sg["idx"] % 3 == 1 or solo else 0.0),
                     asp, fr, na, rng.standard_normal(n), tabs, flows, LEVEL_H,
                     np.ascontiguousarray(Fs), np.ascontiguousarray(Bs), np.ascontiguousarray(nz),
                     np.ascontiguousarray(nw), np.ascontiguousarray(fsp), blk, rj, rs, float(rng.uniform(0, 1)), 0.5, float(sr))

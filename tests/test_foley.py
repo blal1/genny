@@ -405,3 +405,66 @@ if __name__ == "__main__":
         if k.startswith("test_"):
             fn()
             print("ok", k)
+
+
+# ---------------------------------------------------------------- Selfridge aeroacoustics
+def _aero_peak_hz(y, sr=48000):
+    P = np.abs(np.fft.rfft(y * np.hanning(len(y)))) ** 2
+    return np.fft.rfftfreq(len(y), 1 / sr)[np.argmax(P)]
+
+
+def test_cavity_frequencies_match_selfridge_table_3():
+    from genny.physical import modal as m
+    for u, L, b, d, want in ((3.43, 0.03, 0.03, 0.015, (49, 113, 178, 243)), (89.2, 0.0191, 0.1016, 0.0127, (1739, 4057, 6376, 8695)),
+                             (308.7, 0.0191, 0.1016, 0.0127, (4680, 10919, 17159, 23398))):
+        fd, fm = m.cavity_frequencies(u, L, d, b)
+        assert np.allclose(fd, want, rtol=0.003, atol=1.0)                          # the table is rounded to 1 Hz
+    assert abs(m.cavity_frequencies(3.43, 0.03, 0.015, 0.03)[1] - 2061) < 10       # depth mode, Table 3
+    # Howe's cavity: the depth-mode monopole carries more energy than any Rossiter dipole (DAFx-17 Fig. 5)
+    y = m.cavity_tone(3.43, 0.03, 0.015, 0.03, 2.0, np.random.default_rng(0), elevation=30)
+    P, f = np.abs(np.fft.rfft(y)) ** 2, np.fft.rfftfreq(len(y), 1 / 48000)
+    band = lambda c, w: P[(f > c - w) & (f < c + w)].sum()
+    assert band(2065, 150) > max(band(48.6, 5), band(113.4, 8), band(178.2, 10), band(243.0, 12))
+
+
+def test_aeolian_harp_locks_in_to_the_string():
+    from genny.physical import modal as m
+    harp = lambda f1: _aero_peak_hz(m.aeolian_harp(6.0, [f1], 2.0, np.random.default_rng(0)))
+    # at 6 m/s a 0.5 mm string sheds at ~2200 Hz: strings near it pull the tone to their own harmonic
+    assert abs(harp(2000) - 2000) < 5 and abs(harp(1700) - 1700) < 5 and abs(harp(900) - 1800) < 5
+    assert abs(harp(1300) - 2200) < 60                                              # V = 0.68: no lock-in
+
+
+def test_propeller_loading_harmonics_and_presets():
+    from genny.physical import modal as m
+    y = m.propeller_tone(2100, 3, 1.0, 200.0, 2.0, np.random.default_rng(0))
+    bpf = 3 * 2100 / 60
+    P, f = np.abs(np.fft.rfft(y)) ** 2, np.fft.rfftfreq(len(y), 1 / 48000)
+    assert P[np.abs(f - bpf) < 3].sum() > 10 * P[np.abs(f - 1.5 * bpf) < 3].sum()  # a line at the blade-passing frequency
+    for name in m.AIRCRAFT:
+        z = S.REGISTRY["propeller"]["fn"](SR, dur=0.5, aircraft=name)
+        assert np.isfinite(z).all() and brightness(z, SR)["above_5k"] < 0.02
+
+
+def test_edge_tone_modes_and_hysteresis():
+    from genny.physical import modal as m
+    # Powell's geometry of Selfridge 2018 Fig. 5 (d 1.04 mm, h 10 mm): airspeed swept 2 -> 60 -> 2 m/s
+    t = np.arange(20 * 48000) / 48000
+    u = np.where(t < 10, 2 + 5.8 * t, 60 - 5.8 * (t - 10))
+    mode, st, f, *_ = m.edge_track(u, 0.01, 0.00104)
+    at = lambda s: int(mode[int(s * 48000)])
+    assert (at(1.0), at(3.0), at(8.0)) == (2, 3, 4)                                 # stages climb with u
+    assert at(18.5) == 3 and at(3.0) == 3                                          # 10.7 m/s falling: still 3 ...
+    assert at(1.5) == 2                                                            # ... rising through it: 2
+    # eq. 12 at Table 2 values: Re_d 985, h/d 9.6, mode 2 -> St ~0.105
+    i = int(2.0 * 48000)
+    assert at(2.0) == 2 and abs(st[i] - 0.105) < 0.01 and abs(f[i] - st[i] * u[i] / 0.00104) < 1
+    assert m.edge_track(15.0 * np.ones(4800), 0.001, 0.001)[-1].max() < 0.01       # h/d 1: no tone
+
+
+def test_aero_sfx_render():
+    for name, kw in (("cavity_tone", {"dur": 0.5}), ("cavity_tone", {"dur": 0.5, "speed": [5, 30], "gust": 0.5}),
+                     ("edge_tone", {"dur": 0.5}), ("edge_tone", {"dur": 0.5, "speed": [3, 30], "profile": "top_hat"}),
+                     ("aeolian_harp", {"dur": 1.0})):
+        y = S.REGISTRY[name]["fn"](SR, **kw)
+        assert y.ndim == 1 and np.isfinite(y).all() and np.abs(y).max() > 0.1

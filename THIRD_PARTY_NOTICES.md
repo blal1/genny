@@ -79,3 +79,18 @@ in the NESdev wiki and in Pan Docs. The FM patches (`FM_PATCHES`) and the wave s
   `pokey.cpp` (Brad Oliver, Eric Smith, Juergen Buchmueller; BSD 3-Clause), which credits Perry McFarlane and the
   Altirra Hardware Reference Manual.
 - `sn76489`: written from the SMS Power development wiki page "SN76489". `dpcm`: from the NESdev wiki, "APU DMC".
+
+## genny/vehicle.py: PTR exhaust resonators
+
+`PTR_EXHAUST` holds nine numbers per exhaust (a delay and two feedback coefficients for each of three resonators)
+read from the trained checkpoints of **ptr-model** by Robin Doerfler and Lonce Wyse
+(github.com/rdoerfler/ptr-model, "Physics-Informed Neural Engine Sound Modeling with Differentiable Pulse-Train
+Synthesis", arXiv:2603.09391), released under CC BY-NC 4.0. No code and no network weights are included; the pulse
+and resonator structure is written from the paper.
+
+## genny/physical/nonverbal.py: soundgen presets
+
+`PRESETS` (laugh, scream, cry, moan) are the parameter values of the M1 and F1 presets in `presets.R` of
+**soundgen** by Andrey Anikin (GPL >= 2), and the bandwidth formula is its `getBandwidth`. No code is taken; the
+synthesis is written from Anikin, "Soundgen: an open-source tool for synthesizing nonverbal vocalizations",
+Behav. Res. Methods 51, 778-792 (2019) and the package's parameter documentation.

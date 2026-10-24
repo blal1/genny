@@ -781,13 +781,16 @@ def plate_bow(sr=DEFAULT_SR, dur=2.0, size=0.3, thickness=1.7, force=15.0, speed
 # ---------------------------------------------------------------------------------------------------------
 def nl_plate(sr=DEFAULT_SR, vel=1.0, size=0.4, thickness=1.0, force=80.0, contact_ms=16.0, pos=(0.2, 0.3),
              decay=10.0, damping=0.005, model="vk", eps=1.0, material=BRONZE, bright=0.6, quality=1.0,
-             dur=2.0, points=900, drive=None, level=0.85, info=None, accel=True, hp=150.0):
+             dur=2.0, points=900, drive=None, level=0.85, info=None, accel=True, hp=150.0, loss=None, scan=None):
     """Nonlinear plate (g03 §6): `model` = "vk" (von Karman simple scheme, Airy stress solve every step),
     "berger" (tension modulation: glide only) or "linear". `size` is the diameter of the disc of equal
     area, `force` the peak strike force in newtons, converted to the scaled units of eq 13.9 by
     F / (rho H L^2 u0). `drive` (callable n, fs -> force array in N) replaces the single pulse.
     `accel`: acceleration pickup (g03 §4.4; what a small radiator sends to the air) instead of velocity;
-    `hp`: output highpass in Hz (the lowest modes of a big thin plate are subsonic flapping)."""
+    `hp`: output highpass in Hz (the lowest modes of a big thin plate are subsonic flapping).
+    `loss` = (T60 at 0 Hz, f_c, T60 at f_c) replaces decay / damping (Bilbao et al. DAFx-23, eq. 48);
+    `scan` = (R, f_o): the output moves on their ellipse x = 1/2 + R/2 cos(2 pi f_o t), y = 1/2 + R/2 sin(...)
+    (eq. 7), read from 48 fixed points with linear interpolation along the ellipse."""
     rho, E, nu = material
     L = 0.886 * float(np.clip(size, 0.1, 3.0))                     # sqrt(pi)/2 * diameter
     H = float(np.clip(thickness, 0.2, 20.0)) * 1e-3
@@ -796,8 +799,11 @@ def nl_plate(sr=DEFAULT_SR, vel=1.0, size=0.4, thickness=1.0, force=80.0, contac
     fs = _rate(4.0 * kappa * points * q, 4000, 24000)
     kappa = min(kappa, fs / 240.0)
     decay = float(np.clip(decay, 0.1, 30.0))
-    mdl = _model(fs, eps, "ssss", round(kappa, 5), 0.0, round(_L10 / decay, 6),
-                 round(float(np.clip(damping, 0.0, 0.05)), 6), nu)
+    if loss is not None:
+        s0, s1 = loss_coeffs(1.0, loss[0], loss[1], loss[2], kappa, 0.0, fs)
+    else:
+        s0, s1 = _L10 / decay, float(np.clip(damping, 0.0, 0.05))
+    mdl = _model(fs, eps, "ssss", round(kappa, 5), 0.0, round(s0, 6), round(s1, 10), nu)
     u0 = H / math.sqrt(6.0 if model == "berger" else 6.0 * (1.0 - nu * nu))
     vel = float(np.clip(vel, 0.02, 1.0))
     n = int(float(np.clip(dur, 0.05, 20.0)) * fs)
@@ -805,7 +811,17 @@ def nl_plate(sr=DEFAULT_SR, vel=1.0, size=0.4, thickness=1.0, force=80.0, contac
         f = pulse(n, fs, max(force, 1e-3) * vel * vel, float(np.clip(contact_ms, 0.3, 40.0)) * (1.25 - 0.5 * vel))
     else:
         f = drive(n, fs)
-    out, hits = simulate_nl(mdl, f / (rho * H * L * L * u0), model, (pos[0], pos[1], 0.0), ((0.63, 0.41),))
+    if scan is None:
+        pts = ((0.63, 0.41),)
+    else:
+        th = 2.0 * math.pi * np.arange(48) / 48
+        pts = tuple(zip(0.5 + 0.5 * scan[0] * np.cos(th), 0.5 + 0.5 * scan[0] * np.sin(th)))
+    out, hits = simulate_nl(mdl, f / (rho * H * L * L * u0), model, (pos[0], pos[1], 0.0), pts)
+    if scan is not None:                                           # the moving pickup, interpolated along the ellipse
+        ph = (np.arange(n) * scan[1] / fs % 1.0) * 48
+        i0 = ph.astype(int) % 48
+        fr = ph - np.floor(ph)
+        out = ((1.0 - fr) * out[np.arange(n), i0] + fr * out[np.arange(n), (i0 + 1) % 48])[:, None]
     if info is not None:
         info.update(fs=fs, kappa=kappa, n=mdl.n, guard_hits=hits, peak_u=float(np.max(np.abs(out))))
     y = _vel(_vel(out, fs), fs) if accel else _vel(out, fs)
@@ -864,6 +880,35 @@ def tam_tam(sr=DEFAULT_SR, vel=1.0, size=1.0, thickness=2.5, force=2000.0, decay
             model="vk", quality=1.0):
     return nl_plate(sr, vel, size, thickness, force, 10.0, (0.38, 0.44), decay, 0.004, model, 1.0, BRONZE,
                     bright, quality, dur, accel=False, hp=40.0)
+
+
+# Bilbao, Webb, Wang & Ducceschi, "Real-time gong synthesis", DAFx-23: steel (E 2e11 Pa, rho 7850, nu 0.3), 0.5 mm,
+# aspect 1.4, T60 20 s at 0 Hz and 10 s at 1 kHz; a small plate (0.01 m^2, 2 ms strike) crashes when hit hard, a
+# large one (0.16 m^2, 4 ms) swells. UNSOURCED: the strike point and the large plate's force (their Fig. 4 axis).
+STEEL = (7850.0, 2e11, 0.3)
+_DAFX23 = dict(eps=1.4, material=STEEL, loss=(20.0, 1000.0, 10.0))
+
+
+def _dafx23_params(force, dur):
+    return dict(force=(force, "peak strike force N at vel 1 (low: clean modes; higher: pitch glides; high: crash)"),
+                dur=(dur, "rendered length s"), bright=(0.6, "0..1 output lowpass 1.5 kHz .. 12 kHz"),
+                scan=(0.0, "Hz: the pickup circles an ellipse of R 0.4 at this rate (a gong swinging on its "
+                            "rope; DAFx-23 use 1 Hz), 0 = fixed"),
+                quality=(1.0, "0.25..3 internal sample rate / grid size (cost ~ quality^2.5)"))
+
+
+@drum("steel_cymbal", "Small steel plate (DAFx-23 real-time gong model, 0.01 m^2): clear modes when tapped, "
+      "uneven pitch glides harder, a crash of wideband noise at full force.", **_dafx23_params(80.0, 2.0))
+def steel_cymbal(sr=DEFAULT_SR, vel=1.0, force=80.0, dur=2.0, bright=0.6, scan=0.0, quality=1.0):
+    return nl_plate(sr, vel, 0.113, 0.5, force, 2.0, (0.38, 0.45), 20.0, 0.0, "vk", quality=quality, dur=dur,
+                    bright=bright, scan=(0.4, scan) if scan > 0 else None, hp=60.0, **_DAFX23)
+
+
+@drum("steel_gong", "Large steel plate (DAFx-23 real-time gong model, 0.16 m^2): the gong swell, energy "
+      "migrating upwards over the first few hundred ms.", **_dafx23_params(60.0, 5.0))
+def steel_gong(sr=DEFAULT_SR, vel=1.0, force=60.0, dur=5.0, bright=0.6, scan=1.0, quality=1.0):
+    return nl_plate(sr, vel, 0.451, 0.5, force, 4.0, (0.38, 0.45), 20.0, 0.0, "vk", quality=quality, dur=dur,
+                    bright=bright, scan=(0.4, scan) if scan > 0 else None, accel=False, hp=30.0, **_DAFX23)
 
 
 @drum("thunder_sheet", "Thunder sheet: a big thin steel sheet shaken by hand; the nonlinear plate turns the slow "

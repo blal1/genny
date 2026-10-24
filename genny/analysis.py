@@ -119,4 +119,95 @@ def describe(y: np.ndarray, sr: int) -> dict:
            "peak_db": 20 * math.log10(peak + 1e-9), "rms_db": 20 * math.log10(rms + 1e-9),
            "loudness": loudness(y, sr), "ear": ear_loudness(y, sr), "sharpness": sharpness(y, sr)}
     out.update(brightness(y, sr))
+    out["crest_db"] = crest_factor_db(y)
+    out["log_attack"] = log_attack_time(y, sr)
+    out["flux"] = spectral_flux(y, sr)
+    out["true_peak_db"] = true_peak_db(y) if y.size else -240.0
     return out
+
+
+# ------------------------------------------------------------------------------------------
+# QA measurements (artefacts rather than perception); used by tests/test_qa.py
+# ------------------------------------------------------------------------------------------
+
+def crest_factor_db(y: np.ndarray) -> float:
+    """20 log10(peak / RMS). Under ~6 dB a sound is over-compressed or clipped (a sine is 3 dB)."""
+    y = _mono(y)
+    rms = float(np.sqrt(np.mean(y ** 2))) if y.size else 0.0
+    return 20 * math.log10((float(np.max(np.abs(y))) + 1e-12) / (rms + 1e-12)) if y.size else 0.0
+
+
+def spectral_flatness(y: np.ndarray) -> float:
+    """Geometric / arithmetic mean of the power spectrum (Hann window): 0 for a pure tone, 1 for white
+    noise. A rise on a tonal note points to aliasing or an instability."""
+    s = np.abs(np.fft.rfft(_mono(y) * np.hanning(len(y)))) ** 2 + 1e-20
+    return float(np.exp(np.mean(np.log(s))) / np.mean(s))
+
+
+def alias_snr(y: np.ndarray, sr: int, f0: float, guard: int = 4) -> float:
+    """Energy on the harmonics k f0 (within ``guard`` bins, 4-term Blackman-Harris window) over the
+    energy everywhere else above 20 Hz, in dB: high = clean, low = aliased or noisy."""
+    from scipy.signal.windows import blackmanharris
+    y = _mono(y)
+    S = np.abs(np.fft.rfft(y * blackmanharris(len(y)))) ** 2
+    f = np.fft.rfftfreq(len(y), 1.0 / sr)
+    df = f[1]
+    k = np.round(f / f0)
+    harm = (k >= 1) & (np.abs(f - k * f0) <= guard * df)
+    rest = ~harm & (f > 20.0)
+    return 10 * math.log10((S[harm].sum() + 1e-30) / (S[rest].sum() + 1e-30))
+
+
+def detect_clicks(y: np.ndarray, k: float = 6.0, window: int = 441) -> np.ndarray:
+    """Sample indices where |second difference| exceeds k times its local RMS (over ``window`` samples,
+    10 ms at 44.1 kHz): steps and spikes that a smooth signal does not have. Meant for smooth voices
+    (pads, bowed, blown); saws and percussive attacks have edges of their own."""
+    d = np.abs(np.diff(_mono(y), 2))
+    if d.size == 0:
+        return np.zeros(0, int)
+    local = np.sqrt(np.convolve(d * d, np.ones(window) / window, mode="same"))
+    return np.flatnonzero(d > k * local + 1e-9) + 1
+
+
+def true_peak_db(y: np.ndarray) -> float:
+    """4x oversampled peak in dBTP (ITU-R BS.1770 true-peak approximation)."""
+    from scipy.signal import resample_poly
+    up = resample_poly(np.asarray(y, float), 4, 1, axis=0)
+    return 20 * math.log10(float(np.max(np.abs(up))) + 1e-12)
+
+
+def spectral_flux(y: np.ndarray, sr: int) -> float:
+    """Median spectral variation (Timbre Toolbox, Peeters et al. 2011 §II.D, after Krimphoff 1994): 1 minus the
+    normalised correlation of successive magnitude spectra, Hamming 23.2 ms, hop 5.8 ms; the median keeps the
+    silent frames from counting. 0 = a frozen spectrum, ~1e-6 for a struck bar, 2e-4 to 1e-3 for a bowed, blown or pad note, ~0.1 for white noise."""
+    x = _mono(y)
+    M, R = int(round(0.0232 * sr)), int(round(0.0058 * sr))
+    if x.size < M + R:
+        return float("nan")
+    fr = np.lib.stride_tricks.sliding_window_view(x, M)[::R] * np.hamming(M)
+    a = np.abs(np.fft.rfft(fr, axis=1))
+    num = (a[1:] * a[:-1]).sum(axis=1)
+    den = np.sqrt((a[1:] ** 2).sum(axis=1) * (a[:-1] ** 2).sum(axis=1))
+    return float(np.median(1.0 - num / (den + 1e-30)))
+
+
+def log_attack_time(y: np.ndarray, sr: int, a: float = 3.0) -> float:
+    """log10 of the attack duration in s (Timbre Toolbox, Peeters et al., JASA 130:2902, 2011, eq. 4).
+
+    Energy envelope: |Hilbert| low-passed by a 3rd-order 5 Hz Butterworth (zero-phase here). Attack start and
+    end by Peeters' weakest-effort method: times t_i where the envelope first reaches 10 %, 20 % .. 100 % of
+    its maximum; efforts w_i = t_{i+1} - t_i; start = first level whose effort is below a * mean effort,
+    end = last such level (a = 3)."""
+    from scipy.signal import butter, hilbert, sosfiltfilt
+    x = _mono(y)
+    if x.size < 16 or not np.any(x):
+        return float("nan")
+    env = sosfiltfilt(butter(3, 5.0, fs=sr, output="sos"), np.abs(hilbert(x)))
+    env = env[: int(np.argmax(env)) + 1]
+    th = np.arange(1, 11) / 10.0 * env[-1]
+    t = np.array([np.argmax(env >= h) for h in th], float) / sr
+    w = np.diff(t)
+    weak = np.flatnonzero(w < a * np.mean(w)) if w.size else np.zeros(0, int)
+    if not weak.size:
+        return math.log10(max(t[-1] - t[0], 1.0 / sr))
+    return math.log10(max(t[weak[-1] + 1] - t[weak[0]], 1.0 / sr))

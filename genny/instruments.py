@@ -28,12 +28,44 @@ C4 = 261.63
 C5 = 523.25
 
 
+# Tone variants every instrument accepts unless it has a control of its own by that name: shelving EQ after
+# the note, 0.5 = as voiced (no filtering). bright: high shelf at 2.5 kHz, -9 .. +9 dB; warmth: low shelf at
+# 300 Hz, -9 .. +9 dB. onset_lag: the partials above 2.5 f0 fade in over that many ms (sin^2), the onset
+# asynchrony Grey (JASA 61:1270, 1977) found to be a timbre cue: upper harmonics enter a few ms late.
+VARIANTS = {"bright": (0.5, "0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB)"),
+            "warmth": (0.5, "0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB)"),
+            "onset_lag": (0.0, "ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech")}
+
+
 def instrument(name: str, desc: str, family: str = "synth", span: tuple[str, str] = ("C2", "C6"), **params):
     """Register an instrument. `span` is the register it is voiced for (it still plays outside it)."""
     def deco(fn):
-        REGISTRY[name] = {"fn": fn, "desc": desc, "params": params, "family": family, "range": f"{span[0]}-{span[1]}"}
+        generic = [k for k in VARIANTS if k not in params]
+        params.update({k: VARIANTS[k] for k in generic})
+        REGISTRY[name] = {"fn": fn, "desc": desc, "params": params, "family": family, "range": f"{span[0]}-{span[1]}",
+                          "generic": generic}
         return fn
     return deco
+
+
+def _steinway_B(freq):
+    """Inharmonicity of the piano key nearest ``freq`` (Steinway D, Chabassier & Durufle 2012)."""
+    from .physical.piano_data import steinway_B
+    return steinway_B(69.0 + 12.0 * np.log2(max(float(freq), 1.0) / 440.0))
+
+
+def _variants(y, sr, freq, bright=0.5, warmth=0.5, onset_lag=0.0):
+    if onset_lag > 0.0 and y.ndim == 1:
+        lo = F.lowpass(y, min(2.5 * freq, 0.45 * sr), sr, order=2)
+        k = min(len(y), samples(onset_lag / 1000.0, sr))
+        ramp = np.ones(len(y))
+        ramp[:k] = np.sin(0.5 * np.pi * np.arange(k) / max(k, 1)) ** 2
+        y = lo + (y - lo) * ramp
+    if bright != 0.5:
+        y = F.highshelf(y, 2500.0, sr, gain_db=18.0 * (float(np.clip(bright, 0.0, 1.0)) - 0.5))
+    if warmth != 0.5:
+        y = F.lowshelf(y, 300.0, sr, gain_db=18.0 * (float(np.clip(warmth, 0.0, 1.0)) - 0.5))
+    return y
 
 
 # ---------------------------------------------------------------- voicing helpers
@@ -127,12 +159,20 @@ def _harmonics(freq, n, sr, amps):
     return y
 
 
-def _vibrato(freq, n, sr, rate=5.5, depth=0.3, delay=0.15, ramp=0.25, scoop=0.0):
+def _vibrato(freq, n, sr, rate=5.5, depth=0.3, delay=0.15, ramp=0.25, scoop=0.0, end_boost=0.0):
     """Per-sample frequency: vibrato (`depth` semitones) that fades in after `delay`, and an optional
-    onset `scoop` (semitones the note starts flat by, gone in ~40 ms)."""
+    onset `scoop` (semitones the note starts flat by, gone in ~40 ms). `end_boost` Hz is added to the
+    rate over the last 0.5 s of a held note: singers and violinists speed up "a couple of Hz during the
+    last few vibrato cycles" (Prame 1992/1994, reported by Liljencrants, MMD 1999.10.13; Nix 2023)."""
     t = np.arange(n) / sr
     onset = np.clip((t - delay) / max(ramp, 1e-3), 0.0, 1.0)
-    semis = depth * onset * np.sin(2 * np.pi * rate * t)
+    T = n / sr
+    if end_boost and T > delay + ramp + 1.0:
+        r = rate + float(end_boost) * np.clip((t - (T - 0.5)) / 0.5, 0.0, 1.0)
+        ph = 2 * np.pi * np.concatenate(([0.0], np.cumsum(r[:-1]) / sr))
+    else:
+        ph = 2 * np.pi * rate * t
+    semis = depth * onset * np.sin(ph)
     if scoop:
         semis = semis - scoop * np.exp(-t / 0.04)
     return freq * 2 ** (semis / 12.0)
@@ -153,7 +193,7 @@ def _piano(freq, dur, sr, vel, decay, bright, attack=0.003, hammer=0.1, thump=0.
     n = _n(ring, sr)
     t = np.arange(n) / sr
     b = bright * (0.45 + 0.55 * vel)                       # hammer hardness
-    inharm = 0.00035 * (max(freq, 110.0) / C4) ** 1.4       # stiff-string stretch grows up the keyboard
+    inharm = _steinway_B(freq)                              # stiff-string stretch of a Steinway D key
     tilt = _kt(freq, 0.95, 1.7, f_lo=65.0, f_hi=1046.0) / max(b, 0.3) ** 0.4
     corner = 2400.0 * b
     top = min(6500.0, 0.45 * sr)
@@ -589,7 +629,10 @@ def render_note(name: str, freq: float, dur: float, sr: int = DEFAULT_SR, vel: f
     unknown = [k for k in params if k not in allowed]
     if unknown:
         raise ValueError(f"instrument {name!r} does not accept params {unknown}; allowed: {list(allowed)}")
+    var = {k: float(params.pop(k)) for k in entry.get("generic", ()) if k in params}
     y = entry["fn"](freq, dur, sr, vel, **params)
+    if var:
+        y = _variants(y, sr, freq, **var)
     if y.ndim == 1 and y.shape[0] > 8:   # no note carries DC (blown and bowed models did: up to 18 % of peak); 5 Hz, far below any pitch
         from scipy.signal import lfilter
         y = lfilter([1.0, -1.0], [1.0, -(1.0 - 2 * np.pi * 5.0 / sr)], y)
@@ -614,16 +657,27 @@ from ._levels import TRIM  # noqa: E402
 
 # -----------------------------------------------------------------------------
 # Physical-engine compatibility override (v0.5)
-@instrument("piano", "Physical acoustic piano: nonlinear felt hammer, stiff dispersive string and commuted soundboard.",
-            family="keys", span=("A0", "C7"), decay=(2.5, "seconds of ring"), bright=(1.0, "0.5 mellow .. 2 bright"))
+@instrument("piano", "Concert grand (Steinway D strings and hammers): modal strings with measured damping, hereditary felt hammer, "
+            "beating unisons with two-stage decay, phantom partials, modal soundboard (Bank 2010).",
+            family="keys", span=("A0", "C8"), decay=(2.5, "ring: 2.5 as measured, higher rings longer"), bright=(1.0, "felt hardness: 0.5 mellow .. 2 bright"))
 def piano(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=2.5, bright=1.0):
+    from .physical import bank_piano
+    y = bank_piano.note(freq, dur, sr, vel, tail=1.0, loss=2.5 / float(np.clip(decay, 0.3, 20.0)),
+                        hardness=float(np.clip(bright, 0.3, 3.0)))
+    # Every note at the same peak, then the usual velocity scale: the hammer already makes a soft note darker
+    return y / (np.max(np.abs(y)) + 1e-12) * (0.3 + 0.7 * float(np.clip(vel, 0.0, 1.0)))
+
+
+@instrument("piano_wg", "Earlier physical piano: waveguide string with a nonlinear felt hammer and a commuted soundboard.",
+            family="keys", span=("A0", "C7"), decay=(2.5, "seconds of ring"), bright=(1.0, "0.5 mellow .. 2 bright"))
+def piano_wg(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=2.5, bright=1.0):
     from .physics import Piano as PhysicalPiano
     # Map the long-standing Genny controls onto the physical engine rather than
     # deleting them.  Higher ``bright`` means harder effective felt / more HF.
     b = float(np.clip(bright, 0.35, 2.0))
     model = PhysicalPiano(brightness=float(np.clip(0.33 + 0.34 * b, 0.2, 1.0)),
                           felt=float(np.clip(0.26 / b, 0.05, 0.45)),
-                          inharmonicity=4e-4,
+                          inharmonicity=_steinway_B(freq),
                           decay=float(np.clip(decay / 4.5, 0.25, 1.2)),
                           soundboard=0.28)
     y = model.note(freq, max(dur, min(decay, dur + 1.0)), velocity=vel, sr=sr, seed=3)

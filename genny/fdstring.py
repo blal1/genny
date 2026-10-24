@@ -17,6 +17,7 @@ the loss terms with half weight, which is the same thing.
 """
 from __future__ import annotations
 
+import math
 from functools import lru_cache
 
 import numpy as np
@@ -705,9 +706,17 @@ def fd_string(freq, dur, sr=DEFAULT_SR, vel=1.0, excitation="pluck", position=0.
     return _finish(_disp_out(s, y), sr, dur, vel, 0.8, 0.07, _lp(freq, bright))
 
 
+def _piano_key_B(B, freq):
+    """Inharmonicity of the piano note from its value at C4, following the Steinway D scale (Chabassier &
+    Durufle 2012): smallest at the bass/tenor break, 25x C4 at C7; capped at 2.5e-3 for the FD grid."""
+    from .physical.piano_data import steinway_B
+    midi = 69.0 + 12.0 * math.log2(max(float(freq), 1.0) / 440.0)
+    return float(np.clip(B * steinway_B(midi) / steinway_B(60.0), 0.0, 2.5e-3))
+
+
 def _piano_string(freq, sr, strings, detune, B, t60_lo, t60_hi, hammer_mass, hardness, position, vel, backoff=0.95):
     f1 = _flat(freq, B, 2.0)
-    B = _key_B(B, freq)
+    B = _piano_key_B(B, freq)
     if strings <= 0:
         strings = 1 if freq < 70.0 else 2 if freq < 180.0 else 3
     strings = int(np.clip(strings, 1, 3))
@@ -727,12 +736,12 @@ def _piano_string(freq, sr, strings, detune, B, t60_lo, t60_hi, hammer_mass, har
             hammer_mass=(1.0, "hammer mass scale (1 = 0.75 x string mass at C4): heavier = longer contact, darker"),
             hardness=(1.0, "felt stiffness scale 0.2..5: harder = shorter contact, brighter"),
             position=(0.12, "strike point 0..1"),
-            B=(1e-4, "inharmonicity at C4 (scaled by (f/C4)^2 across the keyboard)"),
+            B=(3e-4, "inharmonicity at C4; across the keyboard it follows a Steinway D (least at the bass/tenor break)"),
             decay=(6.0, "seconds of ring at the note"),
             t60_hi=(1.0, "seconds of ring at max(4 kHz, 3x the note)"),
             bright=(1.0, "0.5 mellow .. 2 open"))
 def fd_piano(freq, dur, sr=DEFAULT_SR, vel=1.0, strings=0, detune=3.0, hammer_mass=1.0, hardness=1.0, position=0.12,
-             B=1e-4, decay=6.0, t60_hi=1.0, bright=1.0):
+             B=3e-4, decay=6.0, t60_hi=1.0, bright=1.0):
     lo = decay * float(np.clip((262.0 / freq) ** 0.5, 0.25, 2.0))
     s, _ = _piano_string(freq, sr, strings, float(np.clip(detune, 0.0, 30.0)), B, lo, t60_hi, hammer_mass, hardness,
                          float(np.clip(position, 0.04, 0.5)), vel)
@@ -796,6 +805,51 @@ def slack_string(freq, dur, sr=DEFAULT_SR, vel=1.0, glide=0.7, position=0.8, dec
     s, y = _slack(freq, dur + 0.35, sr, float(np.clip(glide, 0.0, 12.0)), float(np.clip(vel, 0.0, 1.0)),
                   float(np.clip(position, 0.1, 0.9)), decay, pickup)
     return _finish(_disp_out(s, y), sr, dur, vel, 0.95, 0.07, _lp(freq, bright))
+
+
+def sitar_fd(freq, dur, sr=DEFAULT_SR, vel=1.0, buzz=0.45, B=1e-4):
+    """Siddiq, "A physical model of the nonlinear sitar string", Arch. Acoust. 37(1), 73-79 (2012): a dispersive
+    string whose first points rest on the flat bridge, a one-sided obstacle that the string strikes and leaves
+    every period (so the vibrating length changes and the Young-Helmholtz law fails, his Fig. 11). Here the stiff
+    string of this module, the bridge a row of rigid one-sided stops over the first 4 % of the string, curved as
+    depth (x / l)^2 (jawari), depth = 2e-4 (1 - buzz) string lengths; buzz 0 = no bridge. UNSOURCED (Siddiq gives
+    no geometry): the bridge length, curvature, contact stiffness and the 5 mm pluck."""
+    s = StiffString(_flat(freq, B, 3.0), sr, B=_key_B(B, freq), t60=_t60(freq, 8.0, 1.5))
+    b = float(np.clip(buzz, 0.0, 1.0))
+    if b > 0.0:
+        depth = 2e-4 * (1.0 - b)
+        for x in np.arange(s.h, 0.04, s.h):
+            s.rattle(x, w=3e4, eps=2.0, mass_ratio=0.0, alpha=1.5, offset=1.0 - depth * (x / 0.04) ** 2)
+    s.pluck(0.2, 0.002, 0.005 * (0.4 + 0.6 * float(np.clip(vel, 0.0, 1.0))))
+    y = s.run(int((dur + 1.2) * s.sr_i), (0.73, 0.31))
+    return _finish(_disp_out(s, y), sr, dur, vel, 0.57, 0.25, 5000.0)   # as loud as the waveguide sitar
+
+
+@instrument("string_bridge_plate","Plucked string driving a plate through a bridge mass on (nonlinear) springs "
+            "(van Walstijn & Mehes DAFx-17): from a string on a soundboard to buzzing, rattling and cymbal-like plates.",
+            family="strings", span=("E1", "E4"),
+            config=("body", "body (heavy bridge: the string sings, the plate colours) | coupled (light bridge: "
+                            "plate-like, short) | plate (cubic springs: cymbal-like) | rattle (loose bridge, gravity: "
+                            "snare-like buzz) | flat (one-sided string contact: sitar-like)"))
+def string_bridge_plate(freq, dur, sr=DEFAULT_SR, vel=1.0, config="body"):
+    from .physical import sbp
+    if config not in sbp.PRESETS:
+        raise ValueError(f"config must be one of {sorted(sbp.PRESETS)}")
+    force = 0.1 * max(float(vel), 0.05)
+    # the bridge springs and the plate pull the coupled string off its own pitch (the body preset: 4 semitones
+    # sharp, the stiff bridge spring acting almost as a support): tune the string from two 0.5 s trial renders,
+    # on the strongest spectral peak within half an octave of the note, then within 6 %
+    fs = float(freq)
+    for lo, hi in ((2 ** -0.5, 2 ** 0.5), (0.94, 1.06)):
+        tr = sbp.render(fs, 0.5, float(sr), config, force=force)[int(0.1 * sr):]
+        S = np.abs(np.fft.rfft(tr * np.hanning(tr.size), 1 << 17))
+        f = np.fft.rfftfreq(1 << 17, 1.0 / sr)
+        band = (f > freq * lo) & (f < freq * hi)
+        if not np.any(S[band] > 0.05 * S.max()):
+            break                                           # no clear pitch (plate, rattle): leave it
+        fs *= freq / f[band][np.argmax(S[band])]
+    y = sbp.render(fs, dur + 1.0, float(sr), config, force=force)
+    return _finish(y, sr, dur, vel, 0.95, 0.4, 6000.0)
 
 
 # UNSOURCED: order-of-magnitude decay times (T60 at the note for A4, T60 at 4 kHz); no table in the book

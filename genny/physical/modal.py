@@ -42,12 +42,14 @@ Ports (research notes in ``out/research``):
 
 from __future__ import annotations
 
+import math
+
 import numba
 import numpy as np
 
 from . import modal_data as md
-from .core import (SR, DEV_DIR, contact_pulse, decay_rate, pow_decay, rate_radius, seconds, spectrum_peaks,
-                   tv_bandpass, write_wav)
+from .core import (SR, DEV_DIR, contact_pulse, decay_rate, one_pole_coef, one_pole_lp, pow_decay, rate_radius, seconds,
+                   spectrum_peaks, tv_bandpass, write_wav)
 
 LN1000 = float(np.log(1000.0))
 
@@ -581,6 +583,249 @@ def aeolian_tone(u: np.ndarray | float, d: float, dur: float, rng: np.random.Gen
     q = np.full(n, 10.0) if model == "loq" else strouhal_q(re)
     f = np.clip(st * u / d, 1.0, 0.45 * SR)
     return _cascade_bp(rng.standard_normal(n), f, q)
+
+
+def _sig(x):
+    return 1.0 / (1.0 + np.exp(-np.clip(x, -60.0, 60.0)))
+
+
+def _bp(x, f, q):
+    """Band-passed noise, not normalised: its power grows with the bandwidth f / Q, as in the Pd patches."""
+    return tv_bandpass(x, np.ascontiguousarray(f, dtype=float), np.ascontiguousarray(q, dtype=float))
+
+
+def cavity_frequencies(u, length: float, depth: float, width: float):
+    """(Rossiter modes 1..4, depth-mode monopole) in Hz: DAFx-17 eqs 4 and 9."""
+    M = np.asarray(u, float) / C_SOUND
+    fd = [(lam - 0.25) / (1 / 0.57 + M / np.sqrt(1 + 0.2 * M * M)) * u / length for lam in range(1, 5)]
+    return fd, C_SOUND / (4.0 * (depth + math.sqrt(math.pi * width * length / 4.0)))
+
+
+def cavity_tone(u, length: float, depth: float, width: float, dur: float, rng: np.random.Generator, *,
+                elevation: float = 90.0, distance: float = 1.0) -> np.ndarray:
+    """Air flowing over an open cavity (Selfridge, Reiss & Avital, DAFx-17): four Rossiter dipoles
+    (Heller's compressible form, alpha 0.25, K 0.57, eq. 4) and the depth-mode monopole c / 4(d + zeta)
+    (eq. 9), each band-passed noise at Q = 87.715 - 5.296 ln Re_L (eq. 22, 2..90) scaled by Howe's
+    far-field gains (eqs 20-21) with the shear-layer thickness of eqs 10-15. The dipoles fade out when
+    the cavity closes (L/d 8..11, sigmoid). ``elevation`` is phi in degrees (90 = overhead)."""
+    n = seconds(dur)
+    u = np.maximum(np.broadcast_to(np.asarray(u, float), (n,)), 0.05)
+    L, d, b = max(float(length), 1e-3), max(float(depth), 1e-3), max(float(width), 1e-3)
+    M = u / C_SOUND
+    re = RHO_AIR * u * L / MU_AIR
+    q = np.clip(87.715 - 5.296 * np.log(re), 2.0, 90.0)
+    turb = _sig((re - 25000.0) / 2500.0)                        # laminar -> turbulent at Re_L 25000
+    theta0 = L / (9.39 * L / d + 36.732)                        # eq. 10
+    d0 = (2.69 + (1.29 - 2.69) * turb) * theta0                 # eq. 11, H laminar 2.69, turbulent 1.29
+    x = 0.75 * L
+    dc = (1 - turb) * np.sqrt(x * L / re) + turb * x / (6.0 * math.sqrt(8.0))   # eqs 12-13, sigma 6
+    dstar = dc / 8.0 + d0                                       # eqs 14-15, n = 7
+    A = b * L
+    zeta = math.sqrt(math.pi * A / 4.0)
+    cphi = math.cos(math.radians(float(elevation)))
+
+    def common(f):
+        w = 2 * np.pi * f
+        s = w * dstar / u
+        return M ** 2 * s ** (5 / 3) / (max(float(distance), 0.1) * (1 + M * cphi) ** 2 * (s ** 2 + 0.12 ** 2) ** 1.5)
+
+    fds, fm = cavity_frequencies(u, L, d, b)
+    fm = np.full(n, fm)
+    k = 2 * np.pi * fm / C_SOUND
+    e = k * k * A / (2 * np.pi)
+    X, Y = np.cos(k * (d + zeta)) * np.cosh(e), np.sin(k * (d + zeta)) * np.sinh(e)
+    S = 1.02 * np.sin(k * d) / (X * X + Y * Y)                 # C2 = 1.02 (Howe)
+    gm = common(fm) * np.abs((X * S) ** 2 + (Y * S) ** 2 + 2 * Y * S * (cphi - M))
+    y = gm * _bp(rng.standard_normal(n), np.minimum(fm, 0.45 * SR), q)
+    open_ = _sig((9.5 - L / d) * 3.0)                           # closed above L/d 8..11
+    for fd in fds:
+        gd = common(fd) * (cphi - M) ** 2
+        y += open_ * gd * _bp(rng.standard_normal(n), np.minimum(fd, 0.45 * SR), q)
+    return y
+
+
+# Edge tone: Selfridge, Reiss & Avital, AES 144 (2018) paper 9956 and thesis ch. 4.4. The paper prints neither
+# the mode tree nor the full-precision fit; both are ported from the authors' EdgeToneD5.pd
+# (research/bibliographie_genny/data/selfridge_edgetone).
+# St_k = C1 + C2 Re_d + C3 h/d + C4 Re_d^2 + C5 Re_d h/d + C6 (h/d)^2 (eq. 12, Table 2; BestFreq*D2), modes 1..5
+_EDGE_FIT = ((0.119379, 3.21351e-05, -0.0128848, 6.09391e-09, -3.83339e-06, 0.000436755),
+             (0.180982, 0.000103822, -0.0110952, -9.40805e-09, -8.54037e-06, 0.000199891),
+             (0.187383, 0.000129937, -0.00708081, -1.32888e-08, -7.47187e-06, 8.64753e-05),
+             (0.187624, 0.000181775, -0.00509238, -2.13317e-08, -8.20091e-06, 4.72372e-05),
+             (1.00213, -0.000129432, -0.0763784, 6.84169e-09, 7.57556e-06, 0.00162923))
+# Vaik et al. 2014: St = (C1 - C2 / Re_d)(d / h - C3) (eq. 6, thesis Table 4.7): top-hat modes 1..3, and mode 1
+# co-existing with mode 2 or 3 for either profile
+_EDGE_VAIK = ((0.4837, 12.31, 0.005461), (1.066, 27.11, 0.004157), (1.884, 19.96, 0.001261))
+_EDGE_VAIK_CO = {"parabolic": (0.5029, 6.6451, 0.01417), "top_hat": (0.4167, 0.2292, 0.01426)}
+# Weka trees (DecisionTree9_Inc5, ModeOneOption). Node ("Re" | "Red" | "Y", threshold, <=, >) on Re_h, Re_d or the
+# jet thickness at the wedge Y (m); ("du" | "dh", rising, falling, steady) on the airspeed / distance direction
+_EDGE_MODE = ('Re', 4796.79, ('Y', 0.004336, ('Re', 3044.77, 1, ('Y', 0.003633, 1, ('dh', 1, ('Y', 0.003799, 1, 2), 1))), ('Re', 2639.5, ('Y', 0.007688, 1, 2), ('Y', 0.005309, 2, ('Re', 3837.43, 2, ('du', 2, 3, 3))))), ('Y', 0.004897, ('Re', 19230.8, ('Y', 0.003927, ('Y', 0.00314, 1, ('Re', 6632.6, ('dh', 1, 2, ('du', ('Y', 0.003719, 1, 2), 2, 2)), 2)), ('Re', 7461.67, 2, ('Re', 12182.3, ('du', 2, 3, ('dh', ('Y', 0.004652, 2, ('Y', 0.004714, 3, 2)), ('Y', 0.004143, 2, 3), ('Y', 0.004512, 2, 3))), 3))), ('Re', 27071.8, 3, ('Y', 0.003469, 4, 5))), ('Re', 13691.6, ('Y', 0.007442, ('du', ('Re', 10422.7, ('Y', 0.005309, ('Re', 5712.15, 2, 3), 2), 3), 3, ('dh', ('Re', 6490.38, ('Y', 0.005531, 2, 3), 3), ('Y', 0.005856, 3, ('Re', 6928.69, 3, ('Re', 9310.0, ('Y', 0.00647, 3, 4), 4))), ('Re', 5329.77, ('Re', 5075.97, 3, 2), 3))), ('Re', 9475.14, ('Y', 0.013589, ('Y', 0.008574, 3, ('Re', 6429.56, 3, 4)), 4), 4)), ('Y', 0.006894, ('dh', ('Y', 0.006122, 3, 4), 4, ('du', 3, 4, ('Y', 0.005856, 3, 4))), 5))))  # noqa: E501
+_EDGE_CO = {2: ('du', 0, 1, ('Red', 355.318, 1, 0)),
+            3: ('Red', 882.541, ('du', ('Red', 636.526, 1, 0), 0, ('Red', 388.616, ('Red', 125.207, 0, 1), 0)), 0)}
+
+
+def _tree(t, v: dict):
+    while isinstance(t, tuple):
+        if t[0] in ("du", "dh"):
+            t = t[1] if v[t[0]] > 0 else t[2] if v[t[0]] < 0 else t[3]
+        else:
+            t = t[2] if v[t[0]] <= t[1] else t[3]
+    return t
+
+
+def _direction(x: np.ndarray, tol: float) -> np.ndarray:
+    """+1 / -1 / 0: x minus its 1 Hz one-pole lag (Pd lop~ 1) beyond +-tol (lengthDirection, AirspeedDirection)."""
+    lag = one_pole_lp(x - x[0], one_pole_coef(1.0)) + x[0]
+    return np.where(x - lag > tol, 1, np.where(x - lag < -tol, -1, 0))
+
+
+def edge_track(u, h, delta: float, profile: str = "parabolic"):
+    """Per-sample edge-tone state for jet speed ``u`` (m/s), nozzle-to-wedge distance ``h`` and nozzle exit
+    width ``delta`` (m): (mode 1..5, St and f of that mode, f of a co-existing mode 1 or 0, Q, h/d gate 0..1).
+
+    Mode: the tree on Re_h, the jet thickness at the wedge Y = 2 xi + d (laminar xi = (1e4 h)^(2/3) / 1e4,
+    turbulent 0.115 h, sigmoid at Re_h 25000, ShearThickJet) and the u / h directions, re-read every 20 ms as
+    the patch's metro, which is what gives the hysteresis; a top-hat jet stops at mode 3 (modeLim). Q is the
+    mean of the cavity-tone law on Re_h and 137.571 - 12.1602 ln Re_d (eqs 13-14, natural log as log~, 2..90).
+    The tone exists for 2 < h/d < 61 (sigmoids, range)."""
+    n = np.size(u) if np.ndim(u) else np.size(h)
+    u = np.maximum(np.broadcast_to(np.asarray(u, float), (n,)), 0.05).copy()
+    h = np.maximum(np.broadcast_to(np.asarray(h, float), (n,)), 1e-5).copy()
+    d = max(float(delta), 1e-5)
+    re_h, re_d, ratio = RHO_AIR * u * h / MU_AIR, RHO_AIR * u * d / MU_AIR, h / d
+    lam = 1.0 / (1.0 + np.exp(np.clip(80.0 * (re_h / 25000.0 - 1.0), -60.0, 60.0)))
+    Y = lam * (1e4 * h) ** (2 / 3) / 5000.0 + (1.0 - lam) * 0.23 * h + d
+    du, dh = _direction(u, 0.01), _direction(h, 1e-4)
+    top = profile == "top_hat"
+    blk = max(int(0.02 * SR), 1)
+    mode, co = np.empty(n, int), np.zeros(n, bool)
+    for i in range(0, n, blk):
+        v = {"Re": re_h[i], "Red": re_d[i], "Y": Y[i], "du": du[i], "dh": dh[i]}
+        m = _tree(_EDGE_MODE, v)
+        m = min(m, 3) if top else m
+        mode[i:i + blk] = m
+        co[i:i + blk] = m in _EDGE_CO and _tree(_EDGE_CO[m], v) == 1
+    if top:
+        c = np.asarray(_EDGE_VAIK)[mode - 1]
+        st = (c[:, 0] - c[:, 1] / re_d) * (1.0 / ratio - c[:, 2])
+    else:
+        c = np.asarray(_EDGE_FIT)[mode - 1]
+        st = c[:, 0] + c[:, 1] * re_d + c[:, 2] * ratio + c[:, 3] * re_d ** 2 + c[:, 4] * re_d * ratio + c[:, 5] * ratio ** 2
+    st = np.maximum(st, 0.0)                                       # the fit goes negative in places: max~ 0
+    c1, c2, c3 = _EDGE_VAIK_CO["top_hat" if top else "parabolic"]
+    st_co = np.where(co, np.maximum((c1 - c2 / re_d) * (1.0 / ratio - c3), 0.0), 0.0)
+    q = np.clip(0.5 * (87.715 - 5.296 * np.log(re_h) + 137.571 - 12.1602 * np.log(re_d)), 2.0, 90.0)
+    gate = _sig(10.0 * (ratio - 2.0)) * _sig(10.0 * (61.0 - ratio))
+    return mode, st, np.clip(st * u / d, 0.0, 20000.0), st_co, np.clip(st_co * u / d, 0.0, 20000.0), q, gate
+
+
+def edge_tone(u, h, delta: float, dur: float, rng: np.random.Generator, *, profile: str = "parabolic",
+              elevation: float = 0.0, distance: float = 1.0) -> np.ndarray:
+    """Planar jet on a wedge in pascals (Selfridge et al. 2018): per mode, noise through two cascaded band-passes
+    at f_k (Dipoles: two vcf~) with the edge-tone Q, times Powell's far-field pressure
+    |P| = (alpha / 2) rho St u^3 cos(theta) / (r c), alpha = 4 (eq. 7). Each mode's band is gated in and out
+    with the 20 ms ramps of the patch's line~; a co-existing mode 1 sounds alongside modes 2 and 3."""
+    n = seconds(dur)
+    u = np.maximum(np.broadcast_to(np.asarray(u, float), (n,)), 0.05)
+    mode, st, f, st_co, f_co, q, gate = edge_track(u, h, delta, profile)
+    p0 = 2.0 * RHO_AIR * u ** 3 * abs(math.cos(math.radians(float(elevation)))) / (max(float(distance), 0.05) * C_SOUND) * gate
+    ramp = np.ones(max(int(0.02 * SR), 1)) / max(int(0.02 * SR), 1)
+    y = np.zeros(n)
+    for k in range(1, 6):
+        on = np.convolve((mode == k).astype(float), ramp)[:n]
+        if on.any():
+            y += on * p0 * st * _cascade_bp(rng.standard_normal(n), np.clip(f, 20.0, 0.45 * SR), q)
+    if st_co.any():
+        on = np.convolve((st_co > 0).astype(float), ramp)[:n]
+        y += on * p0 * st_co * _cascade_bp(rng.standard_normal(n), np.clip(f_co, 20.0, 0.45 * SR), q)
+    return y
+
+
+# Selfridge, Moffat & Reiss, Audio Mostly 2017, Table 1 (blade count from the aircraft): top speed m/s, rpm,
+# engine hp, blade radius m, blades
+AIRCRAFT = {"c130": (164.0, 1020.0, 4590.0, 2.06, 4), "b17": (144.0, 2500.0, 1200.0, 1.63, 3),
+            "tiger_moth": (48.0, 2100.0, 130.0, 0.996, 2), "yak52": (79.0, 1860.0, 360.0, 1.209, 2),
+            "cessna340": (125.0, 2500.0, 310.0, 0.96, 3), "p51": (193.0, 1280.0, 1490.0, 1.70, 4)}
+_ABSORB = ((90, 0.0), (180, 0.2), (355, 0.6), (710, 1.0), (1400, 1.8), (2800, 3.3), (5600, 6.0), (11200, 11.4))
+
+
+def propeller_tone(rpm, blades: int, radius: float, power_hp: float, dur: float, rng: np.random.Generator, *,
+                   chord: float = 0.15, angle: float = 110.0, distance: float = 30.0) -> np.ndarray:
+    """Propeller in pascals at ``distance`` m, ``angle`` degrees from the flight direction (Selfridge et al.
+    2017). Loading noise: the ten-step Hamilton Standard estimate (eqs 3-11, dB re 20 uPa) for harmonics
+    1..10 of the blade-passing frequency, each band-passed noise; atmospheric absorption from Table 2.
+    Vortex noise: seven compact Aeolian sources per blade at St 0.85 on the chord (eq. 13), Q from the
+    cylinder bandwidth law, intensity of eq. 2 at the source's own speed, p = sqrt(I rho c)."""
+    n = seconds(dur)
+    rpm = np.maximum(np.broadcast_to(np.asarray(rpm, float), (n,)), 1.0)
+    B, R, D = max(int(blades), 1), max(float(radius), 0.05), 2.0 * max(float(radius), 0.05)
+    th = float(np.clip(angle, 0.0, 180.0))
+    r = max(float(distance), 1.0)
+    mt = np.pi * D * rpm / 60.0 / C_SOUND
+    L = (15.11 * np.log10(max(float(power_hp), 1.0)) + 83.57 + 20 * np.log10(4.0 / B) + 40 * np.log10(4.72 / D)
+         + (25.12 * mt - 33.40) * np.log10(0.305 / D) + (34.37 * mt - 36.88)
+         + max(-5.3e-3 * th * th + 1.19 * th - 62.32, -20.0) - 20 * np.log10(3.375 * r - 1.0))
+    bpf = B * rpm / 60.0
+    y = np.zeros(n)
+    for N in range(1, 11):
+        f = N * bpf
+        if f[0] > 0.45 * SR:
+            break
+        absorb = np.interp(f, [a for a, _ in _ABSORB], [v for _, v in _ABSORB], right=20.0) * r / 304.8
+        hn = 26.0 * np.exp(-(-0.7 * mt + 0.79) * N) - 22.0
+        g = P_REF * 10 ** ((L - hn - absorb) / 20.0)
+        # UNSOURCED: Q 30 for the loading harmonics (the paper gives none)
+        y += g * _bp(rng.standard_normal(n), f, np.full(n, 30.0))
+    span = R / 7.0
+    s2 = math.sin(math.radians(th)) ** 2
+    for i in range(7):
+        u = 2 * np.pi * rpm / 60.0 * (i + 0.5) * span
+        M = u / C_SOUND
+        re = RHO_AIR * u * chord / MU_AIR
+        # eq. 2 as printed drops the source's diameter x length; restored as chord x span (AES 141 Aeolian tone form)
+        inten = math.sqrt(2 * math.pi) * 0.85 ** 2 * chord * span * RHO_AIR * u ** 6 * s2 / (
+            32 * C_SOUND ** 3 * r * r * (1 - M * math.cos(math.radians(th))) ** 4)
+        p = np.sqrt(inten * RHO_AIR * C_SOUND)
+        for _ in range(B):
+            # ponytail: the cylinder bandwidth law diverges past Re ~2e5 (Q -> 0.1); held at its Re 193260 value (Q 10)
+            y += p * _bp(rng.standard_normal(n), np.minimum(0.85 * u / chord, 0.45 * SR), strouhal_q(np.minimum(re, 193260.0)))
+    return y
+
+
+def aeolian_harp(u, notes, dur: float, rng: np.random.Generator, *, diameter: float = 5e-4, length: float = 0.61,
+                 density: float = 2432.2, mass_damping: float = 0.05, index: float = 1.0) -> np.ndarray:
+    """Strings in the wind (Selfridge, Moffat, Reiss & Avital, ICSV24 2017). Each string sheds an Aeolian
+    tone at St(Re) u / d; when that frequency nears string harmonic eta (eq. 9) and the reduced velocity
+    V = u / (2 pi d f_eta) (eq. 3) lies in the lock-in range 0.8..1.27, the shedding locks to f_eta and the
+    string sings: an FM tone with carrier f_eta and modulator f_(eta+1) - f_eta (eqs 8, 13-14), scaled by
+    the Govardhan-Williamson peak amplitude (eq. 7) for mass-damping alpha = ``mass_damping`` * eta (eq. 12).
+    ``notes`` are the strings' fundamentals (Hz); tension follows from them, ``density`` and ``diameter``.
+    # ponytail: no hysteresis loop (lock-in is a smooth window in V); Lambda, the window steepness and the
+    # default mass_damping are UNSOURCED (the paper's values are in absolute units genny does not carry)."""
+    n = seconds(dur)
+    u = np.maximum(np.broadcast_to(np.asarray(u, float), (n,)), 0.05)
+    d = max(float(diameter), 1e-5)
+    re = RHO_AIR * u * d / MU_AIR
+    fs = fey_strouhal(re) * u / d
+    a_re = np.where(re > 500.0, np.log10(0.41 * re ** 0.36), 0.63)
+    y = np.zeros(n)
+    for f1 in np.atleast_1d(np.asarray(notes, float)):
+        eta = np.maximum(np.round(fs / f1), 1.0)
+        feta = eta * f1
+        V = u / (2 * np.pi * d * feta)
+        lock = _sig((V - 0.8) / 0.02) * _sig((1.27 - V) / 0.02)
+        al = np.minimum(mass_damping * eta, 1.87)               # past the vertex the fit no longer holds
+        coef = np.where(re > 500.0, 1 - 1.12 * al + 0.30 * al * al, 1 - 1.29 * al + 0.59 * al * al)
+        amax = np.maximum(coef, 0.0) * a_re
+        fv = lock * feta + (1 - lock) * fs
+        fdm = feta + f1 - fv
+        ph_d = 2 * np.pi * np.cumsum(fdm) / SR
+        ph_v = 2 * np.pi * np.cumsum(fv) / SR
+        sing = np.cos(ph_v + index * np.sin(ph_d)) + 0.1 * np.cos(ph_d + index * np.sin(ph_d))
+        g = _cascade_bp(rng.standard_normal(n), np.clip(fs, 1.0, 0.45 * SR), strouhal_q(re))
+        g /= np.sqrt(np.mean(g * g)) + 1e-30
+        y += g + 3.0 * amax * lock * sing                        # UNSOURCED: Lambda = 3 against a unit-RMS tone
+    return y
 
 
 def _swing_kinematics(p: dict, lead: float, tail: float):

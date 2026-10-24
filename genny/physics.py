@@ -47,11 +47,14 @@ class Material:
     fracture_toughness: float = 100.0
 
 
+# Rayleigh pairs: glass, steel, wood from ObjectFolder 2.0 (supp. Table 1, = contact.OBJECTFOLDER_RAYLEIGH);
+# aluminium from Sterling & Lin 2016 Table 1 (alpha1 0.225, alpha2 1.45e-6). The old pairs (glass 0.4 / 2e-9 ...)
+# were UNSOURCED and rang 30-40 s at 1 kHz. UNSOURCED: stone and rubber damping, hardness, toughness.
 MATERIALS: dict[str, Material] = {
-    "glass": Material("glass", 2500, 70e9, 0.22, 0.4, 2e-9, 0.95, 50.0),
-    "steel": Material("steel", 7850, 200e9, 0.30, 0.25, 2e-9, 0.98, 120.0),
-    "aluminum": Material("aluminum", 2700, 69e9, 0.33, 0.6, 4e-9, 0.8, 90.0),
-    "wood": Material("wood", 650, 11e9, 0.35, 2.5, 2e-8, 0.55, 180.0),
+    "glass": Material("glass", 2500, 70e9, 0.22, 1.0, 1e-7, 0.95, 50.0),
+    "steel": Material("steel", 7850, 200e9, 0.30, 5.0, 3e-8, 0.98, 120.0),
+    "aluminum": Material("aluminum", 2700, 69e9, 0.33, 0.225, 1.45e-6, 0.8, 90.0),
+    "wood": Material("wood", 650, 11e9, 0.35, 60.0, 2e-6, 0.55, 180.0),
     "stone": Material("stone", 2600, 50e9, 0.25, 1.2, 8e-9, 0.9, 80.0),
     "rubber": Material("rubber", 1100, 0.01e9, 0.49, 20.0, 2e-6, 0.12, 500.0),
 }
@@ -1161,9 +1164,74 @@ class GearTrain:
         return _to_sr(np.tanh(y/p*1.28)*.6,sr)
 
 
+# Free-air TNT blast (Karlos, Solomos & Larcher, JRC technical report JRC101039, 2016, Table 4): with
+# T = log10(Z), Z = R / W^(1/3) in m/kg^(1/3), U = K0 + K1 T and log10(Y) = sum C_i U^i;
+# Y = peak incident overpressure (kPa) or positive impulse (kPa ms / kg^(1/3)).
+_BLAST_FITS = {
+    "ps": (((-0.91433, -1.45959), (4.06103, 0.97094, -0.0011, -1.15856, -2.45996, 5.01594, -0.3113, 7.4901, -6.5702,
+                                     -3.40241, -0.24764, -4.80809, 8.9989)),
+           ((0.55452, -1.13778), (1.73036, 1.68465, 0.7919, 0.80248, -0.51063, -1.998, 0.13446, 1.41277, -0.83675,
+                                   -0.0515, 1.1813, -0.19042, -0.44056))),
+    "is": (((-1.25215, -1.65602), (2.31971, 1.47803, 1.27866, -3.15442, -3.4603, 5.19595, 9.45267, 5.54576, -5.40032,
+                                     -8.87923, -19.997, -13.89187, 38.20586)),
+           ((0.76008, -0.73017), (1.13866, 1.3391, 0.37718, 0.13645, -2.53112, -5.744957, 6.41571, 19.26609, -9.99,
+                                   -19.08479, 3.68941, 8.13372, -1.07378))),
+}
+# Friedlander decay parameter alpha vs Z (m/kg^(1/3)): Kinney & Graham, Explosive Shocks in Air, Table XI part B
+# (spherical TNT, 1 ton; ft/ton^(1/3) x 0.03149)
+_BLAST_ALPHA = ((0.787, 4.5), (0.945, 3.5), (1.260, 2.3), (1.574, 1.5), (2.204, 0.9), (3.149, 0.9), (4.093, 1.0),
+                (5.668, 1.1), (6.613, 1.2), (7.871, 1.3))
+# positive-phase duration from the same table, ms per ton^(1/3) at ft/ton^(1/3): (25, 5.6) .. (250, 24.6)
+_BLAST_TD = ((25, 5.6), (30, 6.0), (35, 6.5), (40, 7.4), (45, 8.3), (50, 9.3), (60, 11.1), (70, 12.9), (80, 14.6),
+             (90, 16.0), (100, 17.3), (120, 19.0), (150, 20.6), (200, 23.4), (250, 24.6))
+
+
+_TON_CBRT = 907.18 ** (1.0 / 3.0)
+_FT_TON = 0.3048 / _TON_CBRT                                 # 1 ft/ton^(1/3) in m/kg^(1/3)
+
+
+def _blast_fit(kind: str, z: float) -> float:
+    lo, hi = _BLAST_FITS[kind]
+    (k0, k1), c = lo if z <= 0.40 else hi
+    u = k0 + k1 * math.log10(z)
+    return 10 ** sum(ci * u ** i for i, ci in enumerate(c))
+
+
+def blast_wave(w_kg: float, r_m: float) -> tuple[float, float, float]:
+    """(peak overpressure Pa, positive-phase duration s, decay alpha) of a free-air burst of ``w_kg`` kg TNT at
+    ``r_m`` metres, for the Friedlander wave p(t) = Ps (1 - t/td) exp(-alpha t/td) (Kinney & Graham eq. 5.10).
+    Ps from the JRC fit (valid 0.053 <= Z <= 40 m/kg^(1/3)); td read from Kinney's Table XI where it reaches
+    (0.79 <= Z <= 7.9), beyond it from the JRC impulse, i = Ps td (1/alpha - (1 - e^-alpha)/alpha^2), scaled to
+    meet the table at Z = 7.9 (the two sources differ by about 30 % in td there). Past Z = 40 Ps and the
+    impulse go on along their log-log slope (weak shock)."""
+    w = max(float(w_kg), 1e-6)
+    s3 = w ** (1.0 / 3.0)
+    z = max(float(r_m), 1e-3) / s3
+    zc = float(np.clip(z, 0.053, 40.0))
+    ps, imp = _blast_fit("ps", zc), _blast_fit("is", zc)
+    if z > 40.0:                                             # slope of each fit just inside 40
+        for name in ("ps", "is"):
+            k = (math.log10(_blast_fit(name, 40.0)) - math.log10(_blast_fit(name, 36.0))) / (math.log10(40.0) - math.log10(36.0))
+            v = 10 ** (math.log10(_blast_fit(name, 40.0)) + k * (math.log10(z) - math.log10(40.0)))
+            ps, imp = (v, imp) if name == "ps" else (ps, v)
+    a = float(np.interp(z, [p for p, _ in _BLAST_ALPHA], [q for _, q in _BLAST_ALPHA]))
+    zt = [r * _FT_TON for r, _ in _BLAST_TD]
+    tdk = lambda zz: float(np.interp(zz, zt, [d for _, d in _BLAST_TD])) / _TON_CBRT   # noqa: E731  ms per kg^(1/3)
+    if z <= zt[-1]:
+        td = tdk(z) * s3 * 1e-3
+    else:
+        def from_impulse(zz, p, i):
+            aa = float(np.interp(zz, [p_ for p_, _ in _BLAST_ALPHA], [q for _, q in _BLAST_ALPHA]))
+            return i / (p * (1.0 / aa - (1.0 - math.exp(-aa)) / (aa * aa)))
+        k = tdk(zt[-1]) / from_impulse(zt[-1], _blast_fit("ps", zt[-1]), _blast_fit("is", zt[-1]))
+        td = k * from_impulse(z, ps, imp) * s3 * 1e-3
+    return ps * 1e3, td, a
+
+
 @dataclass
 class Explosion:
-    """Reduced blast: N-wave shock, low-frequency expansion, debris and distance."""
+    """Blast: a Friedlander shock pulse sized by the charge and distance (`blast_wave`), low-frequency
+    expansion, debris and distance. ``energy`` is the charge in kg of TNT."""
     energy: float = 1.0
     distance_m: float = 8.0
     debris: float = 0.45
@@ -1172,10 +1240,12 @@ class Explosion:
     def render(self, dur: float = 2.0, *, sr: int=DEFAULT_SR, seed: int=0) -> np.ndarray:
         dur=max(.15,float(dur)); n=max(1,int(round(dur*_PHYS_SR))); t=np.arange(n)/_PHYS_SR
         rng=np.random.default_rng(seed); e=max(.01,float(self.energy)); d=max(.5,float(self.distance_m))
-        # N-wave duration increases with scale and propagation distance.
-        T=np.clip(.006*e**(1/3)+.00045*d,.004,.09)
-        m=min(n,max(4,int(T*_PHYS_SR))); u=np.linspace(-1,1,m)
-        nw=np.zeros(n); nw[:m]=(np.sign(-u)*(1-np.abs(u)))
+        # Friedlander pulse: positive phase td and decay alpha of this charge at this distance; it runs on into
+        # the negative phase until (1 - t/td) e^(-alpha t/td) has died out
+        _, td, alpha = blast_wave(e, d)
+        m = min(n, max(4, int(min(td * (1.0 + 8.0 / alpha), 0.5) * _PHYS_SR)))
+        tt = np.arange(m) / _PHYS_SR
+        nw = np.zeros(n); nw[:m] = (1.0 - tt / td) * np.exp(-alpha * tt / td)
         # Smooth distance-dominant high frequencies by short moving average.
         smooth=max(1,int(np.clip(d*.000035*_PHYS_SR,1,80)))
         if smooth>1: nw=np.convolve(nw,np.ones(smooth)/smooth,mode='same')

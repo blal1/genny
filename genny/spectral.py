@@ -23,7 +23,7 @@ from fractions import Fraction
 
 import numba
 import numpy as np
-from scipy.fft import next_fast_len
+from scipy.fft import dct, idct, next_fast_len
 from scipy.ndimage import gaussian_filter, maximum_filter1d, median_filter, uniform_filter
 from scipy.signal import correlate, hilbert, resample_poly
 
@@ -431,8 +431,24 @@ def _osc_bank(freq, amp, phase, pos, n, sr, cubic):
     return y
 
 
+TMS_BLOCK_S, TMS_THRESH_DB = 1.0, -20.0   # UNSOURCED: Verma & Meng give neither; 1 s blocks, peaks within 20 dB of
+                                          # the frame maximum keep ~3/4 of a click train and ~0.5 % of the hiss under it
+
+
+def _tms_render(model: dict, stretch: float, sr: int) -> np.ndarray:
+    """The transients of a model, moved to their stretched onsets but not stretched themselves (Verma & Meng 1998 §3):
+    the DCT-domain sines are time-scaled by stretch * sr / model sr, so each block grows and every click moves with it."""
+    msr, N, nb = int(model["sr"]), int(model["t_block"]), int(model["t_blocks"])
+    sub = {"sr": msr, "n": nb * N, "hop": model["t_hop"], "win": model["t_win"], "freq": model["t_freq"],
+           "amp": model["t_amp"], "phase": model["t_phase"], "noise": np.zeros((0, 0)), "edges": np.zeros(0)}
+    g = stretch * sr / msr
+    C = resynth(sub, sr=msr, stretch=g, noise_gain=0.0)
+    Nb = len(C) // nb
+    return idct(C[:nb * Nb].reshape(nb, Nb), norm="ortho", axis=1).reshape(-1) / math.sqrt(stretch)
+
+
 def analyze(x: np.ndarray, sr: int = DEFAULT_SR, window_ms: float = 46.0, thresh_db: float = -50.0, max_peaks: int = 60,
-            max_tracks: int = 40, bands: str = "bark", min_frames: int = 4) -> dict:
+            max_tracks: int = 40, bands: str = "bark", min_frames: int = 4, transients: bool = False) -> dict:
     """Sines + noise analysis (Serra's SMS with the PARSHL recipe; g12 §9.5, §17) of a mono signal.
 
     Returns a plain dict of numpy arrays / numbers (see `save_model`):
@@ -453,7 +469,10 @@ def analyze(x: np.ndarray, sr: int = DEFAULT_SR, window_ms: float = 46.0, thresh
     born at zero amplitude one frame earlier (the first frame starts at full level), 60 peaks and
     40 tracks. Residual: magnitude spectrum minus that of the resynthesised sines (§9.5), summed
     per Bark or ERB band (§9.6).
-    Not modelled: transients (g12 §9.6) - an attack is spread over sines and noise."""
+    transients: Verma & Meng's sines + transients + noise (DAFx 1998). The sines' residual is cut in
+    non-overlapping blocks, each block's DCT turns a click into a slowly varying sinusoid, and this same
+    sinusoidal analysis tracks them (keys t_*); the noise is then measured on what both leave. Off, an
+    attack is spread over sines and noise (g12 §9.6) and smears when stretched."""
     x = to_mono(np.asarray(x, float))
     n = len(x)
     M = _win_len(window_ms, sr)
@@ -539,17 +558,27 @@ def analyze(x: np.ndarray, sr: int = DEFAULT_SR, window_ms: float = 46.0, thresh
     fr, am, ph = fr[:, keep], am[:, keep], ph[:, keep]
 
     pos = (np.arange(F) * R - M // 2).astype(np.int64)
-    S = stft(_osc_bank(fr, am, ph, pos, n, float(sr), True), M, R, N, w)
+    s = _osc_bank(fr, am, ph, pos, n, float(sr), True)
+    model = {"sr": int(sr), "n": int(n), "hop": int(R), "win": int(M), "freq": fr, "amp": am, "phase": ph}
+    if transients and n:
+        Nb = int(TMS_BLOCK_S * sr)
+        nb = -(-n // Nb)
+        C = dct(np.pad(x - s, (0, nb * Nb - n)).reshape(nb, Nb), norm="ortho", axis=1).reshape(-1)
+        t = analyze(C, sr, window_ms, TMS_THRESH_DB, max_peaks, max_tracks, bands, min_frames)
+        model.update(t_block=Nb, t_blocks=nb, t_hop=t["hop"], t_win=t["win"], t_freq=t["freq"], t_amp=t["amp"], t_phase=t["phase"])
+        s = s + _tms_render(model, 1.0, sr)[:n]
+    S = stft(s, M, R, N, w)
     res = np.maximum(np.abs(X) - np.abs(S), 0.0) ** 2
     edges = band_edges(sr, bands)
     kb = np.round(edges[:-1] * N / sr).astype(int)
     cnt = np.diff(np.append(kb, K))
     noise = np.sqrt(np.add.reduceat(res, kb, axis=1) / cnt / np.sum(w * w))    # E|X|^2 = sigma^2 sum(w^2) for white noise
-    return {"sr": int(sr), "n": int(n), "hop": int(R), "win": int(M), "freq": fr, "amp": am, "phase": ph, "noise": noise, "edges": edges}
+    return {**model, "noise": noise, "edges": edges}
 
 
 def resynth(model: dict, sr: int | None = None, stretch: float = 1.0, transpose: float = 0.0, formant: float = 0.0,
-            sines_gain: float = 1.0, noise_gain: float = 1.0, seed: int = 0, phases: str = "auto") -> np.ndarray:
+            sines_gain: float = 1.0, noise_gain: float = 1.0, seed: int = 0, phases: str = "auto",
+            transient_gain: float = 1.0) -> np.ndarray:
     """Render a model from `analyze` (mono), at any sample rate.
 
     stretch: duration factor (the envelopes are resampled; g12 §17 H.5). transpose: semitones applied
@@ -558,7 +587,9 @@ def resynth(model: dict, sr: int | None = None, stretch: float = 1.0, transpose:
     through the frame's peaks, g12 §9.3), formant == transpose is a plain "tape" transposition;
     the noise bands move with `formant`. phases: "cubic" follows the measured phases (waveform
     preserved), "free" integrates frequency, "auto" = cubic only when stretch == 1 and transpose == 0.
-    Noise: random-phase spectra shaped by the band levels, root-Hann at 75 % overlap (g12 §9.5)."""
+    Noise: random-phase spectra shaped by the band levels, root-Hann at 75 % overlap (g12 §9.5).
+    Transients (a model from analyze(transients=True)) move to their stretched onsets at their own
+    length and are not transposed."""
     msr = int(model["sr"])
     sr = int(sr or msr)
     R, M = int(model["hop"]), int(model["win"])
@@ -596,6 +627,8 @@ def resynth(model: dict, sr: int | None = None, stretch: float = 1.0, transpose:
         Y = (Bn @ Wm.T) * math.sqrt(Mn / 2.0) * np.exp(1j * np.random.default_rng(seed).uniform(-np.pi, np.pi, (Fn, Mn // 2 + 1)))
         Y[:, 0] = 0.0
         y += noise_gain * _ola(_inv(Y, Mn) * window(Mn, root=True), Rn)[Mn:Mn + n_out]
+    if transient_gain and "t_freq" in model:
+        y += transient_gain * pad_to(_tms_render(model, stretch, sr), n_out)[:n_out]
     return y
 
 
@@ -872,9 +905,12 @@ def spectral_tilt(x, sr=DEFAULT_SR, slope=-3.0, pivot=1000.0):
 @layer_type("resynth")
 def _layer_resynth(layer: dict, sr: int, q: float) -> np.ndarray:
     """{"type": "resynth", "path": "in.wav", "stretch": 1.0, "transpose": 0, "formant": 0, "sines": 1, "noise": 1}
-    optional: "window_ms" (46; analysis window, at least 4 periods of the lowest pitch), "seed" (noise)."""
+    optional: "window_ms" (46; analysis window, at least 4 periods of the lowest pitch), "seed" (noise),
+    "transients" (false; a gain: true or 1 keeps attacks and clicks sharp and unstretched, 0.5 halves them)."""
     x, fsr = read_wav(layer["path"])
     wms = float(layer.get("window_ms", 46.0))
+    tg = float(layer.get("transients", 0.0))
     kw = dict(stretch=float(layer.get("stretch", 1.0)), transpose=float(layer.get("transpose", 0.0)), formant=float(layer.get("formant", 0.0)),
-              sines_gain=float(layer.get("sines", 1.0)), noise_gain=float(layer.get("noise", 1.0)), seed=int(layer.get("seed", 0)))
-    return _per_channel(lambda s: resynth(analyze(s, fsr, window_ms=wms), sr=sr, **kw), x)
+              sines_gain=float(layer.get("sines", 1.0)), noise_gain=float(layer.get("noise", 1.0)), seed=int(layer.get("seed", 0)),
+              transient_gain=tg)
+    return _per_channel(lambda s: resynth(analyze(s, fsr, window_ms=wms, transients=bool(tg)), sr=sr, **kw), x)

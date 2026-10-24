@@ -529,6 +529,66 @@ def _fm_syrinx(f, w, fb, nz, sr):
     return out
 
 
+@numba.njit(cache=True)
+def _nf_syrinx(alpha, beta, gamma, fs, dl, r):
+    """Amador et al. 2013 fig. 1 labial normal form, RK4: x' = y,
+    y' = -a g^2 - b g^2 x - g^2 x^3 - g x^2 y + g^2 x^2 - g x y, into the trachea
+    Pi(t) = a x(t) - r Pi(t - T) (T = ``dl`` samples); returns Pi."""
+    n = alpha.shape[0]
+    x, y = 0.01, 0.0
+    buf = np.zeros(dl)
+    out = np.empty(n)
+    h = 1.0 / fs
+    for i in range(n):
+        a, b, g = alpha[i], beta[i], gamma[i]
+        g2 = g * g
+        k1x = y
+        k1y = -a * g2 - b * g2 * x - g2 * x ** 3 - g * x * x * y + g2 * x * x - g * x * y
+        xx, yy = x + 0.5 * h * k1x, y + 0.5 * h * k1y
+        k2x = yy
+        k2y = -a * g2 - b * g2 * xx - g2 * xx ** 3 - g * xx * xx * yy + g2 * xx * xx - g * xx * yy
+        xx, yy = x + 0.5 * h * k2x, y + 0.5 * h * k2y
+        k3x = yy
+        k3y = -a * g2 - b * g2 * xx - g2 * xx ** 3 - g * xx * xx * yy + g2 * xx * xx - g * xx * yy
+        xx, yy = x + h * k3x, y + h * k3y
+        k4x = yy
+        k4y = -a * g2 - b * g2 * xx - g2 * xx ** 3 - g * xx * xx * yy + g2 * xx * xx - g * xx * yy
+        x += h / 6.0 * (k1x + 2.0 * k2x + 2.0 * k3x + k4x)
+        y += h / 6.0 * (k1y + 2.0 * k2y + 2.0 * k3y + k4y)
+        j = i % dl
+        p = a * x - r * buf[j]
+        buf[j] = p
+        out[i] = p
+    return out
+
+
+# f0 / gamma of the normal form at alpha = 0.15 against beta (measured by RK4, f0 scales exactly
+# with gamma: all terms carry g^2 once time is g t)
+_NF_BETA = np.array([0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.7])
+_NF_G = np.array([0.0767, 0.089, 0.0993, 0.1147, 0.1267, 0.137, 0.1547])
+
+
+def _normal_form_source(f, amp, chaos, noise, tf1, rng):
+    """Labial source + trachea of Amador et al. 2013: alpha (air-sac pressure) follows the syllable
+    envelope across the Hopf threshold, beta (labial tension) sets the timbre (small beta: near the
+    saddle-node, rich spectrum), gamma scales time so f0 follows the contour. Trachea: quarter-wave
+    tube with its first resonance at ``tf1`` (zebra finch: 3.5 cm, 2.5 / 7 kHz). Noise on beta:
+    2.5 % of its range per Noise = 5 (Methods). UNSOURCED: the 0.15 ceiling of alpha, base beta
+    0.3, the chaos -> beta mapping, r = 0.5, oversample 4."""
+    os_ = 4
+    fs = KSR * os_
+    m = len(f) * os_
+    up = lambda v: np.repeat(v, os_)                                   # noqa: E731
+    alpha = up(-0.05 + 0.2 * np.clip(amp, 0.0, 1.0))
+    b0 = np.clip(0.3 - 0.15 * chaos, 0.1, 0.7)
+    jitter = _unit(V._pd_lop(rng.uniform(-1, 1, m), 3000.0, float(fs)))
+    beta = up(b0) + up(40.0 * noise) / 5.0 * 0.025 * 0.6 * jitter      # Noise 0..40, beta range 0.1..0.7
+    gamma = up(f / np.interp(b0, _NF_BETA, _NF_G))
+    dl = max(2, int(round(fs / (2.0 * tf1))))                          # T = 2L / c, f1 = c / 4L
+    y = _nf_syrinx(alpha, np.clip(beta, 0.05, 0.8), gamma, float(fs), dl, 0.5)
+    return _sig.resample_poly(y, 1, os_)[:len(f)]
+
+
 def _syl(dur, f, gap, rep=(1, 1), **kw):
     return dict(dur=dur, f=f, gap=gap, rep=rep, **kw)
 
@@ -653,7 +713,8 @@ def birdsong_plan(species: str = "robin", seed: int = 0, repeats: int = 1, sylla
     return out
 
 
-def _birdsong(species: str, seed, repeats=1, syllables=0, tempo=1.0, pitch=1.0, two_voice=0.0) -> np.ndarray:
+def _birdsong(species: str, seed, repeats=1, syllables=0, tempo=1.0, pitch=1.0, two_voice=0.0,
+              source="fm") -> np.ndarray:
     p = BIRDS[species]
     plan = birdsong_plan(species, seed, repeats, syllables, tempo, pitch)
     rng = _rng(seed, 21)
@@ -693,12 +754,18 @@ def _birdsong(species: str, seed, repeats=1, syllables=0, tempo=1.0, pitch=1.0, 
         fb[i0:i0 + m] = s["chaos"]
         nzd[i0:i0 + m] = s["noise"]
     f = np.minimum(f, 0.2 * KSR)
-    nz = nzd * V._pd_lop(rng.uniform(-1, 1, n), 2000.0, float(KSR))
-    x = _fm_syrinx(f, w, fb, nz, float(KSR))
-    if two_voice > 0:                      # second bronchial source at a non-harmonic ratio (great tit)
-        x = x + two_voice * _fm_syrinx(f * 1.27, w, fb, nz, float(KSR))   # UNSOURCED ratio
-    x = x * amp
     tf1, tf2 = (min(v * pitch, 0.4 * KSR) for v in p["tf"])
+    if source == "normal_form":
+        x = _normal_form_source(f, amp, fb, nzd, tf1, rng)
+        if two_voice > 0:
+            x = x + two_voice * _normal_form_source(f * 1.27, amp, fb, nzd, tf1, _rng(seed, 23))
+        x = _unit(x)
+    else:
+        nz = nzd * V._pd_lop(rng.uniform(-1, 1, n), 2000.0, float(KSR))
+        x = _fm_syrinx(f, w, fb, nz, float(KSR))
+        if two_voice > 0:                  # second bronchial source at a non-harmonic ratio (great tit)
+            x = x + two_voice * _fm_syrinx(f * 1.27, w, fb, nz, float(KSR))   # UNSOURCED ratio
+    x = x * amp
     y = _bpf(x, tf1, p["q"]) + _bpf(x, tf2, p["q"])                    # trachea: two parallel band-passes
     return _hp(y, p["hp"] * pitch) * (amp > 0)                         # beak
 
@@ -708,12 +775,13 @@ def _birdsong(species: str, seed, repeats=1, syllables=0, tempo=1.0, pitch=1.0, 
      repeats=(1, "songs / calls in a row"), syllables=(0, "exact syllable count (0 = the preset's own, random per seed)"),
      pitch=(1.0, "frequency scale (smaller bird > 1)"), tempo=(1.0, "speed scale"),
      two_voice=(0.0, "0..1 level of the second syrinx source"), bright=(1.0, "0.3..2 top-end"),
-     seed=(0, "variation"))
+     source=("fm", "fm (Farnell) | normal_form (Amador 2013 labial dynamics + trachea)"), seed=(0, "variation"))
 def birdsong(sr=DEFAULT_SR, species="robin", repeats=1, syllables=0, pitch=1.0, tempo=1.0, two_voice=0.0,
-             bright=1.0, seed=0):
+             bright=1.0, source="fm", seed=0):
     _choice(species, BIRDS, "species")
+    _choice(source, ("fm", "normal_form"), "source")
     y = _birdsong(species, seed, int(np.clip(repeats, 1, 50)), int(syllables), tempo,
-                  float(np.clip(pitch, 0.25, 3.0)), float(np.clip(two_voice, 0.0, 1.0)))
+                  float(np.clip(pitch, 0.25, 3.0)), float(np.clip(two_voice, 0.0, 1.0)), source)
     return _fin(_lp(y, 5500.0 * float(np.clip(bright, 0.3, 2.0))), sr, peak=0.5, fade_ms=2.0, hp=60.0)
 
 
@@ -868,6 +936,24 @@ def grunt(sr=DEFAULT_SR, pitch=110.0, effort=0.5, size=1.0, dur=0.3, seed=0):
     src = V.lf_pulse(f, 0.25 + 0.5 * float(np.clip(effort, 0, 1)), rng=rng, voiced_env=np.where(env > 0.02, 1.0, 0.0))
     y = V.formant_filter(src * env, "@", "farnell", formant_scale=1.0 / size)
     return _fin(_hp(y, 60.0), sr, peak=0.5)
+
+
+def _nonverbal(kind: str, what: str):
+    def fn(sr=DEFAULT_SR, voice="female", syllables=0, pitch=1.0, seed=0):
+        from .physical import nonverbal as NV
+        y = NV.vocalize(kind, str(voice), _rng(seed, 60 + NV.KINDS.index(kind)),
+                        n_syl=int(syllables) or None, pitch=float(np.clip(pitch, 0.25, 4.0)))
+        return _fin(y, sr, peak=0.6, hp=60.0)
+    sfx(kind, f"{what} (Anikin's soundgen model with its presets: syllables, jitter, AM, aspiration, formants).",
+        voice=("female", "female | male"), syllables=(0, "syllables in the bout, 0 = as the preset"),
+        pitch=(1.0, "f0 scale"), seed=(0, "variation"))(fn)
+
+
+for _k, _w in (("laugh", "Laugh: a bout of short voiced syllables with breathy onsets"),
+               ("scream", "Scream: high, rough voice with jitter, shimmer and amplitude modulation"),
+               ("cry", "Crying: long falling wail with slow jitter and amplitude modulation"),
+               ("moan", "Moan: falling voiced syllable with aspiration")):
+    _nonverbal(_k, _w)
 
 
 @sfx("cough", "Cough: explosive noise burst through the open tract with a short voiced tail.",

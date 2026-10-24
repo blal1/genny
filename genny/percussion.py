@@ -191,11 +191,58 @@ def sleigh(sr=DEFAULT_SR, vel=1.0, decay=0.35):
     y = F.lowpass(y, 6500, sr)
     return y / 4.0 * perc(decay + 0.1, 0.001, sr, curve=1.0) * (0.5 + 0.5 * vel)
 
+def triad(f3, n, sr, a3, t60, split=0.001, threshold=0.05, seed=1e-3):
+    """Chaigne, Touze & Thomas, "Nonlinear vibrations and chaos in gongs and cymbals", Acoust. Sci. & Tech.
+    26(5) (2005), eq. 9: a symmetric mode q3 at w3 struck to amplitude a3, quadratically coupled to twin modes
+    q1, q2 at w3 / 2 (1 -+ split) (internal resonance 1:1:2), V = alpha / 2 (q1^2 + q2^2) q3. Below the parametric
+    threshold a3* = 4 mu w1 / alpha the twins stay silent; above it they grow, after a delay, as the order-2
+    subharmonics of their Fig. 4, and trade energy back and forth with q3. Returns (q1 + q2, q3). UNSOURCED: alpha
+    (set so that a3* = ``threshold``: a full strike blooms after about 0.5 s, below 0.3 nothing), the seed (an
+    off-centre strike gives the twins 1e-3 of the amplitude directly), the
+    twin split and their damping (that of q3)."""
+    w3 = 2.0 * np.pi * f3
+    w1, w2 = 0.5 * w3 * (1.0 - split), 0.5 * w3 * (1.0 + split)
+    mu = 6.91 / max(t60, 1e-3)
+    al = 4.0 * mu * w1 / threshold
+    return _triad(int(n), 1.0 / sr, w1, w2, w3, mu, al, float(a3) * w3, seed * float(a3))
+
+
+import numba  # noqa: E402
+
+
+@numba.njit(cache=True)
+def _triad(n, dt, w1, w2, w3, mu, al, v3, s):
+    out = np.zeros(n)
+    par = np.zeros(n)
+    q1, q2, q3 = s, -s, 0.0                                         # an off-centre strike: the twins get a little directly
+    p1, p2, p3 = 0.0, 0.0, v3                                       # strike = initial velocity of q3
+    for i in range(n):                                              # symplectic Euler
+        p1 += dt * (-w1 * w1 * q1 - al * q1 * q3 - 2.0 * mu * p1)
+        p2 += dt * (-w2 * w2 * q2 - al * q2 * q3 - 2.0 * mu * p2)
+        p3 += dt * (-w3 * w3 * q3 - 0.5 * al * (q1 * q1 + q2 * q2) - 2.0 * mu * p3)
+        q1 += dt * p1
+        q2 += dt * p2
+        q3 += dt * p3
+        out[i] = q1 + q2
+        par[i] = q3
+    return out, par
+
+
 # v0.6 physical migration: gong --------------------------------------------------
-@drum("gong", "Physical modal gong/tam-tam with inharmonic resonances.", tune=(90, "Hz"), decay=(6.0, "seconds"))
-def gong(sr=DEFAULT_SR, vel=1.0, tune=90, decay=6.0):
+@drum("gong", "Physical modal gong/tam-tam with inharmonic resonances.", tune=(90, "Hz"), decay=(6.0, "seconds"),
+      cascade=(0.0, "0..1 level of the 1:1:2 internal-resonance twins (Chaigne & Touze): a hard strike blooms "
+                    "a fifth-free subharmonic below the main groups a moment after the hit; soft strikes stay clean"))
+def gong(sr=DEFAULT_SR, vel=1.0, tune=90, decay=6.0, cascade=0.0):
     from .physics import TunedPercussion
     y = TunedPercussion("gong", decay=decay, hardness=.48).note(float(tune), float(decay), velocity=vel, sr=sr, seed=84)
+    c = float(np.clip(cascade, 0.0, 1.0))
+    if c > 0.0:
+        from .physical.modal_data import GONG
+        sub = np.zeros(len(y))
+        for r in GONG["ratios"][:2]:                                 # the two deep groups
+            tw, _ = triad(float(tune) * r, len(y), sr, float(np.clip(vel, 0.0, 1.0)), float(decay))
+            sub += tw
+        y = y + c * sub / (np.max(np.abs(sub)) + 1e-12) * np.max(np.abs(y)) * float(np.clip(vel, 0.0, 1.0))
     return np.tanh(y*1.15) * .8
 
 # v0.7 physical membrane migration --------------------------------------------

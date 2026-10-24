@@ -49,8 +49,16 @@ def _comb(x: np.ndarray, delay_s: float, fb: float, sr: int) -> np.ndarray:
     bright=(0.0, "0..1 open muffler / sporty rasp (0 = road car heard from the cabin)"),
     seed=(7, "per-engine character"),
     dur=(3.0, "s"),
+    model=("classic", "classic | ptr (Doerfler 2026 pulse-train-resonator: shaped exhaust pulses per cylinder bank, "
+                      "a Karplus-Strong manifold per bank and a shared tailpipe)"),
+    exhaust=("auto", "ptr only: the exhaust the PTR paper learned, inline4 | v8 (low, resonant) | v8_metal (mid-range, "
+                     "metallic); auto = inline4 below 6 cylinders, else v8"),
 )
-def car_engine(sr=DEFAULT_SR, rpm=1500, cylinders=4, load=0.5, rough=0.25, pipe=0.004, body=1.0, bright=0.0, seed=7, dur=3.0):
+def car_engine(sr=DEFAULT_SR, rpm=1500, cylinders=4, load=0.5, rough=0.25, pipe=0.004, body=1.0, bright=0.0, seed=7, dur=3.0,
+               model="classic", exhaust="auto"):
+    if model == "ptr":
+        return _ptr_engine(sr, float(rpm), max(1, int(cylinders)), float(np.clip(load, 0, 1)), float(np.clip(rough, 0, 1)),
+                           float(pipe), float(np.clip(bright, 0, 1)), int(seed), float(dur), str(exhaust))
     rng = np.random.default_rng(int(seed))
     cyl = max(1, int(cylinders))
     rpm = float(rpm)
@@ -119,3 +127,66 @@ def car_engine(sr=DEFAULT_SR, rpm=1500, cylinders=4, load=0.5, rough=0.25, pipe=
     y = np.tanh(y * (1.1 + 0.4 * load)) * 0.85
     y = F.dc_block(y, sr)
     return y
+
+
+# Doerfler et al., "Pulse-Train-Resonator", arXiv 2603.09391 (2026): firing orders of their engines and pulse shape
+_FIRING = {4: (1, 3, 4, 2), 6: (1, 5, 3, 6, 2, 4), 8: (1, 5, 4, 8, 6, 3, 7, 2)}
+
+
+def _ks(x, L, g, a, b):
+    """Karplus-Strong exhaust resonator y[n] = x[n] + g (a y[n-L] + b y[n-L-1]) (eqs 8-9)."""
+    den = np.zeros(L + 2)
+    den[0], den[L], den[L + 1] = 1.0, -g * a, -g * b
+    return lfilter([1.0], den, x)
+
+
+# Resonators learned by PTR on its three datasets (best checkpoints of github.com/rdoerfler/ptr-model, CC BY-NC 4.0,
+# read out in research/bibliographie_genny/data/doerfler_ptr/resonators.md): per resonator (L at 16 kHz, a1, a2) of
+# y[n] = x[n] - a1 y[n-L] - a2 y[n-L-1], the loop gain folded in. Bank a, bank b, shared tailpipe.
+PTR_EXHAUST = {
+    "inline4": ((113, 0.0759, -0.0702), (77, 0.2168, -0.2148), (34, 0.0336, 0.1825)),
+    "v8": ((91, 0.0489, -0.0460), (49, 0.2607, -0.2593), (40, 0.2873, 0.1838)),
+    "v8_metal": ((61, -0.3678, -0.3696), (111, 0.0609, -0.0604), (34, 0.1349, 0.2394)),
+}
+
+
+def _ptr_engine(sr, rpm, cyl, load, rough, pipe, bright, seed, dur, exhaust="auto"):
+    """PTR (Sec. III-IV): every cylinder fires once per engine cycle (f0 = rpm / 120) a bipolar pulse
+    P = E(phi) sum_k a_k sin(k phi~), E = (1 - e^{-alpha phi}) e^{-beta phi} (eq. 4), a_k ~ e^{-0.5 k lambda} (eq. 6), phase
+    bent as phi~ = 2 pi (phi / 2 pi)^nu by the hot leading edge (eq. 5); cylinders are summed per bank (V engines: two
+    banks in firing order), each bank through its own Karplus-Strong manifold, then a shared tailpipe (Sec. IV-C4);
+    turbulence modulates the pulse with throttle, g_thr = max(load, eps)^0.7 (eqs 1, 7).
+    The manifolds and the tailpipe are the resonators PTR learned (``PTR_EXHAUST``), delays rescaled from 16 kHz;
+    ``pipe`` / 0.004 scales the tailpipe length. UNSOURCED (learned per frame by the network, not stored as constants):
+    alpha, beta, lambda, nu."""
+    rng = np.random.default_rng(seed)
+    n = samples(dur, sr)
+    t = np.arange(n) / sr
+    f0 = rpm / 120.0
+    order = _FIRING.get(cyl, tuple(range(1, cyl + 1)))
+    banks = 2 if cyl >= 6 else 1
+    gthr = max(load, 1e-3) ** 0.7
+    lam, nu = 0.35 - 0.2 * bright, 0.75
+    alpha, beta = 40.0, 6.0 + 4.0 * (1.0 - load)
+    K = 24
+    ak = np.exp(-0.5 * np.arange(1, K + 1) * lam)
+    out = [np.zeros(n) for _ in range(banks)]
+    for slot, c in enumerate(order):
+        phase = (f0 * t + slot / len(order) + rng.normal(0.0, 0.004 + 0.02 * rough)) % 1.0
+        phi = 2 * np.pi * phase
+        bent = 2 * np.pi * phase ** nu
+        pulse = (1 - np.exp(-alpha * phi)) * np.exp(-beta * phi) * (np.sin(np.outer(bent, np.arange(1, K + 1))) @ ak)
+        gain = 1.0 + rng.uniform(-1, 1) * (0.08 + 0.3 * rough)
+        turb = 1.0 + 0.3 * gthr * F.lowpass(rng.standard_normal(n), 400.0, sr)
+        out[(c - 1) % banks if banks > 1 else 0] += gain * pulse * turb
+    if exhaust not in PTR_EXHAUST:
+        exhaust = "inline4" if cyl < 6 else "v8"
+    *manifolds, tail = PTR_EXHAUST[exhaust]
+    y = np.zeros(n)
+    for x, (L, a1, a2) in zip(out, manifolds):
+        y += _ks(x, max(2, int(round(L * sr / 16000))), 1.0, -a1, -a2)
+    L, a1, a2 = tail
+    y = _ks(y, max(2, int(round(L * sr / 16000 * pipe / 0.004))), 1.0, -a1, -a2)
+    y = F.lowpass(y, (700 + 1100 * load + 0.1 * rpm) * (1 + 1.5 * bright), sr, 0.7, order=2)
+    y = y / (np.sqrt(np.mean(y ** 2)) + 1e-9) * 0.3
+    return F.dc_block(np.tanh(y * (1.1 + 0.4 * load)) * 0.85, sr)
