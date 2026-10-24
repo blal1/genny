@@ -63,6 +63,23 @@ wind and pipe end correction (Farnell 2010), cello air mode and viola, bassoon a
 2012), room and hall decays (Kuttruff 2009), stone damping (Sterling 2019), bronze (Chadwick 2009), the /o/ vowel
 and male tract length (Story 1996, 2005), propeller Q (Selfridge 2019). Values no text gives stay marked UNSOURCED.
 
+Two more passes, papers and standards found on the web, then 29 papers delivered later. Some 50 values now come from
+a source or are confirmed with a citation, among them:
+
+- Chip clocks: PSG 1.7734 MHz, OPN 7.67 MHz, frame rate 60.0988 Hz.
+- Foley: car horn 335/400 Hz (Hella), relay bounce, gun muzzle speeds, the whip's 2.5 mm thong (Krehl 1998), the
+  Euler's disk exponents (Moffatt 2000).
+- Materials and acoustics: ice (Gammon 1983), bronze density 8800, the Helmholtz neck correction 1.43a, NRC CBD-239
+  walls and the mass law.
+- Spring reverb: defaults per Välimäki, Parker & Abel 2010 (Table 1); transition frequency 3.5-5 kHz.
+- Piano unisons within 1.6 cents below F#5 (Kirk 1959).
+- Animals: lion, dog and cat vocal tracts (Weissengruber 2002, Riede 2000); bark intervals (Pongrácz 2006); purr at
+  26.3 Hz (Sissom 1991).
+- People: hand claps and applause (Jylhä & Erkut 2008, Peltola 2007), trot and gallop cadences (Heglund & Taylor 1988).
+- Voice: the /o/ vowel (Hillenbrand 1995, Table V).
+- Nature: tree sway 0.35 Hz (Moore & Maguire 2004).
+- Retro: SNES/Amiga lo-fi rates.
+
 Licences of borrowed numbers: see `THIRD_PARTY_NOTICES.md` (PTR exhaust values from CC BY-NC 4.0 checkpoints,
 soundgen preset values from a GPL package; no code taken from either).
 

@@ -439,11 +439,15 @@ def ir_spring(sr=DEFAULT_SR, decay=2.0, size=0.5, bright=0.5, seed=0) -> np.ndar
     disperses more), built from the chirp-system idea of DSPG ch.11. The loop gain per frequency is
     g = 10^(-3 tau(f)/decay), so every frequency has the requested RT60."""
     rng = np.random.default_rng(seed)
-    fcut = min((2500.0 + 3500.0 * bright), 0.45 * sr)  # UNSOURCED: spring transition frequency 2.5-6 kHz
+    # transition frequency fC 3.5-5 kHz: "an fC of above 5 kHz is rarely seen in real spring reverberators"
+    # (Parker 2011, EURASIP J. Adv. Signal Process. 646134, §3.2 p.3); lower bound: the measured springs span
+    # fC 3526-4450 Hz and fC 2000 Hz "would be unusual in a real spring reverberation unit" (Valimaki, Parker & Abel
+    # 2010, JAES 58(7/8), Table 1 p.558 and Sec. 3.1 p.557)
+    fcut = min((3500.0 + 1500.0 * bright), 0.45 * sr)
     N = 1 << int(math.ceil(math.log2((1.6 * decay + 0.3) * sr)))
     f = np.fft.rfftfreq(N, 1.0 / sr)
     out = np.zeros(N)
-    for j in range(2):  # UNSOURCED: two springs of slightly different length, as in common tanks
+    for j in range(2):  # two springs in parallel (Olson X-82 tank, Parker & Bilbao 2009 DAFx-09 App. A)
         t0 = (0.030 + 0.035 * size) * (1 + 0.23 * j) * (1 + 0.02 * rng.standard_normal())
         tau = t0 * (1 + 1.8 * np.clip(f / fcut, 0, 1) ** 2)  # UNSOURCED: delay ratio 2.8 across the band
         phase = 2 * np.pi * np.cumsum(tau) * (f[1] - f[0])
@@ -665,7 +669,9 @@ def cvsd_encode(x, clock=30000, step_min=0.001, step_max=0.15, syllabic=0.005, l
     (slew-limited) and falls back otherwise, through a "syllabic filter". Clock 30 kHz and 2000 levels
     (step_min = 2/2000) are Smith's numbers. `x` must already be sampled at `clock`.
     Returns (bits, reconstruction); the decoder runs the identical step logic."""
-    # UNSOURCED: step_max 0.15, syllabic time constant 5 ms, integrator leak 1 ms (not given in the book)
+    # syllabic filter 5 ms +-1, reconstruction integrator 1 ms +-0.25 (RCC IRIG 106-99 Telemetry Standards,
+    # App. F §5.6, §5.7). UNSOURCED: step_max 0.15 (IRIG §5.5 gives a 16:1 compression ratio, which with Smith's
+    # step_min = 2/2000 would cap the slew at 0.016 * clock; not adopted)
     bits = np.zeros(x.shape[0], dtype=np.uint8)
     rec = _cvsd_core(np.ascontiguousarray(x, dtype=np.float64), bits, False, *_cvsd_params(clock, step_min, step_max, syllabic, leak), run)
     return bits, rec
@@ -675,8 +681,9 @@ def cvsd_decode(bits, clock=30000, step_min=0.001, step_max=0.15, syllabic=0.005
     return _cvsd_core(np.zeros(1), np.ascontiguousarray(bits, dtype=np.uint8), True, *_cvsd_params(clock, step_min, step_max, syllabic, leak), run)
 
 
-# IMA/DVI ADPCM tables. UNSOURCED in the findings (Smith gives no step-adaptation constants, DSPG ch.27):
-# these are the published IMA reference tables.
+# IMA/DVI ADPCM tables: indexTable and the 89-entry stepsizeTable, checked value by value against IMA Digital
+# Audio Technical Working Group, "Recommended Practices for Enhancing Digital Audio Compatibility in Multimedia
+# Systems", rev. 3.00, 21 Oct 1992, p.28.
 _IMA_INDEX = np.array([-1, -1, -1, -1, 2, 4, 6, 8], dtype=np.int64)
 _IMA_STEP = np.array([
     7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97, 107,
@@ -773,7 +780,9 @@ def gsm_like(x, pbits=3, order=8):
     maximum, then re-synthesised through 1/A(z). Not bit-exact GSM 06.10: the long-term predictor, the
     weighting filter and LAR quantisation are omitted. Speech frame model: DSPG ch.22 / 27 (LPC = predict
     from past samples, store the error)."""
-    # UNSOURCED: frame/sub-frame sizes and RPE grid follow the published GSM 06.10 layout, not the findings
+    # 160-sample frames, 4 sub-frames of 40, LPC order 8 (LAR 1-8), RPE decimation 3, 3-bit pulses: ETSI ETS 300 961
+    # (GSM 06.10 v5.2.1, 2000) §1.5 p.11-12 and Table 1.1. The spec picks one of 4 grids of 13 pulses;
+    # here one of 3 grids of 13-14 pulses (simplification, not in the spec)
     x = np.asarray(x, dtype=np.float64)
     n = x.shape[0]
     out = np.zeros(n)
@@ -1116,13 +1125,18 @@ def codec(x, sr=DEFAULT_SR, kind="adpcm", quality=0.5):
     raise ValueError("codec kind must be adpcm|cvsd|delta|gsm|dct")
 
 
-# UNSOURCED (all but `telephone`): sample rates, bit depths and bands are commonly quoted hardware figures,
-# not from the findings. telephone = 8 kHz, 8-bit companded, 200-3200 Hz (DSPG ch.1/22, Table 22-2).
+# telephone = 8 kHz, 8-bit companded, 200-3200 Hz (DSPG ch.1/22, Table 22-2).
+# nes: DMC rate $F = 33143.9 Hz, 7-bit output counter (NESdev wiki, APU DMC). snes: S-DSP output 32000 Hz nominal,
+# 16-bit stereo DAC (SNESdev wiki, S-DSP). gameboy: 4-bit wave samples (Pan Docs, Audio Registers, CH3).
+# amiga: 3579545 / 214 (NTSC clock constant / period, Amiga Hardware Reference Manual, "Limitations on Selection
+# of Sampling Period"); low-pass "becomes active around 4 KHz" (HRM, "Low-Pass Filter"). sp1200: 26.04 kHz, 12-bit
+# linear (Rossum Electro-Music SP-1200 page, reissue of the original data format). UNSOURCED: gameboy rate,
+# snes band and ADPCM stand-in for BRR, amiga 8 bits, voicemail, walkie.
 LOFI_PRESETS = {
     "nes": dict(rate=33144, bits=7, law="linear", band=None, hold=True, adpcm=False),
-    "snes": dict(rate=16000, bits=16, law="linear", band=(20, 7000), hold=False, adpcm=True),
+    "snes": dict(rate=32000, bits=16, law="linear", band=(20, 7000), hold=False, adpcm=True),
     "gameboy": dict(rate=8192, bits=4, law="linear", band=None, hold=True, adpcm=False),
-    "amiga": dict(rate=16726, bits=8, law="linear", band=(20, 4400), hold=True, adpcm=False),
+    "amiga": dict(rate=16726, bits=8, law="linear", band=(20, 4000), hold=True, adpcm=False),
     "sp1200": dict(rate=26040, bits=12, law="linear", band=None, hold=True, adpcm=False),
     "telephone": dict(rate=8000, bits=8, law="mu", band=(200, 3200), hold=False, adpcm=False),
     "voicemail": dict(rate=8000, bits=16, law="linear", band=(300, 3000), hold=False, adpcm=True),
@@ -1203,27 +1217,29 @@ def tape(x, sr=DEFAULT_SR, wow=0.15, flutter=0.08, drive=1.5, bump=2.5, hf=12000
     return y * (1.4 / peak) if peak > 1.4 else y  # a big bump on a saturated signal may exceed full scale
 
 
-# UNSOURCED: surface densities (kg/m^2), default leak ceilings (dB) and coincidence frequencies (Hz) are
-# typical building-acoustics handbook values, not from the findings.
+# Surface mass = (kg/m^2 per mm) x thickness and coincidence fc = A / t (Warnock 1985, NRC Canadian Building Digest
+# CBD-239, Eq 2 and Table 1): glass 2.5 kg/m^2/mm, A 15200 Hz mm; gypsum board 0.82, A 39000; dense concrete 2.3,
+# A 18700. Brick = red brick 1922 kg/m^3 (Farnell 2010 Fig 3.3) x 0.11 m. UNSOURCED: doors, all leak ceilings
+# (gaps and flanking, design defaults).
 WALL_MATERIALS = {
-    "window": dict(mass=10.0, leak=30.0, coincidence=3000.0),   # 4 mm glass
+    "window": dict(mass=10.0, leak=30.0, coincidence=3800.0),   # 4 mm glass
     "door": dict(mass=12.0, leak=22.0, coincidence=0.0),        # hollow interior door, gaps around it
     "solid_door": dict(mass=28.0, leak=30.0, coincidence=0.0),
-    "drywall": dict(mass=22.0, leak=42.0, coincidence=2500.0),  # plasterboard stud partition
-    "brick": dict(mass=200.0, leak=52.0, coincidence=0.0),      # 110 mm brick
-    "concrete": dict(mass=350.0, leak=58.0, coincidence=0.0),   # 150 mm concrete
+    "drywall": dict(mass=21.3, leak=42.0, coincidence=3000.0),  # stud partition, one 13 mm gypsum board each side
+    "brick": dict(mass=211.0, leak=52.0, coincidence=0.0),      # 110 mm brick
+    "concrete": dict(mass=345.0, leak=58.0, coincidence=125.0), # 150 mm concrete
 }
 
 
 def wall_loss_db(f, mass, leak=40.0, coincidence=0.0):
-    """Transmission loss of a single partition: mass law TL = 20 log10(f m) - 47 dB (field incidence,
+    """Transmission loss of a single partition: mass law TL = 20 log10(f m) - 48 dB (random incidence,
     f in Hz, m in kg/m^2: +6 dB per octave and per doubling of mass), never below 0, capped at `leak`
     (gaps and flanking paths set the ceiling), with a dip of up to 8 dB one octave wide at the coincidence
     frequency."""
-    # UNSOURCED: mass law and the 8 dB dip are textbook building acoustics, outside g11/g14. The findings
-    # only establish that `muffle`'s 4 dB level loss is far too small (DSPG ch.22: loudness ~ power^(1/3)).
+    # mass law: Warnock 1985, NRC CBD-239 Eq 1; same form in Ballagh 2003, NZ Acoustics 16(4), Eq 1.
+    # UNSOURCED: the 8 dB depth and one-octave width of the dip (CBD-239: depth set by the losses, no figure).
     f = np.asarray(f, dtype=np.float64)
-    tl = np.clip(20 * np.log10(np.maximum(f * mass, 1e-9)) - 47.0, 0.0, leak)
+    tl = np.clip(20 * np.log10(np.maximum(f * mass, 1e-9)) - 48.0, 0.0, leak)
     if coincidence > 0:
         tl = np.maximum(tl - 8.0 * np.exp(-0.5 * (np.log2(np.maximum(f, 1.0) / coincidence) / 0.5) ** 2), 0.0)
     return tl

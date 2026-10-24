@@ -372,7 +372,7 @@ class SympatheticPiano:
     can therefore acquire energy from the struck course.
     """
     struck_frequency: float = 440.0
-    unison_detune_cents: tuple[float,...] = (-1.8, 0.0, 1.6)
+    unison_detune_cents: tuple[float,...] = (-0.9, 0.0, 0.7)  # Kirk 1959, JASA 31(12):1644, 1.6 cent mean max spread
     sympathetic_ratios: tuple[float,...] = (0.5, 1.5, 2.0, 2.5, 3.0)
     coupling: float = 0.055
     string_impedance_n_s_m: float = 0.65

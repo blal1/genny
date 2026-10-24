@@ -1199,14 +1199,14 @@ def vocal_tract_comb(x: np.ndarray, tract_length_m=0.17, *, n_bands: int = 8, q=
 
 
 def roar(dur: float = 2.5, rng: np.random.Generator | None = None, arc=(30.0, 240.0, 120.0),
-         *, rise_frac: float = 0.45, tract_length_m: float = 0.4) -> np.ndarray:
+         *, rise_frac: float = 0.45, tract_length_m: float = 0.38) -> np.ndarray:
     """Lion-like roar (Farnell Practical 29): "start soft and low with distinct glottal pulses,
     building to a dense roar. Frequency ... starting as low as 30 Hz, building to around 240 Hz,
     and then dropping to around 120 Hz." Flapping source -> tract comb, driven by the
     articulation envelope (fig. 20.36 drives F0 base + excursion, tract and noise from it).
 
-    UNSOURCED: rise_frac (time of the 240 Hz peak), tract_length_m (no lion tract length in the
-    sources), and the mappings of the envelope to ripple (1 -> 4), width (2 -> 12) and
+    tract_length_m 0.38: lion lips-glottis 380 mm, Weissengruber et al. 2002 J Anat 201:195 Table 2
+    (one 1-year-old male). UNSOURCED: rise_frac (time of the 240 Hz peak), and the mappings of the envelope to ripple (1 -> 4), width (2 -> 12) and
     noisiness (0.05 -> 0.45); "distinct pulses early, dense later (more ripple, more noise)" is
     the only guidance."""
     rng = rng or np.random.default_rng(0)
@@ -1502,7 +1502,8 @@ def choir(notes, vowel="a", voices_per_note: int = 4, dur: float = 4.0,
 
     ``notes``: f0 values in Hz. Voice type per note from its pitch unless given.
     ``breath``: level of Cook's breathy "fuzz" (noise through the same formants).
-    UNSOURCED: detune_cents (per-singer static detune, gaussian sd), attack/release times
+    detune_cents 6 (per-singer static detune, gaussian sd): Ternstrom 1991 via Meyer 2009 p.127 fig. 3.33
+    (intonation sd below 5 cents good, 10 tolerable). UNSOURCED: attack/release times
     (power-law shapes, PLAN rule 5), the 1/sqrt(N) sum (uncorrelated voices add as sqrt(sum A^2),
     Farnell thesis p.95)."""
     rng = rng or np.random.default_rng(0)
@@ -1522,7 +1523,8 @@ def choir(notes, vowel="a", voices_per_note: int = 4, dur: float = 4.0,
             if breath > 0.0:
                 y += breath * formant_filter(rng.uniform(-1, 1, n), vowel, vt, f0=f0)
             env = np.ones(n)
-            off = int(rng.uniform(0, 0.05) * SR)     # UNSOURCED: singers enter up to 50 ms apart
+            # UNSOURCED: singers enter up to 50 ms apart (Rasch 1979's 35 ms is for chamber ensembles, not choirs)
+            off = int(rng.uniform(0, 0.05) * SR)
             a0 = min(n, off + na)
             env[:off] = 0.0
             env[off:a0] = (np.arange(a0 - off) / max(1, na)) ** 2
@@ -1752,9 +1754,10 @@ def syllable_track(n: int, rng: np.random.Generator, queries, *, syl=(0.14, 0.3)
 # ---- the rune tongue as material for "almost speech" (AUDIO_CHARTER.md §3.10, §8.5) ---------
 
 RUNE_VOWELS = {                       # (F1, F2) Hz, adult male; Farnell/CSLU table (research 03 §3.1)
-    "a": (710.0, 1100.0), "e": (550.0, 1770.0), "i": (280.0, 2250.0), "o": (540.0, 922.0),
+    "a": (710.0, 1100.0), "e": (550.0, 1770.0), "i": (280.0, 2250.0), "o": (497.0, 910.0),
     "u": (310.0, 870.0),
-}   # "o" is not in Farnell's table: Story et al. 1996 Table IV, /o/ "hoe", one adult male, natural speech F1N/F2N
+}   # "o" is not in Farnell's table: Hillenbrand et al. 1995 (JASA 97:3099) Table V p3103, /o/ mean of 45 men
+#     (was Story et al. 1996 Table IV, one talker: 540/922)
 RUNE_ONSETS = ("m", "n", "l", "r", "s", "sh", "h", "v", "th", "t", "k", "d")
 RUNE_CODAS = ("n", "m", "l", "s")
 # syllables of the charter lexicon (§3.10.5), scrambled so no word or grammar comes through
@@ -2022,7 +2025,8 @@ def syrinx(pressure_env, f_env=(500.0, 505.0), dur: float | None = None, *,
     Bernoulli term pulls it shut) and p1 = Z0 U + beta x lower are my reading of eq. 8 and fig. 4.
     The p0 equation is integrated as an exact relaxation, not the paper's trapezoid, because with
     any plausible bronchus volume it is too stiff at audio rates (deviation).
-    UNSOURCED (the paper prints no parameter values): a, h, x0, membrane mass, eps, mode Q,
+    a = trachea radius and membrane density: Fletcher 1988 Table 1, Kahrs & Avanzini DAFx-01 (below).
+    UNSOURCED (the paper prints no parameter values; Fletcher's differ, see below): h, x0, thickness, eps, mode Q,
     gamma = 30, Zs, bronchus volume, mode_ratio, the beak LPF corner, oversample. The set used
     was picked by a parameter sweep as the one whose f0 follows the membrane frequency
     (150-900 Hz at p_s = 3 kPa); below ~1 kPa or with low Q it does not self-oscillate."""
@@ -2038,12 +2042,16 @@ def syrinx(pressure_env, f_env=(500.0, 505.0), dur: float | None = None, *,
     w2a = TWO_PI * fb if second_valve else np.zeros(m_)
     w2b = w2a * mode_ratio
     rho, c = 1.2, 343.0
-    a = trachea_radius_m                     # UNSOURCED: valve half-width = trachea radius
-    h = 0.003                                # UNSOURCED: membrane half-length 3 mm
-    x0 = 0.0005                              # UNSOURCED: rest opening 0.5 mm
-    m = 1000.0 * (2 * a) * (2 * h) * 1e-3    # UNSOURCED: 1 mm thick, density 1000 (K&A)
-    eps = 1.0                                # UNSOURCED
-    q = 30.0                                 # UNSOURCED: modal Q
+    # Fletcher 1988 J Theor Biol 135:455 Table 1 ("crow or raven"): trachea 2a = 7 mm, membrane 2h = 7 mm,
+    # d = 100 um, x0 = 0 (closed at rest), Q = 2 at f1 150 Hz, mass nonlinearity eta = 10. Only a is taken:
+    # with low Q this sweep-tuned set does not self-oscillate (see above); the rest untried, need a listen.
+    a = trachea_radius_m                     # valve half-width = trachea radius (Fletcher 1988 Table 1, eq. 5)
+    h = 0.003                                # UNSOURCED: membrane half-length 3 mm (Fletcher: 3.5 mm)
+    x0 = 0.0005                              # UNSOURCED: rest opening 0.5 mm (Fletcher: 0)
+    # density 1000 kg/m3: Kahrs & Avanzini DAFx-01 sec. 4.1 (after Titze). UNSOURCED: 1 mm thick (Fletcher: 0.1 mm)
+    m = 1000.0 * (2 * a) * (2 * h) * 1e-3
+    eps = 1.0                                # UNSOURCED (Fletcher eta: 10)
+    q = 30.0                                 # UNSOURCED: modal Q (Fletcher: 2 at 150 Hz, ~10 at 1 kHz)
     gamma = 30.0                             # within the paper's 10..100
     zs = 2.0e6                               # UNSOURCED: air-sac impedance
     vol = math.pi * 0.0015 ** 2 * 0.010      # oil-bird bronchus 10 mm x 1.5 mm radius (K&A)

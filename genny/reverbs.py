@@ -1053,8 +1053,8 @@ def doppler(x, sr=DEFAULT_SR, speed=20.0, closest=5.0, pass_at=0.5, direction="l
 
 # Volume density kg/m^3, Farnell 2010 Fig 3.3 p.16: red brick 1922, marble 2563, plaster 849, water 1000; concrete and
 # rock inside "brick, cement, rock" 2000-5000, soil inside "earth" 1500-2500, wood 500 = top of "woods" 200-500.
-# Metal = steel 7900 (Farnell 2010 p.21, Eq 3.8 example). UNSOURCED: tile, glass (Fig 3.3 lists 1500, not adopted),
-# fabric, carpet, foliage, people.
+# Metal = steel 7900 (Farnell 2010 p.21, Eq 3.8 example). Glass 2500 = 2.5 kg/m^2 per mm (Warnock 1985, NRC CBD-239
+# Table 1; Farnell Fig 3.3's 1500 not adopted), concrete 2300 also there. UNSOURCED: tile, fabric, carpet, foliage, people.
 _DENSITY = {"concrete": 2300.0, "brick": 1922.0, "marble": 2563.0, "rock": 2600.0, "tile": 2300.0, "wood": 500.0,
             "glass": 2500.0, "plaster": 849.0, "metal": 7900.0, "fabric": 300.0, "carpet": 300.0, "water": 1000.0,
             "soil": 1500.0, "foliage": 30.0, "people": 1000.0}
@@ -1068,14 +1068,14 @@ _DENSITY = {"concrete": 2300.0, "brick": 1922.0, "marble": 2563.0, "rock": 2600.
 def occlude(x, sr=DEFAULT_SR, material="brick", thickness=0.1, leak=0.15, edge=600.0):
     """Farnell p.87: a wall "transmits a filtered version of the sound, usually with less high
     frequencies"; Sound Rendering: "occluders damp smoothly rather than cut" (diffraction).
-    Transmission: field-incidence mass law TL = 20 log10(f m) - 47 dB (m = surface density kg/m^2),
-    i.e. a first-order low-pass with corner 224 / m Hz.  # UNSOURCED: standard building acoustics
+    Transmission: random-incidence mass law TL = 20 log10(f m) - 48 dB (m = surface density kg/m^2;
+    Warnock 1985, NRC CBD-239 Eq 1), i.e. a first-order low-pass with corner 10^(48/20) / m = 251 / m Hz.
     Diffraction: one-pole low-pass at ``edge`` scaled by ``leak``.  # UNSOURCED: shape only"""
     if material not in _DENSITY:
         raise ValueError(f"unknown material {material!r}; choose from {sorted(_DENSITY)}")
     x = np.asarray(x, float)
     m = _DENSITY[material] * float(np.clip(thickness, 1e-4, 10.0))
-    fc = float(np.clip(224.0 / m, 0.5, 0.45 * sr))
+    fc = float(np.clip(251.0 / m, 0.5, 0.45 * sr))
     a = math.exp(-2 * math.pi * fc / sr)
     y = lfilter([1.0 - a], [1.0, -a], x, axis=0)
     lk = float(np.clip(leak, 0.0, 1.0))

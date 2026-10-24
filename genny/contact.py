@@ -120,9 +120,13 @@ MATERIALS: dict[str, ContactMaterial] = {m.name: m for m in (
     _m("aluminium", 1590.0, 0.55, 0.0, 1e10, 0.08, 2700, 69e9, 0.33, (0.0, 1e-7)),
     # church bell f/d read off the plot: 800-3500 (g06 B1)
     _m("bronze", 2000.0, 0.55, 0.0, 1e10, 0.08, 8800, 110e9, 0.34),
-    # UNSOURCED: ice and stone have no damping data in the findings; minimal glass-like guesses.
-    _m("ice", 90.0, 0.55, 15.0, 1.495e9, 0.2, 917, 9e9, 0.33),
-    _m("stone", 120.0, 0.55, 20.0, 1.495e9, 0.15, 2600, 50e9, 0.25),
+    # ice: polycrystalline ice bars in flexure, tan delta at the proton-relaxation peak 0.0085-0.0095 (Kuroiwa
+    # 1964, Contrib. Inst. Low Temp. Sci. A18, §III Fig. 3); its Arrhenius fit (tau0 6.9e-16 s, 13.1 kcal/mol)
+    # puts the peak at ~3 kHz at -10 C, so audio-band eta = 0.009 -> fd = 1/(pi eta) = 35.4.
+    _m("ice", 35.4, 0.55, 15.0, 1.495e9, 0.2, 917, 9e9, 0.33),
+    # stone: Barre and Quincy granite spheres, Q ~ 200 at 11-200 kHz (Birch 1975, JGR 80(5) 756) -> fd = Q/pi.
+    # UNSOURCED: ice / stone ext 15 / 20 (no external-damping data).
+    _m("stone", 63.7, 0.55, 20.0, 1.495e9, 0.15, 2600, 50e9, 0.25),
     # concrete loss factor 0.02-0.05 (COMSOL "Damping in structural dynamics" table), order 1e-2 for dense
     # concrete (NPTEL 112104040 lecture 9.6, after Cremer & Heckl): eta = 0.02 -> fd = 1/(pi eta) = 15.9.
     # UNSOURCED: ext 40.

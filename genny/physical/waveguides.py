@@ -76,8 +76,8 @@ UNSOURCED = {
                       "8 kHz -> 400 Hz, air-mode weight 4; guitar 100 Hz, Q 10, >= 100 ms is JOS, "
                       "violin/cello/bass air modes 275/110/60 Hz are Meyer 2009 §3.3.",
     "bowed.body_scale": "cello/bass/hurdy-gurdy bodies are the Maestre violin body with poles and "
-                        "zeros moved down in frequency (Q kept) by 0.47 (cello/violin length) "
-                        "and 0.8; 0.22 (bass/violin air mode) is inside Meyer 2009's 0.19-0.27.",
+                        "zeros moved down in frequency (Q kept); hurdy-gurdy 0.8 is chosen; cello "
+                        "0.40 and bass 0.22 are air-mode ratios to the violin from Meyer 2009 §3.3.",
     "bowed.bow_noise": "bow-noise depth 0.08 and its 2 kHz two-pole low-pass (rjlib knob at full "
                        "scale) are chosen, the sources give the structure only.",
     "brass.normalisation": "breath expressed relative to the lip filter's DC gain, lip bandwidth "
@@ -527,10 +527,10 @@ _MAESTRE_BODY = np.array([
     [1.0, -1.9299, 0.9621, -1.9354, 0.9590],
     [1.0, -1.9800, 0.9888, -1.9867, 0.9923],
 ])
-# UNSOURCED: cello = body-length ratio (35.5/75.5 cm); hurdy-gurdy 0.8. bass = air-mode ratio
-# (Meyer 2009 §3.3.4.1 57-70 Hz / §3.3.1.1 262-294 Hz -> 0.19-0.27, 0.22 inside; the length
-# ratio 0.32 leaves the A1 fundamental 44 dB under its 3rd harmonic).
-_BODY_SCALE = {"violin": 1.0, "cello": 0.47, "bass": 0.22, "gurdy": 0.8}
+# cello / bass = air-mode ratio to the violin (Meyer 2009 §3.3.1.1 262-294 Hz; §3.3.3.1 ~110 Hz
+# -> 0.37-0.42, 110/275 = 0.40; §3.3.4.1 57-70 Hz -> 0.19-0.27, 0.22 inside; the length ratio
+# 0.32 leaves the A1 fundamental 44 dB under its 3rd harmonic). UNSOURCED: hurdy-gurdy 0.8.
+_BODY_SCALE = {"violin": 1.0, "cello": 0.40, "bass": 0.22, "gurdy": 0.8}
 
 
 def _map_root(z: complex, k: float) -> complex:

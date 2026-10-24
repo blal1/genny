@@ -22,7 +22,8 @@ Sources (findings files are in ``out/research``):
 * **Jets** - Strouhal peak f = St U / D with St = 0.2 (Selfridge, findings 06 section 4.1).
   Level: free-jet U^8 law (Lighthill, quoted by Verge et al. 1997, section V).
 * **Ice** - no findings file covers ice. The dispersive chirp is the textbook Kirchhoff thin-plate
-  flexural wave (derivation in ``ice_chirp``); the material constants are marked UNSOURCED.
+  flexural wave (derivation in ``ice_chirp``); E, rho, nu and the shear-speed ceiling are
+  Gammon et al. 1983 (J. Glaciol., Brillouin, polycrystalline ice at -16 C).
 """
 from __future__ import annotations
 
@@ -429,14 +430,16 @@ def vessel_resonance(fill, height: float = 0.15, radius: float = 0.035, neck: fl
     "the empty cavity above the liquid is a quarter-wave (semi-open) tube"; end correction 0.62 R for
     a straight pipe, Farnell "Designing Sound" section 5, p.73). Odd harmonics 1, 3, 5, 7.
     Bottle (0 < neck < radius): Helmholtz, f = (c / 2 pi) sqrt(A / (V L')), A = pi neck^2,
-    V = pi radius^2 L_air (findings 01 section 3.5), L' = neck_len + 1.7 neck (textbook end
-    correction, # UNSOURCED in the findings). Both rise monotonically as the vessel fills.
+    V = pi radius^2 L_air (findings 01 section 3.5), L' = neck_len + 1.43 neck (end corrections:
+    inner end into the cavity, flanged by the shoulder, 0.8216 a (Rayleigh) + outer end unflanged,
+    0.6133 a (Levine & Schwinger); Chaigne & Kergomard, Acoustics of Musical Instruments, 2016,
+    sect. 12.6.1.2-3, eq. 12.133). Both rise monotonically as the vessel fills.
     """
     L = height * (1.0 - np.clip(np.asarray(fill, float), 0.0, 1.0))
     if neck <= 0.0 or neck >= radius:
         return c / (4.0 * (L + 0.62 * radius))
     # + 2 mm of air: a brim-full bottle keeps a finite cavity (guard against V -> 0)
-    return c / (2.0 * np.pi) * np.sqrt(neck * neck / (radius * radius * (L + 0.002) * (neck_len + 1.7 * neck)))
+    return c / (2.0 * np.pi) * np.sqrt(neck * neck / (radius * radius * (L + 0.002) * (neck_len + 1.43 * neck)))
 
 
 def _vessel(src, f0, q, harmonics=(1, 3, 5, 7)):
@@ -1278,8 +1281,11 @@ def lightning(sr=DEFAULT_SR, dur=6.0, distance=150.0, delay=0.0, seed=0):
 # PHASE TRANSITIONS - ice
 # =============================================================================================
 
-ICE_E, ICE_RHO, ICE_NU = 9.0e9, 917.0, 0.33   # UNSOURCED (not in the findings): textbook values for ice
-ICE_C_MAX = 1900.0                            # UNSOURCED: shear-wave ceiling on the flexural group speed, m/s
+# Isotropic polycrystalline ice Ih at -16 C, Gammon, Kiefte, Clouter & Denner, J. Glaciol. 29(103)
+# 433-460 (1983), Brillouin: rho 919.5 kg/m^3, V_L 3844.94 m/s, V_T 1956.9 m/s; nu = (V_L^2 - 2 V_T^2) /
+# (2 (V_L^2 - V_T^2)) = 0.325, E = 2 rho V_T^2 (1 + nu) = 9.33 GPa (derived here; their Table VIII).
+ICE_E, ICE_RHO, ICE_NU = 9.33e9, 919.5, 0.325
+ICE_C_MAX = 1957.0                            # Gammon 1983 V_T: shear-wave ceiling on the flexural group speed, m/s
 
 
 def ice_chirp(distance: float = 60.0, thickness: float = 0.05, loss: float = 0.004,
@@ -1297,8 +1303,8 @@ def ice_chirp(distance: float = 60.0, thickness: float = 0.05, loss: float = 0.0
     thickness), which gives the top frequency c_max^2 / (8 pi a): about 3 kHz for 5 cm ice and
     500 Hz for 30 cm - thin ice sings, thick ice booms. Stationary-phase amplitude of a dispersed
     impulse: A ~ sqrt(|df/dt|) ~ (t0 / t)^1.5, times exp(-loss 2 pi f (t - t0)).
-    # UNSOURCED: derived here from textbook plate theory (no findings file covers ice); E, rho, nu,
-    # c_max and ``loss`` are assumptions.
+    Derived here from Kirchhoff plate theory (no findings file covers ice); E, rho, nu, c_max from
+    Gammon et al. 1983 (see ICE_E). # UNSOURCED: ``loss``.
     """
     h = float(np.clip(thickness, 0.005, 2.0))
     d = float(np.clip(distance, 2.0, 2000.0))

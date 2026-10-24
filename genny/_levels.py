@@ -4,7 +4,7 @@ Each instrument is scaled so that notes across its register at vel 0.9 measure t
 loudness, so `gain` means the same thing whatever the instrument.
 """
 TRIM: dict[str, float] = {
-    "piano": 1.09,
+    "piano": 1.079,
     "felt_piano": 0.543,
     "epiano": 0.708,
     "organ": 1.213,

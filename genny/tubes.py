@@ -561,7 +561,7 @@ _CAL = {
     "bottle": ((30, 36, 42, 48, 60, 72, 90), (0, 0, 0, 0, 0, 0, 0), (8.0, 4.2, 2.9, 2.1, 1.6, 1.3, 1.3)),
 }
 TONEHOLE = (0.8, 0.003, 0.005)        # x_T, radius b, height tau: Bilbao Fig 9.18 (S_T 0.1644, xi 0.0075, xi_e 0.0134)
-REGISTER = (0.078, 0.0015, 0.010)     # distance from the reed (m) and radius: STK BlowHole (07 §7.6); height UNSOURCED
+REGISTER = (0.078, 0.0015, 0.010)     # distance from the reed (m) and radius: STK BlowHole (07 §7.6); height 10 mm DESIGN: Debut, Kergomard & Laloe 2005 (Appl. Acoust. 66:365) Table 3 give 13 mm, but this lumped hole stops overblowing at 13 mm
 
 
 @lru_cache(maxsize=512)

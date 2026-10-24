@@ -145,13 +145,18 @@ def foot_grf(n: int, contact: float, amps=(3.0, 2.0, 3.0), splits=SPLITS, offset
 def _gait(variation: int, rng: np.random.Generator, ratios: str) -> dict:
     """Pace and GRF shape of one natural step. Variation = which foot and a slightly different pace.
 
-    # UNSOURCED: the deviation sizes (pace +-3 %, phase amplitudes +-12 %, split points +-0.02,
+    Pace +-2.25 % uniform = 1.3 % sd, the stride-time CV of healthy young adults (Hausdorff, Zemany, Peng &
+    Goldberger 1999, J. Appl. Physiol. 86(3), p. 1041; applied to the step, not the stride). Same order as
+    Hausdorff, Purdon, Peng et al. 1996 (J. Appl. Physiol. 80(5), p. 1450): stride SD 22 ms on 1.1 s (2 %) at
+    the normal pace, CV "~3 %" over all paces, but over 1-h walks that include the long-range (alpha 0.95)
+    drift; the short-run 1.3 % is kept for one step.
+    # UNSOURCED: the other deviation sizes (phase amplitudes +-12 %, split points +-0.02,
     # acceleration term +-0.08) and the left-foot asymmetry (heel x0.92, ball x1.06, pace x0.97)
     # are not given by Cook or Farnell (Cook prints shapes only); they sit inside Visell's pace range.
     """
     base = {0: (0.50, "R", 0.0), 1: (0.48, "L", -0.05), 2: (0.53, "R", 0.08)}[variation % 3]
     T, foot, accel = base
-    T *= 1.0 + rng.uniform(-0.03, 0.03)
+    T *= 1.0 + rng.uniform(-0.0225, 0.0225)
     T = float(np.clip(T, STEP_INTERVAL[0] - 0.03, STEP_INTERVAL[1]))
     ov = rng.uniform(WALK_OVERLAP[0], 0.14)           # low half of 10-20 %: trailing ball ends near heel strike
     accel += rng.uniform(-0.08, 0.08)
@@ -579,6 +584,8 @@ def render_step(ground: str, variation: int, rng: np.random.Generator, *, return
         fl_ = pt._lowpass_force(F_lead)
         fn = np.clip(fl_ / (fl_.max() or 1), 0, None)
         dfn = np.gradient(fn)
+        # Camp 1987 (J. Phys. Colloq. 48 C1, p. C1-239): the step in cold (-17 C) snow has a "relaxation
+        # character" (stick-slip), warm corned snow is near white noise; he gives no rates.
         # UNSOURCED: threshold 0.45 of peak GRF, pulse rate 350-1100 Hz, 30 % jitter
         pulses = _stick_slip_pulses(n, fn, dfn, 0.45 + rng.uniform(-0.05, 0.05), 350.0, 1100.0, 0.30,
                                     int(rng.integers(0, 2**31 - 1)))

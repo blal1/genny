@@ -1235,7 +1235,8 @@ def woodhouse_tau(freq, fk, material="nylon"):
     open string at or below it, stopped to length L0 f_open / freq): Valette's loss factor as fitted by Woodhouse,
     eta_n = [T (eta_F + eta_A / w_n) + EI eta_B (n pi / L)^2] / [T + EI (n pi / L)^2] (eq. 4), tau = 2 / (eta w).
     Open length L0 = 0.65 m: what the nylon rows of Woodhouse's Table I imply, L = sqrt(T / m) / (2 f) = 0.649-0.653 m
-    on every string. UNSOURCED for steel: its rows imply 0.70 m, 0.65 m is kept for both."""
+    on every string. Steel: its rows imply 0.70 m, but the common steel-string scale is 25.4 in = 0.645 m (Martin D-28
+    spec sheet, martinguitar.com), so 0.65 m is kept for both."""
     rows = _WOODHOUSE[material]
     row = next((r for r in rows if r[0] <= freq * 1.001), rows[-1])
     fo, T, m, EI, eF, eB, eA = row

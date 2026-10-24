@@ -29,12 +29,19 @@ _MIDI = np.array([r[0] for r in CHABASSIER_D], float)
 TAU_LONG = 0.15            # s, free longitudinal mode (Bank 2005, F1)
 SB_A, SB_B = 2.0e-5, 0.07  # Chabassier soundboard modal damping (eq. 1)
 # Weinreich unison. UNSOURCED: half of the prompt decay goes through the bridge (the aftersound decays at half the
-# prompt rate), and the unison spread (cents) is genny's earlier SympatheticPiano default
+# prompt rate). Weinreich 1977 (JASA 62(6), Sec. I-II, p.1474-1477) gives only the bridge-only limit (share 1: the
+# in-phase mode decays N times the single-string rate, the antisymmetric one not at all); real shares are in figures.
 BRIDGE_SHARE = 0.5
 # UNSOURCED: the soundboard takes the longitudinal (in-plane) bridge force 20 dB weaker than the transverse one;
 # Bank & Sujbert 2005 only say it responds differently (their high-pass H_l)
 LONG_COUPLING = 0.1
-UNISON_CENTS = {1: (0.0,), 2: (-0.9, 0.9), 3: (-1.8, 0.0, 1.6)}
+# unison spread: Kirk 1959 (JASA 31(12), p.1644 and 1647): artist tuners leave a mean maximum difference of 1.6 cents
+# among the three strings of concert-grand unisons, listeners prefer 1-2 cents (trained ones 1.7). Trichord: 1.6 cents,
+# centre string off-centre (Kirk: tuners do not tune it midway). Bichord: 1.8 cents, within the preferred 1-2 cents
+# (Kirk tested trichords only).
+UNISON_CENTS = {1: (0.0,), 2: (-0.9, 0.9), 3: (-0.9, 0.0, 0.7)}
+# Kirk left out the top 2.5 octaves (above F#5, p.1645). UNSOURCED there: genny's earlier 3.4 cent spread
+TREBLE_MIDI, TREBLE_CENTS = 78, (-1.8, 0.0, 1.6)
 
 
 def _row(midi: float) -> dict:
@@ -222,7 +229,7 @@ def note(freq: float, dur: float, sr: int = 48000, vel: float = 0.8, *, tail: fl
     n = int((float(dur) + float(tail)) * sr)
     # unison: Weinreich's coupled partials
     ns = strings_per_key(midi)
-    cents = np.asarray(UNISON_CENTS[ns])
+    cents = np.asarray(TREBLE_CENTS if ns == 3 and midi >= TREBLE_MIDI else UNISON_CENTS[ns])
     lam = np.zeros((k.size, ns), np.complex128)
     cw = np.zeros((k.size, ns), np.complex128)
     one = np.ones(ns)

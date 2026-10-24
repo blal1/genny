@@ -186,7 +186,9 @@ def roar(sr=DEFAULT_SR, size=1.0, aggression=0.7, dur=2.5, seed=0):
     f0[:nr] = 30.0 + (240.0 - 30.0) * a[:nr]
     f0[nr:] = 120.0 + (240.0 - 120.0) * a[nr:]
     ag = float(np.clip(aggression, 0.0, 1.0))
-    y = _voc(f0 / size, a, rng, tract_m=0.4 * size, harsh=0.15 + 0.85 * ag, jitter=0.005 + 0.03 * ag,
+    # tract 0.38 m: lion lips-glottis 380 mm, Weissengruber et al. 2002 J Anat 201:195 Table 2 p197
+    # (1-year-old lion; confirmed on the full text)
+    y = _voc(f0 / size, a, rng, tract_m=0.38 * size, harsh=0.15 + 0.85 * ag, jitter=0.005 + 0.03 * ag,
              shimmer=0.3 * ag, sub=0.3 * ag)
     return _fin(_dark(y), sr)
 
@@ -206,8 +208,11 @@ def growl(sr=DEFAULT_SR, size=1.0, aggression=0.6, pitch=70.0, dur=1.5, seed=0):
     return _fin(_dark(y), sr)
 
 
-_DOGS = {  # UNSOURCED: f0 peak Hz, tract m, bark s (sources give no dog numbers)
-    "small": (720.0, 0.09, 0.10), "medium": (430.0, 0.15, 0.15), "large": (240.0, 0.22, 0.21)}
+# f0 peak Hz, tract m, bark s. Tract: Riede & Fitch 1999 (J Exp Biol 202:2859) = Riede 2000 PhD thesis
+# (HU Berlin) ch. 5 Table 5.2 p77: VTL 6.9 cm (Yorkshire terrier) .. 22.4 cm (Rottweiler), mean 15.7 cm (n = 33).
+# Medium f0 430 Hz confirmed: Pongracz et al. 2005 (J Comp Psychol 119:136) Fig. 2, Mudi (medium breed) bark
+# f0 about 330-480 Hz across six contexts (read off the bars). UNSOURCED: small / large f0, bark lengths.
+_DOGS = {"small": (720.0, 0.069, 0.10), "medium": (430.0, 0.157, 0.15), "large": (240.0, 0.224, 0.21)}
 
 
 @sfx("bark", "Dog barks: short arched pulses bursts, 'wa-u' vowel path.",
@@ -218,7 +223,7 @@ def bark(sr=DEFAULT_SR, size="medium", count=2, aggression=0.6, pitch=0.0, seed=
     fpk = to_hz(pitch) if pitch else fpk
     rng = _rng(seed, 3)
     count = int(np.clip(count, 1, 40))
-    out = np.zeros(_n(count * (d + 0.4) + 0.3))
+    out = np.zeros(_n(count * (1.15 * d + 0.55) + 0.3))
     t = 0.02
     for _ in range(count):
         dd = d * rng.uniform(0.9, 1.15)
@@ -228,7 +233,10 @@ def bark(sr=DEFAULT_SR, size="medium", count=2, aggression=0.6, pitch=0.0, seed=
         y = _voc(f0, env, rng, tract_m=tract, harsh=0.35 + 0.6 * aggression, vowel=_vowel_keys("A-u", dd),
                  shimmer=0.2, jitter=0.02, sub=0.3 * aggression)
         _place(out, _unit(y), t, rng.uniform(0.8, 1.0))
-        t += dd + rng.uniform(0.16, 0.32)                          # UNSOURCED gap
+        # gap = end of one bark to start of the next: Pongracz et al. 2006 (Appl Anim Behav Sci 100:228) Table 1,
+        # natural 0.05-1.70 s (mean 0.41); short 0.05-0.15 s reads aggressive, long 0.45-0.55 s not.
+        # Aggression 0..1 maps long -> short (0.5 -> 0.1 s centre, +-0.05 s); the linear mapping is UNSOURCED.
+        t += dd + (0.5 - 0.4 * float(np.clip(aggression, 0.0, 1.0))) + rng.uniform(-0.05, 0.05)
     return _fin(_dark(out[:_n(t + 0.1)]), sr)
 
 
@@ -241,22 +249,27 @@ def meow(sr=DEFAULT_SR, size=1.0, pitch=550.0, dur=0.9, seed=0):
     n = _n(dur)
     env = V.articulation_env(n, 0.3, offset=0.0) ** 0.7
     f0 = to_hz(pitch) / size * _arc(n, [(0, 0.72), (0.3, 1.0), (0.6, 0.96), (1, 0.68)]) * (1 + 0.01 * _slow(n, rng, 6.0))
-    y = _voc(f0, env, rng, tract_m=0.085 * size, harsh=0.12, vowel=_vowel_keys("i:-ae-A-u", dur), vmix=0.75)
+    # tract 0.08 m: domestic cat lips-glottis 80 mm, Weissengruber et al. 2002 J Anat 201:195 Table 2 p197
+    y = _voc(f0, env, rng, tract_m=0.08 * size, harsh=0.12, vowel=_vowel_keys("i:-ae-A-u", dur), vmix=0.75)
     return _fin(_dark(y), sr)
 
 
-@sfx("purr", "Cat purr: glottal pulses near 25 Hz through the tract, breathing in and out.",
-     rate=(25.0, "pulses per second (mean)"), size=(1.0, "body scale"), dur=(3.0, "s"), seed=(0, "variation"))
-def purr(sr=DEFAULT_SR, rate=25.0, size=1.0, dur=3.0, seed=0):
+@sfx("purr", "Cat purr: glottal pulses near 26 Hz through the tract, breathing in and out.",
+     rate=(26.3, "pulses per second (mean)"), size=(1.0, "body scale"), dur=(3.0, "s"), seed=(0, "variation"))
+def purr(sr=DEFAULT_SR, rate=26.3, size=1.0, dur=3.0, seed=0):
+    # Sissom, Rice & Peters 1991 (J Zool 223:67) p69: domestic cats purr at 26.3 +- 1.95 Hz (23-31), mid-expiration
+    # 2.4 Hz above mid-inspiration (-> +-4.6 %), amplitude minimum at each flow reversal (Fig. 1).
     rng = _rng(seed, 5)
     n = _n(dur)
     t = np.arange(n) / KSR
-    br = np.sin(TWO_PI * t / 1.7 + rng.uniform(0, TWO_PI))        # UNSOURCED: 1.7 s breath cycle
-    f = float(np.clip(rate, 5.0, 80.0)) * (1.0 + 0.04 * np.tanh(4.0 * br)) * (1.0 + 0.01 * _slow(n, rng, 5.0))
+    # UNSOURCED: 1.7 s breath cycle (Sissom 1991: breath rate "varied widely", no number) and the symmetric
+    # cycle (their Fig. 2: expiration about 40 % of it)
+    br = np.sin(TWO_PI * t / 1.7 + rng.uniform(0, TWO_PI))
+    f = float(np.clip(rate, 5.0, 80.0)) * (1.0 + 0.046 * np.tanh(4.0 * br)) * (1.0 + 0.01 * _slow(n, rng, 5.0))
     amp = 0.55 + 0.45 * np.abs(np.tanh(4.0 * br)) ** 0.5           # dip at each breath reversal
     src = V.raised_cosine_pulse(f, width_env=5.0)
     src = src + 0.06 * rng.uniform(-1, 1, n) * np.maximum(src, 0.0)
-    y = V.vocal_tract_comb(src, 0.085 * float(np.clip(size, 0.4, 4.0)), q=2.5) + 0.15 * _lp(src, 300.0)
+    y = V.vocal_tract_comb(src, 0.08 * float(np.clip(size, 0.4, 4.0)), q=2.5) + 0.15 * _lp(src, 300.0)   # 80 mm, as meow
     return _fin(_lp(y * amp, 2200.0), sr)
 
 
@@ -345,7 +358,9 @@ def dolbear_rate(temp_c: float) -> float:
 _CRICKETS = {
     # carrier Hz, fall, pulses per chirp, pulse period s, wing split, rate factor on Dolbear
     "field": (4500.0, 0.133, 7, 0.017, 0.022, 1.0),          # Farnell Practical 27
-    "tree": (2900.0, 0.05, 8, 0.02, 0.01, 1.0),              # UNSOURCED: snowy tree cricket numbers
+    # snowy tree cricket, Walker SINA orthsoc.org/sina/585a.htm (after Fulton 1925, Walker 1962): 8 (or 5)
+    # pulses "at ca. 52/sec" at 25 C, spectrogram dominant 2.9 kHz at 24.8 C. UNSOURCED: fall, wing split.
+    "tree": (2900.0, 0.05, 8, 1.0 / 52.0, 0.01, 1.0),
     "bell": (3000.0, 0.0, 0, 0.0, 0.0, 2.52),                # Farnell "japanese cricket": 3.6 Hz when field = 1.43
 }
 
@@ -484,7 +499,8 @@ def night_insects(sr=DEFAULT_SR, density=0.5, temp=20.0, bright=0.5, dur=6.0, se
 
 
 # insect beats/s: Farnell Practical 27 "between 50Hz for large insects with synchronous wing muscles,
-# and 2kHz for small flies" (the low end: audible flaps). UNSOURCED: bird and bat beats/s, band scales.
+# and 2kHz for small flies" (the low end: audible flaps). bat 11: inside the 4-13 Hz maxima of 23 species,
+# Bullen & McKenzie 2002 J Exp Biol 205:2615 (abstract). UNSOURCED: bird beats/s, band scales.
 _WINGS = {"bird": (6.0, 1.0), "bat": (11.0, 1.6), "insect": (50.0, 3.0)}
 
 
@@ -1076,7 +1092,8 @@ def eat(sr=DEFAULT_SR, kind="crunch", bites=4, rate=1.7, seed=0):
 
 def heart_s1s2(bpm: float) -> float:
     """S1-S2 interval in s: left-ventricular ejection time (Weissler 1968: 0.413 - 0.0017 HR) plus
-    isovolumic contraction. UNSOURCED: the 0.04 s contraction time (gives 0.35 s at 60 bpm, the
+    isovolumic contraction, 0.04 s: IVCT 40 +- 10 ms, Alhakak et al. 2025 Clin Res Cardiol
+    (Copenhagen City Heart Study, PMC11946970) Table 2, all participants (gives 0.35 s at 60 bpm, the
     LovelyHeart patch's 35 %)."""
     return float(np.clip(0.453 - 0.0017 * bpm, 0.12, 0.6 * 60.0 / bpm))
 
@@ -1125,11 +1142,14 @@ def _clap(rng, fc: float, q: float, decay: float, n: int | None = None) -> np.nd
 
 
 @sfx("handclap", "One hand clap: a filtered noise burst; cupped hands are lower and hollower.",
-     cup=(0.3, "0 flat palms (bright ~2.4 kHz) .. 1 cupped (hollow ~0.8 kHz)"), seed=(0, "variation"))
+     cup=(0.3, "0 flat palms (bright ~1.4 kHz) .. 1 cupped (hollow ~0.5 kHz)"), seed=(0, "variation"))
 def handclap(sr=DEFAULT_SR, cup=0.3, seed=0):
     rng = _rng(seed, 48)
     c = float(np.clip(cup, 0.0, 1.0))
-    fc = 2400.0 * (800.0 / 2400.0) ** c                                # UNSOURCED resonance range
+    # resonance: Jylha & Erkut DAFx-08 Table 1 (Repp 1987 clap types): flat P1 1364 / P3 1562 Hz -> 1400,
+    # very cupped A1+ 500 Hz. Peltola et al. 2007 (IEEE TASLP 15:1021) Fig. 8 agrees at the flat end (P3 about
+    # 1500 Hz) but puts A1+ nearer 700 Hz (+-150); kept 500. Their Fig. 8 Q (fc/B) is about 5-6 for every mode.
+    fc = 1400.0 * (500.0 / 1400.0) ** c
     y = _clap(rng, fc, 1.5 + 2.5 * c, 0.008 + 0.008 * c, _n(0.12))
     y[_n(0.003):] += 0.5 * _clap(rng, fc * 1.5, 2.0, 0.006, len(y) - _n(0.003))   # UNSOURCED: fingers then palm
     return _fin(y, sr, peak=0.7, fade_ms=1.0, hp=200.0)
@@ -1139,25 +1159,28 @@ CLAP_VOICES = 64        # clappers rendered one by one; the rest of the crowd is
 
 
 def applause_rate(enthusiasm: float) -> float:
-    """Claps per second per person. UNSOURCED: 2 Hz polite .. 4.5 Hz enthusiastic."""
-    return 2.0 + 2.5 * float(np.clip(enthusiasm, 0.0, 1.0))
+    """Claps per second per person: 2.5 Hz bored (OOI 400 ms) .. 4.17 Hz enthusiastic (OOI 240 ms), Peltola et al.
+    2007 (IEEE TASLP 15:1021) sec. IV-A, their ClaPD control model."""
+    return 2.5 + 1.67 * float(np.clip(enthusiasm, 0.0, 1.0))
 
 
 def applause_plan(crowd: int = 30, enthusiasm: float = 0.6, dur: float = 4.0, seed: int = 0) -> list[np.ndarray]:
-    """Clap times (s) of each individually rendered clapper: own rate (+-8 %), phase and 4 % jitter."""
+    """Clap times (s) of each individually rendered clapper: own rate (sd 10 %), phase and 2.7 % jitter.
+    Peltola et al. 2007 (IEEE TASLP 15:1021): rate sd = the spread of the 8 subjects' mean periods in Table I
+    (0.238-0.327 s, CV 9.7 %); jitter = Repp 1987's mean OOI sd 6.8 ms = 2.7 % (sec. IV)."""
     rng = _rng(seed, 49)
     r = applause_rate(enthusiasm)
     plan = []
     for _ in range(int(min(max(crowd, 1), CLAP_VOICES))):
-        ri = r * float(np.clip(rng.normal(1.0, 0.08), 0.7, 1.3))
+        ri = r * float(np.clip(rng.normal(1.0, 0.10), 0.7, 1.3))
         k = np.arange(int(dur * ri) + 2)
-        t = rng.uniform(0.0, 1.0 / ri) + k / ri + rng.normal(0.0, 0.04 / ri, len(k))
+        t = rng.uniform(0.0, 1.0 / ri) + k / ri + rng.normal(0.0, 0.027 / ri, len(k))
         plan.append(np.sort(t[(t >= 0.0) & (t < dur - 0.03)]))
     return plan
 
 
 @sfx("applause", "Applause: every clapper has a rate, a hand resonance and a place; big crowds blur into Poisson grains.",
-     crowd=(30, "number of people"), enthusiasm=(0.6, "0 polite (2 claps/s each) .. 1 wild (4.5 claps/s)"),
+     crowd=(30, "number of people"), enthusiasm=(0.6, "0 bored (2.5 claps/s each) .. 1 wild (4.2 claps/s)"),
      dur=(4.0, "s"), seed=(0, "variation"))
 def applause(sr=DEFAULT_SR, crowd=30, enthusiasm=0.6, dur=4.0, seed=0):
     crowd = int(np.clip(crowd, 1, 100000))
@@ -1165,7 +1188,9 @@ def applause(sr=DEFAULT_SR, crowd=30, enthusiasm=0.6, dur=4.0, seed=0):
     n = _n(dur)
     out = np.zeros(n)
     for times in applause_plan(crowd, enthusiasm, dur, seed):
-        fc = float(np.clip(1500.0 * math.exp(rng.normal(0.0, 0.3)), 700.0, 3200.0))    # UNSOURCED spread
+        # Jylha & Erkut DAFx-08 Table 1, the 8 Repp clap types: geometric mean 1030 Hz (-> 1100), log sd 0.38,
+        # range 500..1562 Hz
+        fc = float(np.clip(1100.0 * math.exp(rng.normal(0.0, 0.38)), 500.0, 1600.0))
         decay = rng.uniform(0.006, 0.014)
         m = _n(8 * decay)
         env = np.exp(-np.arange(m) / (decay * KSR))
@@ -1258,8 +1283,10 @@ GROUNDS = tuple(S.GROUND_SPECS)
 _HARD = {"stone", "concrete", "cobblestone", "wet_stone", "marble", "hard_floor", "wood", "metal_web", "ice",
          "crystal", "bone", "coral"}
 # default footfalls per minute; walk / run inside and above Visell's 75-125 steps/min.
-# UNSOURCED: sneak, limp, stairs, trot (78 strides/min) and gallop (110 strides/min) defaults.
-GAITS = {"walk": 105.0, "run": 170.0, "sneak": 66.0, "limp": 84.0, "stairs": 96.0, "trot": 312.0, "gallop": 440.0}
+# trot / gallop = 4 footfalls x stride frequency at the preferred speed of a 500 kg horse, Heglund & Taylor 1988
+# (J Exp Biol 138:301) eqs. 2 and 6 / Table 3: 3.35 Mb^-0.130 = 1.49 strides/s (89.6/min, 358 footfalls/min),
+# 4.44 Mb^-0.156 = 1.68 strides/s (101/min, 403 footfalls/min). UNSOURCED: the 500 kg mass; sneak, limp, stairs.
+GAITS = {"walk": 105.0, "run": 170.0, "sneak": 66.0, "limp": 84.0, "stairs": 96.0, "trot": 358.0, "gallop": 403.0}
 # footfall onsets inside one stride. UNSOURCED fractions; the structure is the standard one:
 # trot = two beats of diagonal pairs, gallop = four beats then a suspension phase.
 _QUAD = {"trot": (0.0, 0.035, 0.5, 0.535), "gallop": (0.0, 0.17, 0.36, 0.52)}

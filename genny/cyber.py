@@ -120,11 +120,14 @@ def magnetostriction(b):
      size=(1.0, "0.3 small wall unit .. 3 substation: scales the tank resonances down"), seed=(0, "variation"))
 def transformer(sr=DEFAULT_SR, dur=4.0, mains=50.0, flux=0.8, dc_bias=0.0, load=0.3, loose=0.0, size=1.0, seed=0):
     """The radiated sound is taken as the strain velocity (a large tank radiates as its surface
-    velocity) plus the tank's modes. # UNSOURCED: 0.02 Hz grid wander, 4 % level drift."""
+    velocity) plus the tank's modes. Grid wander 3.8e-4 sd = 18.8 mHz at 50 Hz, the measured sd of the
+    Continental European grid (Rydin Gorjao et al. 2020, Nat. Commun. 11:6362, Suppl. Table II, DE; US 17.8-18.7 mHz).
+    # UNSOURCED: the wander's 0.2 Hz rate (real grids decorrelate over minutes, Schaefer et al. 2018,
+    # Nat. Energy 3, Fig. 4), 4 % level drift."""
     rng = _rng(seed, 71)
     n = _n(dur)
     f = float(np.clip(mains, 20.0, 400.0))
-    wander = 1.0 + 4e-4 * _lfn(rng, n, 0.2)
+    wander = 1.0 + 3.8e-4 * _lfn(rng, n, 0.2)
     th = 2 * np.pi * np.cumsum(f * wander) / SR
     b = float(np.clip(flux, 0.3, 1.3)) * np.sin(th) + float(np.clip(dc_bias, 0.0, 0.5))
     v = np.gradient(magnetostriction(b)) * SR / (2 * np.pi * 2 * f)

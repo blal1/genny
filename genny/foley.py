@@ -594,8 +594,10 @@ COINS = {"penny": (11000, 5200, 3835), "nickel": (5583, 9255, 9805), "dime": (44
 def coin_spin(sr=DEFAULT_SR, coin="quarter", dur=1.8, start=9.0, seed=0):
     """Rolling-contact noise gated at the wobble rate into the STK coin resonances (Shakers coin
     rows, R07) and a wooden table (Faust body, R08 §2.2).
-    # UNSOURCED (not in the findings): Euler's-disk law, wobble rate ~ (t0 - t)^(-1/6) and tilt
-    # ~ (t0 - t)^(1/3) (Moffatt, Nature 404, 2000); the rate is capped at 40x the start."""
+    Euler's-disk law (Moffatt, Nature 404:833, 2000, eq. 4: alpha^3 ~ (t0 - t) / t1, and "the corresponding
+    behaviour of Omega is (t0 - t)^(-1/6)"; confirmed): tilt ~ (t0 - t)^(1/3), wobble rate ~ alpha^(-1/2)
+    ~ (t0 - t)^(-1/6) (Bildsten 2001, arXiv gr-qc/0102046: Omega^2 = 4g/(a alpha), "Moffatt's scaling ...
+    exponent of -1/6"; Bildsten's boundary-layer regime gives -2/9 above 0.3 deg). The 40x cap is a design limit."""
     rng = np.random.default_rng(int(seed))
     dur = float(np.clip(dur, 0.3, 10))
     n = _n(dur)
@@ -806,13 +808,16 @@ RIFLE_BODY = (230.0, 380.0, 560.0, 760.0, 2200.0, 2500.0, 2800.0, 3050.0)   # "f
 # kind -> shell chirp ms, barrel ms, noise burst ms, bullet speed m/s, body formant scale, blast gain, blast low-pass Hz (0 = none),
 #         automatic-fire rate (rounds/s), N-wave transition ms.
 # rifle = Farnell's main-guns1 preset (39 / 6.1 / 7.7 ms, N-wave 2 ms, 850 m/s cone example, metro 87 ms).
+# Bullet speeds: pistol 360 m/s = 9 mm 115 gr FMJ 1180 fps, 4" barrel (Federal AE9DP data,
+# le.vistaoutdoor.com/ammunition/federal/handgun/details.aspx?id=94); smg 400 m/s and 800 rounds/min = 13.3/s,
+# silenced 300 m/s = MP5 1313 fps / MP5SD 984 fps (Heckler & Koch MP5 LE brochure 2025, hk-usa.com).
 # UNSOURCED: the other rows are that preset scaled by barrel size; shotgun barrel 20 ms is the book
 # default ("a burst between 100 and 200 Hz"); cannon uses the black-powder discharge time (30-80 ms)
-# and the book's 200 ms noise burst; bullet speeds other than 850; the suppressor's 0.2 gain / 1.2 kHz.
+# and the book's 200 ms noise burst; shotgun and cannon speeds; the suppressor's 0.2 gain / 1.2 kHz.
 GUNS = {
     "rifle":    (38.97, 6.1, 7.677, 850.0, 1.0, 1.0, 0.0, 10.0, 2.0),
     "pistol":   (30.0, 4.0, 6.0, 360.0, 1.4, 0.9, 0.0, 6.0, 1.5),
-    "smg":      (30.0, 5.0, 6.0, 380.0, 1.25, 0.9, 0.0, 11.5, 1.5),
+    "smg":      (30.0, 5.0, 6.0, 400.0, 1.25, 0.9, 0.0, 13.3, 1.5),
     "shotgun":  (45.0, 20.0, 30.0, 400.0, 0.75, 1.0, 0.0, 1.5, 2.0),
     "silenced": (30.0, 4.0, 6.0, 300.0, 1.4, 0.2, 1200.0, 6.0, 1.5),
     "cannon":   (60.0, 60.0, 200.0, 450.0, 0.3, 1.0, 0.0, 0.5, 4.0),
@@ -1095,13 +1100,18 @@ def bow_shot(sr=DEFAULT_SR, draw=0.35, distance=20.0, pitch=120.0, target="wood"
      dur=(0.35, "s of swing before the crack"), size=(1.0, "whip length scale: longer N-wave, lower whoosh"), echo=(0.2, "0..1 outdoor echoes"),
      seed=(0, "variation"))
 def whip(sr=DEFAULT_SR, dur=0.35, size=1.0, echo=0.2, seed=0):
-    """The Aeolian tone of a 4 mm thong whose speed rises as t^3 to Mach 1 (Selfridge source, R03 §4),
-    then an N-wave (Farnell nwave, R03 §5.2) with its ground reflection.
-    # UNSOURCED: 0.5 ms N-wave for a whip tip, 4 mm thong, cubic speed law."""
+    """The Aeolian tone of the 2.5 mm terminal lash whose speed rises as t^3 to Mach 1 (Selfridge source,
+    R03 §4), then an N-wave (Farnell nwave, R03 §5.2) with its ground reflection.
+    Lash cord "outer diameter of 2.5 mm" (Krehl, Engemann & Schwenkel 1998, Shock Waves 8:1-9, §4.5).
+    The same paper measures a supersonic phase of ~1.2-1.3 ms peaking at M = 2.19 (744 m/s) after
+    ~850 us, the crack being emitted by the tuft turning over in ~100 us (§5.3-5.5); this model stops at
+    M 1.05 and lets the N-wave stand for the shock.
+    # UNSOURCED: 0.5 ms N-wave duration, the cubic speed law before Mach 1 (Krehl gives only the
+    # supersonic phase, ~linear at 50 m/s per 100 us)."""
     rng = np.random.default_rng(int(seed))
     m = _n(float(np.clip(dur, 0.08, 2.0)))
     u = (C_AIR * 1.05) * (np.arange(m) / m) ** 3
-    sw = modal.aeolian_tone(u, 0.004 * float(np.clip(size, 0.3, 4)), m / P, rng, "loq") * (u / C_AIR) ** 2
+    sw = modal.aeolian_tone(u, 0.0025 * float(np.clip(size, 0.3, 4)), m / P, rng, "loq") * (u / C_AIR) ** 2
     y = np.zeros(m + _n(0.9))
     _put(y, _nm(sw), 0.0, 0.25)
     crack = np.pad(n_wave(0.5 * float(np.clip(size, 0.3, 4)), 9.133, 0.7), (0, _n(0.6)))
@@ -1223,7 +1233,8 @@ def _switch(kind: str, state: str, rng, n: int) -> np.ndarray:
             return cl(20, 5500, 0.0) + _mclick(lo, [(f * 1.15, q, d) for f, q, d in CATCH], 0.015, 1.0)
         return cl(20, 5000, 0.0) + cl(20, 5200, 0.012) + _mclick(lo, CATCH, 0.030, 1.0)
     if kind == "relay":             # sprung contact: "bounces briefly ... a few milliseconds ... short chatter"
-        y = cl(20, 5000, 0.0) + 0.5 * cl(10, 5000, 0.004) + 0.3 * cl(8, 5000, 0.0065) + 0.15 * cl(6, 5000, 0.008)   # UNSOURCED bounce times
+        # bounces end by 5 ms: "Bounce time max. monostable 5/7ms" (operate/release; TE Schrack RP3SL datasheet)
+        y = cl(20, 5000, 0.0) + 0.5 * cl(10, 5000, 0.0025) + 0.3 * cl(8, 5000, 0.004) + 0.15 * cl(6, 5000, 0.005)   # UNSOURCED: the 0.5/0.3/0.15 levels
         y += _shortping(n, 0.0, 0.02)
         _put(y, _shock(0.006), 0.0, 0.3 * float(np.max(np.abs(y))))
         return y
@@ -1722,9 +1733,11 @@ def siren_wail(sr=DEFAULT_SR, kind="police", dur=5.0, rate=0.0, echo=0.5, bright
 
 
 @sfx("car_horn", "Car horn: two diaphragm horns a third apart.",
-     dur=(0.7, "s"), freq=(420, "Hz or note name of the low horn"), freq2=(500, "Hz or note name of the high horn"), bright=(1.0, "0.5 muffled .. 2 harsh"))
-def car_horn(sr=DEFAULT_SR, dur=0.7, freq=420, freq2=500, bright=1.0):
-    """# UNSOURCED: a clipped diaphragm buzz per horn through a 2 kHz horn band; 420 / 500 Hz pair."""
+     dur=(0.7, "s"), freq=(335, "Hz or note name of the low horn"), freq2=(400, "Hz or note name of the high horn"), bright=(1.0, "0.5 muffled .. 2 harsh"))
+def car_horn(sr=DEFAULT_SR, dur=0.7, freq=335, freq2=400, bright=1.0):
+    """Pair = Hella M26 disc horns, low tone 335 Hz / high tone 400 Hz (hella.co.nz M26 series page).
+    2 kHz horn band: UN ECE Regulation 28 §6.4.1 requires the 1800-3550 Hz band to dominate every component
+    above 3550 Hz (UNTS vol. 854, p. 197). # UNSOURCED: the clipped-buzz model, band Q and mix."""
     n = int(sr * float(np.clip(dur, 0.05, 20.0)))
     t = np.arange(n) / sr
     x = sum(np.tanh(6.0 * np.sin(2 * np.pi * to_hz(f) * t + 0.3 * np.sin(2 * np.pi * 37.0 * t))) for f in (freq, freq2))

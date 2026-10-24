@@ -1006,9 +1006,10 @@ def zzfx_voice(freq, dur, sr=DEFAULT_SR, vel=1.0, p=None, hold=True, shape=None,
 
 
 # ============================================================================ AY-3-8910 PSG
-# 16 logarithmic DAC steps. The datasheet (g15 §2) says "16 logarithmic steps" but prints no table:
-PSG_DAC = np.array([0.0] + [2.0 ** (-(15 - n) / 2.0) for n in range(1, 16)])   # UNSOURCED: 3 dB/step is the findings' design choice
-PSG_CLOCK = 1_773_400.0   # UNSOURCED: the datasheet gives no clock; 1.7734 MHz is the ZX Spectrum 128 value (general knowledge)
+# 16 logarithmic DAC steps, 3 dB (x 0.707) per step: GI AY-3-8910 data manual, Fig. 3 "D/A converter output"
+# (normalized 1 V at 15, ~0.5 at 13, ~0.25 at 11, ~0.12 at 9; map.grauw.nl/resources/sound/generalinstrument_ay-3-8910.pdf).
+PSG_DAC = np.array([0.0] + [2.0 ** (-(15 - n) / 2.0) for n in range(1, 16)])
+PSG_CLOCK = 1_773_450.0   # ZX Spectrum 128: 35.469 MHz crystal / 20 (MAME sinclair/spec128.h X1_128_SINCLAIR, spec128.cpp AY_SLOT); CPU 3.54690 MHz = /10 (WoS 128K reference); datasheet range 1-2 MHz
 
 
 def psg_tone_period(freq: float, clock: float = PSG_CLOCK) -> int:
@@ -1057,7 +1058,7 @@ def _psg_core(n, tp, npd, ep, shape, level, noise_mix, seed, dac):
         nc += 1
         if nc >= 2 * npd:
             nc = 0
-            # UNSOURCED: taps bit0 ^ bit3 of a 17-bit register (not in the datasheet; from memory of the chip)
+            # 17-bit register, input bit0 ^ bit3, "verified on AY-3-8910 and YM2149 chips" (MAME devices/sound/ay8910.h, noise_rng_tick)
             lfsr = (lfsr >> 1) | (((lfsr ^ (lfsr >> 3)) & 1) << 16)
         ec += 1
         if ec >= 2 * ep:
@@ -1072,7 +1073,7 @@ _PSG_GAIN = 0.58      # level trim: about -12 dB at vel 0.9
 
 @instrument("psg", "AY-3-8910 sound chip voice: square from a 12-bit clock divider, 16-step log DAC, LFSR noise, hardware envelope shapes.",
             family="retro", span=("C2", "C6"),
-            clock=(PSG_CLOCK, "chip clock in Hz (1773400 ZX Spectrum, 2000000 Atari ST, 1789772 MSX): sets the pitch grid f = clock/(16*TP)"),
+            clock=(PSG_CLOCK, "chip clock in Hz (1773450 ZX Spectrum, 2000000 Atari ST, 1789772 MSX): sets the pitch grid f = clock/(16*TP)"),
             level=(15, "fixed volume 0..15 on the 16-step log DAC (3 dB per step)"),
             noise=(0.0, "0 = tone channel only .. 1 = noise channel only (two chip channels mixed)"),
             noise_period=(8, "noise period NP 1..31: LFSR clock = clock/(16*NP) (1 = hiss, 31 = rumble)"),

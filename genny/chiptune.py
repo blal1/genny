@@ -35,7 +35,8 @@ from .retro import _fade, _seed, _to_sr
 from .spec import SpecError, layer_type
 
 DEC = 16                 # clock ticks averaged into one sample before resampling
-FRAME_HZ = 60.0          # UNSOURCED: a music driver runs once per video frame; 60 Hz is used for both machines
+FRAME_HZ = 60.0988       # a music driver runs once per video frame: NTSC NES 60.0988 Hz (NESdev, Cycle reference chart);
+                         # kept for every machine (Game Boy 4194304 / 70224 = 59.73 Hz, Pan Docs, Rendering)
 
 # ============================================================================ NES 2A03
 NES_CPU = {"ntsc": 1789773.0, "pal": 1662607.0}                                      # APU: clock rates
@@ -107,7 +108,7 @@ def _nes_core(n_out, dec, seg, off, dmc, duty, tri, pulse_tab, tnd_tab):
                     else:
                         tim[c] -= 1
             if vol[2] != 0 and per[2] >= 2:                # the triangle's timer counts CPU cycles; it holds its value when gated off
-                if tim[2] <= 0:                            # UNSOURCED: periods under 2 are ultrasonic and are held, as emulators do
+                if tim[2] <= 0:                            # UNSOURCED: periods under 2 are held, as emulators do (NESdev APU Triangle: hardware steps at up to fCPU/32 = 55.9 kHz, filtered to about half amplitude)
                     tim[2] = per[2]
                     step[2] = (step[2] + 1) & 31
                 else:
@@ -591,7 +592,7 @@ def gb_noise(freq, dur, sr=DEFAULT_SR, vel=1.0, period=-1, short=False, volume=1
 # tables, the envelope generator with its increment table and key scaling, the phase generator with detune, the
 # eight algorithms with operator 1 feedback, the LFO, the 9-bit channel output and its DAC discontinuity.
 # Not ported: SSG-EG envelopes, the channel 3 multi-frequency mode, CSM, the channel 6 PCM DAC, timers.
-OPN_CLOCK = 7670453.0    # UNSOURCED: the Mega Drive's NTSC master clock / 7 (general knowledge); the chip runs at clock / 144
+OPN_CLOCK = 53693175.0 / 7.0   # Mega Drive NTSC master 53.693175 MHz / 7 (MAME src/mame/sega/megadriv.cpp, YM2612 clock); the chip runs at clock / 144
 # ymfm prints both tables; they equal these formulas entry for entry (checked against the file)
 OPN_SIN = np.array([round(-math.log2(math.sin((i + 0.5) * math.pi / 512)) * 256) for i in range(256)], np.int64)
 OPN_SIN = np.array([(OPN_SIN[(~i if i & 0x100 else i) & 0xFF]) | ((i >> 9) << 15) for i in range(1024)], np.int64)

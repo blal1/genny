@@ -213,7 +213,8 @@ Decay time (s) of the partials ``fk`` of a ``freq`` note on the guitar string th
 open string at or below it, stopped to length L0 f_open / freq): Valette's loss factor as fitted by Woodhouse,
 eta_n = [T (eta_F + eta_A / w_n) + EI eta_B (n pi / L)^2] / [T + EI (n pi / L)^2] (eq. 4), tau = 2 / (eta w).
 Open length L0 = 0.65 m: what the nylon rows of Woodhouse's Table I imply, L = sqrt(T / m) / (2 f) = 0.649-0.653 m
-on every string. UNSOURCED for steel: its rows imply 0.70 m, 0.65 m is kept for both.
+on every string. Steel: its rows imply 0.70 m, but the common steel-string scale is 25.4 in = 0.645 m (Martin D-28
+spec sheet, martinguitar.com), so 0.65 m is kept for both.
 
 ### `bank_loss_fit(f0, fk, tau, sr)`
 
@@ -483,7 +484,7 @@ channel between its drums: the latest note wins. A chord in `steps` is played as
 
 
 
-### `render_opn(lanes, dur, sr, clock=7670453.0, lfo=None, raw_dac=True, divider=144.0, nch=6, steps_of=None)`
+### `render_opn(lanes, dur, sr, clock=7670453.571428572, lfo=None, raw_dac=True, divider=144.0, nch=6, steps_of=None)`
 
 lanes: channel index -> notes (t0, t1, hz, vel, patch, pan 'L'|'R'|'C'). Returns stereo at `sr`.
 raw_dac: False or 0 = full resolution, True or 1 = YM2612, 2 = YM2610, 3 = YM2151. `steps_of(hz, patch)` ->
@@ -1428,7 +1429,7 @@ Lines marked ``# UNSOURCED`` are tuning with no number in any source.
 
 
 
-### `purr(sr=44100, rate=25.0, size=1.0, dur=3.0, seed=0)`
+### `purr(sr=44100, rate=26.3, size=1.0, dur=3.0, seed=0)`
 
 
 
@@ -1544,7 +1545,8 @@ onset ``t`` and ``dur`` in seconds, contour ``f`` [(u, Hz)], and the syrinx para
 ### `heart_s1s2(bpm: 'float') -> 'float'`
 
 S1-S2 interval in s: left-ventricular ejection time (Weissler 1968: 0.413 - 0.0017 HR) plus
-isovolumic contraction. UNSOURCED: the 0.04 s contraction time (gives 0.35 s at 60 bpm, the
+isovolumic contraction, 0.04 s: IVCT 40 +- 10 ms, Alhakak et al. 2025 Clin Res Cardiol
+(Copenhagen City Heart Study, PMC11946970) Table 2, all participants (gives 0.35 s at 60 bpm, the
 LovelyHeart patch's 35 %).
 
 ### `heartbeat(sr=44100, rate=1.0, dur=2.0, murmur=0.0, tone=1.0, dub_delay=0.0, seed=0)`
@@ -1557,11 +1559,14 @@ LovelyHeart patch's 35 %).
 
 ### `applause_rate(enthusiasm: 'float') -> 'float'`
 
-Claps per second per person. UNSOURCED: 2 Hz polite .. 4.5 Hz enthusiastic.
+Claps per second per person: 2.5 Hz bored (OOI 400 ms) .. 4.17 Hz enthusiastic (OOI 240 ms), Peltola et al.
+2007 (IEEE TASLP 15:1021) sec. IV-A, their ClaPD control model.
 
 ### `applause_plan(crowd: 'int' = 30, enthusiasm: 'float' = 0.6, dur: 'float' = 4.0, seed: 'int' = 0) -> 'list[np.ndarray]'`
 
-Clap times (s) of each individually rendered clapper: own rate (+-8 %), phase and 4 % jitter.
+Clap times (s) of each individually rendered clapper: own rate (sd 10 %), phase and 2.7 % jitter.
+Peltola et al. 2007 (IEEE TASLP 15:1021): rate sd = the spread of the 8 subjects' mean periods in Table I
+(0.238-0.327 s, CV 9.7 %); jitter = Repp 1987's mean OOI sd 6.8 ms = 2.7 % (sec. IV).
 
 ### `applause(sr=44100, crowd=30, enthusiasm=0.6, dur=4.0, seed=0)`
 
@@ -1653,7 +1658,10 @@ Core strain (arbitrary units) for a flux density ``b`` in units of the saturatio
 ### `transformer(sr=44100, dur=4.0, mains=50.0, flux=0.8, dc_bias=0.0, load=0.3, loose=0.0, size=1.0, seed=0)`
 
 The radiated sound is taken as the strain velocity (a large tank radiates as its surface
-velocity) plus the tank's modes. # UNSOURCED: 0.02 Hz grid wander, 4 % level drift.
+velocity) plus the tank's modes. Grid wander 3.8e-4 sd = 18.8 mHz at 50 Hz, the measured sd of the
+Continental European grid (Rydin Gorjao et al. 2020, Nat. Commun. 11:6362, Suppl. Table II, DE; US 17.8-18.7 mHz).
+# UNSOURCED: the wander's 0.2 Hz rate (real grids decorrelate over minutes, Schaefer et al. 2018,
+# Nat. Energy 3, Fig. 4), 4 % level drift.
 
 ### `gear_frequencies(rpm: 'float', teeth: 'int', teeth2: 'int') -> 'dict'`
 
@@ -2203,7 +2211,7 @@ within +-1.
 
 ### `wall_loss_db(f, mass, leak=40.0, coincidence=0.0)`
 
-Transmission loss of a single partition: mass law TL = 20 log10(f m) - 47 dB (field incidence,
+Transmission loss of a single partition: mass law TL = 20 log10(f m) - 48 dB (random incidence,
 f in Hz, m in kg/m^2: +6 dB per octave and per doubling of mass), never below 0, capped at `leak`
 (gaps and flanking paths set the ceiling), with a dip of up to 8 dB one octave wide at the coincidence
 frequency.
@@ -2342,11 +2350,16 @@ no geometry): the bridge length, curvature, contact stiffness and the 5 mm pluck
 
 
 
-### `spring_reverb(x, sr=44100, mix=0.3, decay=2.0, delay=0.045, cutoff=4000.0, density=60)`
+### `spring_reverb(x, sr=44100, mix=0.3, decay=1.7, delay=0.053, cutoff=4300.0, density=100)`
 
 Dispersive allpass-chain spring (the structure of parametric spring reverbs), NOT Bilbao's helical-spring
 scheme (g02 section 10): that equation set is the least reliably extracted part of the source and its
-coupling/boundary terms could not be recovered, so it is not used. Every constant here is UNSOURCED.
+coupling/boundary terms could not be recovered, so it is not used.
+Defaults: the Leem Pro KA-1210 spring 1 as calibrated by Valimaki, Parker & Abel 2010 (JAES 58(7/8)) Table 1
+p.558: Td 0.056 s, fC 4300 Hz, M_low 100, g_lf -0.8 (confirmed); a1 0.62 from their Sec. 1.3 p.550 and Sec. 2.1
+p.553 (same values in Gamper, Parker & Valimaki, DAFx-11, Table 1). delay = Td less the chain's dc group delay
+K M (1 - a1)/(1 + a1) (their eq. 10-11: L about 2350 samples, 53 ms, Sec. 2.1 p.553); decay = the -1.94 dB per Td
+of g_lf, 60 dB in 1.7 s.
 
 ## `genny.filters`
 
@@ -2488,8 +2501,10 @@ as the hand's pressure curve, then the page settling as a soft felt contact at 1
 
 Rolling-contact noise gated at the wobble rate into the STK coin resonances (Shakers coin
 rows, R07) and a wooden table (Faust body, R08 §2.2).
-# UNSOURCED (not in the findings): Euler's-disk law, wobble rate ~ (t0 - t)^(-1/6) and tilt
-# ~ (t0 - t)^(1/3) (Moffatt, Nature 404, 2000); the rate is capped at 40x the start.
+Euler's-disk law (Moffatt, Nature 404:833, 2000, eq. 4: alpha^3 ~ (t0 - t) / t1, and "the corresponding
+behaviour of Omega is (t0 - t)^(-1/6)"; confirmed): tilt ~ (t0 - t)^(1/3), wobble rate ~ alpha^(-1/2)
+~ (t0 - t)^(-1/6) (Bildsten 2001, arXiv gr-qc/0102046: Omega^2 = 4g/(a alpha), "Moffatt's scaling ...
+exponent of -1/6"; Bildsten's boundary-layer regime gives -2/9 above 0.3 deg). The 40x cap is a design limit.
 
 ### `dice(sr=44100, count=2, surface='wood', force=0.7, seed=0)`
 
@@ -2589,9 +2604,14 @@ Karplus-Strong bowstring, Selfridge LoQ tone of an 8 mm shaft at 70 m/s slowing 
 
 ### `whip(sr=44100, dur=0.35, size=1.0, echo=0.2, seed=0)`
 
-The Aeolian tone of a 4 mm thong whose speed rises as t^3 to Mach 1 (Selfridge source, R03 §4),
-then an N-wave (Farnell nwave, R03 §5.2) with its ground reflection.
-# UNSOURCED: 0.5 ms N-wave for a whip tip, 4 mm thong, cubic speed law.
+The Aeolian tone of the 2.5 mm terminal lash whose speed rises as t^3 to Mach 1 (Selfridge source,
+R03 §4), then an N-wave (Farnell nwave, R03 §5.2) with its ground reflection.
+Lash cord "outer diameter of 2.5 mm" (Krehl, Engemann & Schwenkel 1998, Shock Waves 8:1-9, §4.5).
+The same paper measures a supersonic phase of ~1.2-1.3 ms peaking at M = 2.19 (744 m/s) after
+~850 us, the crack being emitted by the tuft turning over in ~100 us (§5.3-5.5); this model stops at
+M 1.05 and lets the N-wave stand for the shock.
+# UNSOURCED: 0.5 ms N-wave duration, the cubic speed law before Mach 1 (Krehl gives only the
+# supersonic phase, ~linear at 50 m/s per 100 us).
 
 ### `shield_bash(sr=44100, material='wood', force=0.8, size=1.0, seed=0)`
 
@@ -2718,9 +2738,11 @@ inside "typical sweep frequencies are between 0.1Hz and 3Hz" (Farnell 2010, Prac
 Police, pp. 357, 361). # UNSOURCED: the police fast rise (35 %); ambulance two-tone 450 / 600 Hz
 at 0.9 Hz; air raid: a rotor spinning up to 465 Hz with a second 5:6 port ring, 4 s on / 4 s coasting.
 
-### `car_horn(sr=44100, dur=0.7, freq=420, freq2=500, bright=1.0)`
+### `car_horn(sr=44100, dur=0.7, freq=335, freq2=400, bright=1.0)`
 
-# UNSOURCED: a clipped diaphragm buzz per horn through a 2 kHz horn band; 420 / 500 Hz pair.
+Pair = Hella M26 disc horns, low tone 335 Hz / high tone 400 Hz (hella.co.nz M26 series page).
+2 kHz horn band: UN ECE Regulation 28 §6.4.1 requires the 1800-3550 Hz band to dominate every component
+above 3550 Hz (UNTS vol. 854, p. 197). # UNSOURCED: the clipped-buzz model, band Q and mix.
 
 ### `bike_bell(sr=44100, freq=1300, strikes=2, gap=0.16, decay=1.2, bright=1.0, seed=0)`
 
@@ -3890,7 +3912,8 @@ Sources (findings files are in ``out/research``):
 * **Jets** - Strouhal peak f = St U / D with St = 0.2 (Selfridge, findings 06 section 4.1).
   Level: free-jet U^8 law (Lighthill, quoted by Verge et al. 1997, section V).
 * **Ice** - no findings file covers ice. The dispersive chirp is the textbook Kirchhoff thin-plate
-  flexural wave (derivation in ``ice_chirp``); the material constants are marked UNSOURCED.
+  flexural wave (derivation in ``ice_chirp``); E, rho, nu and the shear-speed ceiling are
+  Gammon et al. 1983 (J. Glaciol., Brillouin, polycrystalline ice at -16 C).
 
 ### `minnaert(r0)`
 
@@ -3955,8 +3978,10 @@ Open cylinder (neck = 0): quarter-wave tube, f = c / (4 (L_air + 0.62 a)) (Farne
 "the empty cavity above the liquid is a quarter-wave (semi-open) tube"; end correction 0.62 R for
 a straight pipe, Farnell "Designing Sound" section 5, p.73). Odd harmonics 1, 3, 5, 7.
 Bottle (0 < neck < radius): Helmholtz, f = (c / 2 pi) sqrt(A / (V L')), A = pi neck^2,
-V = pi radius^2 L_air (findings 01 section 3.5), L' = neck_len + 1.7 neck (textbook end
-correction, # UNSOURCED in the findings). Both rise monotonically as the vessel fills.
+V = pi radius^2 L_air (findings 01 section 3.5), L' = neck_len + 1.43 neck (end corrections:
+inner end into the cavity, flanged by the shoulder, 0.8216 a (Rayleigh) + outer end unflanged,
+0.6133 a (Levine & Schwinger); Chaigne & Kergomard, Acoustics of Musical Instruments, 2016,
+sect. 12.6.1.2-3, eq. 12.133). Both rise monotonically as the vessel fills.
 
 ### `pour(sr=44100, dur=4.0, flow=1.0, fill_start=0.05, fill_end=0.9, height=0.15, radius=0.035, neck=0.0, neck_len=0.05, material='glass', resonance=0.6, seed=0)`
 
@@ -4188,8 +4213,8 @@ where c_max caps the group speed (thin-plate theory fails once the wavelength ne
 thickness), which gives the top frequency c_max^2 / (8 pi a): about 3 kHz for 5 cm ice and
 500 Hz for 30 cm - thin ice sings, thick ice booms. Stationary-phase amplitude of a dispersed
 impulse: A ~ sqrt(|df/dt|) ~ (t0 / t)^1.5, times exp(-loss 2 pi f (t - t0)).
-# UNSOURCED: derived here from textbook plate theory (no findings file covers ice); E, rho, nu,
-# c_max and ``loss`` are assumptions.
+Derived here from Kirchhoff plate theory (no findings file covers ice); E, rho, nu, c_max from
+Gammon et al. 1983 (see ICE_E). # UNSOURCED: ``loss``.
 
 ### `ice_crack(sr=44100, dur=1.5, thickness=0.05, distance=60.0, cracks=3, brittle=0.6, seed=0)`
 
@@ -4290,7 +4315,7 @@ to couple energy back into the bridge/string network.
 - `.step(self, force_n: 'float') -> 'tuple[float, float]'`
 - `.modal_energy`
 
-### `SympatheticPiano(struck_frequency: 'float' = 440.0, unison_detune_cents: 'tuple[float, ...]' = (-1.8, 0.0, 1.6), sympathetic_ratios: 'tuple[float, ...]' = (0.5, 1.5, 2.0, 2.5, 3.0), coupling: 'float' = 0.055, string_impedance_n_s_m: 'float' = 0.65, bridge: 'BridgeImpedance | None' = None, soundboard: 'ModalSoundboard | None' = None, sr: 'int' = 48000, loss_dc: 'float' = 0.99965, loss_hf: 'float' = 0.989) -> None`
+### `SympatheticPiano(struck_frequency: 'float' = 440.0, unison_detune_cents: 'tuple[float, ...]' = (-0.9, 0.0, 0.7), sympathetic_ratios: 'tuple[float, ...]' = (0.5, 1.5, 2.0, 2.5, 3.0), coupling: 'float' = 0.055, string_impedance_n_s_m: 'float' = 0.65, bridge: 'BridgeImpedance | None' = None, soundboard: 'ModalSoundboard | None' = None, sr: 'int' = 48000, loss_dc: 'float' = 0.99965, loss_hf: 'float' = 0.989) -> None`
 
 Reduced piano network with unison strings, sympathetic strings and one
 shared bridge/soundboard.
@@ -4678,8 +4703,13 @@ Force on a tree / wagon from the (delayed, inertial) windspeed.
 
 Research 02 §13/§4: "drive the force from the wind speed (delayed like the leaves) to get
 causally linked creaking pines" - leaves use a 3 s read delay and lop~ 0.07.
-# UNSOURCED: the sway itself (narrow-band noise at ``sway_hz``, Q 3) and ``gain``; the sources
-# give no tree-sway model, only the lag.
+Sway as narrow-band noise at ``sway_hz``: 0.35 Hz confirmed, Scots pine natural sway frequency
+0.35 (sd 0.04, range 0.29-0.42) Hz (16 trees, Mayhead et al. 1975), conifers 0.24-1.39 Hz (Moore & Maguire 2004, Trees 18:195-203,
+Table 1); the callers' 0.3-0.45 Hz sit inside it. Q 3 = damping ratio 0.17, the high end of
+the measured whole-tree damping (Table 2: Douglas-fir 0.154, Sitka spruce up to 0.25); pines
+alone are ~0.06 (Q ~8), kept at 3 because a Q 8 resonator (amplitude time constant ~7 s)
+would not reach steady state within the one-period warm-up of short loops (Dom).
+# UNSOURCED: ``gain``; the research notes give no tree-sway model, only the lag.
 
 ### `fire(dur: 'float', rng: 'np.random.Generator', *, loop: 'bool' = False, units: 'int' = 1, wood_crackle: 'float' = 0.5, crackle_lp: 'float' = 1.0, return_info: 'bool' = False)`
 
@@ -4775,7 +4805,9 @@ slightly varied (round-robin voices never cut each other off: bubbles are summed
 Drips in a cave, stereo. Each source is a quantised flow (a relaxation oscillator: surface
 tension vs weight, thesis T p.80-81), so it drips nearly periodically with jitter; each drop is
 ``particles.drip`` (STK waterDrop + Farnell impact click). Space: zita_rev1 "cave".
-# UNSOURCED: drip periods 1.2-7 s, jitter +-12 %, and the wet level.
+Drip periods 1.6-9 s: the "fast" drip class, > 100 drops per 15 min, fastest site 550 per 15 min
+(Mahmud, Mariethoz, Baker & Treble 2017, HESS Discuss. hess-2017-127, Golgotha Cave, sec. 3 / Fig. 2f).
+# UNSOURCED: jitter +-12 %, and the wet level.
 
 ### `tinkle(rng: 'np.random.Generator', *, f_scale: 'float' = 1.0, gain: 'float' = 1.0) -> 'np.ndarray'`
 
@@ -6412,15 +6444,15 @@ recomputed every sample, avoiding the message-rate clicks Farnell mentions). 8 b
 the figure (8 ``bp~ 1 1``); bands above 0.45 SR are dropped.
 UNSOURCED: default q (the figure's "res" inlet has no printed value).
 
-### `roar(dur: 'float' = 2.5, rng: 'np.random.Generator | None' = None, arc=(30.0, 240.0, 120.0), *, rise_frac: 'float' = 0.45, tract_length_m: 'float' = 0.4) -> 'np.ndarray'`
+### `roar(dur: 'float' = 2.5, rng: 'np.random.Generator | None' = None, arc=(30.0, 240.0, 120.0), *, rise_frac: 'float' = 0.45, tract_length_m: 'float' = 0.38) -> 'np.ndarray'`
 
 Lion-like roar (Farnell Practical 29): "start soft and low with distinct glottal pulses,
 building to a dense roar. Frequency ... starting as low as 30 Hz, building to around 240 Hz,
 and then dropping to around 120 Hz." Flapping source -> tract comb, driven by the
 articulation envelope (fig. 20.36 drives F0 base + excursion, tract and noise from it).
 
-UNSOURCED: rise_frac (time of the 240 Hz peak), tract_length_m (no lion tract length in the
-sources), and the mappings of the envelope to ripple (1 -> 4), width (2 -> 12) and
+tract_length_m 0.38: lion lips-glottis 380 mm, Weissengruber et al. 2002 J Anat 201:195 Table 2
+(one 1-year-old male). UNSOURCED: rise_frac (time of the 240 Hz peak), and the mappings of the envelope to ripple (1 -> 4), width (2 -> 12) and
 noisiness (0.05 -> 0.45); "distinct pulses early, dense later (more ripple, more noise)" is
 the only guidance.
 
@@ -6509,7 +6541,8 @@ jitter (randomGain 0.005, SingWave default) - with an independent vibrato phase.
 
 ``notes``: f0 values in Hz. Voice type per note from its pitch unless given.
 ``breath``: level of Cook's breathy "fuzz" (noise through the same formants).
-UNSOURCED: detune_cents (per-singer static detune, gaussian sd), attack/release times
+detune_cents 6 (per-singer static detune, gaussian sd): Ternstrom 1991 via Meyer 2009 p.127 fig. 3.33
+(intonation sd below 5 cents good, 10 tolerable). UNSOURCED: attack/release times
 (power-law shapes, PLAN rule 5), the 1/sqrt(N) sum (uncorrelated voices add as sqrt(sum A^2),
 Farnell thesis p.95).
 
@@ -6636,7 +6669,8 @@ SIGN CHECK (flagged): the force sign convention (pressure pushes the membrane op
 Bernoulli term pulls it shut) and p1 = Z0 U + beta x lower are my reading of eq. 8 and fig. 4.
 The p0 equation is integrated as an exact relaxation, not the paper's trapezoid, because with
 any plausible bronchus volume it is too stiff at audio rates (deviation).
-UNSOURCED (the paper prints no parameter values): a, h, x0, membrane mass, eps, mode Q,
+a = trachea radius and membrane density: Fletcher 1988 Table 1, Kahrs & Avanzini DAFx-01 (below).
+UNSOURCED (the paper prints no parameter values; Fletcher's differ, see below): h, x0, thickness, eps, mode Q,
 gamma = 30, Zs, bronchus volume, mode_ratio, the beak LPF corner, oversample. The set used
 was picked by a parameter sweep as the one whose f0 follows the membrane frequency
 (150-900 Hz at p_s = 3 kPa); below ~1 kPa or with low Q it does not self-oscillate.
@@ -7385,7 +7419,7 @@ Linear Kirchhoff plate struck with force pulse 12.28, velocity pickup (g03 §3, 
 
 
 
-### `nl_plate(sr=44100, vel=1.0, size=0.4, thickness=1.0, force=80.0, contact_ms=16.0, pos=(0.2, 0.3), decay=10.0, damping=0.005, model='vk', eps=1.0, material=(8700.0, 124000000000.0, 0.33), bright=0.6, quality=1.0, dur=2.0, points=900, drive=None, level=0.85, info=None, accel=True, hp=150.0, loss=None, scan=None)`
+### `nl_plate(sr=44100, vel=1.0, size=0.4, thickness=1.0, force=80.0, contact_ms=16.0, pos=(0.2, 0.3), decay=10.0, damping=0.005, model='vk', eps=1.0, material=(8800.0, 124000000000.0, 0.33), bright=0.6, quality=1.0, dur=2.0, points=900, drive=None, level=0.85, info=None, accel=True, hp=150.0, loss=None, scan=None)`
 
 Nonlinear plate (g03 §6): `model` = "vk" (von Karman simple scheme, Airy stress solve every step),
 "berger" (tension modulation: glide only) or "linear". `size` is the diameter of the disc of equal
@@ -7549,11 +7583,11 @@ ZzFXM note semantics: the instrument array rendered at the note's frequency (the
 phase accumulator, so it is exactly in tune unless the array slides or jumps).
 Source: g17-retro-sfx-generators.md §C.2, §D.1, §F.3.
 
-### `psg_tone_period(freq: 'float', clock: 'float' = 1773400.0) -> 'int'`
+### `psg_tone_period(freq: 'float', clock: 'float' = 1773450.0) -> 'int'`
 
 12-bit tone period TP for a pitch: f = clock / (16 * TP) (datasheet, g15 §2).
 
-### `psg(freq, dur, sr=44100, vel=1.0, clock=1773400.0, level=15, noise=0.0, noise_period=8, shape=-1, env_hz=8.0, bright=0.5, seed=0)`
+### `psg(freq, dur, sr=44100, vel=1.0, clock=1773450.0, level=15, noise=0.0, noise_period=8, shape=-1, env_hz=8.0, bright=0.5, seed=0)`
 
 General Instrument AY-3-8910 voice. The pitch is quantised to the chip's divider, f = clock/(16*TP),
 so high notes are slightly off like on the real machine (under 10 cents up to about 1.2 kHz at 1.77 MHz).
@@ -7745,8 +7779,8 @@ swept delays, g13 §2.1). Pan: constant-power cos/sin law (g15 §6.1 item 7) on 
 
 Farnell p.87: a wall "transmits a filtered version of the sound, usually with less high
 frequencies"; Sound Rendering: "occluders damp smoothly rather than cut" (diffraction).
-Transmission: field-incidence mass law TL = 20 log10(f m) - 47 dB (m = surface density kg/m^2),
-i.e. a first-order low-pass with corner 224 / m Hz.  # UNSOURCED: standard building acoustics
+Transmission: random-incidence mass law TL = 20 log10(f m) - 48 dB (m = surface density kg/m^2;
+Warnock 1985, NRC CBD-239 Eq 1), i.e. a first-order low-pass with corner 10^(48/20) / m = 251 / m Hz.
 Diffraction: one-pole low-pass at ``edge`` scaled by ``leak``.  # UNSOURCED: shape only
 
 ### `leslie(x, sr=44100, speed='fast', start=None, drive=0.3, mic=0.6, spread=90.0, mix=1.0, crossover=800.0)`

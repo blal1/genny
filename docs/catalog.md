@@ -1128,7 +1128,7 @@ AY-3-8910 sound chip voice: square from a 12-bit clock divider, 16-step log DAC,
 
 | param | default | meaning |
 |---|---|---|
-| `clock` | `1773400.0` | chip clock in Hz (1773400 ZX Spectrum, 2000000 Atari ST, 1789772 MSX): sets the pitch grid f = clock/(16*TP) |
+| `clock` | `1773450.0` | chip clock in Hz (1773450 ZX Spectrum, 2000000 Atari ST, 1789772 MSX): sets the pitch grid f = clock/(16*TP) |
 | `level` | `15` | fixed volume 0..15 on the 16-step log DAC (3 dB per step) |
 | `noise` | `0.0` | 0 = tone channel only .. 1 = noise channel only (two chip channels mixed) |
 | `noise_period` | `8` | noise period NP 1..31: LFSR clock = clock/(16*NP) (1 = hiss, 31 = rumble) |
@@ -2495,7 +2495,7 @@ Applause: every clapper has a rate, a hand resonance and a place; big crowds blu
 | param | default | meaning |
 |---|---|---|
 | `crowd` | `30` | number of people |
-| `enthusiasm` | `0.6` | 0 polite (2 claps/s each) .. 1 wild (4.5 claps/s) |
+| `enthusiasm` | `0.6` | 0 bored (2.5 claps/s each) .. 1 wild (4.2 claps/s) |
 | `dur` | `4.0` | s |
 | `seed` | `0` | variation |
 
@@ -2844,8 +2844,8 @@ Car horn: two diaphragm horns a third apart.  *(module `foley`)*
 | param | default | meaning |
 |---|---|---|
 | `dur` | `0.7` | s |
-| `freq` | `420` | Hz or note name of the low horn |
-| `freq2` | `500` | Hz or note name of the high horn |
+| `freq` | `335` | Hz or note name of the low horn |
+| `freq2` | `400` | Hz or note name of the high horn |
 | `bright` | `1.0` | 0.5 muffled .. 2 harsh |
 
 ### `casing`
@@ -3647,7 +3647,7 @@ One hand clap: a filtered noise burst; cupped hands are lower and hollower.  *(m
 
 | param | default | meaning |
 |---|---|---|
-| `cup` | `0.3` | 0 flat palms (bright ~2.4 kHz) .. 1 cupped (hollow ~0.8 kHz) |
+| `cup` | `0.3` | 0 flat palms (bright ~1.4 kHz) .. 1 cupped (hollow ~0.5 kHz) |
 | `seed` | `0` | variation |
 
 ### `handle`
@@ -4348,11 +4348,11 @@ Meaty punch / body hit.  *(module `sfx`)*
 
 ### `purr`
 
-Cat purr: glottal pulses near 25 Hz through the tract, breathing in and out.  *(module `creatures`)*
+Cat purr: glottal pulses near 26 Hz through the tract, breathing in and out.  *(module `creatures`)*
 
 | param | default | meaning |
 |---|---|---|
-| `rate` | `25.0` | pulses per second (mean) |
+| `rate` | `26.3` | pulses per second (mean) |
 | `size` | `1.0` | body scale |
 | `dur` | `3.0` | s |
 | `seed` | `0` | variation |
@@ -6251,10 +6251,10 @@ Spring-tank reverb as a dispersive allpass-chain loop (chirping 'boing' echoes);
 | param | default | meaning |
 |---|---|---|
 | `mix` | `0.3` | wet level 0..1 |
-| `decay` | `2.0` | seconds of ring |
-| `delay` | `0.045` | seconds per trip along the spring |
-| `cutoff` | `4000.0` | Hz: top of the chirps |
-| `density` | `60` | allpass sections 10..200: more = longer chirps |
+| `decay` | `1.7` | seconds of ring |
+| `delay` | `0.053` | seconds per trip along the spring |
+| `cutoff` | `4300.0` | Hz: top of the chirps |
+| `density` | `100` | allpass sections 10..200: more = longer chirps |
 
 ### `steep_bandpass`
 

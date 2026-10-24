@@ -309,13 +309,13 @@ def _pv(x: np.ndarray, pos: np.ndarray, M: int, lock: bool = True, reset: np.nda
 def _wsola(x, ibp, obp, n_out, M, sr):
     """Synchronous overlap-add with a similarity search (SOLA-FS / WSOLA family, g12 §9.8): Hann
     frames at a fixed synthesis hop M/2; each input frame is taken where it best continues the
-    previous one (maximum normalised cross-correlation) within +-12 ms of the mapped position. Inside
+    previous one (maximum normalised cross-correlation) within +-25 ms of the mapped position. Inside
     a rate-1 (transient) interval the natural continuation is in range, so a transient is copied
     once, never repeated or dropped. Stereo shares one offset per frame."""
     x2 = x[:, None] if x.ndim == 1 else x
     n = x2.shape[0]
     H = M // 2
-    D = min(H, int(0.012 * sr))                                       # UNSOURCED: +-12 ms search (covers a 42 Hz period)
+    D = min(H, int(0.025 * sr))   # +-25 ms = half a 20 Hz period (Driedger & Mueller 2016, Appl. Sci. 6(2):57, §4.3 p.10)
     P = M + D
     xp = np.concatenate([np.zeros((P, x2.shape[1])), x2, np.zeros((P, x2.shape[1]))])
     mono = xp.mean(axis=1)

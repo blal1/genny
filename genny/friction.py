@@ -696,7 +696,8 @@ def rubbed_glass(freq, dur, sr=DEFAULT_SR, vel=1.0, pressure=0.3, speed=0.1, rou
     return _edges(_tone(y, freq, sr, bright, harm=5.0), sr) * _LEVEL["rubbed_glass"]
 
 
-_BAR_MATERIAL = {   # (partial ratios, damping ratio of mode 1)   # UNSOURCED: loss values, only their ranking matters
+_BAR_MATERIAL = {   # (partial ratios, damping ratio of mode 1); xi = eta/2. Al, steel, glass inside the COMSOL loss-factor
+    # table (Sonnerlind 2019); wood inside Bremaud et al. 2012 (Ann. For. Sci. 69:373) axial tan delta 4e-3..19e-3 over 98 woods
     "aluminium": (ALU_BLADE[:4], 0.0004), "steel": (FREE, 0.0003), "glass": (FREE, 0.0008), "wood": (FREE, 0.004)}
 
 

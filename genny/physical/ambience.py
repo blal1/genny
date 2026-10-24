@@ -673,8 +673,13 @@ def sway_force(w: np.ndarray, rng: np.random.Generator, *, sway_hz: float = 0.35
 
     Research 02 §13/§4: "drive the force from the wind speed (delayed like the leaves) to get
     causally linked creaking pines" - leaves use a 3 s read delay and lop~ 0.07.
-    # UNSOURCED: the sway itself (narrow-band noise at ``sway_hz``, Q 3) and ``gain``; the sources
-    # give no tree-sway model, only the lag.
+    Sway as narrow-band noise at ``sway_hz``: 0.35 Hz confirmed, Scots pine natural sway frequency
+    0.35 (sd 0.04, range 0.29-0.42) Hz (16 trees, Mayhead et al. 1975), conifers 0.24-1.39 Hz (Moore & Maguire 2004, Trees 18:195-203,
+    Table 1); the callers' 0.3-0.45 Hz sit inside it. Q 3 = damping ratio 0.17, the high end of
+    the measured whole-tree damping (Table 2: Douglas-fir 0.154, Sitka spruce up to 0.25); pines
+    alone are ~0.06 (Q ~8), kept at 3 because a Q 8 resonator (amplitude time constant ~7 s)
+    would not reach steady state within the one-period warm-up of short loops (Dom).
+    # UNSOURCED: ``gain``; the research notes give no tree-sway model, only the lag.
     """
     dom = Dom(len(w) / SR, loop)
     wm = dom.tile(w)
@@ -1070,7 +1075,8 @@ def thunder(rng: np.random.Generator, *, dur: float = 24.0, distance: float = 0.
 C_AIR = 343.0
 THUNDER_PEAK_HZ = 60.0   # ground flashes peak at 40-80 Hz after wind-noise correction (Holmes et al. 1971, McCrory 1971)
 # a bolt "can be 2km long" and "changes direction about every 10m" (Farnell, Designing Sound, Practical 17
-# "Tortuosity", p. 459). UNSOURCED: the 16 degrees rms turn per segment.
+# "Tortuosity", p. 459). UNSOURCED: the 16 degrees rms turn per segment (nearest: Ribner & Roy 1982, JASA 72(6),
+# p. 1919, 3-D walk p ~ sin(T) exp(-T^2/25deg^2), i.e. 17.7 deg per axis, but on 3 m segments with 5-segment memory).
 CHANNEL_M, SEGMENT_M, TURN_DEG = 2000.0, 10.0, 16.0
 
 
@@ -1163,7 +1169,8 @@ def tube_bubble(r: float, rng: np.random.Generator, n_modes: int = 8) -> np.ndar
 def _wave_env(n: int, rng: np.random.Generator, period=(8.0, 13.0), loop: bool = True, single: bool = False):
     """Wave crest envelopes and their start times over one period.
     # UNSOURCED: swell period 8-13 s, crest rise 1-2 s (square law), wash decay 3-6 s (quartic);
-    # no source gives a surf timing model."""
+    # no source gives a surf timing model. Deane 1997 (JASA 102(5), p. 2673) logs a single condition,
+    # significant height 0.9 m and period 7 s at La Jolla, just under this range."""
     env = np.zeros(n + seconds(8.0))
     starts = []
     t = 0.3 if single else rng.uniform(0.0, period[0])
@@ -1281,12 +1288,14 @@ def cave_drips(dur: float, rng: np.random.Generator, *, loop: bool = False, sour
     """Drips in a cave, stereo. Each source is a quantised flow (a relaxation oscillator: surface
     tension vs weight, thesis T p.80-81), so it drips nearly periodically with jitter; each drop is
     ``particles.drip`` (STK waterDrop + Farnell impact click). Space: zita_rev1 "cave".
-    # UNSOURCED: drip periods 1.2-7 s, jitter +-12 %, and the wet level."""
+    Drip periods 1.6-9 s: the "fast" drip class, > 100 drops per 15 min, fastest site 550 per 15 min
+    (Mahmud, Mariethoz, Baker & Treble 2017, HESS Discuss. hess-2017-127, Golgotha Cave, sec. 3 / Fig. 2f).
+    # UNSOURCED: jitter +-12 %, and the wet level."""
     dom = Dom(dur, loop)
     n = dom.n
     y = np.zeros((n + seconds(0.5), 2))
     for s in range(sources):
-        per = rng.uniform(1.2, 7.0)
+        per = rng.uniform(1.6, 9.0)
         f0 = rng.uniform(450.0, 1200.0)
         pan = rng.uniform(-0.8, 0.8)
         g = rng.uniform(0.3, 1.0)

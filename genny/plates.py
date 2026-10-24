@@ -55,7 +55,8 @@ from .sfx import sfx
 _L10 = 3.0 * math.log(10.0)
 RHO_AIR, C_AIR = 1.2, 343.0          # kg/m^3, m/s: air at room temperature (standard values)
 HEAD_DENSITY = 0.26                  # kg/m^2: timpani head, 0.262 (Christian et al. 1984, sec. III)
-BRONZE = (8700.0, 1.24e11, 0.33)     # rho, E, nu: E and nu of cymbal bronze (Chadwick et al. 2009, Table 1); UNSOURCED: rho
+BRONZE = (8800.0, 1.24e11, 0.33)     # rho, E, nu: E and nu of cymbal bronze (Chadwick et al. 2009, Table 1); rho of bell bronze
+                                     # C91300 (Cu 81 Sn 19), 0.318 lb/in3 (Wieland Concast C91300 datasheet, CDA physical data)
 WOOD_K = (36.5, 8.41, 18.1, 1.248)   # kx, ky, kxy, aspect: wooden plate of Table 12.2 (g03 §4.6)
 
 

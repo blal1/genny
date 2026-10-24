@@ -110,9 +110,9 @@ VOICES = {
     # UNSOURCED: mezzo = mean of the alto and soprano rows
     "mezzo": dict(tab={"alto": 0.5, "soprano": 0.5}, tscale=1.0, sc=1.14, lo=57, hi=81, brk=None, male=False, sf=3100.0),
     "soprano": dict(tab={"soprano": 1.0}, tscale=1.0, sc=1.16, lo=60, hi=84, brk=None, male=False, sf=3200.0),
-    # UNSOURCED: treble = soprano row x 1.10 (Peterson & Barney 1952 children's formants sit 10-20 %
-    # above women's; speech.VOICES child/female shift 1.28/1.16 = 1.10)
-    "treble": dict(tab={"soprano": 1.0}, tscale=1.10, sc=1.28, lo=60, hi=81, brk=None, male=False, sf=3400.0),
+    # treble = soprano row x 1.16: Peterson & Barney 1952 (JASA 24:175) Table II, children/women formant
+    # ratio, mean over F1-F3 of /i e ae a u/ = 1.16 (range 1.12-1.23); applied to the sung soprano row
+    "treble": dict(tab={"soprano": 1.0}, tscale=1.16, sc=1.28, lo=60, hi=81, brk=None, male=False, sf=3400.0),
 }
 _ALIAS = {"child": "treble", "boy": "treble", "boys": "treble", "girl": "treble", "contralto": "alto",
           "counter": "countertenor", "mezzo-soprano": "mezzo", "sopranos": "soprano", "altos": "alto",
@@ -1225,7 +1225,8 @@ def _render_singer(sg: dict, notes: list[dict], P: dict, n: int, sr: int, cons_g
         Fs[:, :5] = tuned_formants(Fs[:, :5], f0b, vt) * (1 - nw[:, None]) + Fs[:, :5] * nw[:, None]
     for k in range(1, NF):                                           # keep the poles in order
         Fs[:, k] = np.maximum(Fs[:, k], Fs[:, k - 1] * 1.04 + 20.0)
-    # yielding wall (Bilbao 9.18-9.19): low formants broadened. UNSOURCED: 50 Hz at F1 = 250 Hz
+    # yielding wall (Bilbao 9.18-9.19): low formants broadened. 50 Hz at F1 = 250 Hz (12.5 at 500): Fujimura &
+    # Lindqvist 1971 (JASA 49:541) closed-glottis B1 about 70 Hz close vowels vs 35 Hz semi-open (male), the 35 Hz excess = wall
     Bs[:, 0] += 50.0 * (250.0 / np.maximum(Fs[:, 0], 120.0)) ** 2 + 25.0 * np.clip(rdv - 1.0, 0, None)
     Bs = np.clip(Bs, 30.0, 2000.0)
     Fs = np.clip(Fs, 60.0, 0.49 * sr)
@@ -1321,7 +1322,7 @@ def _params(sr: int, style: str, solo: bool, **kw) -> dict:
         whisper=mode == "whisper", falsetto=True if mode == "falsetto" else kw.get("falsetto"),
         ring=float(ring), breath=float(np.clip(st["breath"] if breath is None else breath, 0.0, 1.0)),
         effort=float(kw.get("effort", 1.0)) * (1.35 if shout else 1.0),
-        f1=1.08 if shout else 1.0,                      # UNSOURCED size: shouting raises F1 (Lienard & Di Benedetto 1999)
+        f1=1.08 if shout else 1.0,                      # Lienard & Di Benedetto 1999 (JASA 106:411) Fig. 4b p416: F1 +3.5 Hz/dB of AX (F0 +5.1 Hz/dB); their close->far range is only 8.9 dB (AX 46.7 -> 55.6 dB, p415) = +31 Hz, so x1.08 (+48 Hz at 600 Hz, about 14 dB) is an extrapolation to a shout
         vibrato=kw.get("vibrato"), vib_rate=kw.get("vib_rate"), tuning=bool(kw.get("tuning", True)),
         release=float(kw.get("release", 0.16)), exact=bool(kw.get("exact", False)),
         breaths=float(kw.get("breaths", 0.0)), spread_t=float(kw.get("timing", 2.0 * st["lag"])),

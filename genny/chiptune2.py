@@ -431,7 +431,8 @@ def _opnb_layer(layer: dict, sr: int, q: float) -> np.ndarray:
             if i + 1 < len(seq):
                 t1 = min(t1, seq[i + 1][0])
             params = {k: p[k] for k in ("level", "noise", "noise_period", "shape", "env_hz")}
-            # UNSOURCED: the SSG section is clocked at a quarter of the master clock (2 MHz here)
+            # the SSG section is a YM2149 on a quarter of the master clock (2 MHz here): ymfm_opn.h gives the YM2610's SSG rate
+            # as clock / 32, and a YM2149 runs at its own clock / 8
             parts.append((I.render_note("psg", hz, max(t1 - t0, 0.01), sr, vel, clock=OPNB_CLOCK / 4.0, bright=1.0, **params) * 0.5, t0))
     if parts:
         s = mix(parts, sr)
@@ -458,7 +459,7 @@ CT.SYSTEMS["ym2610"] = OPNB_NAMES
 #               resonance values (reSID's 8580 table), low-pass, band-pass and high-pass outputs that can be summed.
 # Not modelled: combined waveforms (they need the chip's sampled tables), the 6581's non-linear filter and
 # its DC offsets, the ADSR delay bug, the external audio input.
-SID_CLOCK = {"pal": 985248.0, "ntsc": 1022727.0}             # UNSOURCED here: the C64's CPU clock rates (general knowledge)
+SID_CLOCK = {"pal": 985248.0, "ntsc": 1022727.0}             # C64 CPU/SID clocks: 17.734472 MHz / 18 and 14.318181 MHz / 14 (MAME src/mame/commodore/c64.cpp)
 SID_RATE = np.array([8, 31, 62, 94, 148, 219, 266, 312, 391, 976, 1953, 3125, 3906, 11719, 19531, 31250], np.int64)
 SID_Q = np.array([1448, 1328, 1218, 1117, 1024, 939, 861, 790, 724, 664, 609, 558, 512, 470, 431, 395], np.float64) / 1024.0
 SID_WAVES = {"triangle": 0, "tri": 0, "saw": 1, "sawtooth": 1, "pulse": 2, "square": 2, "noise": 3}

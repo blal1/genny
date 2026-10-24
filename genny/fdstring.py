@@ -934,23 +934,28 @@ def twang(sr=DEFAULT_SR, kind="band", freq=140.0, dur=0.9, amount=1.0):
 
 
 @effect("spring_reverb", "Spring-tank reverb as a dispersive allpass-chain loop (chirping 'boing' echoes); not the helical-spring FD model.",
-        mix=(0.3, "wet level 0..1"), decay=(2.0, "seconds of ring"), delay=(0.045, "seconds per trip along the spring"),
-        cutoff=(4000.0, "Hz: top of the chirps"), density=(60, "allpass sections 10..200: more = longer chirps"))
-def spring_reverb(x, sr=DEFAULT_SR, mix=0.3, decay=2.0, delay=0.045, cutoff=4000.0, density=60):
+        mix=(0.3, "wet level 0..1"), decay=(1.7, "seconds of ring"), delay=(0.053, "seconds per trip along the spring"),
+        cutoff=(4300.0, "Hz: top of the chirps"), density=(100, "allpass sections 10..200: more = longer chirps"))
+def spring_reverb(x, sr=DEFAULT_SR, mix=0.3, decay=1.7, delay=0.053, cutoff=4300.0, density=100):
     """Dispersive allpass-chain spring (the structure of parametric spring reverbs), NOT Bilbao's helical-spring
     scheme (g02 section 10): that equation set is the least reliably extracted part of the source and its
-    coupling/boundary terms could not be recovered, so it is not used. Every constant here is UNSOURCED."""
+    coupling/boundary terms could not be recovered, so it is not used.
+    Defaults: the Leem Pro KA-1210 spring 1 as calibrated by Valimaki, Parker & Abel 2010 (JAES 58(7/8)) Table 1
+    p.558: Td 0.056 s, fC 4300 Hz, M_low 100, g_lf -0.8 (confirmed); a1 0.62 from their Sec. 1.3 p.550 and Sec. 2.1
+    p.553 (same values in Gamper, Parker & Valimaki, DAFx-11, Table 1). delay = Td less the chain's dc group delay
+    K M (1 - a1)/(1 + a1) (their eq. 10-11: L about 2350 samples, 53 ms, Sec. 2.1 p.553); decay = the -1.94 dB per Td
+    of g_lf, 60 dB in 1.7 s."""
     x = np.asarray(x, dtype=np.float64)
     fc = float(np.clip(cutoff, 500.0, 0.45 * sr))
     K = max(1, int(round(sr / (2.0 * fc))))                    # stretch: dispersion confined below sr / 2K
     M = int(np.clip(density, 10, 200))
     D = max(2, int(float(np.clip(delay, 0.005, 0.5)) * sr))
-    trip = D / sr + M * K * 0.3 / sr                           # allpass chain adds about M K (1-a)/(1+a) samples
-    fb = -(10.0 ** (-3.0 * trip / max(float(decay), 0.05)))    # UNSOURCED: inverting loop, -60 dB after `decay`
+    trip = D / sr + M * K * (1.0 - 0.62) / (1.0 + 0.62) / sr   # chain dc delay K M (1-a1)/(1+a1) (Valimaki et al. 2010 eq. 11)
+    fb = -(10.0 ** (-3.0 * trip / max(float(decay), 0.05)))    # inverting loop (g_lf < 0, Gamper et al. DAFx-11 Table 1), -60 dB after `decay`
     lp = 1.0 - np.exp(-2.0 * np.pi * fc / sr)
 
     def one(ch):
-        return _spring_kernel(np.ascontiguousarray(ch), M, K, 0.62, D, fb, lp)   # UNSOURCED: allpass coefficient 0.62
+        return _spring_kernel(np.ascontiguousarray(ch), M, K, 0.62, D, fb, lp)   # a1 0.62 (Valimaki et al. 2010 Sec. 2.1 p.553)
     wet = one(x) if x.ndim == 1 else np.stack([one(x[:, 0]), one(x[:, 1])], axis=1)
     m = float(np.clip(mix, 0.0, 1.0))
     return (1.0 - m) * x + m * wet

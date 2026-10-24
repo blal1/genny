@@ -55,8 +55,8 @@ _NEW_SCALES = {
     "hijaz": [0, 1, 4, 5, 7, 8, 10],          # D Eb F# G A Bb C (AGENTS.md, middle_eastern)
     "in": [0, 1, 5, 7, 8],                    # D Eb G A Bb (AGENTS.md, japanese)
     "hirajoshi": [0, 2, 3, 7, 8],
-    "pelog": [0, 1, 3, 7, 8],                 # UNSOURCED: usual 12-TET stand-in for 5-tone pelog
-    "slendro": [0, 2, 5, 7, 9],               # UNSOURCED: usual 12-TET stand-in for slendro
+    "pelog": [0, 1, 3, 7, 8],                 # pelog degrees 1 2 3 5 6 rounded: saron at 0/124/256/668/788 c (Rahn 2016, YorkSpace hdl 10315/32503, ensemble 1)
+    "slendro": [0, 2, 5, 7, 9],               # slendro from degree 5 rounded: 0/241/502/699/945 c (Surjodiningrat et al. 1972 Table 1 p. 37, Kyahi Madumurti saron, via Rahn 2022 hdl 10315/39544)
     "octatonic": [0, 2, 3, 5, 6, 8, 9, 11],   # whole-half; skip-one chords are diminished sevenths
     "octatonic_hw": [0, 1, 3, 4, 6, 7, 9, 10],
     "bebop": [0, 2, 4, 5, 7, 9, 10, 11],      # bebop dominant
@@ -72,7 +72,8 @@ RATIO_SCALES = {
     "slendro_equal": [2 ** (i / 5) for i in range(5)],               # octave in 5 equal parts (Ruiz i Carulla, Baschet annexes, citing Sethares p. 306)
 }
 RATIO_SCALES["7-11"] = RATIO_SCALES["seven_eleven"]
-# UNSOURCED: the usual 5-limit chromatic, used by "tuning": "just" to retune any 12-TET scale
+# 5-limit chromatic, used by "tuning": "just" to retune any 12-TET scale: every ratio is in Truax,
+# Handbook for Acoustic Ecology, "Just tuning" table (semitone 16:15 ... augmented fourth 45:32, minor seventh 9:5, major seventh 15:8)
 JUST12 = [1, 16 / 15, 9 / 8, 6 / 5, 5 / 4, 4 / 3, 45 / 32, 3 / 2, 8 / 5, 5 / 3, 9 / 5, 15 / 8]
 
 
