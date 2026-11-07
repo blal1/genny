@@ -22,8 +22,9 @@ write. A knob you write is never changed by the preset or by mutate.
 | `preset` | `none` | `pickup` (`coin`), `laser` (`shoot`), `explosion`, `powerup`, `hit` (`hurt`), `jump`, `blip` (`select`), `synth`, `tone` (440 Hz sine, 1 s), `click`, `random` |
 | `seed` | 0 | int or string. A different seed is a different sound of the same kind |
 | `mutate` | 0 | rounds of the sfxr "mutate": each knob has a 50% chance of moving by up to 0.05 |
-| `wave` | preset's, else `square` | `square`, `saw`, `sine`, `noise`; with `engine: "bfxr"` also `triangle`, `breaker`, `tan`, `whistle`, `bitnoise` |
+| `wave` | preset's, else `square` | `square`, `saw`, `sine`, `noise`; with `engine: "bfxr"` also `triangle`, `breaker`, `tan`, `whistle`, `bitnoise`, `rasp`, `fmsyn`, `voice` (AKWF single cycles) |
 | `engine` | `sfxr` | `sfxr` or `bfxr` |
+| `strict` | false | with `engine: "bfxr"`: Bfxr's own knob laws too (relative minimum frequency limit^0.4 × start, sustain ≥ 0.01, minimum length 0.18, +10 decay samples, flanger as sweep³ × 0.2) |
 | `level` | 0.8 | peak level of the result |
 | `max_dur` | 3.0 | longest sound in seconds (cut with a 20 ms fade) |
 | `soften` | 1.0 | 0 = raw sfxr, 1 = top end rounded (12 dB/oct low-pass at 4 kHz) |
@@ -47,7 +48,11 @@ The 22 knobs (0..1, the signed ones -1..1):
 | `hpf`, `hpf_sweep` | 0 | high-pass cutoff and sweep (signed) |
 
 `engine: "bfxr"` extras: `harmonics` (0..10 overtones), `harmonics_falloff` (0..1), `crush` (sample-and-hold
-rate reduction 0..1), `crush_sweep` (-1..1), `compression` (0..1, lifts the quiet parts).
+rate reduction 0..1), `crush_sweep` (-1..1), `compression` (0..1, lifts the quiet parts). The bfxr presets
+`hit`, `jump` and `blip` changed since 1.2.1.
+
+Knobs in physical units, each overriding its 0..1 knob (exact inverses of jsfxr's mappings): `attack_s`,
+`sustain_s`, `decay_s` (seconds), `slide_oct` (octaves per second), `lpf_hz`, `hpf_hz` (Hz).
 
 ```json
 {"type": "sfx", "kind": "sfxr", "params": {"preset": "coin", "seed": 7}}
@@ -102,7 +107,8 @@ in tune unless the array itself slides or jumps. The `volume` slot (0..3) scales
 
 `p` (the array), `hold` (true: the sustain slot follows the note length; false: the array's own envelope, cut
 at the end of the note, as ZzFXM plays it), `shape`, `shape_curve`, `attack`, `decay`, `sustain_volume`,
-`release`, `bright` 0.5.
+`release`, `bright` 0.5, `engine` (`zzfx` = ZzFX 1.3.2, or `zzfxg` = the generator embedded in the ZzFXM player: 99-sample
+minimum attack, sine modulation, no filter slot).
 
 ```json
 {"type": "seq", "inst": "zzfx_voice", "steps": "A3 C4 E4", "params": {"shape": 1, "release": 0.3}}
@@ -136,6 +142,15 @@ What the chip does, and what each param maps to:
 
 Other params: `bright` 0.5 (1 = raw square), `seed` (noise start state).
 
+- `dac`: `log` (datasheet, 3 dB a step), `ay8910` / `ym2149` (MAME's resistor tables), `westcott` (levels measured on
+  an AY), `mosfet` (the output transistor into 1 kOhm).
+- `mixer`: `sum` (tone and noise added by `noise`) or `and` (one channel through the register-7 gate, tone AND noise).
+- `chip`: `ay8910` (16-step envelope) or `ym2149` (32 finer steps on the YM's own table).
+- `duty` 0..8: the AY8930's expanded-mode pulse widths, 3.125 to 96.875 %; unset = the plain square.
+
+Related instruments: `psg3` (three AY/YM channels on one load resistor: `third`, `fifth`, `chip`, `load`) and
+`soft_sync` (soft-synced oscillator; `ratio`, `window` 0.35 by default).
+
 ```json
 {"type": "seq", "inst": "psg", "steps": "C4 E4 G4 C5", "step": 0.12}
 {"type": "seq", "inst": "psg", "steps": "C5:0.3 G4:0.3", "params": {"shape": 9, "env_hz": 5}}
@@ -158,7 +173,8 @@ A tracker. Each pattern holds one row string per channel; `order` lists the patt
 | `order` | all patterns | pattern names in playing order; repeat a name to repeat the pattern |
 | `pan` | - | `{channel: -1..1}`; any pan makes the layer stereo |
 | `tail` | 0 | seconds of ring-out kept after the last row |
-| `format`, `data` | - | `"zzfxm"` + a raw ZzFXM song array `[instruments, patterns, sequence, bpm]` |
+| `format`, `data` | - | `"zzfxm"` + a raw ZzFXM song array `[instruments, patterns, sequence, bpm]` (`"engine": "zzfxg"` renders with the player's embedded generator); `"mod"` + `"path"` (or `"data"` bytes): a 31-sample ProTracker module, see below |
+| `ticks`, `frame` | -, `zx128` | a row lasts `ticks` video frames, as in an AY driver: `frame` `zx48` (50.08 Hz), `zx128` (50.021 Hz) or `pal` (50 Hz) |
 
 Cells, separated by spaces (`|` is ignored):
 
@@ -207,6 +223,12 @@ A ZzFXM channel is `[instrument, pan, note, note, ...]`. Note `N.A`: pitch = the
 2^((N-12)/12), volume = 1 - A; `-1` = note off. A row lasts `floor(floor(44100 / bpm x 60) / 4)` samples at
 44100 Hz, as in `zzfxm.js`, so the length matches the original player.
 
+ProTracker import (`"format": "mod"`) follows the ZzFXM converter's rules: the note comes from the period
+(`mod_note`), the volume becomes an attenuation, Axy is approximated row by row, even channels go left and odd
+channels right, Dxx ends the pattern. Speed and tempo are read on the first row only and position jumps are
+ignored. `"instruments": {"1": <instrument>}` maps a sample to a genny instrument; otherwise a ZzFXM instrument is
+chosen if its name is in the sample's name, and failing that the note plays a plain ZzFX sound.
+
 ## Differences from the originals
 
 - `sfxr`: an envelope stage of length 0 gives silence for its one sample where jsfxr gives NaN. Mutated and
@@ -219,6 +241,12 @@ A ZzFXM channel is `[instrument, pan, note, note, ...]`. Note `N.A`: pitch = the
   the rest is the same noise statistically (the original hashes `sin(i^5)`, whose value past 2^53 depends on
   the JavaScript engine's `pow`).
 - `song` import: voices are rendered by `zzfx_voice` with the ZzFX 1.3.2 generator, not ZzFXM's embedded
-  variant, so songs sound the same but are not sample-identical. Volume-only cells (`0.A`) are ignored.
+  variant (unless `"engine": "zzfxg"`). The two generators differ in the attack, and in the modulation for 6
+  instruments out of 35. Volume-only cells (`0.A`) are ignored.
+- `sfxr repeat`: the repeat period always follows jsfxr, ((1 − r)² × 20000 + 32) samples. Bfxr interpolates
+  between the envelope length and sr/10 and resets period, slide, flanger, bitcrush, duty and filters; genny does
+  not take that law.
+- Python: `retro.beeper(freq, dur, sr)` and `beeper_hz(f)`: the ZX Spectrum ROM 1-bit BEEP, pitch quantised by
+  HL = round(437500 / f − 30.125); `bfxr_strict`, `mod_note`, `FRAME_HZ`.
 - `psg`: one voice of the chip, not three channels sharing one envelope. The DAC table (3 dB per step), the
   noise register's taps and the default clock are not in the datasheet.

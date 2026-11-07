@@ -86,7 +86,7 @@ def declick(x: np.ndarray, sr: int = DEFAULT_SR, ms: float = 2.0) -> np.ndarray:
         ramp = np.linspace(0, 1, n_in)
         x[:n_in] *= ramp[:, None] if x.ndim == 2 else ramp
     if n_out > 0:
-        ramp = np.linspace(1, 0, n_out)
+        ramp = np.cos(0.5 * np.pi * (np.arange(n_out) + 1) / n_out) ** 2   # a linear fade's corner is itself a click on a low tail
         x[-n_out:] *= ramp[:, None] if x.ndim == 2 else ramp
     return x
 
@@ -102,18 +102,28 @@ def trim_tail(x: np.ndarray, threshold_db: float = -70.0, keep_ms: float = 30.0,
     return x[:end]
 
 
-def write_wav(path: str | Path, x: np.ndarray, sr: int = DEFAULT_SR, bits: int = 16) -> Path:
+def write_wav(path: str | Path, x: np.ndarray, sr: int = DEFAULT_SR, bits: int = 16, dither=None, seed: int = 0) -> Path:
+    """dither: None (plain truncation, the default) or a `dsp.quantize` mode (tpdf, gauss, shaped,
+    fweighted, lipshitz) applied at the output word length with a fixed seed."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     x = np.clip(x, -1.0, 1.0)
     channels = 1 if x.ndim == 1 else x.shape[1]
-    if bits == 16:
+    if bits not in (16, 24):
+        raise ValueError("bits must be 16 or 24")
+    if dither not in (None, False, "", "none"):
+        from .dsp import quantize
+        S = float(2 ** (bits - 1))
+        ints = np.clip(np.round(quantize(x, bits=bits, dither=dither, seed=seed) * S), -S, S - 1)
+        if bits == 16:
+            data = ints.astype("<i2")
+        else:
+            data = np.ascontiguousarray(ints.astype("<i4").view("<u1").reshape(-1, 4)[:, :3])
+    elif bits == 16:
         data = (x * 32767).astype("<i2")
-    elif bits == 24:
+    else:
         ints = (x * 8388607).astype("<i4")
         data = np.ascontiguousarray(ints.view("<u1").reshape(-1, 4)[:, :3])
-    else:
-        raise ValueError("bits must be 16 or 24")
     with wave.open(str(path), "wb") as w:
         w.setnchannels(channels)
         w.setsampwidth(bits // 8)
@@ -123,11 +133,16 @@ def write_wav(path: str | Path, x: np.ndarray, sr: int = DEFAULT_SR, bits: int =
 
 
 def read_wav(path: str | Path) -> tuple[np.ndarray, int]:
-    with wave.open(str(path), "rb") as w:
-        sr = w.getframerate()
-        ch = w.getnchannels()
-        sw = w.getsampwidth()
-        raw = w.readframes(w.getnframes())
+    try:
+        with wave.open(str(path), "rb") as w:
+            sr = w.getframerate()
+            ch = w.getnchannels()
+            sw = w.getsampwidth()
+            raw = w.readframes(w.getnframes())
+    except (wave.Error, EOFError):        # float WAV, AIFF, FLAC...: the wave module only reads PCM WAV
+        import soundfile as sf
+        x, sr = sf.read(str(path), dtype="float64", always_2d=True)
+        return (x[:, 0] if x.shape[1] == 1 else x[:, :2]), int(sr)
     if sw == 2:
         x = np.frombuffer(raw, dtype="<i2").astype(np.float64) / 32768.0
     elif sw == 3:

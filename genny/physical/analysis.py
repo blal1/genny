@@ -3,44 +3,32 @@
 # Licensed under Klang Open License 1.0; see KLANG_LICENSE.txt.
 """Analysis / resynthesis of CC0 recordings for the hybrid families (voices, creatures, wind, sea).
 
-Author decision ``out/research/SFX_HYBRID.md`` (2026-09-27): free recordings are *source material*
-for analysis and procedural transformation, never pasted raw. Everything here is a port of an
-algorithm named in the research notes:
+Free recordings are *source material* for analysis and procedural transformation, never pasted raw.
 
-* **LPC analysis / resynthesis** - Cook, *Real Sound Synthesis* ch.8 p.87-92 (research 04 §9.1):
-  autocorrelation LPC, order about SR/1000 + 4, pre-emphasis 0.97, 20-30 ms frames ("frames are
-  stable for 5-20 ms"; hammer-on-nail: order 10, 12 ms frames, 6 ms hop, §9.3). Levinson-Durbin
-  recursion; the filter is run as the **ladder / lattice** of reflection coefficients
-  ``k = (R2 - R1)/(R2 + R1)`` (Cook App. C, JOS Kelly-Lochbaum, research 10 §8.1): interpolating k
-  per sample keeps every intermediate filter stable, so the time-varying tract never blows up
-  and there are no frame-switch clicks.
-* **Residual extraction** - Cook §4.6 / p.68-69: inverse-filter the signal with A(z); the residual
-  is "a pulse stream (voiced) or white noise (unvoiced)". Voicing and f0 come from the residual's
-  normalised autocorrelation.
-* **Resynthesis with new excitation / cross-synthesis** - Cook p.91-92: "keep the time-varying
-  LPC filter and swap the source (a creature growl source through human vowel filters = almost
-  speech)"; Farnell *Designing Sound* ex. 52.2 (research 03 §3.1): "isolate excitation from
-  resonance, then impose human-like tract gestures; separating voiced from unvoiced parts helps
-  a lot". Puckette's timbre stamping (TTEM p.278, research 10 §8.5) is the same idea in STFT form.
-* **Formant warping** (vocal-tract size) - Farnell research 03 §3.1: "knowing the length of an
-  animal's vocal tract we can work out the characteristic resonances" (F = c/4l): the all-pole
-  envelope is resampled on a frequency axis scaled by l_source / l_target and refitted (power
-  spectrum -> autocorrelation -> Levinson), so the new filter is again minimum-phase all-pole.
-* **Formant morphing** - Farnell research 03 §3.1 ("moving between vowels needs interpolation of
-  the filter parameters ... animal sounds obey the same rules of geometry and resonance"):
-  interpolation of the log power envelopes, refitted to all-pole.
-* **Granular engine** - Farnell ch.9.7 p.330-338 (research 01 §9.7): symmetric grain windows
-  (Hann = "0.5 + cos(x)/2 over -pi..pi"), synchronous two-reader PSOLA for pitch shift / time
-  stretch with jitter against the "pitched quality at the grain rate", asynchronous clouds with
-  pitch variance about 2 % and random start offsets for textures (water, wind, crowds); circular
-  placement for seamless loops.
-* **Gust statistics** - Farnell Practical 18 (research 02 §13): gusts are band-limited random
-  processes; the measured envelope (modulation) spectrum, depth and gust rate of a CC0 wind
-  recording replace the patch's ``lop~ 0.5 x2`` noise shaping, keeping its square-law scaling.
-  Circular FFT shaping makes the control exactly periodic (seamless beds).
-* **Wave-cycle statistics** - Moss et al. (research 06 §3.3): bubble formation follows the crest
-  (Gamma = u^2 kappa); the crest timing (period, rise, decay, crest-level spread) is measured on
-  CC0 surf recordings (the sources give no surf timing model, research 05 §8.3).
+* **LPC analysis / resynthesis** - autocorrelation LPC, order about SR/1000 + 4, pre-emphasis 0.97,
+  20-30 ms frames (impacts: order 10, 12 ms frames, 6 ms hop). Levinson-Durbin recursion; the filter
+  is run as the **ladder / lattice** of reflection coefficients ``k = (R2 - R1)/(R2 + R1)``:
+  interpolating k per sample keeps every intermediate filter stable, so the time-varying tract never
+  blows up and there are no frame-switch clicks.
+* **Residual extraction** - inverse-filter the signal with A(z); the residual is a pulse stream
+  (voiced) or white noise (unvoiced). Voicing and f0 come from the residual's normalised
+  autocorrelation.
+* **Resynthesis with new excitation / cross-synthesis** - keep the time-varying LPC filter and swap
+  the source (a creature growl through human vowel filters = almost speech); separating voiced from
+  unvoiced parts helps. Timbre stamping is the same idea in STFT form.
+* **Formant warping** (vocal-tract size) - F = c/4l: the all-pole envelope is resampled on a
+  frequency axis scaled by l_source / l_target and refitted (power spectrum -> autocorrelation ->
+  Levinson), so the new filter is again minimum-phase all-pole.
+* **Formant morphing** - interpolation of the log power envelopes, refitted to all-pole.
+* **Granular engine** - symmetric grain windows (Hann), synchronous two-reader PSOLA for pitch
+  shift / time stretch with jitter against the pitched quality at the grain rate, asynchronous
+  clouds with pitch variance about 2 % and random start offsets for textures (water, wind, crowds);
+  circular placement for seamless loops.
+* **Gust statistics** - gusts are band-limited random processes; the measured envelope (modulation)
+  spectrum, depth and gust rate of a CC0 wind recording replace a fixed noise shaping, keeping its
+  square-law scaling. Circular FFT shaping makes the control exactly periodic (seamless beds).
+* **Wave-cycle statistics** - bubble formation follows the crest (Gamma = u^2 kappa); the crest
+  timing (period, rise, decay, crest-level spread) is measured on CC0 surf recordings.
 
 Recordings live in ``synthgen/recordings/<family>/`` with ``PROVENANCE.toml``
 (``recordings/fetch_recordings.py``). Set ``SYNTHGEN_HYBRID=0`` (or ``analysis.HYBRID = False``)
@@ -65,7 +53,7 @@ from scipy.signal import lfilter
 
 SR = 48000
 REC = Path(__file__).resolve().parent.parent / "recordings"
-PREEMPH = 0.97                       # Cook / SFX_HYBRID: pre-emphasis 0.97
+PREEMPH = 0.97                       # pre-emphasis 0.97
 HYBRID = os.environ.get("SYNTHGEN_HYBRID", "0") != "0"
 
 
@@ -170,7 +158,7 @@ def active_regions(x: np.ndarray, min_s: float = 0.15, floor_db: float = 30.0) -
 
 
 # ==========================================================================================
-# LPC (Cook ch.8): Levinson-Durbin, lattice analysis and synthesis
+# LPC: Levinson-Durbin, lattice analysis and synthesis
 # ==========================================================================================
 
 def lpc_order(sr: float = SR) -> int:
@@ -261,7 +249,7 @@ def _lattice_inverse(x, K, hop):
 
 @numba.njit(cache=True)
 def _lattice_synth(e, K, hop):
-    """All-pole lattice 1/A(z) (Cook App. C ladder / Kelly-Lochbaum) with per-sample k."""
+    """All-pole lattice 1/A(z) (ladder / Kelly-Lochbaum) with per-sample k."""
     n = len(e)
     F, p = K.shape
     b = np.zeros(p + 1)          # b_j(n-1), j = 0..p
@@ -345,7 +333,7 @@ def deemph(x: np.ndarray, c: float = PREEMPH) -> np.ndarray:
 
 def pitch_track(e: np.ndarray, hop: int, fmin: float = 40.0, fmax: float = 900.0) -> tuple[np.ndarray, np.ndarray]:
     """f0 and voicing per frame from the residual's normalised autocorrelation (60 ms frames at
-    12 kHz after a 1.5 kHz low-pass; Cook: the voiced residual is a pulse stream)."""
+    12 kHz after a 1.5 kHz low-pass; the voiced residual is a pulse stream)."""
     from scipy.signal import resample_poly
     y = resample_poly(e, 1, 4)
     sr = SR / 4
@@ -379,6 +367,27 @@ def pitch_track(e: np.ndarray, hop: int, fmin: float = 40.0, fmax: float = 900.0
     return f0, v
 
 
+def pitch_clean(f0: np.ndarray, hop_s: float, *, L: int = 9, jump: float = 1.05, min_seg: float = 0.04) -> np.ndarray:
+    """Post-processing of a frame f0 track (0 = unvoiced): running median over ``L`` frames of the voiced
+    values, a new segment wherever two neighbouring frames differ by more than the ratio ``jump``,
+    and segments shorter than ``min_seg`` seconds set to 0."""
+    from scipy.ndimage import median_filter
+    f = np.asarray(f0, float).copy()
+    on = f > 0
+    if on.any():
+        f[on] = median_filter(f[on], size=max(1, int(L)), mode="nearest")
+    lo = math.log(max(float(jump), 1.0 + 1e-9))
+    brk = np.ones(len(f) + 1, bool)
+    brk[1:-1] = ~(on[1:] & on[:-1]) | (np.abs(np.log(np.maximum(f[1:], 1e-9) / np.maximum(f[:-1], 1e-9))) > lo)
+    edges = np.flatnonzero(brk)
+    need = max(1, int(math.ceil(float(min_seg) / float(hop_s))))
+    for a, b in zip(edges[:-1], edges[1:]):
+        if on[a] and b - a < need:
+            f[a:b] = 0.0
+    f[~on] = 0.0
+    return f
+
+
 def _butter_lp(fc: float, sr: float):
     from scipy.signal import butter
     return butter(2, fc / (sr / 2))
@@ -386,7 +395,7 @@ def _butter_lp(fc: float, sr: float):
 
 def analyse(x: np.ndarray, *, order: int | None = None, frame_ms: float = 25.0, hop_ms: float = 5.0,
             want_pitch: bool = True) -> tuple[Track, np.ndarray]:
-    """LPC-analyse a segment: returns (Track, whitened residual at SR). Cook ch.8: pre-emphasis
+    """LPC-analyse a segment: returns (Track, whitened residual at SR). Pre-emphasis
     0.97, Hann frames of 25 ms (SFX_HYBRID 20-30 ms), 5 ms hop, order SR/1000 + 4."""
     p = order or lpc_order()
     N = int(frame_ms * 1e-3 * SR)
@@ -410,7 +419,7 @@ def analyse(x: np.ndarray, *, order: int | None = None, frame_ms: float = 25.0, 
 
 
 def resynth(excitation: np.ndarray, track: Track, *, gain: bool = True) -> np.ndarray:
-    """Cook cross-synthesis: excitation (any source, normalised to unit RMS per frame by the
+    """Cross-synthesis: excitation (any source, normalised to unit RMS per frame by the
     caller or here) through the time-varying lattice, times the analysed residual gain track,
     then de-emphasis. The track must span len(excitation) samples (``Track.stretch``)."""
     n = len(excitation)
@@ -456,7 +465,7 @@ def refit(P: np.ndarray, p: int) -> np.ndarray:
 
 def warp(track: Track, alpha, *, tilt_keep: bool = True) -> Track:
     """Formant warping: every resonance moves by ``alpha`` (alpha < 1 = a longer tract, lower
-    formants; Farnell F = c/4l so alpha = l_source / l_target). ``alpha`` may be per frame."""
+    formants; F = c/4l so alpha = l_source / l_target). ``alpha`` may be per frame."""
     P = power_envelope(track.K)
     bins = P.shape[1]
     grid = np.arange(bins)
@@ -485,7 +494,7 @@ def morph(a: Track, b: Track, w) -> Track:
 
 def flatten(track: Track, amount: float) -> Track:
     """Pull every frame's envelope toward the track's own mean envelope by ``amount`` (0..1):
-    less articulation, no vowel identity (doc 07 §5.3 "never words")."""
+    less articulation, no vowel identity (never words)."""
     P = power_envelope(track.K)
     P /= np.mean(P, axis=1, keepdims=True)
     L = np.log(P)
@@ -497,7 +506,7 @@ def flatten(track: Track, amount: float) -> Track:
 
 def formant_pair(K: np.ndarray, gain: np.ndarray | None = None, fmin: float = 200.0) -> tuple[float, float]:
     """(F1, F2) of the energy-weighted mean all-pole envelope of some frames: the two lowest
-    peaks with >= 2 dB prominence above ``fmin`` (Cook: LPC fits peaks well). For vowel choice."""
+    peaks with >= 2 dB prominence above ``fmin`` (LPC fits peaks well). For vowel choice."""
     P = power_envelope(K)
     P /= np.mean(P, axis=1, keepdims=True)
     w = (gain[: len(P)] ** 2) if gain is not None else np.ones(len(P))
@@ -525,7 +534,7 @@ def first_formant(track: Track, fmin: float = 150.0) -> float:
 
 
 # ==========================================================================================
-# Granular engine (Farnell ch.9.7)
+# Granular engine
 # ==========================================================================================
 
 @numba.njit(cache=True)
@@ -561,11 +570,15 @@ def _ola(src, out_len, t_out, pos, ratio, gain, L, wrap_out, wrap_src):
 
 
 def psola(x: np.ndarray, n_out: int, *, ratio=1.0, read=None, grain_s: float = 0.04, overlap: float = 4.0,
-          jitter: float = 0.3, rng: np.random.Generator | None = None, src_f0: float | None = None) -> np.ndarray:
-    """Synchronous granular pitch shift / time stretch (Farnell §9.7 "two-phase PSOLA"; jitter
+          jitter: float = 0.3, rng: np.random.Generator | None = None, src_f0: float | None = None,
+          sync: bool = False) -> np.ndarray:
+    """Synchronous granular pitch shift / time stretch (two-phase PSOLA; jitter
     reduces "a pitched quality at the frequency of the grain stream"). ``read`` = source position
     per output sample (default: linear over the whole source); ``ratio`` = pitch ratio (scalar or
-    per output sample). With ``src_f0`` the grain length follows 2.5 source periods."""
+    per output sample). With ``src_f0`` the grain length follows 2.5 source periods. ``sync`` (with
+    ``src_f0``): each grain's read point is moved by whole source periods so that it continues the phase of a
+    resampler running at ``ratio``; the overlapping grains then add in phase at the new pitch instead of
+    falling back to the source pitch."""
     rng = rng or np.random.default_rng(0)
     if src_f0:
         grain_s = float(np.clip(2.5 / src_f0, 0.015, 0.08))
@@ -577,6 +590,14 @@ def psola(x: np.ndarray, n_out: int, *, ratio=1.0, read=None, grain_s: float = 0
     ra = np.broadcast_to(np.asarray(ratio, float), (n_out,))
     c = np.clip(starts + L // 2, 0, n_out - 1)
     pos = rd[c] - ra[c] * L / 2
+    if sync and src_f0:
+        per = SR / float(src_f0)
+        acc = np.cumsum(ra) - ra
+        base = acc[np.clip(starts, 0, n_out - 1)] + ra[c] * np.minimum(starts, 0)
+        pos = base + per * np.round((pos - base) / per)
+        top = np.maximum(0, len(x) - 2 - ra[c] * L)
+        pos = np.where(pos < 0, pos + per * np.ceil(-pos / per), pos)
+        pos = np.where(pos > top, pos - per * np.ceil((pos - top) / per), pos)
     pos = np.clip(pos, 0, np.maximum(0, len(x) - 2 - ra[c] * L))
     t0 = starts.copy()
     ok = t0 + L > 0
@@ -590,10 +611,42 @@ def psola(x: np.ndarray, n_out: int, *, ratio=1.0, read=None, grain_s: float = 0
     return y / np.maximum(ws, 0.25 * overlap / 2)
 
 
+def _concat_pick(x, pos, extra, t, L, ratio, min_back, top):
+    """Sequential grain choice: candidate 0 is ``pos``, the others ``extra``; each grain keeps the candidate whose
+    first samples correlate best with the source just after the previous grain's read point, and never jumps
+    back by less than ``min_back`` samples (falls back to the continuation)."""
+    out = pos.copy()
+    cands = np.stack([pos] + list(extra), axis=1)
+    for j in range(1, len(out)):
+        cont = min(out[j - 1] + (t[j] - t[j - 1]) * ratio[j - 1], top)
+        cont = max(cont, 0.0)
+        w = int(min(512, max(16, L[j] // 4)))
+        c0 = int(cont)
+        ref = x[c0:c0 + w]
+        best, score = None, -np.inf
+        for c in cands[j]:
+            if min_back > 0 and 0 < out[j - 1] - c < min_back:
+                continue
+            if cands.shape[1] == 1:
+                best = c
+                break
+            s = x[int(c):int(c) + w]
+            m = min(len(s), len(ref))
+            if m < 8:
+                continue
+            a, b = s[:m] - s[:m].mean(), ref[:m] - ref[:m].mean()
+            r = float(a @ b) / (math.sqrt(float(a @ a) * float(b @ b)) + 1e-12)
+            if r > score:
+                best, score = c, r
+        out[j] = cont if best is None else best
+    return out
+
+
 def cloud(x: np.ndarray, n_out: int, rng: np.random.Generator, *, target=None, feature=None,
           grain_s=(0.06, 0.2), overlap: float = 3.0, pitch_var: float = 0.02, loop: bool = False,
-          choose_frac: float = 0.04, src_mask: np.ndarray | None = None) -> np.ndarray:
-    """Asynchronous grain cloud from a recording (Farnell §9.7: random start offsets, pitch
+          choose_frac: float = 0.04, src_mask: np.ndarray | None = None, pitch_st: float | None = None,
+          positions: str = "random", match: int = 0, min_back: float = 0.0) -> np.ndarray:
+    """Asynchronous grain cloud from a recording (random start offsets, pitch
     variance about 2 % "a thick chorusing effect", overlap 1-2+; texture of "wind, water").
 
     ``target`` (per output sample, any scale) and ``feature`` (per source sample, same scale)
@@ -601,7 +654,14 @@ def cloud(x: np.ndarray, n_out: int, rng: np.random.Generator, *, target=None, f
     lies within the nearest ``choose_frac`` of the target, so loud crests draw from loud,
     bright moments of the recording and quiet troughs from quiet ones (the procedural control
     decides *when*, the recording supplies *what it sounds like*). ``loop`` wraps grains around
-    the output end (circular -> seamless bed)."""
+    the output end (circular -> seamless bed).
+
+    ``pitch_st``: each grain transposed by a uniform random amount in +-pitch_st semitones (random
+    granulation; replaces ``pitch_var``). ``positions`` (without a target): random | gauss (around a
+    head crossing the source once) | walk (random walk) | zigzag (head sweeping the source forth and
+    back). ``match`` > 1: concatenative choice, each grain taken among ``match`` candidates as the one
+    whose opening best correlates with the natural continuation of the previous grain.
+    ``min_back`` (s): no backward jump shorter than this between consecutive grains."""
     ns = len(x)
     mean_L = 0.5 * (grain_s[0] + grain_s[1]) * SR
     hop = mean_L / overlap
@@ -609,8 +669,11 @@ def cloud(x: np.ndarray, n_out: int, rng: np.random.Generator, *, target=None, f
     t = np.sort(rng.uniform(-mean_L if not loop else 0, n_out, count)).astype(np.int64)
     L = rng.uniform(grain_s[0], grain_s[1], count) * SR
     L = L.astype(np.int64)
-    ratio = 2.0 ** (rng.normal(0.0, pitch_var, count) / 1.0) if pitch_var else np.ones(count)
-    ratio = np.clip(ratio, 0.8, 1.25)
+    if pitch_st:
+        ratio = 2.0 ** (rng.uniform(-1.0, 1.0, count) * float(pitch_st) / 12.0)
+    else:
+        ratio = 2.0 ** (rng.normal(0.0, pitch_var, count) / 1.0) if pitch_var else np.ones(count)
+        ratio = np.clip(ratio, 0.8, 1.25)
     valid = np.arange(ns) if src_mask is None else np.flatnonzero(src_mask)
     valid = valid[valid < ns - int(1.3 * L.max()) - 2]
     if not len(valid):
@@ -625,8 +688,27 @@ def cloud(x: np.ndarray, n_out: int, rng: np.random.Generator, *, target=None, f
         span = max(4, int(choose_frac * len(order)))
         lo = np.clip(q - span // 2, 0, len(order) - span)
         pos = order[lo + rng.integers(0, span, count)].astype(float)
+        draw = lambda: order[lo + rng.integers(0, span, count)].astype(float)
+    elif positions != "random":
+        u = np.clip(t, 0, n_out) / max(n_out, 1)
+        if positions == "gauss":
+            u = u + rng.normal(0.0, 0.05, count)
+        elif positions == "walk":
+            u = 0.5 + np.cumsum(rng.normal(0.0, 0.03, count))
+        elif positions == "zigzag":
+            u = 2.0 * u
+        else:
+            raise ValueError("positions must be random|gauss|walk|zigzag")
+        r = np.mod(u, 2.0)
+        u = np.where(r > 1.0, 2.0 - r, r)
+        pos = valid[(u * (len(valid) - 1)).astype(np.int64)].astype(float)
+        draw = lambda: valid[rng.integers(0, len(valid), count)].astype(float)
     else:
         pos = valid[rng.integers(0, len(valid), count)].astype(float)
+        draw = lambda: valid[rng.integers(0, len(valid), count)].astype(float)
+    if int(match) > 1 or min_back > 0:
+        pos = _concat_pick(np.asarray(x, float), pos, [draw() for _ in range(max(int(match), 1) - 1)], t, L,
+                           ratio, float(min_back) * SR, float(valid.max()))
     t_in = t.copy()
     if not loop:
         neg = t_in < 0
@@ -639,12 +721,37 @@ def cloud(x: np.ndarray, n_out: int, rng: np.random.Generator, *, target=None, f
     return y / np.sqrt(np.maximum(ws, 0.3) * 0.5)
 
 
+def wavescan(x: np.ndarray, f0, n: int, *, start: float = 0.0, end: float = 1.0, sr: float = SR) -> np.ndarray:
+    """Wave scanning: the sound read as a moving wavetable. Two readers half a period apart each read one
+    period (sr / f0) of the source under a sin^2 window (overlap 2, the windows sum to 1); the read point
+    slides from ``start`` to ``end`` (fractions of the source) over the ``n`` output samples."""
+    x = np.asarray(x, float)
+    f = np.broadcast_to(np.asarray(f0, float), (n,))
+    P = sr / f
+    ph = np.cumsum(f / sr)
+    head = (start + (end - start) * np.arange(n) / max(n - 1, 1)) * max(len(x) - P.max() - 2, 0)
+    y = np.zeros(n)
+    for off in (0.0, 0.5):
+        q = np.mod(ph + off, 1.0)
+        y += np.sin(np.pi * q) ** 2 * np.interp(head + q * P, np.arange(len(x)), x)
+    return y
+
+
+def vector_mix(a, b, c, d, x, y) -> np.ndarray:
+    """Vector synthesis: four sources crossfaded by a joystick (x, y) in [0, 1]^2 (bilinear weights,
+    a at (0, 0), b at (1, 0), c at (0, 1), d at (1, 1)); x and y may be per-sample arrays."""
+    n = min(len(a), len(b), len(c), len(d))
+    x = np.clip(np.broadcast_to(np.asarray(x, float), (n,)), 0, 1)
+    y = np.clip(np.broadcast_to(np.asarray(y, float), (n,)), 0, 1)
+    return ((1 - x) * (1 - y) * a[:n] + x * (1 - y) * b[:n] + (1 - x) * y * c[:n] + x * y * d[:n])
+
+
 def recorded_texture(family: str, queries, pick: float, control: np.ndarray, rng: np.random.Generator, *,
                      loop: bool = True, grain_s=(0.08, 0.25), overlap: float = 3.0, pitch_var: float = 0.02,
                      used: list | None = None, file: str | None = None) -> np.ndarray:
     """Level-matched grain cloud of one recording of ``family`` under a procedural ``control``
     (len = output length): the control decides when it swells, the recording what a swell
-    sounds like (Farnell §9.7 granular texture; control = Farnell gusts / Moss crest timing).
+    sounds like (granular texture; control = gusts / crest timing).
     ``file`` forces a recording (e.g. the one whose statistics made the control)."""
     rows = rows_matching(family, queries)
     row = (row_by_file(family, file) if file else None) or rows[int(pick * len(rows)) % len(rows)]
@@ -745,20 +852,45 @@ class Modes:
     gains: np.ndarray
 
 
-def modal_fit(x: np.ndarray, n_modes: int = 16, fmin: float = 60.0, fmax: float = 16000.0) -> Modes:
-    """Modal analysis of a recorded strike (Cook §0.3 / van den Doel & Pai, research 04 §0.3,
-    06 §1): the strongest spectral peaks of the first 60 ms after the onset, each one's decay rate
-    from the slope of its STFT magnitude (dB) over the following frames."""
+VOTE_FLOOR_DB = 6.0
+VOTE_MIN_DECAY = 0.1
+
+
+def modal_fit(x: np.ndarray, n_modes: int = 16, fmin: float = 60.0, fmax: float = 16000.0, *,
+              method: str = "peak", N: int = 4096) -> Modes:
+    """Modal analysis of a recorded strike:
+    the strongest spectral peaks of the first 60 ms after the onset, each one's decay rate
+    from the slope of its STFT magnitude (dB) over the following frames. ``N`` = FFT length.
+    method="vote": a peak is kept only if it is found (within one bin) in at least half of the
+    frames of those 60 ms, stands ``VOTE_FLOOR_DB`` above the noise floor measured before the
+    onset, and decays faster than ``VOTE_MIN_DECAY`` 1/s (steady hum and noise lines are dropped)."""
     from scipy.signal import find_peaks, stft
-    N = 4096
+    N = int(N)
     if len(x) < 2 * N:
         x = np.pad(x, (0, 2 * N - len(x)))
     f, t, S = stft(x, SR, nperseg=N, noverlap=N - 512, boundary=None)
     M = np.abs(S) + 1e-12
     j0 = int(np.argmax(M.sum(0)))
-    spec = 20 * np.log10(M[:, j0:j0 + max(1, int(0.06 * SR / 512))].mean(1))
+    nf = max(1, int(0.06 * SR / 512))
+    spec = 20 * np.log10(M[:, j0:j0 + nf].mean(1))
     pk, _ = find_peaks(spec, prominence=6.0, distance=3)
     pk = pk[(f[pk] >= fmin) & (f[pk] <= fmax)]
+    if method == "vote":
+        fr = M[:, j0:j0 + nf]
+        votes = np.zeros(len(f))
+        for k in range(fr.shape[1]):
+            p, _ = find_peaks(20 * np.log10(fr[:, k]), prominence=6.0, distance=3)
+            hit = np.zeros(len(f), bool)
+            hit[p] = True
+            hit[np.clip(p - 1, 0, len(f) - 1)] = True
+            hit[np.clip(p + 1, 0, len(f) - 1)] = True
+            votes += hit
+        pk = pk[votes[pk] >= 0.5 * fr.shape[1]]
+        if j0 > 0:
+            floor = 20 * np.log10(np.median(M[:, :j0], axis=1))
+            pk = pk[spec[pk] >= floor[pk] + VOTE_FLOOR_DB]
+    elif method != "peak":
+        raise ValueError("method must be peak|vote")
     pk = pk[np.argsort(-spec[pk])][:n_modes]
     freqs, decays, gains = [], [], []
     tt = t[j0:] - t[j0]
@@ -769,8 +901,14 @@ def modal_fit(x: np.ndarray, n_modes: int = 16, fmin: float = 60.0, fmax: float 
         if stop < 3:
             stop = min(len(tr), 3)
         slope = np.polyfit(tt[:stop], tr[:stop], 1)[0] if stop >= 2 else -60.0
+        if method == "vote" and -slope / 8.686 < VOTE_MIN_DECAY:
+            continue
         decays.append(float(np.clip(-slope / 8.686, 2.0, 400.0)))
-        freqs.append(float(f[b]))
+        # parabolic interpolation on the dB spectrum: the bin alone is off by up to half a bin, 5.9 Hz here,
+        # 23 cents at 400 Hz
+        a, c = spec[b - 1], spec[min(b + 1, spec.size - 1)]
+        den = a - 2 * spec[b] + c
+        freqs.append(float(f[b] + (0.5 * (a - c) / den if den < 0 else 0.0) * (f[1] - f[0])))
         gains.append(float(10 ** (spec[b] / 20)))
     g = np.array(gains) if gains else np.array([1.0])
     return Modes(np.array(freqs or [500.0]), np.array(decays or [30.0]), g / g.max())
@@ -778,7 +916,7 @@ def modal_fit(x: np.ndarray, n_modes: int = 16, fmin: float = 60.0, fmax: float 
 
 def modal_resynth(md: Modes, n: int, rng: np.random.Generator, *, f_scale: float = 1.0,
                   decay_scale: float = 1.0, jitter: float = 0.02) -> np.ndarray:
-    """Sum of exponentially decaying sinusoids (Cook's modal structure), frequencies scaled
+    """Sum of exponentially decaying sinusoids (modal structure), frequencies scaled
     (size: f ~ 1/L), decays scaled, each mode detuned by up to ``jitter`` so no two takes match."""
     t = np.arange(n) / SR
     y = np.zeros(n)
@@ -794,10 +932,10 @@ def recorded_event(family: str, queries, pick: float, rng: np.random.Generator, 
                    f_scale: float = 1.0, t_scale: float = 1.0, modal: float = 0.0, order: int = 24,
                    used: list | None = None) -> np.ndarray:
     """A recorded impact / step / fall, resynthesised (never pasted): a transient cut from a
-    recording is LPC-analysed (Cook §9.3: impacts resynthesise well from a low order and their
+    recording is LPC-analysed (impacts resynthesise well from a low order and their
     residual), its residual time-stretched by ``t_scale`` and pitch-shifted by ``f_scale``
     (granular PSOLA), the envelope warped by ``f_scale`` (size), then passed back through the
-    lattice. ``modal`` > 0 adds that share of a modal resynthesis of the same strike (Cook §0.3:
+    lattice. ``modal`` > 0 adds that share of a modal resynthesis of the same strike (
     modes + residual), frequencies x f_scale, decays / t_scale. Peak-normalised."""
     rows = rows_matching(family, queries)
     row = rows[int(pick * len(rows)) % len(rows)]
@@ -822,7 +960,7 @@ def recorded_event(family: str, queries, pick: float, rng: np.random.Generator, 
 
 
 # ==========================================================================================
-# Wind: gust statistics (Farnell Practical 18 control, measured)
+# Wind: gust statistics (measured control)
 # ==========================================================================================
 
 CTRL_RATE = 100.0                     # control samples per second
@@ -1077,3 +1215,64 @@ def wave_control(stats: WaveStats, n: int, rng: np.random.Generator, *, loop: bo
         env = env[:n]
     floor = 10 ** (-min(stats.depth_db, 30.0) / 20.0)
     return np.maximum(env, floor * 0.5), starts
+
+
+BREAK_FACTOR = 1.25         # a gap between glottal pulses longer than 1.25 / pitch floor is a voice break
+
+
+def voice_breaks(pulses, duration: float, fmin: float = 75.0) -> tuple[int, float]:
+    """(number of voice breaks, degree of voice breaks) from glottal pulse times in s: a break is an interval
+    between consecutive pulses longer than ``BREAK_FACTOR`` / ``fmin`` (16.7 ms at 75 Hz); the degree is the
+    breaks' summed length over ``duration``."""
+    t = np.sort(np.asarray(pulses, float))
+    d = np.diff(t)
+    gaps = d[d > BREAK_FACTOR / float(fmin)]
+    return int(len(gaps)), float(gaps.sum() / max(float(duration), 1e-12))
+
+
+RESIDUAL_GL_ITERS = 10
+
+
+def residual_transfer(rec: np.ndarray, md_src: Modes, md_tgt: Modes, rng: np.random.Generator | None = None, *,
+                      nfft: int = 1024, iters: int = RESIDUAL_GL_ITERS) -> np.ndarray:
+    """Residual of a recording (recording minus its modal resynthesis) carried to another set of modes: for each
+    mode pair the spectrogram band between the neighbouring mid-frequencies is moved from f_s to f_t, stretched in
+    time by d_s / d_t and scaled by g_t / g_s, then a phase is rebuilt by Griffin-Lim (``iters`` passes)."""
+    from scipy.signal import istft, stft
+    rng = rng or np.random.default_rng(0)
+    x = np.asarray(rec, float)
+    res = x - modal_resynth(md_src, x.size, rng, jitter=0.0) * (np.std(x) / (np.std(modal_resynth(md_src, x.size, np.random.default_rng(0), jitter=0.0)) + 1e-12))
+    f, t, Z = stft(res, SR, nperseg=nfft)
+    M = np.abs(Z)
+    out = np.zeros_like(M)
+    n = min(len(md_src.freqs), len(md_tgt.freqs))
+    fs_, ft_ = np.sort(md_src.freqs[:n]), np.sort(md_tgt.freqs[:n])
+    os_, ot_ = np.argsort(md_src.freqs[:n]), np.argsort(md_tgt.freqs[:n])
+
+    def edges(fr):
+        mid = 0.5 * (fr[1:] + fr[:-1])
+        return np.concatenate([[0.0], mid]), np.concatenate([mid, [0.5 * SR]])
+    sl, sh = edges(fs_)
+    tl, th = edges(ft_)
+    frames = np.arange(M.shape[1], dtype=float)
+    for i in range(n):
+        ds, dt = md_src.decays[os_[i]], md_tgt.decays[ot_[i]]
+        gs, gt = md_src.gains[os_[i]], md_tgt.gains[ot_[i]]
+        band = (f >= tl[i]) & (f < th[i])
+        if not band.any():
+            continue
+        src_f = fs_[i] + (f[band] - ft_[i]) * (sh[i] - sl[i]) / max(th[i] - tl[i], 1e-9)
+        src_t = frames * (dt / max(ds, 1e-9))
+        for j, fj in zip(np.flatnonzero(band), src_f):
+            col = np.interp(fj, f, np.arange(f.size))
+            k0 = int(np.clip(col, 0, f.size - 2))
+            row = (1 - (col - k0)) * M[k0] + (col - k0) * M[k0 + 1]
+            out[j] = np.interp(frames, src_t, row, right=0.0) * gt / max(gs, 1e-9) * np.sqrt(ds / max(dt, 1e-9))
+    phase = np.exp(2j * np.pi * rng.uniform(size=out.shape))
+    y = None
+    for _ in range(max(1, iters)):
+        _, y = istft(out * phase, SR, nperseg=nfft)
+        _, _, Z2 = stft(y, SR, nperseg=nfft)
+        Z2 = Z2[:, :out.shape[1]] if Z2.shape[1] >= out.shape[1] else np.pad(Z2, ((0, 0), (0, out.shape[1] - Z2.shape[1])))
+        phase = np.exp(1j * np.angle(Z2))
+    return y[:x.size]

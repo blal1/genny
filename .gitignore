@@ -11,3 +11,4 @@ build/
 .claude/
 out_code/
 /*.wav
+genny/out/

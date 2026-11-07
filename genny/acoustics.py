@@ -74,11 +74,14 @@ class MovingPropagation(Propagation):
             else:
                 d = np.interp(np.linspace(0, d.size - 1, len(x)), np.arange(d.size), d)
         d = np.maximum(d, 1e-3)
-        # Receive sample n reads source at n - d/c. Linear interpolation is
-        # deliberately local and stable; callers needing offline mastering can
-        # oversample upstream.
-        delay_samples = d / float(self.speed_of_sound) * sr
-        read = np.arange(len(x), dtype=float) - delay_samples
+        # d(t) is the distance when sample t is emitted, so it arrives at t + d(t)/c: inverting that gives
+        # the moving-source ratio c/(c-v). Reading at n - d(n)/c would give the moving-listener 1 + v/c
+        # (-154 cents at 100 m/s; DAFX c16). Linear interpolation is deliberately local and stable;
+        # callers needing offline mastering can oversample upstream.
+        t = np.arange(len(x), dtype=float) / sr
+        arrive = np.maximum.accumulate(t + d / float(self.speed_of_sound))
+        read = np.interp(t, arrive, t, left=-1.0, right=-1.0) * sr
+        d = np.interp(t, arrive, d)
         i0 = np.floor(read).astype(np.int64)
         frac = read - i0
         valid = (i0 >= 0) & (i0 + 1 < len(x))

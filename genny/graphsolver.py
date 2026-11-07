@@ -60,6 +60,21 @@ class FractionalDelay:
         self.w = (self.w + 1) % len(self.buf)
 
 
+THIRAN_MIN_FRAC = 0.1
+
+
+def thiran_coeffs(D: float, N: int) -> np.ndarray:
+    """Denominator [1, a1..aN] of the order-N Thiran allpass with delay D (~N, D > N - 1):
+    a_k = (-1)^k C(N, k) prod_{n=0..N} (D - N + n) / (D - N + k + n)."""
+    a = np.ones(N + 1)
+    for k in range(1, N + 1):
+        p = 1.0
+        for n in range(N + 1):
+            p *= (D - N + n) / (D - N + k + n)
+        a[k] = (-1) ** k * math.comb(N, k) * p
+    return a
+
+
 @dataclass
 class ThiranDelay:
     """Integer delay followed by a first-order Thiran allpass.
@@ -79,7 +94,7 @@ class ThiranDelay:
     def read(self, delay: float | None=None) -> float:
         d=float(self.delay if delay is None else delay)
         d=min(max(d,1.0),self.max_delay-3.0)
-        integer=max(1,int(math.floor(d)))
+        integer=max(1,int(math.floor(d-THIRAN_MIN_FRAC)))
         frac=d-integer
         x=float(self.buf[(self.w-integer)%len(self.buf)])
         if frac < 1e-8:
@@ -255,7 +270,7 @@ def hammer_string(f0: float, dur: float, velocity=.8, *, sr=48000,
                   felt=.15, loss=.9985, coupling=.85) -> CommonSolveResult:
     n = max(1, int(round(dur*sr)))
     delay = max(2.0, sr/max(float(f0), 1.0))
-    dl = FractionalDelay(delay, int(sr/20)+8, method='lagrange3')
+    dl = ThiranDelay(delay, int(sr/20)+8)
     y = np.zeros(n); force=np.zeros(n); hv=np.zeros(n); sv=np.zeros(n)
     key = float(np.clip(49.0 + 12.0*math.log2(max(f0,1e-6)/440.0),1,88))
     p = 3.7 + .015*key

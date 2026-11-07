@@ -474,7 +474,7 @@ def test_wall_tape_smooth_lofi_steep():
         for hz in (250.0, 1000.0):
             y = D.wall(_sine(hz, 0.5), SR, material=material)
             got.append(-_db(np.sqrt(2 * np.mean(y[SR // 8:] ** 2))))
-        want = [float(D.wall_loss_db(hz, m["mass"], m["leak"], m["coincidence"])) for hz in (250.0, 1000.0)]
+        want = [float(D.wall_loss_db(hz, m["mass"], m["leak"], m["coincidence"], m2=m.get("m2", 0.0), gap=m.get("gap", 0.0), stud=m.get("stud", 0.0))) for hz in (250.0, 1000.0)]
         MEASURED[f"wall {material} loss dB at 250/1000 Hz: measured (model)"] = ([round(float(v), 1) for v in got], [round(v, 1) for v in want])
         assert np.allclose(got, want, atol=1.0), (material, got, want)
     # moving average: first null at fs/M, sqrt(M) noise reduction, zero delay

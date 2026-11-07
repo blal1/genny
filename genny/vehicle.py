@@ -49,16 +49,22 @@ def _comb(x: np.ndarray, delay_s: float, fb: float, sr: int) -> np.ndarray:
     bright=(0.0, "0..1 open muffler / sporty rasp (0 = road car heard from the cabin)"),
     seed=(7, "per-engine character"),
     dur=(3.0, "s"),
-    model=("classic", "classic | ptr (Doerfler 2026 pulse-train-resonator: shaped exhaust pulses per cylinder bank, "
-                      "a Karplus-Strong manifold per bank and a shared tailpipe)"),
+    model=("classic", "classic | ptr (pulse-train-resonator: shaped exhaust pulses per cylinder bank, "
+                      "a Karplus-Strong manifold per bank and a shared tailpipe) | pd003 (four 1 / (1 + x^2) pulses, "
+                      "two cross-fed delay paths and four 50 ms guides)"),
+    inharm=(0.0, "ptr only: 0..1 a bump of detuned partials (up to 8 %), drawn from seed"),
     exhaust=("auto", "ptr only: the exhaust the PTR paper learned, inline4 | v8 (low, resonant) | v8_metal (mid-range, "
                      "metallic); auto = inline4 below 6 cylinders, else v8"),
+    noise=(0.0, "ptr only: 0..1 combustion burst noise shaped by each pulse envelope, plus steady flow noise with throttle"),
 )
 def car_engine(sr=DEFAULT_SR, rpm=1500, cylinders=4, load=0.5, rough=0.25, pipe=0.004, body=1.0, bright=0.0, seed=7, dur=3.0,
-               model="classic", exhaust="auto"):
+               model="classic", exhaust="auto", inharm=0.0, noise=0.0):
+    if model == "pd003":
+        return _pd003_engine(sr, float(rpm), float(np.clip(load, 0, 1)), int(seed), float(dur))
     if model == "ptr":
         return _ptr_engine(sr, float(rpm), max(1, int(cylinders)), float(np.clip(load, 0, 1)), float(np.clip(rough, 0, 1)),
-                           float(pipe), float(np.clip(bright, 0, 1)), int(seed), float(dur), str(exhaust))
+                           float(pipe), float(np.clip(bright, 0, 1)), int(seed), float(dur), str(exhaust), float(inharm),
+                           float(np.clip(noise, 0, 1)))
     rng = np.random.default_rng(int(seed))
     cyl = max(1, int(cylinders))
     rpm = float(rpm)
@@ -129,7 +135,27 @@ def car_engine(sr=DEFAULT_SR, rpm=1500, cylinders=4, load=0.5, rough=0.25, pipe=
     return y
 
 
-# Doerfler et al., "Pulse-Train-Resonator", arXiv 2603.09391 (2026): firing orders of their engines and pulse shape
+PTR_NU = 0.9
+PTR_JITTER = 2.0 / 720.0
+
+
+def ptr_envelope(load):
+    """(alpha, beta) per radian of cycle phase of the pulse envelope: rise in 1/alpha (15 to 10 crank degrees), fall in
+    1/beta (100 to 50 crank degrees), both shortening with ``load``."""
+    ld = float(np.clip(load, 0.0, 1.0))
+    return 7.6 + 3.9 * ld, 1.15 + 1.15 * (1.0 - ld)
+
+
+def ptr_inharmonicity(K, amount, seed):
+    """Relative detuning of partials 1..K: D exp(-(k - mu)^2 / (2 sigma^2)), D = +-0.08 amount, mu in [0.5, 24], sigma 3."""
+    if amount <= 0:
+        return np.zeros(K)
+    r = np.random.default_rng(int(seed) + 77)
+    d = 0.08 * float(np.clip(amount, 0, 1)) * r.choice((-1.0, 1.0))
+    mu = r.uniform(0.5, 24.0)
+    return d * np.exp(-((np.arange(1, K + 1) - mu) ** 2) / (2 * 3.0 ** 2))
+
+
 _FIRING = {4: (1, 3, 4, 2), 6: (1, 5, 3, 6, 2, 4), 8: (1, 5, 4, 8, 6, 3, 7, 2)}
 
 
@@ -150,15 +176,61 @@ PTR_EXHAUST = {
 }
 
 
-def _ptr_engine(sr, rpm, cyl, load, rough, pipe, bright, seed, dur, exhaust="auto"):
-    """PTR (Sec. III-IV): every cylinder fires once per engine cycle (f0 = rpm / 120) a bipolar pulse
-    P = E(phi) sum_k a_k sin(k phi~), E = (1 - e^{-alpha phi}) e^{-beta phi} (eq. 4), a_k ~ e^{-0.5 k lambda} (eq. 6), phase
-    bent as phi~ = 2 pi (phi / 2 pi)^nu by the hot leading edge (eq. 5); cylinders are summed per bank (V engines: two
-    banks in firing order), each bank through its own Karplus-Strong manifold, then a shared tailpipe (Sec. IV-C4);
-    turbulence modulates the pulse with throttle, g_thr = max(load, eps)^0.7 (eqs 1, 7).
-    The manifolds and the tailpipe are the resonators PTR learned (``PTR_EXHAUST``), delays rescaled from 16 kHz;
-    ``pipe`` / 0.004 scales the tailpipe length. UNSOURCED (learned per frame by the network, not stored as constants):
-    alpha, beta, lambda, nu."""
+PD003 = dict(phases=(0.0, 0.25, 0.5, 0.75), width=12.0, noise_lp=20.0, cross_ms=20.0, loop_ms=(5.0, 10.0, 15.0, 20.0),
+             loop_fb=0.5, guide_ms=50.0, guide_fb=(0.3, 0.25, 0.2, 0.15), hip=200.0, gain=12.0, smooth=0.25)
+
+
+def _comb_n(x, m, g):
+    a = np.zeros(m + 1)
+    a[0], a[m] = 1.0, -g
+    return lfilter([1.0], a, x)
+
+
+def _pd003_engine(sr, rpm, load, seed, dur):
+    """Four cylinders at cycle phases 0, 1/4, 1/2, 3/4, pulses 1 / (1 + (w x)^2) roughened by 20 Hz noise; cylinders 1, 3 on
+    path a and 2, 4 on path b, each fed 20 ms late into the other; a loop with taps at 5, 10, 15 and 20 ms; four 50 ms
+    guides e1a, e1b, e2a, e2b in parallel; 200 Hz high-pass, x 12."""
+    c = PD003
+    rng = np.random.default_rng(seed)
+    n = samples(dur, sr)
+    t = np.arange(n) / sr
+    ph = t * rpm / 120.0
+    ms = lambda v: max(int(v * 1e-3 * sr), 1)
+    lop = F.lowpass(rng.uniform(-1, 1, n), c["noise_lp"], sr)
+    paths = [np.zeros(n), np.zeros(n)]
+    for k, p in enumerate(c["phases"]):
+        x = (ph + p) % 1.0 - 0.5
+        paths[k % 2] += (1.0 / (1.0 + (c["width"] * x) ** 2)) * (1.0 + 3.0 * lop) * (0.5 + 0.5 * load)
+    d = ms(c["cross_ms"])
+    a = paths[0] + np.concatenate([np.zeros(d), paths[1][:-d]])
+    b = paths[1] + np.concatenate([np.zeros(d), paths[0][:-d]])
+    y = a + b
+    m = max(ms(v) for v in c["loop_ms"])
+    den = np.zeros(m + 1)
+    den[0] = 1.0
+    for v in c["loop_ms"]:
+        den[ms(v)] -= c["loop_fb"] / len(c["loop_ms"])
+    y = lfilter([1.0], den, y)
+    y = sum(_comb_n(y, ms(c["guide_ms"]) + j, g) for j, g in enumerate(c["guide_fb"]))
+    y = F.highpass(y, c["hip"], sr) * c["gain"]
+    y = np.tanh(y / (np.max(np.abs(y)) + 1e-12) * 1.5)
+    return y / (np.max(np.abs(y)) + 1e-12) * 0.8
+
+
+PTR_BURST_HP = 1000.0
+PTR_FLOW_LP = 2000.0
+
+
+def _ptr_engine(sr, rpm, cyl, load, rough, pipe, bright, seed, dur, exhaust="auto", inharm=0.0, noise=0.0):
+    """Pulse-train-resonator engine: every cylinder fires once per engine cycle (f0 = rpm / 120) a bipolar pulse
+    P = E(phi) sum_k a_k sin(k (1 + d_k) phi~), E = (1 - e^{-alpha phi}) e^{-beta phi}, a_k ~ e^{-0.5 k lambda}, phase
+    bent as phi~ = 2 pi (phi / 2 pi)^nu by the hot leading edge; cylinders 1..n/2 and n/2+1..n on two banks (V engines),
+    each bank through its own Karplus-Strong manifold, then a shared tailpipe; turbulence modulates the pulse with
+    throttle, g_thr = max(load, eps)^0.7. Each cylinder has a static phase offset (within +-40 crank degrees) and a
+    jitter drawn anew every cycle (sd 2 / 720 of a cycle). ``inharm`` 0..1: a Gaussian bump of detuning
+    d_k = D exp(-(k - mu)^2 / 2 sigma^2) on the partials, D up to +-0.08, mu and the sign drawn from the seed.
+    ``pipe`` / 0.004 scales the tailpipe length. ``noise``: each pulse also carries a burst of high-passed noise
+    under the same envelope E(phi), and a steady low-passed flow noise grows with g_thr (no arcsine shaping)."""
     rng = np.random.default_rng(seed)
     n = samples(dur, sr)
     t = np.arange(n) / sr
@@ -166,19 +238,29 @@ def _ptr_engine(sr, rpm, cyl, load, rough, pipe, bright, seed, dur, exhaust="aut
     order = _FIRING.get(cyl, tuple(range(1, cyl + 1)))
     banks = 2 if cyl >= 6 else 1
     gthr = max(load, 1e-3) ** 0.7
-    lam, nu = 0.35 - 0.2 * bright, 0.75
-    alpha, beta = 40.0, 6.0 + 4.0 * (1.0 - load)
+    lam, nu = 0.35 - 0.2 * bright, PTR_NU
+    alpha, beta = ptr_envelope(load)
     K = 24
     ak = np.exp(-0.5 * np.arange(1, K + 1) * lam)
+    kk = np.arange(1, K + 1) * (1.0 + ptr_inharmonicity(K, inharm, seed))
     out = [np.zeros(n) for _ in range(banks)]
+    jit = np.random.default_rng(seed + 101)
     for slot, c in enumerate(order):
-        phase = (f0 * t + slot / len(order) + rng.normal(0.0, 0.004 + 0.02 * rough)) % 1.0
+        cyc = f0 * t + slot / len(order) + np.clip(rng.normal(0.0, 0.004 + 0.02 * rough), -40 / 720, 40 / 720)
+        cyc = cyc + jit.normal(0.0, PTR_JITTER, int(cyc[-1]) + 2)[np.floor(cyc).astype(int)]
+        phase = cyc % 1.0
         phi = 2 * np.pi * phase
         bent = 2 * np.pi * phase ** nu
-        pulse = (1 - np.exp(-alpha * phi)) * np.exp(-beta * phi) * (np.sin(np.outer(bent, np.arange(1, K + 1))) @ ak)
+        pulse = (1 - np.exp(-alpha * phi)) * np.exp(-beta * phi) * (np.sin(np.outer(bent, kk)) @ ak)
         gain = 1.0 + rng.uniform(-1, 1) * (0.08 + 0.3 * rough)
         turb = 1.0 + 0.3 * gthr * F.lowpass(rng.standard_normal(n), 400.0, sr)
-        out[(c - 1) % banks if banks > 1 else 0] += gain * pulse * turb
+        out[(c - 1) * banks // cyl] += gain * pulse * turb
+        if noise > 0:
+            nz = np.random.default_rng(seed + 211 + slot)
+            env = (1 - np.exp(-alpha * phi)) * np.exp(-beta * phi)
+            burst = F.highpass(nz.standard_normal(n), PTR_BURST_HP, sr) * env
+            flow = F.lowpass(nz.standard_normal(n), PTR_FLOW_LP, sr) * 0.3 * gthr
+            out[(c - 1) * banks // cyl] += noise * ak.sum() * 0.3 * (burst + flow)
     if exhaust not in PTR_EXHAUST:
         exhaust = "inline4" if cyl < 6 else "v8"
     *manifolds, tail = PTR_EXHAUST[exhaust]
@@ -190,3 +272,48 @@ def _ptr_engine(sr, rpm, cyl, load, rough, pipe, bright, seed, dur, exhaust="aut
     y = F.lowpass(y, (700 + 1100 * load + 0.1 * rpm) * (1 + 1.5 * bright), sr, 0.7, order=2)
     y = y / (np.sqrt(np.mean(y ** 2)) + 1e-9) * 0.3
     return F.dc_block(np.tanh(y * (1.1 + 0.4 * load)) * 0.85, sr)
+
+
+# Modal banks (Hz, tau s, gain) of the engine structure, author-tuned in mechsynth.js: block and crankcase.
+_BLOCK = ((640.0, 0.012, 1.0), (1150.0, 0.009, 0.8), (1900.0, 0.006, 0.6), (2900.0, 0.004, 0.35))
+_CASE = ((210.0, 0.03, 1.0), (390.0, 0.022, 0.8), (760.0, 0.012, 0.4))
+
+
+def _ring(n, sr, t0, modes, amp):
+    y = np.zeros(n)
+    s = int(t0 * sr)
+    if s < n:
+        t = np.arange(n - s) / sr
+        y[s:] = amp * sum(g * np.exp(-t / tau) * np.sin(2 * np.pi * f * t) for f, tau, g in modes)
+    return y
+
+
+@sfx("engine_knock", "What a worn or abused engine adds: combustion knock (ping), piston slap, or rod knock. Layer it over car_engine.",
+     kind=("knock", "knock (cylinder gas resonance at a frequency set by the bore) | slap (piston rocking, block) | rod (crankcase thud)"),
+     rpm=(2500.0, "crank speed"), cylinders=(4, "number"), bore=(86.0, "mm: knock is 1.841 c / (pi B), 6.47 kHz at 86 mm"),
+     severity=(0.5, "0..1 how often a cylinder knocks, and how hard"), dur=(1.5, "s"), seed=(0, "variation"))
+def engine_knock(sr=DEFAULT_SR, kind="knock", rpm=2500.0, cylinders=4, bore=86.0, severity=0.5, dur=1.5, seed=0):
+    """Draeger's first circumferential gas mode: f = 1.841 c / (pi B), c = 950 m/s hot gas, modes x 1, 1.66, 2.1, tau 4.5, 3, 2 ms,
+    gains 1, .5, .3; slap at each thrust reversal, 2 per turn on the block; rod knock on the crankcase, once per turn (mechsynth.js:
+    author's constants, c and taus not confirmed elsewhere). how severity maps to probability and level."""
+    rng = np.random.default_rng(int(seed))
+    n = samples(dur, sr)
+    sev = float(np.clip(severity, 0.0, 1.0))
+    turn = 60.0 / max(float(rpm), 60.0)
+    cyl = max(1, int(cylinders))
+    y = np.zeros(n)
+    if kind == "knock":
+        fk = 1.841 * 950.0 / (np.pi * max(float(bore), 20.0) * 1e-3)
+        modes = [(min(fk * r, 0.45 * sr), tau, g) for r, tau, g in ((1.0, 0.0045, 1.0), (1.66, 0.003, 0.5), (2.1, 0.002, 0.3))]
+        for t in np.arange(0.0, dur, 2.0 * turn / cyl):
+            if rng.random() < sev:
+                y += _ring(n, sr, t + rng.uniform(0.0, 0.2) * turn / cyl, modes, rng.uniform(0.5, 1.0))
+    elif kind == "slap":
+        for t in np.arange(0.0, dur, 0.5 * turn):
+            y += _ring(n, sr, t, _BLOCK, (0.3 + 0.7 * sev) * rng.uniform(0.7, 1.0))
+    elif kind == "rod":
+        for t in np.arange(0.0, dur, turn):
+            y += _ring(n, sr, t, _CASE, (0.3 + 0.7 * sev) * rng.uniform(0.8, 1.0))
+    else:
+        raise ValueError("kind must be knock|slap|rod")
+    return y / (np.max(np.abs(y)) + 1e-9) * 0.8 * (0.4 + 0.6 * sev)

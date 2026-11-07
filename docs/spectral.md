@@ -24,17 +24,33 @@ STFT-domain processing after J. O. Smith, *Spectral Audio Signal Processing* (fi
 | darker or brighter overall, no resonance | `spectral_tilt` |
 | stretch ×8, transpose, or re-balance tone vs noise of a recording | layer `resynth` |
 
+Added since 1.2.1 (parameters: `catalog.md`):
+
+| I want to… | use |
+|---|---|
+| keep only the tones, or only the hits, of a sound | `hpss` (median filtering) |
+| snap a voice to the nearest semitone | `autotune` |
+| turn a male voice female or the reverse | `gender` (pitch and formants together) |
+| mix two sounds' spectra (magnitudes multiplied, or phases of one on the other) | `mutate` |
+| stretch a mix with both tones and hits | `timestretch mode=hps` (vocoder on the tones, overlap-add on the hits) |
+| land moments of a sound on an animation | `timestretch anchors="t_in:t_out, ..."` |
+| finer, noisier cross-synthesis | `cross_synth method=stamp` |
+| denoise without musical noise, or from a noise sample | `spectral_gate mode=soft` / `mode=subtract` |
+
+`freqshift fold=false` (the default) now removes what would cross Nyquist or 0 Hz; `fold=true` keeps the mirrored
+ring-modulator artefact.
+
 ## Effects
 
 Length: `timestretch` returns `factor ×` the input length and `freeze` adds `length` seconds;
-every other effect keeps the length. Channel count is always kept.
+every other effect keeps the length, except `granular` (longer by the buffer delay plus one grain). Channel count is always kept, except `granular`, which returns stereo when `spread` > 0.
 
 ### `timestretch`
 | param | default | meaning |
 |---|---|---|
 | `factor` | 1.0 | length ratio, 0.1–10. 2 = twice as long, same pitch |
-| `mode` | `vocoder` | `vocoder`: phase vocoder, best for music, chords, pads, ambience. `sola`: time-domain overlap-add with a similarity search, best for speech, drums and single voices (no "phasiness", but chords may flutter) |
-| `window_ms` | 0 | analysis window; 0 = auto (45 ms vocoder, 25 ms sola). Longer resolves closer/lower partials but smears more |
+| `mode` | `vocoder` | `vocoder`: phase vocoder, best for music, chords, pads, ambience. `sola`: time-domain overlap-add with a similarity search, best for speech, drums and single voices (no "phasiness", but chords may flutter). `ola`: sola without the similarity search. `hps`: vocoder on the tones, OLA on the hits. `psola`: pitch-synchronous overlap-add, cuts two-period grains at each pitch period (best for a single pulsed voice: no phasiness, formants kept). `auto`: psola where the voice pulses are sharp (epoch sharpness ≥ 0.9 over 6 frames of 10 ms), vocoder elsewhere, 20 ms crossfades. `anchors` need vocoder, sola, ola or hps |
+| `window_ms` | 0 | analysis window; 0 = auto (45 ms vocoder, 50 ms sola). Longer resolves closer/lower partials but smears more |
 | `lock` | true | vocoder: keep the phase relations around each spectral peak (less reverberant "phasiness") |
 | `transients` | true | attacks are moved, not stretched (a click stays a click). A number is the detector sensitivity (2 = also softer attacks); false stretches everything |
 
@@ -44,6 +60,7 @@ every other effect keeps the length. Channel count is always kept.
 | `semitones` | 0 | −36…+36 |
 | `formant` | `shift` | `shift`: the whole spectrum moves, like tape speed (resonances move too: smaller/larger body). `keep`: the spectral envelope (vowel, body resonances) stays where it was, only the pitch moves |
 | `fine` | 0 | additional cents |
+| `mode` | `vocoder` | `vocoder`; `psola`: pitch-synchronous grains, the formants stay in place whatever `formant` says; `auto`: psola on sharp voice pulses, vocoder elsewhere |
 
 The older granular `pitch` effect is untouched; `pitch_shift` is the clean one for tonal material.
 
@@ -109,7 +126,8 @@ sounds ring on. `freq` (0 Hz): smoothing across frequency — partials widen int
 ### `freqshift`
 `hz` (100): every component moves by the same number of Hz (single-sideband modulation), so
 harmonic sounds become inharmonic: 440/880/1320 → 540/980/1420. ±0.1–2 Hz gives slow beating
-against the dry signal; ±20–300 Hz is metallic; negative shifts go down.
+against the dry signal; ±20–300 Hz is metallic; negative shifts go down. `hz_end`: the shift glides
+linearly from `hz` to it over the sound (barber-pole sweeps).
 
 ### `robotize`
 `pitch` (110, Hz or note): each analysis frame is turned into a symmetric pulse, so the output has
@@ -122,6 +140,68 @@ keeps the formants. Longer frames (30+) let some pitch through. `seed`.
 ### `spectral_tilt`
 `slope` (−3 dB/octave), `pivot` (1000 Hz): a straight-line change of the spectrum in dB per octave
 (limited to ±24 dB), linear phase, level-compensated. −3 turns white noise pink; +3 adds air.
+
+### `spectacle`
+Spectral delay: the spectrum is cut into `bands` (geometric, `low` to `high` Hz), each delayed by its own time with
+its own feedback: rising, falling or scattered echoes of different colours.
+
+| param | default | meaning |
+|---|---|---|
+| `delay` | 0.5 | s, longest band delay |
+| `table` | `random` | `random`, `ascending`, `descending`: which bands wait longest |
+| `feedback` | 0.8 | 0..0.95 per band |
+| `bands` | 64 | number of bands |
+| `low`, `high` | 100, 4100 | Hz |
+| `mix`, `seed` | 0.5, 0 | |
+
+### `granular`
+Granular cloud read from a 6 s ring buffer the sound is written into (96 grains at most). Each grain reads
+`position` + random `spray` back into the buffer, at `pitch`, panned at random within `spread`. `freeze` stops
+recording after that many seconds, so the grains keep scanning the held moment; `feedback` writes the output back
+into the buffer (DC-blocked, 0.95 at most) for swelling, self-feeding clouds. Output is stereo when `spread` > 0,
+and longer than the input by the buffer delay plus one grain.
+
+| param | default | meaning |
+|---|---|---|
+| `density` | 20 | grains per second, 2-200 |
+| `size` | 0.08 | grain length in s, 0.005-1 |
+| `spray` | 0.2 | random reach back into the buffer, 0-1 |
+| `position` | 0.05 | how far back grains read, fraction of the 6 s buffer |
+| `spread` | 0.5 | stereo spread, 0 = mono output |
+| `pitch` | 0 | grain transposition in semitones |
+| `feedback` | 0 | 0-0.95 |
+| `freeze` | none | seconds after which the buffer stops recording |
+| `window` | `hann` | `hann`, `tukey` (flat with 15 % edges), `perc` (exp(−5t)(1−t): plucked grains) |
+| `overlap` | `normal` | `normal`: sum scaled by 1/sqrt(density × size); `sola`: each grain fades in over the life left in the previous one and out the same way, linear ramps that sum to one (no level pumping) |
+| `mix` | 1 | 0 = dry, 1 = grains only |
+| `seed` | 0 | |
+
+### `granulate`
+Brassage: the sound is rebuilt, at the same length, from Hann grains of `grain` s (0.08; 0.001-0.1) drawn within
+`window` s (0.1) of the current time (0 = anywhere in the sound: a shuffled texture), `overlap` grains per grain
+length (2 = half-grain overlap) and a random transposition of `pitch_var` octaves (sd, 0.02) per grain; `seed`.
+`pitch_st` (0: ± semitones per grain, uniform, replaces `pitch_var`), `positions` (with `window` 0: `random`, `gauss`,
+`walk`, `zigzag`), `match` (0: concatenative, candidates per grain, the one that best continues the previous grain
+wins), `min_back` (s: no backward jump shorter than this). Python `physical.analysis.cloud(..., pitch_st=,
+positions=, match=, min_back=)` is the engine behind it.
+
+### `fog`
+FOF grains read from the sound as a sample table (granular formant synthesis on a recording): `dens` grains per
+second (80), `trans` read speed inside each grain (1; 2 = an octave up), `spd` table passes per second of the grain
+start pointer (0 = every grain starts at the beginning), `band` Hz (50: grain decay exp(−π band t)), `ris` s rise
+(0.01), `dec` s fall at the end (0.07), `dur` s grain length (0.1).
+
+### `tf_pad`
+Time-frequency pad: grains scan the sound and a drawn `curve` shifts each one in frequency by its read position
+(points `"x:y"`, x 0..1, y Hz, e.g. `"0:0,0.5:300,1:-100"`; Hann grains, single-sideband shift); `density` grains per
+second (40), `size` s (0.08), `seed`.
+
+### PSOLA (Python)
+`spectral.pitch_marks(x, sr, f0=None)` (one mark per period at the waveform peak; YIN when `f0` is None),
+`spectral.psola(x, sr, semitones, factor, f0=None)`, `spectral.epoch_sharpness(x, sr, f0)` ((crest − 1) ×
+autocorrelation at one period: pulsed voice > 2, glottal about 1.2, breathy about 0.6, smooth < 0.5),
+`spectral.psola_mask(x, sr)`. `spectral.true_envelope(mag, n_c, accel=True)`: the true envelope started from a max
+filter of log|X| and over-relaxed at each step (factor at most 2.5), so it needs far fewer iterations.
 
 ## Layer type `resynth`
 
@@ -207,6 +287,10 @@ S.save_model(m, "voice.npz"); m = S.load_model("voice.npz")        # or .json
 E = S.cepstral_envelope(np.abs(X), n_c=int(0.002 * sr))   # smooth spectral envelope per frame
 E = S.lpc_envelope(np.abs(X), order=24)                    # all-pole envelope (hugs the peaks)
 H = S.minimum_phase(G, nfft)          # complex response with magnitude G and no pre-ringing
+y = S.phase_rotate(x, phi)            # every component shifted by phi rad (Hilbert pair)
+f0 = S.twm_f0(freqs, amps_db)         # two-way mismatch fundamental of a peak list
+w2 = S.laguerre_map(w, b); b = S.laguerre_b_for(w0, w0_new)   # first-order allpass frequency warping
+t2, a2 = S.reduce_envelope(t, a, segments=8)                  # breakpoint envelope cut to a few straight segments
 ```
 
 ### The model (`analyze` → `resynth`)
@@ -233,4 +317,4 @@ H = S.minimum_phase(G, nfft)          # complex response with magnitude G and no
 | peak threshold, tracks | −50 dB re frame maximum (book: −30), 60 peaks, 40 tracks, DFmax = 2·sr/M | PARSHL listing (g12 §17 H.8) |
 | noise bands | Bark edges 0…15500 (+20500, 27000) Hz, or 1 ERB | g12 §14.1 |
 | vocoder bands | Voder edges | g12 §18 G.5 |
-| unsourced (marked `# UNSOURCED` in the code) | transient detector constants, ±12 ms SOLA search, peak-curvature tolerance, 2-frame track gap, tonal test of `spectral_gate` (12 dB over a ±100 Hz median) | tuned on the test signals |
+| unsourced (justified in `research/SOURCES.md`) | transient detector constants, ±12 ms SOLA search, peak-curvature tolerance, 2-frame track gap, tonal test of `spectral_gate` (12 dB over a ±100 Hz median) | tuned on the test signals |

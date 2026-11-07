@@ -11,10 +11,12 @@ from pathlib import Path
 import numpy as np
 
 from . import drums as D
+from . import filters as F
 from . import fx as FX
 from . import instruments as I
 from . import sfx as S
 from . import speech as SPK
+from .core import to_mono
 from .core import DEFAULT_SR, declick, mix, normalize, read_wav, resample, samples, silence, trim_tail, write_wav
 from .analysis import ear_loudness
 from .notes import parse_pitch_list, parse_sequence
@@ -24,14 +26,19 @@ DEFAULT_MAX_LOUDNESS = -6.0   # ear-weighted dB (see analysis.ear_loudness); "ma
 # "loudness" presets: integrated LUFS (ITU-R BS.1770) with true peak <= -1 dBTP.
 # streaming: Spotify normalisation (-14 LUFS, -1 dBTP); broadcast: EBU R128 (-23 LUFS);
 # console: Sony ASWG (-23 LUFS +-2 LU for PS3/PS4 games); mobile: Sony ASWG handheld (-18 LUFS).
-LOUDNESS_PRESETS = {"streaming": -14.0, "broadcast": -23.0, "console": -23.0, "mobile": -18.0}
+LOUDNESS_PRESETS = {"streaming": -14.0, "broadcast": -23.0, "console": -23.0, "mobile": -18.0,
+                    "apple_tv": -24.0, "itunes": -16.2, "kids": -28.0}
+HOT_MASTER_LUFS, HOT_TRUE_PEAK = -14.0, -2.0
 
 
-def master_loudness(y: np.ndarray, sr: int, target, true_peak: float = -1.0, loop: bool = False) -> np.ndarray:
+def master_loudness(y: np.ndarray, sr: int, target, true_peak: float | None = None, loop: bool = False,
+                    headroom_only: bool = False) -> np.ndarray:
     """Gain ``y`` to an integrated loudness (preset name or LUFS), then hold the true peak under ``true_peak`` dBTP.
+    ``true_peak`` None: -1 dBTP, or -2 dBTP for a master louder than -14 LUFS.
 
     Short sounds are measured padded to 0.5 s. A peak over the limit is soft-kneed (tanh), or for loops
-    turned down with plain gain so the seam stays whole.
+    turned down with plain gain so the seam stays whole. ``headroom_only``: one plain gain,
+    min(target - loudness, true_peak - true peak) dB, so the ceiling is never reached (no soft knee).
     """
     import pyloudnorm
     from .physical.core import _true_peak
@@ -50,6 +57,12 @@ def master_loudness(y: np.ndarray, sr: int, target, true_peak: float = -1.0, loo
         g = 0.1 / float(np.max(np.abs(x)))
         x, measure = x * g, measure * g
         loud = pyloudnorm.Meter(sr).integrated_loudness(measure)
+    if true_peak is None:
+        true_peak = HOT_TRUE_PEAK if float(target) > HOT_MASTER_LUFS else -1.0
+    if headroom_only:
+        g = float(target) - loud if np.isfinite(loud) else 0.0
+        tp = 20 * np.log10(_true_peak(x) + 1e-30)
+        return x * 10 ** (min(g, float(true_peak) - tp) / 20)
     if np.isfinite(loud):
         x = x * 10 ** ((float(target) - loud) / 20)
     limit = 10 ** (float(true_peak) / 20)
@@ -208,8 +221,47 @@ def render_sequence(layer: dict, sr: int, q: float = 1.0) -> np.ndarray:
     return mix(parts, sr)
 
 
+def _duck(parts: list, layers: list[dict], sr: int) -> list:
+    """`"priority"` on layers: louder priorities turn lower ones down 3 dB per step, 12 at most (RP.Sound Mixer.cs:
+    key follower 5/50 ms on x^2, drive between 0.02 and 0.2 of full scale, gain smoothed in dB 10/400 ms)."""
+    co = lambda tau: 1.0 - np.exp(-1.0 / (tau * sr))
+    total = max(int(round(at * sr)) + sig.shape[0] for sig, at in parts)
+    drive = {}
+    for (sig, at), l in zip(parts, layers):
+        if "priority" in l:
+            key = np.zeros(total)
+            s = int(round(at * sr))
+            key[s:s + sig.shape[0]] = to_mono(sig)
+            e = np.sqrt(F.follow(key * key, co(0.005), co(0.05)))
+            p = float(l["priority"])
+            drive[p] = np.maximum(drive.get(p, 0.0), np.clip((e - 0.02) / 0.18, 0.0, 1.0))
+    out = []
+    for (sig, at), l in zip(parts, layers):
+        if "priority" in l:
+            p = float(l["priority"])
+            db = np.zeros(total)
+            for q, d in drive.items():
+                if q > p:
+                    db = np.maximum(db, min(3.0 * (q - p), 12.0) * d)
+            s = int(round(at * sr))
+            g = 10.0 ** (-F.follow(db, co(0.01), co(0.4))[s:s + sig.shape[0]] / 20.0)
+            g = g[:, None] if sig.ndim == 2 else g
+            band = l.get("duck_band")
+            if band:                                    # notch instead of duck: only this band is turned down
+                from scipy.signal import butter, sosfiltfilt
+                lo, hi = (500.0, 4000.0) if band is True else (float(band[0]), float(band[1]))
+                sos = butter(2, [lo, min(hi, 0.45 * sr)], "bandpass", fs=sr, output="sos")
+                sig = sig + sosfiltfilt(sos, sig, axis=0) * (g - 1.0)     # zero phase: the band subtracts in phase
+            else:
+                sig = sig * g
+        out.append((sig, at))
+    return out
+
+
 def render_layers(layers: list[dict], sr: int, bpm: float | None = None) -> np.ndarray:
     parts = [render_layer(l, sr, bpm) for l in layers]
+    if sum("priority" in l for l in layers) > 1:
+        parts = _duck(parts, layers, sr)
     return mix(parts, sr)
 
 
@@ -261,7 +313,8 @@ def render_spec(spec: dict, sr: int | None = None) -> tuple[np.ndarray, int]:
             y = declick(y, sr)
     if spec.get("loudness") is not None:
         # integrated-loudness mastering replaces peak normalising and the ear-weighted ceiling
-        y = master_loudness(y, sr, spec["loudness"], float(spec.get("true_peak", -1.0)), loop=bool(loop) and not fold)
+        y = master_loudness(y, sr, spec["loudness"], spec.get("true_peak"), loop=bool(loop) and not fold,
+                            headroom_only=bool(spec.get("headroom_only", False)))
         y = y * float(spec.get("gain", 1.0))
         return np.clip(y, -1, 1), sr
     lvl = spec.get("normalize", -1.0)
@@ -284,7 +337,7 @@ def render_to_file(spec: dict, out: str | Path | None = None, out_dir: str | Pat
     path = Path(out or spec.get("out") or "out.wav")
     if out_dir and not path.is_absolute():
         path = Path(out_dir) / path
-    return write_wav(path, y, sr, bits=int(spec.get("bits", 16)))
+    return write_wav(path, y, sr, bits=int(spec.get("bits", 16)), dither=spec.get("dither"), seed=int(spec.get("dither_seed", 0)))
 
 
 def load_specs(source: str | Path | dict | list) -> list[dict]:
@@ -299,7 +352,7 @@ def load_specs(source: str | Path | dict | list) -> list[dict]:
     else:
         data = source
     if isinstance(data, list):
-        return data
+        return [v for sp in data for v in expand_variants(sp)]
     if "sounds" in data:
         out_dir = data.get("out_dir")
         specs = []
@@ -311,8 +364,43 @@ def load_specs(source: str | Path | dict | list) -> list[dict]:
             if out_dir and "out" in sp and not Path(sp["out"]).is_absolute():
                 sp["out"] = str(Path(out_dir) / sp["out"])
             specs.append(sp)
-        return specs
-    return [data]
+        return [v for sp in specs for v in expand_variants(sp)]
+    return expand_variants(data)
+
+
+def _reseed(node, k: int):
+    if isinstance(node, dict):
+        return {key: (v + k if key == "seed" and isinstance(v, (int, float)) and not isinstance(v, bool) else _reseed(v, k))
+                for key, v in node.items()}
+    if isinstance(node, list):
+        return [_reseed(v, k) for v in node]
+    return node
+
+
+def expand_variants(spec: dict) -> list[dict]:
+    """`"variants": N` renders N files `<out>_01.wav` ... for random playback. `"vary"`: `pitch` [lo, hi] playback-rate
+    ratio (a `speed` effect, length changes with it), `gain` [lo, hi] linear (after normalising), `reseed` (default
+    true: every `seed` in the spec + 0, 1, 2 ...), `seed` (draws). Without `variants` the spec is returned as is."""
+    n = spec.get("variants")
+    if not n:
+        return [spec]
+    vary = dict(spec.get("vary") or {})
+    rng = np.random.default_rng(int(vary.get("seed", 0)))
+    base = {k: v for k, v in spec.items() if k not in ("variants", "vary")}
+    stem = Path(str(spec.get("out") or "out.wav"))
+    out = []
+    for i in range(int(n)):
+        sp = _reseed(base, i) if vary.get("reseed", True) else dict(base)
+        lo, hi = vary.get("pitch", (1.0, 1.0))
+        r = float(rng.uniform(float(lo), float(hi)))
+        lo, hi = vary.get("gain", (1.0, 1.0))
+        g = float(rng.uniform(float(lo), float(hi)))
+        if r != 1.0:
+            sp["fx"] = list(sp.get("fx") or []) + [{"type": "speed", "factor": r}]
+        sp["gain"] = float(sp.get("gain", 1.0)) * g
+        sp["out"] = str(stem.with_name(f"{stem.stem}_{i + 1:02d}{stem.suffix or '.wav'}"))
+        out.append(sp)
+    return out
 
 
 EXAMPLE = {

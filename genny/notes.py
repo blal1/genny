@@ -5,6 +5,7 @@ import re
 
 NOTE_INDEX = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 _NOTE_RE = re.compile(r"^([A-Ga-g])([#b]?)(-?\d+)$")
+_CENTS_RE = re.compile(r"^(.+?)([+-]\d+(?:\.\d+)?)c$")
 
 SCALES = {
     "major": [0, 2, 4, 5, 7, 9, 11],
@@ -91,6 +92,9 @@ def to_freq(value) -> float:
     if isinstance(value, float):
         return value
     s = str(value).strip()
+    m = _CENTS_RE.match(s)
+    if m:                                       # 'C4+12c', 'A4-5.5c', '440hz+3c': cents off that pitch
+        return to_freq(m.group(1)) * 2.0 ** (float(m.group(2)) / 1200.0)
     if s.lower().endswith("hz"):
         return float(s[:-2])
     if _NOTE_RE.match(s):
@@ -138,6 +142,7 @@ def parse_sequence(text: str, default_dur: float = 0.25) -> list[dict]:
       C4:maj:0.5    named chord (see CHORDS)
       -:0.25        rest
       C4:0.5@0.6    velocity 0..1 after '@'
+      C4+12c        cents off the note (also A4-5.5c, 440hz+3c)
       |             bar line, ignored (for readability)
 
     Returns list of {"pitches": [hz...], "dur": float, "vel": float}; pitches empty for a rest.

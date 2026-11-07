@@ -1,0 +1,32 @@
+{
+  "out": "suikinkutsu.wav",
+  "layers": [
+    {
+      "type": "sfx",
+      "kind": "drops",
+      "params": {
+        "dur": 8.0,
+        "rate": 1.2,
+        "jitter": 0.8,
+        "size": 0.25,
+        "seed": 3
+      }
+    }
+  ],
+  "fx": [
+    {
+      "type": "cavity",
+      "shape": "sphere",
+      "size": 0.35,
+      "wall": 0.2,
+      "mix": 0.9,
+      "tail": 1.5
+    },
+    {
+      "type": "reverb",
+      "mix": 0.1,
+      "size": 0.2
+    }
+  ],
+  "normalize": -3.0
+}

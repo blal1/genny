@@ -208,17 +208,17 @@ def test_mini_ignition_and_stop():
 
 # ------------------------------------------------------------------ rain
 def test_rain_event_rate():
-    assert K.rain_rate(0.0) == 2.0 and near(K.rain_rate(1.0), 602.0, 1e-12)
-    n = [len(K.rain_events(20.0, i, 1)) for i in (0.0, 0.2, 0.5, 1.0)]
+    assert K.rain_rate(0.0) == 0.0 and near(K.rain_rate(1.0), 600.0, 1e-12)        # 200 drops / s / m2 over 3 m2
+    n = [len(K.rain_events(20.0, i, 1)) for i in (0.01, 0.2, 0.5, 1.0)]
     assert all(a < b for a, b in zip(n, n[1:])), n
     for i, c in zip((0.2, 0.5, 1.0), n[1:]):
         assert near(c, K.rain_rate(i) * 20.0, 0.1), (i, c)                          # Poisson: sqrt(N) / N < 5 %
     # heard: count the ticks of a sparse rain without the bed
-    y = SX.render_sfx("klang_rain", SR, intensity=0.1, hiss=0.0, dur=10.0, seed=2)
+    y = SX.render_sfx("klang_rain", SR, intensity=0.01, hiss=0.0, dur=10.0, seed=2)
     e = np.abs(y)[:len(y) // 44 * 44].reshape(-1, 44).max(1)                        # 1 ms frames
     on = np.flatnonzero((e[1:] > 0.02) & (e[:-1] <= 0.02))
     heard = 1 + int(np.sum(np.diff(on) > 8)) if len(on) else 0
-    assert near(heard, K.rain_rate(0.1) * 10.0, 0.3), heard
+    assert near(heard, K.rain_rate(0.01) * 10.0, 0.3), heard
     lv = [loudness(SX.render_sfx("klang_rain", SR, intensity=i), SR) for i in (0.1, 0.5, 1.0)]
     assert lv[0] < lv[1] < lv[2], lv
 

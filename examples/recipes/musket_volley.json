@@ -1,0 +1,32 @@
+{
+  "out": "musket_volley.wav",
+  "layers": [
+    {
+      "type": "scatter",
+      "dur": 1.0,
+      "count": 12,
+      "seed": 4,
+      "reseed": true,
+      "gain_db": 3.0,
+      "pitch": 0.3,
+      "layers": [
+        {
+          "type": "sfx",
+          "kind": "firearm",
+          "params": {
+            "weapon": "flintlock",
+            "distance": 5.0,
+            "echo": 0.0
+          }
+        }
+      ]
+    }
+  ],
+  "fx": [
+    {
+      "type": "distance",
+      "metres": 150.0
+    }
+  ],
+  "normalize": -1.0
+}

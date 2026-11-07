@@ -68,6 +68,15 @@ def seconds(t: float) -> int:
     return int(round(t * SR))
 
 
+def soft_ends(n: int, rise: int, fall: int) -> np.ndarray:
+    """Gain of n samples with raised-cosine ends: starts at 0, ends at 0, no corner (detect_clicks finds a linear fade's)."""
+    g = np.ones(n)
+    a, b = min(max(rise, 1), n), min(max(fall, 1), n)
+    g[:a] = np.sin(0.5 * np.pi * np.arange(a) / a) ** 2
+    g[-b:] *= np.cos(0.5 * np.pi * (np.arange(b) + 1) / b) ** 2
+    return g
+
+
 def t60_to_radius(t60: float) -> float:
     """Pole radius whose envelope falls 60 dB in ``t60`` seconds: r = 10**(-3 / (t60*SR))."""
     return 10.0 ** (-3.0 / (max(t60, 1e-6) * SR))

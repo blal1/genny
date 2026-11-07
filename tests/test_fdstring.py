@@ -335,3 +335,23 @@ if __name__ == "__main__":
         if name.startswith("test_"):
             fn()
             print("ok", name)
+
+
+def test_bidirectional_longitudinal_modes():
+    # Bank 2006 thesis eqs 5.36a and 6.3: one transverse mode A sin(pi x) drives only longitudinal mode 2,
+    # F_2 = -c_l^2 pi^3 A^2 / 2 (lengths in units of L); the modes feed back as tension along the string
+    A, kc = 0.01, 225.0
+    s = M.StiffString(50.0, SR, B=1e-5, t60=None, backoff=0.9, tension=kc).longitudinal(10)
+    x = np.linspace(0.0, 1.0, s.N + 1)
+    s.U[:] = A * np.sin(np.pi * x)
+    s.U1[:] = s.U
+    s.run(1)
+    cl2 = s.gamma ** 2 * kc
+    assert s.LW.size == 10 and abs(s.LF[0, 1] / (-cl2 * np.pi ** 3 * A ** 2 / 2) - 1) < 1e-3, s.LF[0, :3]
+    assert np.all(np.abs(np.delete(s.LF[0], 1)) < 1e-6 * abs(s.LF[0, 1]))
+    ys = []
+    for K in (0, 10):
+        s = M.StiffString(50.0, SR, B=1e-5, t60=(100.0, 5.0, 2000.0, 3.0), backoff=0.9, tension=kc).longitudinal(K)
+        ys.append(s.pluck(0.2, 0.05, 0.002).render(0.3))
+    assert np.isfinite(ys[1]).all() and np.max(np.abs(ys[1])) < 2 * np.max(np.abs(ys[0]))
+    assert np.max(np.abs(ys[1] - ys[0])) > 1e-4 * np.max(np.abs(ys[0]))

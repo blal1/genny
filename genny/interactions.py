@@ -16,6 +16,7 @@ import numpy as np
 from .core import DEFAULT_SR, resample
 from .ports import PhysicalPort, PassiveCoupler
 from .physical import waveguides as _wg
+from .physical import winds as _winds
 from .physical import voice as _voice
 from . import graphsolver as _common
 
@@ -205,10 +206,10 @@ class LipBoreInteraction:
         ctrl = _env(self.pressure,dur,.04)
         pm = 7000.0*np.clip(ctrl,0,1.5)
         z = self.bore_impedance
-        opening = np.clip(.2 + .75*self.lip_tension, .05, .95)
         dp = np.maximum(pm,0.0)
-        # Bernoulli-inspired volume flow through a reduced lip opening.
-        area = 2e-5*opening
+        # Quasi-stationary Bernoulli flow through the lip channel b H0 of the embouchure.
+        lp = _winds.lip_params(self.lip_tension)
+        area = lp["b"]*lp["H0"]
         u = area*np.sqrt(2.0*dp/_RHO_AIR)
         bore_p = np.minimum(z*u, pm)
         a = PhysicalPort.acoustic(pm,u,"lips")
@@ -218,7 +219,8 @@ class LipBoreInteraction:
         common=_common.lip_bore(frequency,dur,self.pressure,self.lip_tension,sr=_PHYS_SR,bore_radius=self.bore_radius_m,seed=seed)
         hybrid=_hybrid(common.audio,audio)
         return InteractionResult(_from_phys(hybrid,sr),common.drive,common.response,
-                                 {"bore_impedance":z,"solver":"hybrid-common/lip-bore-waveguide"})
+                                 {"bore_impedance":z,"lip_area":area,
+                                  "solver":"hybrid-common/lip-bore-waveguide"})
 
 
 @dataclass

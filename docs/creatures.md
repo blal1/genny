@@ -28,7 +28,7 @@ some noise give a harsh, gritty, snarling excitation"), plus cycle jitter and pe
 | `growl` | `size` (1), `aggression` (0.6), `pitch` (70 Hz), `dur` (1.5), `seed` | wobbling low pulses, period doubling |
 | `bark` | `size` (`medium`: small, medium, large), `count` (2), `aggression` (0.6), `pitch` (0 = from size), `seed` | dog |
 | `meow` | `size` (1), `pitch` (550 Hz), `dur` (0.9), `seed` | cat near 500 Hz (Farnell), vowel path i-ae-A-u |
-| `purr` | `rate` (25 pulses/s), `size` (1), `dur` (3), `seed` | glottal pulses through the tract, breathing cycle |
+| `purr` | `rate` (25 pulses/s), `size` (1), `dur` (3), `voice` (0), `seed` | glottal pulses through the tract, breathing cycle; `voice` 0..1: a tone near 200 Hz (/ `size`) that swells on each purr cycle, on expiration |
 | `moo` | `size` (1), `pitch` (115 Hz), `dur` (1.8), `seed` | closed-mouth "mm" opening to "oo" |
 | `howl` | `size` (1), `pitch` (420 Hz), `dur` (3), `seed` | wolf |
 | `monster` | `size` (2.5), `aggression` (0.8), `pitch` (220 Hz at size 1), `dur` (2), `seed` | subharmonics, double tract, drifting vowels |
@@ -48,6 +48,7 @@ Unsourced: every preset number except the lion arc and the cat's 500 Hz (dog pit
 | `fly` | `freq` (220 Hz), `wobble` (0.5), `motion` (0.5), `proximity` (0.7), `tone` (2000 Hz), `dur` (2), `seed` | Farnell's measured harmonic table |
 | `mosquito` | same, `freq` 600, `tone` 4200 | 3 % wing pulse through a Q 12 band (Farnell's patch uses 8000) |
 | `bee` | same, `freq` 230, `tone` 2600 | Farnell's patch uses 6000 |
+| `stridulation` | `kind` (`grasshopper`, lobster), `rate` (0 = 12 strokes/s grasshopper, 4 lobster), `dur` (2), `seed` | grasshopper: pegs rubbed on a wing vein (friction noise, two stroke directions); lobster: a spiny lobster's soft elastoplastic stick-slip rasp, output as acceleration |
 | `night_insects` | `density` (0.5), `temp` (20), `bright` (0.5), `dur` (6), `seed` | gated crickets + "critters" + "chirper" bed |
 | `wings` | `kind` (`bird`: bird, bat, insect), `rate` (0 = 6 / 11 / 35 flaps/s), `size` (1), `dur` (2), `seed` | fan pulse into swept air noise |
 
@@ -70,8 +71,8 @@ high-pass.
 
 | name | params (default) |
 |---|---|
-| `birdsong` | `species` (`robin`), `repeats` (1), `syllables` (0 = preset), `pitch` (1), `tempo` (1), `two_voice` (0), `bright` (1), `source` (`fm`; `normal_form` = Amador et al. 2013 labial normal form into a quarter-wave trachea: pressure crosses a Hopf threshold at each onset, so notes scoop up into pitch), `seed` |
-| `bird_call` | `freq` (450 Hz, 150-900), `freq_end` (0 = no glide), `pressure` (3 kPa, 1.5-6), `attack` (0.3), `two_voice` (5 Hz), `species` (`raven`: oil_bird, raven, budgie), `dur` (0.5) |
+| `birdsong` | `species` (`robin`), `repeats` (1), `syllables` (0 = preset), `pitch` (1), `tempo` (1), `two_voice` (0), `bright` (1), `source` (`fm`; `normal_form` = Amador et al. 2013 labial normal form into a quarter-wave trachea: pressure crosses a Hopf threshold at each onset, so notes scoop up into pitch; `laje` = the syrinx labia driven along a pressure-tension ellipse per syllable), `seed` |
+| `bird_call` | `freq` (450 Hz, 150-900), `freq_end` (0 = no glide), `pressure` (3 kPa, 1.5-6), `attack` (0.3), `two_voice` (5 Hz), `species` (`raven`: oil_bird, raven, budgie), `dur` (0.5), `source` (`valve`), `coupling` (0.5), `latex` (0), `membrane` (`sweep`), `radiation` (`lowpass`) |
 | `dawn_chorus` | `birds` (6), `dur` (8), `bright` (1), `seed` |
 
 Species: `canary` (three trill phrases), `robin` (varied warble), `blackbird` (slow flutes then a twitter),
@@ -86,6 +87,13 @@ range. Measured: the rendered syllable count equals the plan for every tested sp
 `bird_call` is the physical model (Smyth & Smith): air-sac `pressure` drives two membrane valves into a trachea
 waveguide. `freq` is the membrane frequency, i.e. the tension; the call follows it (294.9 / 444.7 / 694.3 Hz for
 300 / 450 / 700). It is harmonically rich and raven-like, not a whistle. `two_voice` detunes the second valve.
+`source="labial"`: two self-oscillating labia, one per bronchus, sounding above 1 kPa and joined to the trachea by a
+three-port junction; `coupling` sets their pressure feedback (0: the two sources beat; higher: they lock when close).
+`latex` (strain 0..0.5): the frequency becomes that of a latex membrane stretched across the trachea (artificial
+syrinx) and `freq` is ignored. `membrane="fletcher"`: a raven's thin membrane that sounds from 0.3 kPa (`pressure`
+may then go down to 0.3). `radiation="piston"`: the beak's radiation corner at k b = 2 (default: a 4 kHz corner). `membrane="raven"`: the
+full raven set (valve shut at rest, constant damping, heavy mass law, 1 ml bronchus); `radiation="fletcher"`: piston,
+then a roll-off from 3 kHz. Python: `voice.syrinx` takes the same `raven` set and `fletcher` radiation.
 
 ## Frogs and reptiles
 
@@ -105,12 +113,14 @@ waveguide. `freq` is the membrane frequency, i.e. the tension; the call follows 
 | `sneeze` | `effort` (0.8), `size` (1), `seed` | unsourced recipe |
 | `snore` | `rate` (14 breaths/min), `pitch` (45 Hz flutter), `size` (1), `dur` (8), `seed` | unsourced recipe |
 | `gulp` | `size` (1), `seed` | unsourced recipe |
+| `body_fall` | `size` (1, 0.2-8), `material` (`flesh`: stone, shell, metal, bone), `debris` ("": metal, bone, shell), `seed` | a creature collapsing: three hits, ever closer and softer (`fall_schedule`), a heavy thump, then pieces clattering after it |
 | `eat` | `kind` (`crunch`: crunch, chew, slurp), `bites` (4), `rate` (1.7 /s), `seed` | PhISEM "Crunch" grains driven by the jaw |
 | `heartbeat` | `rate` (1.0 beats/s), `dur` (2), `murmur` (0), `tone` (1), `dub_delay` (0 = physiological), `seed` | **replaces** the old `heartbeat` |
-| `handclap` | `cup` (0.3), `seed` | one clap; cupped = lower |
+| `handclap` | `cup` (0.3), `rise` (fast), `seed` | one clap; cupped = lower. `rise` fast (0.4 ms linear onset) or exp (exponential onset, 3.2 ms time constant, resonators Q 5.5) |
 | `applause` | `crowd` (30), `enthusiasm` (0.6), `dur` (4), `seed` | |
 | `crowd_murmur` | `people` (20), `mood` (0.5), `distance` (0.5), `dur` (5), `seed` | gated talking-pulse voices |
 | `whistle_human` | `kind` (`wolf`: wolf, up, down, note, taxi), `freq` (1800 Hz or a note), `breath` (0.3), `speed` (1), `seed` | |
+| `mammal` | `f0` (120 Hz), `f0_end` (0 = no glide), `dur` (1.5), `complexity` (3), `tract` (0.38 m), `formants` (0.8), `seed` | Mammal call: glottal pulses through a tube tract. `complexity` 1 limit cycle, 2 shimmer, 3 subharmonic, 4 inharmonic sidebands, 5 two modulators, 6 chaos. `tract` lion 0.38, wolf about 0.2, dog 0.1-0.2. `formants` 0 dry source .. 1 all tract |
 
 - **Heartbeat**: S1 "lub" is exactly 5 cycles of 63 Hz, S2 "dub" 3 cycles of 42 Hz plus its octave, both starting
   at phase zero with a squared decay (LovelyHeart). The S1-S2 gap is the ejection time, `0.453 - 0.0017 bpm`
@@ -133,7 +143,10 @@ curve, so no two are the same samples (the looped identical step is what listene
 | `steps` | 0 | footfalls; 0 = 8 (16 for trot / gallop) |
 | `weight` | 1 | 0.4-3: heavier is lower, longer, bassier |
 | `shoe` | `default` | default, barefoot, boot, heel, hoof |
-| `variation` | 0.5 | timing and level irregularity |
+| `variation` | 0.5 | timing and level irregularity; the timing varies fractally from step to step, as in human gait |
+| `stop` | 0 | the last N footfalls slow down to a halt, like a runner stopping (0 = steady) |
+| `walker` | "" | `woman` (120 steps/min, lighter, higher resonances) or `man` (75 steps/min, heavier, lower): sets pace and weight left at default (`WALKERS`) |
+| `mood` | `neutral` | `happy` (faster, louder, regular), `sad` (slow, soft, uneven), `angry` (fast, loud, heavy, uneven), `tender` (slow, soft, even) (`MOODS`) |
 | `seed` | 0 | |
 
 Walking is legato (the feet overlap), running staccato (a silent flight phase), sneaking soft-onset and dull,
@@ -148,6 +161,35 @@ Unsourced: the gait defaults other than walk / run, the quadruped beat fractions
 | `whistling` | winds | C5-C7 | `vibrato` (0.15 semitones), `breath` (0.3), `seed` |
 
 A near-pure tone with breath noise around the pitch. In tune within 2 cents, about -12 dB at vel 0.9.
+
+## Added since 1.2.1
+
+- `bark mass` (dog mass in kg, 2.5-50: sets the tract length, VTL cm = 3.15 + 11.53 log10 m, `dog_vtl`), `roar species` lion | tiger | jaguar |
+  jaguar_female | cub, `meow size` 0.6 = a kitten near 1.4 kHz, `howl biphonation` (a second f0 at f0/0.59
+  cross-modulating the first).
+- `birdsong tract=gardner`: a canary's 3 cm trachea and 1 cm beak instead of the preset's band-passes.
+- `birdsong source=gardner` (Gardner's flapping labia, Titze's mean pressure), `suboscine`, `tyrant` (strong
+  nonlinear restitution); `coupling` 0..1 (trachea pressure acting back on the labia: period doubling when strong);
+  `gestures` Hz (> 0: Wilson-Cowan air-sac pressure gestures replace the syllable envelopes; canary 5 separate
+  pulses .. 25 sustained). Python: `gardner_source`, `wc_pressure`, `spectral_content_index`.
+- `birdsong tract=oec`: the trachea feeds the bird's oropharyngeal-esophageal cavity (a Helmholtz resonator near
+  5.4 kHz), then the beak, which radiates. Mostly useful with `source=normal_form`.
+- `primate kind=diane` (module `fauna`): a male Diana monkey's leopard alarm series; in each call the formants glide
+  from one four-tube tract configuration to the next.
+- Python helpers: `oec_hz` (OEC Helmholtz resonance), `oec_beak`, `labial_syrinx`, `latex_membrane_hz` (first mode of
+  a strained clamped latex membrane), `tube_formants` (resonances of cylinders closed at the source),
+  `diana_alarm`, `DIANA_TUBES`.
+- `handclap clap_type` (Repp's hand configurations P1..P3, A1..A3, A1+ cupped, A1- flat); `applause clap_type`
+  (`mix` = each clapper its own) and `sync` (0 free clapping .. 1 rhythmic applause pulling into phase: period doubled, clap-rate spread
+  1.3 times narrower).
+- `footsteps mass` (kg: the stride rate of an animal that heavy, trot and gallop); `dread_choir`.
+- `crowd_murmur` and `cry` sound different from 1.2.1.
+- `bark dominant` (default false): a spectral peak set by `aggression`, 1267 Hz at 0 down to 626 Hz at 1
+  (`dominant_hz`).
+- Python helpers: `stride_hz(species, speed)` (gallop stride rate a + b v for horse, mouse, dog) and
+  `creature_profile(size)` (one body scale for every creature sound: f0 / size, tract × size, wing rate /
+  size^0.3, impact and footstep pitch / size^(1/3), level +20 log10(size) dB, capped at −20 / +12).
+- Many more animals and body sounds are in the `fauna` and `human` modules (`catalog.md`).
 
 ## Recipes
 

@@ -45,6 +45,10 @@ def test_tuning():
     # wound bass strings: the fundamental is exact but the stiff-string stretch (Rauhala dispersion) puts
     # partials 3-4 4-10 cents sharp on E1, and the autocorrelation pitch follows them over a weak fundamental
     loose |= {"upright_bass", "finger_bass", "slap_bass"}
+    # baschet: the two halves of the string are bent `bend` = 30 cents apart, one up one down (beating by design)
+    loose |= {"baschet"}
+    # musical_saw scoops up 2 semitones over its first 0.25 s, then a 0.25 semitone vibrato fades in, all inside the window
+    loose |= {"musical_saw"}
     # church and china bells are tuned on one stated partial of a strongly inharmonic spectrum, which an
     # autocorrelation pitch cannot follow; tests/test_foley.py checks that partial against the mode table
     inharmonic = {"church_bell", "china_bell"}
@@ -53,6 +57,18 @@ def test_tuning():
     # the bridge spring of string_bridge_plate stretches its partials by up to 4 %: tuned on its fundamental,
     # which tests/test_string_bridge_plate.py checks
     inharmonic |= {"string_bridge_plate"}
+    # timpani plays a measured kettledrum: fifth and octave at 1.50 and 1.98 of the written mode, a virtual pitch the
+    # autocorrelation reads flat; tests/test_percussions.py checks the written mode
+    inharmonic |= {"timpani"}
+    # string_scrape is a picket fence of clicks at slide speed / winding pitch (1 kHz by default): the note only
+    # chooses the wound string that colours them
+    inharmonic |= {"string_scrape"}
+    # whirl_string is tuned at rest and glides down about a semitone over the first half second as the swing (and the
+    # tension) shrinks; tests/test_v4_cordes.py checks its pitch over the whole note
+    inharmonic |= {"whirl_string"}
+    # mesh_vowel: the formants of the mesh pull the autocorrelation peak 60-70 cents sharp while the first harmonic is
+    # in tune; tests/test_tubes.py checks that harmonic on the spectrum
+    inharmonic |= {"mesh_vowel"}
     for name, e in I.REGISTRY.items():
         if name in inharmonic:
             continue

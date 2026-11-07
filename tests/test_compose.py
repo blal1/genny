@@ -388,6 +388,17 @@ def test_scatter_and_layers():
     assert 150 < len(half) < 250
     rs = C.to_spec({"type": "scatter", "layers": [{"type": "drum", "kind": "ks_drum"}], "count": 4, "seed": 1, "reseed": True})["layers"]
     assert len({l["layers"][0]["params"]["seed"] for l in rs}) == 4
+    trio = [{"type": "drum", "kind": k} for k in ("rim", "clave", "woodblock")]
+    picked = lambda **kw: [l["layers"][0]["kind"] for l in C.to_spec({"type": "scatter", "layers": trio, "count": 300, "dur": 6, "seed": 1, **kw})["layers"]]   # noqa: E731
+    bag = picked(pick="shuffle")
+    assert all(len(set(bag[i:i + 3])) == 3 for i in range(0, 300, 3))                            # every child once per round
+    assert 0.85 < picked(weights=[9, 1, 0]).count("rim") / 300 < 0.95 and "woodblock" not in picked(weights=[9, 1, 0])
+    for bad in ({"pick": "cycle"}, {"weights": [1, 1]}, {"weights": [0, 0, 0]}, {"weights": [1, -1, 1]}, {"pick": "shuffle", "weights": [1, 1, 1]}):
+        try:
+            picked(**bad)
+        except C.SpecError:
+            continue
+        raise AssertionError(bad)
     # stingers: shape by mood, `length` in notes
     for mood in C.MOODS:
         for n in (3, 5, 7):

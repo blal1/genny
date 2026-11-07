@@ -26,17 +26,24 @@ attack brightness and the level.
 | `roll` | a ball rolling on a surface (replaces the old `roll`) |
 | `scrape` | scraping / sliding along a surface (replaces the old `scrape`) |
 | `rumble` | low rumble: earthquake, heavy machinery, distant collapse |
+| `hail` | hail shower on a roof, car, deck or window: Lane impact forces, Kopp size distribution; `hardness` down to graupel |
 | `avalanche` | rock slide / avalanche rumble with a long tail |
 | `modal_engine` | four-stroke engine as a force loop on a low plate body |
 
 Materials everywhere: `rubber`, `plastic`, `wood`, `glass`, `ceramic`, `metal`, `steel`, `aluminium`,
-`bronze`, `ice`, `stone`, `concrete`. A material sets three things at once: how long it rings, how
+`bronze`, `copper`, `acrylic` (dice), `ice`, `stone`, `concrete`, and `wood:<species>`: 32 measured woods (spruce,
+sitka_spruce, fir, maple, sycamore, boxwood, padauk, ebony, african_blackwood, pernambuco, mahogany ...) with the
+density, stiffness and loss of the real wood. A material sets three things at once: how long it rings, how
 stiff the object is (pitch for a given size) and how hard its surface is in a contact.
 
 Body shapes: `string`, `bar` (free ends), `bar_clamped` (one end held, like a ruler on a table edge),
-`bar_supported`, `bar_clamped_clamped`, `rect_membrane`, `rect_plate`, `circ_membrane`, `circ_plate`.
+`bar_supported`, `bar_clamped_clamped`, `rect_membrane`, `rect_plate`, `circ_membrane`, `circ_plate` (clamped
+edge), `circ_plate_free` (free-edged disc: lid, coin, cymbal; modes from the free-edge frequency equation, zero radial
+moment and Kirchhoff shear, ratios 1, 1.68, 2.32 ... at ν = 0.3).
 Where a `shape` / `body` is accepted you can also name a measured object from the modal tables:
-`sy_vase`, `sy_wok`, `sy_sword1`, `sy_stick`, `sy_desklamp`, `sy_computertower`, `churchBell`...
+`sy_vase`, `sy_wok`, `sy_sword1`, `sy_stick`, `sy_desklamp`, `sy_computertower`, `churchBell`... or
+`ri_<object>`, the measured partials of a real object: `ri_ceramic_bowl`, `ri_glass`, `ri_wood_plate`,
+`ri_iron_pan`, `ri_plastic_bowl`, `ri_steel_pot`, `ri_polycarbonate_cup`.
 
 ### `impact`
 
@@ -60,6 +67,11 @@ Where a `shape` / `body` is accepted you can also name a measured object from th
 | `law` | `friction` | mode decay law: `friction` (internal friction, the default), `rayleigh` (Ren's measured pairs), `objectfolder` (the ObjectFolder 2.0 pairs: a free-standing glass rings 2.8 s at 1 kHz, steel 2.2 s, wood 0.1 s) or `power` (Sterling & Lin's power law fitted to recordings of plastic, porcelain, wood and aluminium). `damping` is added on top |
 | `material_angle` | -1 | degrees on Aramaki et al.'s perceived-material disk, replacing the decays: 0 glass, 120 metal, 240 wood; in between, a continuous blend of the two neighbours. -1 = off |
 | `material_radius` | 1 | 0..1 distance from the disk centre; 0 = the average of glass, metal and wood |
+| `azimuth` | -1 | degrees: where the listener stands around the object; each mode's level follows its radiation lobes. -1 = averaged over all directions |
+| `rough` | 0 | 0..1 perceived roughness: every mode amplitude-modulated at a quarter of its critical band (the most dissonant rate) |
+| `freq_factor` | 1 | × on every mode frequency: 0.7 with a heavier striker reads as a bigger object, 4 as a small ceramic one |
+| `decay_factor` | 1 | × on every decay rate (the ring time divides by it): 50 turns ringing metal into a wood-like knock |
+| `uneven` | 0 | 0..1 uneven decay as real wood rings: a slow random swell on the tail, the highs dying sooner (0.5 for wood; metal decays smoothly) |
 
 Small objects cannot radiate wavelengths much larger than themselves: every mode is weighted like a pulsating
 sphere of the object's size, ka / sqrt(1 + (ka)^2) (6 dB per octave below ka = 1).
@@ -85,7 +97,7 @@ partial; a drum struck dead centre keeps only its symmetric modes.
 | `surface` | `wood` | what it lands on. This dominates the material you hear |
 | `surface_size` | 0.6 | m, size of the surface plate |
 | `first_interval` | 0.3 | s between the first two impacts. It is the drop height: h = g t² / 8 |
-| `restitution` | 0.74 | ratio of successive intervals and impact speeds. 0.70-0.76 is a steel ball on wood; 0.4 is dead, 0.9 lively |
+| `restitution` | 0.74 | ratio of successive intervals and impact speeds. 0.70-0.76 is a steel ball on wood; 0.4 is dead, 0.9 lively. 0 = the material's typical value (steel 0.75, glass 0.8, wood 0.5, stone 0.45, plastic 0.55, rubber 0.85, ceramic 0.65, ice 0.4) |
 | `irregularity` | 0 | 0..1 non-roundness: intervals and hits randomly shorter and weaker, strike point changes per bounce |
 | `velocity` | 0 | m/s first impact speed; 0 = derived from the interval |
 | `bright`, `seed` | 0.5, 0 | |
@@ -109,7 +121,7 @@ contact, rolls off at `roll_speed` and slows to rest over `roll` seconds.
 | `material`, `size` | `steel`, 0.03 | the ball and its diameter (m) |
 | `surface`, `surface_size` | `wood`, 0.8 | the floor / table |
 | `height` | 0.25 | m. Impact speed sqrt(2 g h), first interval 2 e sqrt(2h/g) |
-| `restitution` | 0.6 | bounce interval ratio |
+| `restitution` | 0.6 | bounce interval ratio 0.3..0.9; 0 = the ball material's typical value (as `bounce`) |
 | `roll` | 1.5 | s of rolling after the last bounce (0 = none) |
 | `roll_speed` | 0.4 | m/s when rolling starts |
 | `roughness` | 0.5 | 0..1 surface roughness while rolling |
@@ -182,8 +194,9 @@ Loudness and brightness follow the speed by themselves.
 | `surface`, `surface_size` | `wood`, 1.0 | the surface (dominates the timbre) and its size in m |
 | `joints` | 0 | m, spacing of floor joints / grooves (0 = none): a tick each time, rate follows speed |
 | `dents` | 0 | 0..1 a dent on the ball, heard once per revolution |
-| `asymmetry` | 0 | 0..1 non-round ball: speed and load wobble at the rotation rate |
+| `asymmetry` | 0 | 0..1 an off-centre centre of mass (up to 10 % of the radius at 1): the contact point and the height swing once per turn; the load stays m g, the ball's own inertia does the rest |
 | `feedback` | 0.18 | accepted for old specs, ignored |
+| `patch` | 0 | 0 = off; 1 = the surface is felt as its mean height over the Hertz contact patch (0..10 scales the half-length): wavelengths shorter than the patch fade out, a low-pass with its first zero at speed / (2a), so the roll is duller |
 | `bright`, `seed` | 0.4, 0 | |
 
 ```json
@@ -208,7 +221,11 @@ normal force, and that force drives the body. A steady scrape is hard to recogni
 | `grain` | 0.1 | mm, size of the surface grain. Smaller = brighter |
 | `body` | `rect_plate` | what is scraped: a shape or a modal table |
 | `material`, `size` | `wood`, 0.4 | of the scraped body |
-| `position`, `bright`, `seed` | 0.3, 0.5, 0 | |
+| `position` | 0.3 | 0..1 where it is scraped; a list of breakpoints = the scraper moves along the body, each mode follows its shape there |
+| `variation` | 0 | 0..1 random change of each mode's level along the path (0.2 = the measured 20 % spread) |
+| `model` | `profile` | `profile`; `curvature`: the path of a scraper of real mass over the profile, its inertia gives the force (uses `scraper_mass`, `height`); `meso`: one impulse per surface pixel crossed (each change of the scraper's normal momentum, a height map) |
+| `gate` | 0 | 1 = the scraper leaves the surface where the profile falls away faster than force/mass can follow (fast scrapes chatter); uses `height`, `scraper_mass` and `force` in N |
+| `bright`, `seed` | 0.5, 0 | |
 
 ```json
 {"type": "sfx", "kind": "scrape", "params": {"dur": 1.2, "speed": [0.05, 0.6, 0.1], "force": [0.4, 1, 0.3], "texture": "wood", "material": "wood"}}
@@ -239,6 +256,9 @@ physically coupled single-action models.
 | `roughness` | 0.5 | 0 smooth .. 1 rough (Conan's Table I): sparser, more irregular rolling |
 | `ball` | 0.5 | 0.1..1 size of the rolling object: longer contacts, slower wobble |
 | `body`, `material`, `size`, `position` | `rect_plate`, `wood`, 0.4, 0.3 | the surface |
+| `prefilter` | 0 | 0..1 reinforces the force near the body's modes (what a two-way contact does by itself); 0 = off |
+| `radius` | 0 | m, the rolling ball's radius: the wobble is then once per turn, v/(2π radius); 0 = Conan's 3 V/ball |
+| `gamma` | 1 | 2 = every mode rings as a gammatone t·exp(−t/τ)·sin, softer onsets |
 | `bright`, `seed` | 0.5, 0 | |
 
 ```json
@@ -255,10 +275,10 @@ White noise with a rise / hold / fade envelope rings a cluster of randomly place
 | param | `avalanche` | `rumble` | meaning |
 |---|---|---|---|
 | `dur` | 10 | 4 | s until all sound has ended |
-| `fmin`, `fmax` | 100, 150 | 35, 90 | Hz band of the modes. Raise `fmax` (1000+) for wind-like or eerie tones |
+| `fmin`, `fmax` | 100, 160 | 35, 90 | Hz band of the modes. Raise `fmax` (1000+) for wind-like or eerie tones |
 | `damping` | 0.87 | 3.0 | 1/s decay rate of the modes: lower = more tonal, slower to move |
 | `modes` | 25 | 16 | number of modes |
-| `rise` | 0 (12 %) | 0 (10 %) | s to full level |
+| `rise` | 0 (20 %: the rumble swells over the first fifth) | 0 (10 %) | s to full level |
 | `hold` | 0 (30 %) | 0 (70 %) | s when the fade starts |
 | `fade` | 0 (60 %) | 0 (90 %) | s when the drive has stopped; the modes ring on until `dur` |
 | `seed` | 0 | 0 | |
@@ -287,12 +307,36 @@ shakes a long, low plate.
 | `damping` | 5.56 | 1/s external damping of the body |
 | `modes` | 13 | body modes |
 | `bright`, `seed` | 0.5, 0 | |
+| `misfire` | 0 | 0..0.1 probability per 128-sample block (at 44.1 kHz), converted per cycle, p_cycle = 1 − (1 − p)^(cycle/block): a misfiring cycle loses its combustion stroke, intake and exhaust go on |
+| `pick` | `lowest` | `lowest`: the lowest body modes; `rank`: the most audible modes up to 8060 Hz (the thesis's rectplate span) |
+| `body` | `plate` | `plate` (the rectangular plate above) or `car1` (a car engine body: 50 Hz and 100 n² Hz, n = 1..10) |
+| `valves` | 0 | 0..1 valve-train clatter: each valve seating, bouncing once past the valve-float rpm |
+
+Python, valve train: `valve_lift(x, lift, lash, shape)`, `valve_float_rpm(...)` (crank rpm above which the spring
+no longer holds the valve on the cam), `valvetrain_force(n, sr, rpm, cylinders, seed)`. Ruptures: `conrod_stress`,
+`conrod_breaks`, `valve_hits_piston`, `turbo_spin_down` (w0 e^(−3t)), `fatigue_damage` ((p/pmax)^9). Rolling and
+creep: `creep_closed_form` (creep of a Hertz contact below sliding), `rolling_loss_peak` (1.83 v/a),
+`rolling_resistance_peak` (0.195 a/R), `plastic_rolling_moment` (M0 = c p²/k), `profile_plasticity` (plasticity
+index of a measured profile).
 
 ```json
 {"type": "sfx", "kind": "modal_engine", "params": {"rpm": 1100, "cylinders": 1, "dur": 3}}
 {"type": "sfx", "kind": "modal_engine", "params": {"rpm": [1500, 5000, 3000], "cylinders": 4, "cyl_spread": 0.5, "dur": 4}}
 {"type": "sfx", "kind": "modal_engine", "params": {"rpm": 3200, "body_freq": 350, "damping": 120, "intake": 0.8, "fan": 0.3}}
 ```
+
+### Added since 1.2.1
+
+- `bounce`, `drop`, `roll`, `smash` take their contact stiffness from the material (Hertz, from E, nu and the
+  radius): brighter than in 1.2.1 (spectral centroid +45 to 100 %), and so is every sound built on them.
+- `impact`: `law` adds `sterling_rayleigh`, `caughey`, `hybrid`, `obrien`, `zheng`; `thickness` (m), `tip` ball |
+  cone | flat, `mount` (a bar hung at its nodes), `rest_force` (N, resting on a support), `ice_temp`, `dilate`
+  (spectral dilation), `radiation=modes` (only each mode's net volume flow radiates as a monopole), `moisture`
+  (wood water content).
+- `bounce`: `yield_stress` (a hard hit dents and bounces less), `restrike_jitter` (0.2 measured), `hit_spread`.
+- `roll body=can` (an empty can, four measured modes); `scrape` `level=power` (silent at rest), `model=curvature`
+  (a scraper of real mass), `stroke` (Hz of a hand stroke back and forth); `interaction sharpness` (1 .. 4,
+  clicking); `modal_engine misfire`.
 
 ## Effects (`"fx"`)
 
@@ -359,6 +403,9 @@ each mode decaying according to the wall absorption.
 - **Restitution** in `bounce` / `drop` is the ratio between one bounce interval and the next, and
   between successive impact speeds.
 
+Listeners hear size mostly through pitch and loudness, and confuse material with damping: small glass and steel
+plates are both heard as glass, large ones as steel; a damped glass plate is heard as wood or plastic.
+
 ## Library use
 
 ```python
@@ -372,12 +419,49 @@ hit = C.ImpactInteractor(body, mass=0.01, k=1.5e9, alpha=1.5, mu=0.1).strike(vel
 hit.audio, hit.force, hit.contact_time, hit.restitution, hit.contacts()
 
 audio, disp, vel = C.modal_bank(force_signal, body, sr=44100)      # any force; contact-point motion exposed
+C.modal_bank(force_signal, body, residual=True)                     # + quasi-static motion of the truncated modes (body.residual_compliance(), sum phi^2/(m w^2)): sharper contact, no extra modes
+C.free_disc_omega((2, 0), nu=0.3)                                  # dimensionless omega of mode (m, n) of a free disc
+C.free_disc_freq(diameter, thickness, "steel")                     # uses the material's Poisson ratio (Ducceschi & Touze's 7.7 Hz holds for nu = 0.38)
+C.airy_disc_roots(l, n=6), C.vk_disc_couplings(k)                 # in-plane (Airy) modes of the free disc, and which ones transverse mode k drives
+C.cut_length(440.0, "steel", tube=(ro, ri))                        # bar (or tube) length for a pitch
 
 t, v = C.bounce_schedule(0.3, 2.0, 0.74, dev_t=0.3, dev_v=0.3)     # bouncer
 t, v, train = C.break_schedule(1.5, trains=8)                      # dropper
 ev = C.crumple_events(0.03, gamma=-1.3, rate=20)                   # t, energy, left, right, cut
 noise = C.fractal_noise(44100, beta=1.81)                          # 1/f^beta surface texture
 offset = C.rolling_offset(C.rolling_surface(1.0), radius=0.03, dx=1e-4)
+C.rolling_resistance(a, radius, tan_delta, shape="sphere")       # hysteresis loss: 3 alpha a/(16 R), alpha = 2.6 tan_delta; cylinder 2 alpha a/(3 pi R)
 C.hc_contact_time(0.01, 1.5e9, 1.5, 0.1, 2.0)                      # contact time of a mass on a rigid wall
 C.MATERIALS, C.material_damping(freqs, "wood")
+C.wood_species("padauk"), C.wood_eta(25.0)                         # material="wood:padauk"; loss factor from E'/gamma (GPa)
+C.sample_modes("glass", n=24, f1=300.0)                            # a new random object of a material (double modes split by 1 %)
+C.realimpact_body("iron_pan", "cast_iron")                         # the measured ri_<object> partials as a ModalObject
 ```
+
+Contact mechanics helpers (same module): `hertz_elliptic`, `hertz_k_elliptic`, `line_contact_shear`,
+`cylinder_between_plates`, `hertz_edge_tension`, `jkr_load`, `jkr_pulloff` (the contact radius at pull-off is
+(9π γ R²/(4 E*))^(1/3)), `elastoplastic_mean_pressure`, `elastoplastic_contact` (loading, elastic unloading,
+crater), `matthews_alpha`, `matthews_indentation`, `layer_k` (sphere on a thin layer: felt, rubber pad),
+`wavy_contact`, `gw_contact`, `rough_sphere_alpha`, `rough_hertz_k`, `mindlin`, `mindlin_loss`, `mindlin_torque`,
+`sliding_traction`, `oblique_impact`, `rayleigh_speed`, `halfspace_radiated_power`, `impact_regime`,
+`moving_contact_ratio`, `viscoelastic_contact_radius`, `hunter_restitution`, `rolling_microslip`, `effective_mass`.
+Signal pieces behind the sfx options: `resonant_prefilter` (`interaction prefilter`), `gammatone_bank` (`gamma=2`),
+`moving_bank` (moving `position`, `variation`), `contact_gate` (`scrape gate`), `directivity_gains` (`impact
+azimuth`).
+
+Perception and more mechanics: `critical_bandwidth` (25 + 75 (1 + 1.4 f²)^0.69, f in kHz), `bark`, `masked_modes`
+(modes under the masking threshold of a stronger one) and `ModalObject.pruned(masking=True)`, `am_sidebands`
+(`impact rough`), `classify_material` (metal, wood or glass from a decay law), `micro_impact_force` (energy-counter
+rolling force, a cross-check of `roll`), `meso_force` (`scrape model=meso`), `hc_rebound_closed` (closed form of
+`hc_rebound`), `directional_gains` (mode gains for a force along any direction), `hertz_tau`,
+`acceleration_noise` and `impact(accel=0..1)` (Chadwick's acceleration noise: the click of the striker's velocity
+reversal over the Hertz contact time, τ = 2.87 (m²/(r E*² v))^(1/5)), `ModalObject.rank(energy=False)` (modes ranked
+by energy), `lod_gains` and `smash(distance=)` (m: farther fragments keep fewer modes, the most important first),
+`cavity_modes(gamma=None)` (superquadric cavity), `physics.ModalBody.strike(click=0)`, `material_restitution`,
+`johnson_regime` (damage number ρV²/σ: elastic, elasto-plastic, fully plastic...), `winkler_roller`,
+`tangential_stiffness` (8 G a / (2 − ν)), `torsional_stiffness` (16 G a³ / 3), `relative_radius` (a concave
+surface as a negative radius), `crater_radius`, `mud_contact_radius` (a³ = 3 r p0 t / (16 η)),
+`wave_restitution(v, e_body, nu_body, rho_body, e_ball, nu_ball, rho_ball)` (restitution when the only loss is the
+elastic waves sent into the struck body, Hunter's loss: close to 1, steel on steel 0.997 at 1 m/s, so a metal impact
+loses its energy to internal damping, not waves), `patch_average(profile, a, dx)` (mean height of a looped profile
+over a contact of half-length a: each wavelength scaled by sin(ka)/(ka)).

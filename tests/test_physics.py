@@ -54,6 +54,18 @@ def test_moving_propagation():
     assert np.max(np.abs(y)) > 1e-8
 
 
+def test_moving_propagation_is_a_moving_source():
+    # 1 kHz coming at 100 m/s: c/(c-v) = 1411.5 Hz, not the moving listener's 1 + v/c = 1291.5
+    sr = 48000
+    t = np.arange(sr) / sr
+    d = 200.0 - 100.0 * t
+    y = genny.MovingPropagation(speed_of_sound=343.0).apply_trajectory(np.sin(2 * np.pi * 1000 * t), d, sr=sr, block=0)
+    z = y[np.abs(y) > 0]
+    crossings = np.flatnonzero(np.diff(np.sign(z)) > 0)
+    f = sr * (len(crossings) - 1) / (crossings[-1] - crossings[0])
+    assert abs(f - 343000 / 243) < 5
+
+
 def test_blast_wave_matches_kinney_table():
     from genny.physics import blast_wave
     # Kinney & Graham Table XI part B, 1 ton TNT at 100 ft: Z = 3.149 m/kg^(1/3), Ps 0.57 atm, td 17.3 ms
@@ -66,3 +78,12 @@ def test_blast_wave_matches_kinney_table():
     # farther = weaker and longer
     near, far = blast_wave(1.0, 5.0), blast_wave(1.0, 50.0)
     assert far[0] < near[0] / 10 and far[1] > near[1]
+
+
+def test_rubber_loss_factor_is_that_of_a_rubber():
+    from genny.physics import MATERIALS
+    m = MATERIALS["rubber"]
+    for f in (100.0, 300.0, 1000.0):
+        w = 2 * np.pi * f
+        eta = m.damping_alpha / w + m.damping_beta * w          # Rayleigh loss factor 2 zeta
+        assert 0.1 < eta < 0.5, f                               # soft rubber 0.1-1 in the audio band

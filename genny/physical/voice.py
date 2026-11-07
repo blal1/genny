@@ -4,7 +4,7 @@
 """Voices: glottal sources, formant filters, a vocal tract, creature calls, choir and breath.
 
 Every model here is a port of a named source (PLAN.md rule 1). Numbers not given by a source
-are marked ``# UNSOURCED:`` with the reason.
+are justified in research/SOURCES.md.
 
 Sources (research notes in ``synthgen/out/research``; originals where they exist locally)
 ------------------------------------------------------------------------------------------
@@ -52,8 +52,9 @@ from fractions import Fraction
 import numba
 import numpy as np
 from scipy import signal as _sig
+from scipy.ndimage import uniform_filter1d
 
-from .core import SR, rate_radius
+from .core import SR, rate_radius, seconds
 
 TWO_PI = 2.0 * math.pi
 
@@ -101,8 +102,7 @@ def _phasor(f: np.ndarray, sr: float = SR, start: float = 0.0) -> np.ndarray:
 def _edge_fade(x: np.ndarray, ms: float = 5.0) -> np.ndarray:
     """Squared-sine fade at both ends so a hard-started patch does not click.
 
-    UNSOURCED: the Pd patches start and stop hard (dac~ on/off); 5 ms is the minimum that
-    removes the click (PLAN rule 5)."""
+"""
     m = min(len(x) // 2, int(ms * 1e-3 * SR))
     if m > 1:
         w = np.sin(0.5 * np.pi * np.arange(m) / m) ** 2
@@ -461,11 +461,14 @@ def _param_path(vowel, n: int, voice_type: str, key: str) -> np.ndarray:
     raise ValueError("numeric vowel index only for the Faust/Csound voice types")
 
 
-def _autobend(F: np.ndarray, f0: np.ndarray, voice_type: str) -> np.ndarray:
+def _autobend(F: np.ndarray, f0: np.ndarray, voice_type: str, f1_margin: float = 0.0) -> np.ndarray:
     """Faust ``autobendFreq`` (Olsen, from chant-lib): formant 0 raised to f0 if below it;
-    formant 1 (not countertenor) lowered when F1 >= 1300 and f0 >= 200, raised to 30 + 2 f0."""
+    formant 1 (not countertenor) lowered when F1 >= 1300 and f0 >= 200, raised to 30 + 2 f0.
+    ``f1_margin`` semitones keeps F1 that far above f0: F1 = f0 sounds "unnatural and shrill", better about
+    4 semitones above, x 1.26 (Sundberg, KTH synthesis of singing, 2006, p. 135)."""
     F = F.copy()
-    F[:, 0] = np.where(F[:, 0] <= f0, f0, F[:, 0])
+    f1_floor = f0 * 2.0 ** (f1_margin / 12.0)
+    F[:, 0] = np.where(F[:, 0] <= f1_floor, f1_floor, F[:, 0])
     if voice_type != "countertenor":
         f1 = F[:, 1]
         hi = (f1 >= 1300) & (f0 >= 200)
@@ -678,7 +681,7 @@ def _lf_resid(te, w, al, ra, rd):
 
 
 @numba.njit(cache=True)
-def _lf_coefs(rd):
+def _lf_coefs(rd, variant=1):
     """LF pulse (T0 = Ee = 1) whose measured Rd is the asked Rd: the transformed LF model solved exactly
     (Wang & Gobl, Interspeech 2023), in the tuple layout of pinktrombone.lib ``_lfCoefficients``.
 
@@ -688,16 +691,20 @@ def _lf_coefs(rd):
     Above Rd 1.71 Fant's Rk has no LF pulse: Rk is raised to its minimum (k_k of eq. 30; Wang & Gobl's
     eq. 29 for the Oq of that minimum is misprinted, so Oq comes from a fit of the minimum found
     numerically, max error 2e-4 over 1.71..2.7, which reproduces eq. 30 to 4 decimals) and omega, alpha are
-    solved at that Oq. Rd is held in 0.3..2.7: Ra is valid down to 0.21 (Huber et al., Interspeech 2012,
-    eq. 13) and the regressions up to 2.7."""
+    solved at that Oq. Rd is held in 0.3..6: Ra is valid down to 0.21 (Huber et al., Interspeech 2012,
+    eq. 13). Above 2.7 the regressions are Huber & Roebel 2013, variant 1 (eqs 7-10): Ra = 0.323/Rd,
+    OQupp = 1 - 1/(2.17 Rd), Rg = 9.3552e-3 + 5.96/(7.96 - 2 OQupp), Rk = 2 Rg OQupp - 1.0428; they give
+    Te = (1 + Rk)/(2 Rg), and omega, alpha are solved at that Te. Variant 2 takes these regressions
+    from Rd 1.8476 up, with Rk = 2 Rg OQupp - 0.9572."""
     if rd < 0.3:
         rd = 0.3
-    elif rd > 2.7:
-        rd = 2.7
-    ra = -0.01 + 0.048 * rd
-    rk = 0.224 + 0.118 * rd
+    elif rd > 6.0:
+        rd = 6.0
+    rd0 = min(rd, 2.7)                   # the Newton start below only exists up to 2.7
+    ra = -0.01 + 0.048 * rd0
+    rk = 0.224 + 0.118 * rd0
     # start: the Pink Trombone stylisation
-    rg = (rk / 4.0) * (0.5 + 1.2 * rk) / (0.11 * rd - ra * (0.5 + 1.2 * rk))
+    rg = (rk / 4.0) * (0.5 + 1.2 * rk) / (0.11 * rd0 - ra * (0.5 + 1.2 * rk))
     tp = 1.0 / (2.0 * rg)
     te = tp + tp * rk
     w = math.pi / tp
@@ -706,8 +713,15 @@ def _lf_coefs(rd):
     shift = math.exp(-eps * (1.0 - te))
     rhs = ((1.0 / eps) * (shift - 1.0) + (1.0 - te) * shift) / (1.0 - shift)
     al = math.log(-math.pi * s * -(rhs - (te - tp) / 2.0) / (tp * 2.0)) / (tp / 2.0 - te)
+    huber = rd > 2.7 or (variant == 2 and rd > 1.8476)
     fixed_te = rd > 1.71
-    if fixed_te:
+    if huber:
+        ra = 0.323 / rd
+        oqu = 1.0 - 1.0 / (2.17 * rd)
+        rg = 9.3552e-3 + 5.96 / (7.96 - 2.0 * oqu)
+        rk = 2.0 * rg * oqu - (0.9572 if variant == 2 else 1.0428)
+        te = (1.0 + rk) / (2.0 * rg)
+    elif fixed_te:
         te = (0.02076431 * rd - 0.11738928) * rd + 0.96445575
         rk *= ((0.031978 * rd - 0.32428) * rd + 1.0706) * rd - 0.044299
     w = math.pi * (1.0 + rk) / te
@@ -750,14 +764,17 @@ def _lf_eval(t, eps, shift, delta, te, omega, alpha, e0):
     return e0 * math.exp(alpha * t) * math.sin(omega * t)
 
 
-def lf_waveform(rd: float, n: int = 512) -> np.ndarray:
+def lf_waveform(rd: float, n: int = 512, variant: int = 1) -> np.ndarray:
     """One period of the normalised LF glottal-flow derivative (``pt.lfWaveform``)."""
-    c = _lf_coefs(float(rd))
+    c = _lf_coefs(float(rd), int(variant))
     return np.array([_lf_eval(k / n, *c) for k in range(n)])
 
 
+TA_MIN = 2e-4   # s, shortest LF return phase. Tenseness drift reaches Rd 0.3, Ta 30 us: a closure a sample long, -12 dB second difference at each period in `klang.strain`.
+
+
 @numba.njit(cache=True)
-def _glottis_kernel(freq_target, vib, tens_ui, tens_new, voiced, asp, simp199, fs, block_time):
+def _glottis_kernel(freq_target, vib, tens_ui, tens_new, voiced, asp, simp199, fs, block_time, nshift):
     n = len(freq_target)
     out = np.zeros(n)
     nmod = np.zeros(n)
@@ -805,10 +822,10 @@ def _glottis_kernel(freq_target, vib, tens_ui, tens_new, voiced, asp, simp199, f
             phase = nxt
             latched = f
         if wrap or k == 0:
-            eps, shift, delta, te, omega, alpha, e0 = _lf_coefs(3.0 * (1.0 - tens_new[k]))
+            eps, shift, delta, te, omega, alpha, e0 = _lf_coefs(max(3.0 * (1.0 - tens_new[k]), (TA_MIN * f + 0.01) / 0.048))
         t = tens_ui[k]
         voice = _lf_eval(phase, eps, shift, delta, te, omega, alpha, e0) * intensity * t ** 0.25
-        vm = 0.1 + 0.2 * max(0.0, math.sin(TWO_PI * phase))
+        vm = 0.1 + 0.2 * max(0.0, math.sin(TWO_PI * (phase - nshift)))
         nm = t * intensity * vm + (1.0 - t * intensity) * 0.3
         a = intensity * (1.0 - math.sqrt(t)) * nm * asp[k] * (0.2 + 0.02 * simp199[k])
         out[k] = voice + a
@@ -825,7 +842,7 @@ def _resonbp_const(x, fc, q, gain, fs):
     return _sig.lfilter(b, a, x)
 
 
-def _glottis(f0, tens, voiced, wobble, rng, fs, block_time, seed):
+def _glottis(f0, tens, voiced, wobble, rng, fs, block_time, seed, noise_shift=0.0):
     """pinktrombone.lib ``glottis`` at rate ``fs``; returns (glottal output, noise modulator).
 
     Noise-level note (derived): the Faust/JS original draws white noise at 48 kHz; at another
@@ -841,22 +858,25 @@ def _glottis(f0, tens, voiced, wobble, rng, fs, block_time, seed):
     asp = _resonbp_const(white, 500.0, 0.5, 2.0, fs)          # _bandpassUnity(500, 0.5)
     s199 = _simplex_lf(seed, 1.99, n, fs)
     return _glottis_kernel(np.ascontiguousarray(f0), vib, np.ascontiguousarray(tens), tens_new,
-                           np.ascontiguousarray(voiced), asp, s199, float(fs), float(block_time))
+                           np.ascontiguousarray(voiced), asp, s199, float(fs), float(block_time),
+                           float(noise_shift))
 
 
 def lf_pulse(f0_env, tenseness_env=0.6, dur: float | None = None,
              rng: np.random.Generator | None = None, *, voiced_env=1.0, wobble=0.0,
-             return_modulator: bool = False):
+             return_modulator: bool = False, noise_shift: float = 0.0):
     """Pink Trombone glottis (``pt.glottis``): per-period LF pulse with Rd = 3(1 - tenseness),
     aspiration noise (500 Hz, Q 0.5 band) modulated by the glottal cycle, 6 Hz + simplex
     vibrato, simplex tenseness drift, voicing intensity ramp 0.13/-0.05 per 512-sample block.
     Low tenseness = breathy/lax, high = pressed. Returns the glottal output (and the noise
-    modulator if asked)."""
+    modulator if asked). ``noise_shift`` (fraction of a period) moves the aspiration hump, at 25 %
+    of the cycle by default, later: 0.35 puts it at 60 %, on the closing phase where the glottal jet is
+    fastest and most turbulent."""
     rng = rng or np.random.default_rng(0)
     n = _n_of(dur, *[e for e in (f0_env, tenseness_env, voiced_env) if isinstance(e, np.ndarray)])
     seed = int(rng.integers(0, 65536))
     out, nm = _glottis(_env(f0_env, n), _env(tenseness_env, n), _env(voiced_env, n), wobble,
-                       rng, float(SR), 512.0 / SR, seed)
+                       rng, float(SR), 512.0 / SR, seed, noise_shift)
     return (out, nm) if return_modulator else out
 
 
@@ -1105,8 +1125,11 @@ def _pt_tract_kernel(glottal, nmod, fric, t_idx, t_diam, c_idx, c_diam, c_act, n
 def pink_trombone(f0_env, tenseness_env=0.6, tongue_index_env=12.9, tongue_diameter_env=2.43,
                   constrictions=(), tick_rate_scale: float = 1.0, dur: float | None = None,
                   rng: np.random.Generator | None = None, *, voiced_env=1.0, wobble=0.0,
-                  nasal_env=0.0) -> np.ndarray:
+                  nasal_env=0.0, excitation=None) -> np.ndarray:
     """Full Pink Trombone (Thapen 2017, Faust port ``pinktrombone.lib`` ``pinkTrombone2``).
+
+    ``excitation`` (array, stretched to the duration) replaces the glottal output: any sound spoken through the
+    tract. The frication noise stays driven by the glottis cycle.
 
     Envelopes are scalars or arrays (any length, stretched to the duration). ``constrictions``
     is a list of dicts ``{"index": 2..44, "diameter": 0..3 (<= 0.3 closes), "active": 0/1}``
@@ -1151,6 +1174,8 @@ def pink_trombone(f0_env, tenseness_env=0.6, tongue_index_env=12.9, tongue_diame
     seed = int(rng.integers(0, 65536))
     block_time = 512.0 / (fs / 2.0)
     g, nm = _glottis(f0, tens, voiced, wobble, rng, fs, block_time, seed)
+    if excitation is not None:
+        g = to_int(np.asarray(excitation, float))
     white = 0.5 * rng.uniform(-1.0, 1.0, m) * math.sqrt(fs / 48000.0)
     fric = _resonbp_const(white, 1000.0, 0.5, 2.0, fs)          # _bandpassUnity(1000, 0.5)
     y = _pt_tract_kernel(g, nm, fric, ti, td, c_idx, c_diam, c_act, nas, float(fs)) * 0.25
@@ -1184,7 +1209,7 @@ def vocal_tract_comb(x: np.ndarray, tract_length_m=0.17, *, n_bands: int = 8, q=
     ``tract_length_m`` may be per-sample (articulation moves the length; coefficients are
     recomputed every sample, avoiding the message-rate clicks Farnell mentions). 8 bands as in
     the figure (8 ``bp~ 1 1``); bands above 0.45 SR are dropped.
-    UNSOURCED: default q (the figure's "res" inlet has no printed value)."""
+"""
     x = np.ascontiguousarray(x, dtype=np.float64)
     n = len(x)
     ln = np.maximum(_env(tract_length_m, n), 1e-3)
@@ -1206,9 +1231,7 @@ def roar(dur: float = 2.5, rng: np.random.Generator | None = None, arc=(30.0, 24
     articulation envelope (fig. 20.36 drives F0 base + excursion, tract and noise from it).
 
     tract_length_m 0.38: lion lips-glottis 380 mm, Weissengruber et al. 2002 J Anat 201:195 Table 2
-    (one 1-year-old male). UNSOURCED: rise_frac (time of the 240 Hz peak), and the mappings of the envelope to ripple (1 -> 4), width (2 -> 12) and
-    noisiness (0.05 -> 0.45); "distinct pulses early, dense later (more ripple, more noise)" is
-    the only guidance."""
+    (one 1-year-old male)."""
     rng = rng or np.random.default_rng(0)
     n = int(round(dur * SR))
     a = articulation_env(n, rise_frac, offset=0.0)              # 0 -> 1 -> 0
@@ -1240,7 +1263,7 @@ def frog_croak(kind: str = "a", rng: np.random.Generator | None = None,
     sr = float(SR)
     if kind in ("a", "b"):
         ramp_ms = 400.0 if kind == "a" else 200.0
-        tail = 0.15                                   # UNSOURCED: ring-out after the ramp
+        tail = 0.15
         n = int(round((ramp_ms / 1000.0 + tail) * SR))
         t = np.arange(n) / SR
         v = np.clip(1.0 - t / (ramp_ms / 1000.0), 0.0, 1.0)
@@ -1319,7 +1342,11 @@ def almost_speech(dur: float = 3.0, rng: np.random.Generator | None = None, *,
     * syllables: ``phasor~ -4`` squared -> ``lop~ 130`` -> x6 + 0.5 = pulse index;
     * voice: (phasor(f0) - 0.5) x index -> ``clip~ -0.5 0.5`` -> ``cos~`` -> +1 -> x 0.5.
     As each syllable ramp falls the pulse widens, the formant sweeps from bright to dull,
-    heard as a diphthong. ``f0_scale`` transposes the pitch generator (1 = the patch)."""
+    heard as a diphthong. ``f0_scale`` transposes the pitch generator (1 = the patch).
+
+    The syllable phasor starts at a random phase (the patch starts at 0): voices that share a phase
+    wrap together, and a crowd of them pulses at 4 Hz. Reference for the 4 syllables/s of the patch: reading
+    rate 149.2 +/- 31.2 words/min, about 2.5 words/s (75 speakers, Lim, Toutios et al. 2021, fig. 4)."""
     rng = rng or np.random.default_rng(0)
     n = int(round(dur * SR))
     f0 = np.empty(n)
@@ -1334,7 +1361,7 @@ def almost_speech(dur: float = 3.0, rng: np.random.Generator | None = None, *,
         cur = cur + (tgt - cur) * seg / period
         pos += seg
     f0 *= f0_scale
-    syl = _phasor(np.full(n, -4.0))
+    syl = _phasor(np.full(n, -4.0), start=float(rng.random()))
     idx = _pd_lop(syl * syl, 130.0, float(SR)) * 6.0 + 0.5
     ph = _phasor(f0)
     y = 0.5 * (np.cos(TWO_PI * np.clip((ph - 0.5) * idx, -0.5, 0.5)) + 1.0)
@@ -1351,8 +1378,8 @@ def paf(f0_env, fc_env, bw_env, dur: float | None = None, *, gravel: float = 0.0
     is ~1. Several PAFs on one phasor add coherently (sum them for vowels).
 
     ``gravel``: Puckette's embellishment "introducing gravel by irregularly modulating the
-    phase" - a random carrier phase offset per period. UNSOURCED: its size (gravel = the
-    standard deviation in cycles)."""
+    phase" - a random carrier phase offset per period. Its size: gravel = the
+    standard deviation in cycles."""
     n = _n_of(dur, *[e for e in (f0_env, fc_env, bw_env) if isinstance(e, np.ndarray)])
     f0 = _env(f0_env, n)
     fc = _env(fc_env, n)
@@ -1447,6 +1474,14 @@ def octave_divider(x: np.ndarray, f0_env) -> np.ndarray:
     return x + 2.0 * x * np.cos(TWO_PI * _phasor(0.5 * f0))
 
 
+def octave_doubler(x: np.ndarray, f0_env, delay_s: float = 0.0) -> np.ndarray:
+    """Octave up: y(t) = x(t - D) + x(t - D - 1/(2 f0)); the odd harmonics cancel."""
+    n = len(x)
+    f0 = np.maximum(_env(f0_env, n), 1.0)
+    t = np.arange(n) - delay_s * SR
+    return np.interp(t, np.arange(n), x, 0.0, 0.0) + np.interp(t - SR / (2.0 * f0), np.arange(n), x, 0.0, 0.0)
+
+
 # ==========================================================================================
 # STK SingWave/Modulate, choir, breath
 # ==========================================================================================
@@ -1480,8 +1515,44 @@ def singwave(f0_env, dur: float | None = None, rng: np.random.Generator | None =
     return sum(np.cos(TWO_PI * h * ph) for h in range(1, 21)) / 20.0
 
 
+MOOG_ADSR = (0.001, 1.5, 0.6, 0.25)
+MOOG_Q = 0.85
+MOOG_SWEEP_START_HZ = 2000.0
+MOOG_SWEEP_RATE = 0.0001 * 22050.0
+MOOG_VIB_HZ = 6.122
+
+
+def stk_moog(f0: float, dur: float, vel: float = 0.8, *, q: float | None = None, vibrato: float = 0.0,
+             rng: np.random.Generator | None = None) -> np.ndarray:
+    """STK ``Moog`` sampler: the 20-harmonic pulse loop at f0 plus a short plucked attack (0.5 x velocity),
+    ADSR 1 ms / 1.5 s / 0.6 / 0.25 s, through two ``FormSwep`` resonators in series whose centre sweeps
+    linearly from 2 kHz down to f0 (radius q + 0.05 to q + 0.099) at 0.0001 x 22050 / fs per sample.
+    ``q`` 0.8..0.9 (default 0.8 + 0.1 vel), ``vibrato`` depth as a fraction of f0 at 6.122 Hz."""
+    rng = rng or np.random.default_rng(0)
+    a_, d_, s_, r_ = MOOG_ADSR
+    n_on = max(1, int(dur * SR))
+    n = n_on + int(r_ * SR)
+    t = np.arange(n) / SR
+    q = (0.8 + 0.1 * float(np.clip(vel, 0.0, 1.0))) if q is None else float(q)
+    f = f0 * (1.0 + vibrato * np.sin(TWO_PI * MOOG_VIB_HZ * t))
+    ph = _phasor(f)
+    loop = sum(np.cos(TWO_PI * h * ph) for h in range(1, 21) if h * f0 < 0.45 * SR) / 20.0
+    burst = rng.uniform(-1.0, 1.0, n) * np.exp(-t / 0.004)
+    burst = _pd_lop(burst, min(4.0 * f0 + 1000.0, 0.45 * SR), float(SR))
+    x = loop + 0.5 * vel * burst
+    s = np.minimum(np.arange(n) * MOOG_SWEEP_RATE / SR, 1.0)
+    fc = (MOOG_SWEEP_START_HZ + (f0 - MOOG_SWEEP_START_HZ) * s)[:, None]
+    rad = (q + 0.05 + 0.049 * s)[:, None]
+    g = np.ones((n, 1))
+    y = _formswep_bank(_formswep_bank(x, fc, rad, g, float(SR)), fc, rad, g, float(SR))
+    env = np.where(t < a_, t / a_, s_ + (1.0 - s_) * np.exp(-(t - a_) / (d_ / 5.0)))
+    rel = np.arange(n) >= n_on
+    env[rel] = env[n_on - 1] * np.exp(-(np.arange(n - n_on)) / (r_ * SR / 5.0))
+    y = y * env * vel
+    return y / (np.max(np.abs(y)) + 1e-12) * 0.8
+
+
 def _voice_type_for(f0: float) -> str:
-    # UNSOURCED: split points between the table's voice types (standard choral ranges).
     if f0 < 150.0:
         return "bass"
     if f0 < 260.0:
@@ -1503,9 +1574,7 @@ def choir(notes, vowel="a", voices_per_note: int = 4, dur: float = 4.0,
     ``notes``: f0 values in Hz. Voice type per note from its pitch unless given.
     ``breath``: level of Cook's breathy "fuzz" (noise through the same formants).
     detune_cents 6 (per-singer static detune, gaussian sd): Ternstrom 1991 via Meyer 2009 p.127 fig. 3.33
-    (intonation sd below 5 cents good, 10 tolerable). UNSOURCED: attack/release times
-    (power-law shapes, PLAN rule 5), the 1/sqrt(N) sum (uncorrelated voices add as sqrt(sum A^2),
-    Farnell thesis p.95)."""
+    (intonation sd below 5 cents good, 10 tolerable)."""
     rng = rng or np.random.default_rng(0)
     n = int(round(dur * SR))
     out = np.zeros(n)
@@ -1523,7 +1592,6 @@ def choir(notes, vowel="a", voices_per_note: int = 4, dur: float = 4.0,
             if breath > 0.0:
                 y += breath * formant_filter(rng.uniform(-1, 1, n), vowel, vt, f0=f0)
             env = np.ones(n)
-            # UNSOURCED: singers enter up to 50 ms apart (Rasch 1979's 35 ms is for chamber ensembles, not choirs)
             off = int(rng.uniform(0, 0.05) * SR)
             a0 = min(n, off + na)
             env[:off] = 0.0
@@ -1540,8 +1608,7 @@ def breath(dur: float = 1.2, in_or_out: str = "out", rng: np.random.Generator | 
     formant peaks). Formants: STK VoicForm whispered rows ``hah`` (exhale) / ``hoo`` (inhale),
     voice gain 0, noise gain 0.1, F1 at -40 dB; noise level follows Farnell's soft rise/fall
     articulation curve. ``formant_scale`` = STK CC4 tract size (0.9..1.4; lower for big bodies).
-    UNSOURCED: which whispered row for in/out, and the default rise fraction (inhale 0.6,
-    exhale 0.25)."""
+"""
     rng = rng or np.random.default_rng(0)
     n = int(round(dur * SR))
     ph = "hah" if in_or_out == "out" else "hoo"
@@ -1659,9 +1726,9 @@ def roughness(f0, rng: np.random.Generator, *, jitter: float = 0.03, shimmer: fl
       with a DC offset - Puckette's octave divider (TTEM p.126/p.135, research 10 §8.6: "odd
       partials 1/2, 3/2 ... an octave down, spectral envelope roughly kept"). ``subharmonic`` is
       the depth d (scalar or per sample); it is gated on and off in random episodes at about
-      ``sub_rate`` per second (UNSOURCED: episode rate and lengths), so the doubling comes and goes
+      ``sub_rate`` per second, so the doubling comes and goes
       like a real vocal-fold bifurcation instead of a steady octave.
-    Amplitude changes happen at cycle starts only (held per cycle), so no clicks inside a pulse."""
+    Amplitude changes happen at cycle starts only, over 2 ms, so no clicks inside a pulse."""
     f = np.asarray(f0, float)
     n = len(f)
     f2 = cycle_jitter(f, jitter, rng)
@@ -1681,7 +1748,9 @@ def roughness(f0, rng: np.random.Generator, *, jitter: float = 0.03, shimmer: fl
         gate = _pd_lop(np.ascontiguousarray(gate), 30.0, float(SR))
         alt = np.where(c2 % 2 == 0, 1.0, -1.0)
         amp = amp * (1.0 + d * gate * alt)
-    return f2, np.maximum(amp, 0.0)
+    # Held per cycle, the steps land where a flapping source is at its top, not at zero: each is a click (measured in growl). 1 ms, a quarter period above 250 Hz: shimmer stays where a squeal has it.
+    w = max(1, min(seconds(0.001), int(0.25 * SR / max(float(np.median(f)), 1.0))))
+    return f2, np.maximum(uniform_filter1d(uniform_filter1d(amp, w, mode="nearest"), w, mode="nearest"), 0.0)
 
 
 def micro_pitch(track, n: int, limit: float = 0.12) -> np.ndarray:
@@ -1710,7 +1779,7 @@ def syllable_track(n: int, rng: np.random.Generator, queries, *, syl=(0.14, 0.3)
     to the syllable length and concatenated; the lattice interpolates k between frames, so the
     formants glide from one recorded vowel shape to the next (Farnell research 03 §3.1: diphthongs
     are neighbours in vowel space, move between them by interpolation). Returns (Track,
-    syllable amplitude envelope). UNSOURCED: syllable lengths (Pd F02: 4 Hz syllable phasor)."""
+    syllable amplitude envelope)."""
     from . import analysis
     Ks, gs, bounds = [], [], []
     pos = 0
@@ -1827,8 +1896,7 @@ def phrase_pitch(n: int, bounds, rng: np.random.Generator, base: float, *, decli
     semitones from start to end) plus per-syllable pitch accents - each syllable, with probability
     ``accent_prob``, gets a rise-fall hat of 4-7 semitones up or down (up twice as likely), peaking
     40-70 % into the syllable; the others glide gently. Syllable joins are slewed (25 ms), so the
-    contour is continuous. UNSOURCED: all numbers (the coordinator's brief: declination plus
-    +-4-7 semitone accents per syllable)."""
+    contour is continuous."""
     t = np.arange(n) / max(1, n - 1)
     st = declination_st * t
     for a, m in bounds:
@@ -1921,17 +1989,16 @@ def hybrid_voice(n: int, rng: np.random.Generator, *, family: str, queries, pick
 
 
 # ==========================================================================================
-# Syrinx: Smyth & Smith (DAFx-02) valve + trachea waveguide
+# Syrinx: valve + trachea waveguide
 # ==========================================================================================
 
 
 @numba.njit(cache=True)
 def _syrinx_kernel(ps, w1a, w1b, w2a, w2b, fs, a, h, x0, m, eps, kappa_q, gamma, zs, vol,
-                   rho, c, z0, beta, lp_a, dl):
+                   rho, c, z0, beta, lp_a, dl, kap=0.0):
     """Two independent valves (bronchi) into one trachea. Per valve: bronchial pressure p0
-    (eq. 1, integrated exactly as a relaxation for stiffness), Bernoulli flow U (eq. 6), two
-    membrane modes x_n (eq. 11 with the mass law eq. 10 and closed-wall damping eq. 9),
-    driving force F (eq. 8), trapezoid rule (eq. 14). Trachea: fig. 4 - p1 = Z0 U + beta x lower
+    (integrated exactly as a relaxation for stiffness), Bernoulli flow U, two membrane modes x_n
+    with the mass law and closed-wall damping, driving force F, trapezoid rule. Trachea: p1 = Z0 U + beta x lower
     rail, upper rail delay, at the top LPF then -1 (open end) into the lower rail; output =
     upper - LPF(upper) (the transmitted part)."""
     n = len(ps)
@@ -1962,28 +2029,28 @@ def _syrinx_kernel(ps, w1a, w1b, w2a, w2b, fs, a, h, x0, m, eps, kappa_q, gamma,
             if wa <= 0.0:
                 continue
             x = x0 + xa[v] + xb[v]
-            # eq. 1: dp0/dt = (rho c^2/V)((ps - p0)/Zs - U); exact relaxation toward ps - Zs U
+            # dp0/dt = (rho c^2/V)((ps - p0)/Zs - U); exact relaxation toward ps - Zs U
             target = ps[k] - zs * U[v]
             p0[v] = target + (p0[v] - target) * math.exp(-K / zs * T)
-            # eq. 6 (x > 0), trapezoid; closed valve -> no flow
+            # x > 0, trapezoid; closed valve -> no flow
             if x > 0.0:
                 d = (2.0 * a * x / (rho * h)) * (p0[v] - p1 - rho / (8.0 * a * a * x * x) * U[v] * U[v])
                 U[v] += (d + dU[v]) * 0.5 * T
                 dU[v] = d
                 if U[v] < 0.0:
                     U[v] = 0.0
-                # eq. 8
+                # driving force
                 F = a * h * (p0[v] + p1) - 2.0 * rho * U[v] * U[v] * h / (7.0 * (a * x) ** 1.5)
             else:
                 U[v] = 0.0
                 dU[v] = 0.0
                 F = a * h * (p0[v] + p1)
-            # eq. 9 (closed: damping x gamma), eq. 10 (mass grows with excursion)
+            # closed: damping x gamma; mass grows with excursion
             g = gamma if x <= 0.0 else 1.0
             mm = m * (1.0 + eps * ((x - x0) / h) ** 2)
-            ka = g * wa / (2.0 * kappa_q)
-            kb = g * wb / (2.0 * kappa_q)
-            # eq. 11 per mode (alpha = 1), trapezoid on velocity and displacement
+            ka = g * (0.5 * kap if kap > 0.0 else wa / (2.0 * kappa_q))
+            kb = g * (0.5 * kap if kap > 0.0 else wb / (2.0 * kappa_q))
+            # per mode (alpha = 1), trapezoid on velocity and displacement
             acc_a = F / mm - 2.0 * ka * va[v] - wa * wa * xa[v]
             acc_b = F / mm - 2.0 * kb * vb[v] - wb * wb * xb[v]
             nva = va[v] + (acc_a + aa[v]) * 0.5 * T
@@ -2007,29 +2074,45 @@ def _syrinx_kernel(ps, w1a, w1b, w2a, w2b, fs, a, h, x0, m, eps, kappa_q, gamma,
     return out
 
 
+_VOL_OILBIRD = math.pi * 0.0015 ** 2 * 0.010
+SYRINX_RAD_ROLLOFF_HZ = 3000.0
+SYRINX_SETS = {
+    "sweep": dict(h=0.003, x0=0.0005, thickness=1e-3, q=30.0),
+    "fletcher": dict(h=0.0035, x0=0.0001, thickness=1e-4, q=10.0),
+    "raven": dict(h=0.0035, x0=0.0, thickness=1e-4, q=10.0, kappa=300.0, eps=10.0, vol=1e-6,
+                  mass=math.pi / 4.0),
+}
+
+
 def syrinx(pressure_env, f_env=(500.0, 505.0), dur: float | None = None, *,
            mode_ratio: float = 1.6, trachea_length_m: float = 0.07,
-           trachea_radius_m: float = 0.0035, second_valve: bool = True,
-           oversample: int = 4) -> np.ndarray:
-    """Pressure-driven syrinx valve(s) feeding a trachea waveguide (Smyth & Smith DAFx-02,
-    after Fletcher 1988). ``pressure_env``: air-sac pressure p_s in Pa (Fig. 5 shows ~1-2 kPa at
-    the trachea base). ``f_env``: membrane mode-1 frequency of each valve (two valves at close
-    frequencies beat: the "two-voice" syrinx); mode 2 at ``mode_ratio`` x.
+           trachea_radius_m: float = 0.0035, beak_radius_m: float = 0.01, second_valve: bool = True,
+           oversample: int = 4, beak_open=None, membrane: str = "sweep", radiation: str = "lowpass",
+           beak_gape_m: float | None = None) -> np.ndarray:
+    """Pressure-driven syrinx valve(s) feeding a trachea waveguide. ``pressure_env``: air-sac pressure
+    p_s in Pa. ``f_env``: membrane mode-1 frequency of each valve (two valves at close frequencies
+    beat: the "two-voice" syrinx); mode 2 at ``mode_ratio`` x.
 
-    Sourced: equations 1, 5, 6, 8-11, 14 and fig. 4 (decoded from the mis-encoded PDF font:
-    F = a h (p0 + p1) - 2 rho U^2 h / (7 (a x)^1.5); dU/dt = (2 a x / rho h)(p0 - p1 -
-    rho U^2 / (8 a^2 x^2)); gamma in 10..100; mass m (1 + eps ((x - x0)/h)^2); wall loss
-    alpha = 1.2e-5 sqrt(omega)/a); raven trachea 70 mm x 3.5 mm radius (Kahrs & Avanzini);
-    rho = 1.2, c = 343.
-    SIGN CHECK (flagged): the force sign convention (pressure pushes the membrane open, the
-    Bernoulli term pulls it shut) and p1 = Z0 U + beta x lower are my reading of eq. 8 and fig. 4.
-    The p0 equation is integrated as an exact relaxation, not the paper's trapezoid, because with
-    any plausible bronchus volume it is too stiff at audio rates (deviation).
-    a = trachea radius and membrane density: Fletcher 1988 Table 1, Kahrs & Avanzini DAFx-01 (below).
-    UNSOURCED (the paper prints no parameter values; Fletcher's differ, see below): h, x0, thickness, eps, mode Q,
-    gamma = 30, Zs, bronchus volume, mode_ratio, the beak LPF corner, oversample. The set used
-    was picked by a parameter sweep as the one whose f0 follows the membrane frequency
-    (150-900 Hz at p_s = 3 kPa); below ~1 kPa or with low Q it does not self-oscillate."""
+    Valve: bronchial pressure relaxing toward p_s - Zs U, Bernoulli flow
+    dU/dt = (2 a x / rho h)(p0 - p1 - rho U^2 / (8 a^2 x^2)) (inertance rho h / (2 a x) of a slot of
+    depth h; the other form in use, rho / (2 sqrt(a x)), is dimensionally valid too and is not used), force
+    F = a h (p0 + p1) - 2 rho U^2 h / (7 (a x)^1.5), mass m (1 + eps ((x - x0)/h)^2), damping x gamma
+    when closed. Trachea: p1 = Z0 U + beta x the returning wave; at the beak a one-pole low-pass is
+    reflected (inverted) and the rest radiated.
+
+    ``membrane``: ``sweep`` (h 3 mm, x0 0.5 mm, 1 mm thick, Q 30: self-oscillates from about 1 kPa)
+    or ``fletcher`` (h 3.5 mm, x0 0.1 mm, 100 um thick, Q 10: a raven's membrane, sounds from 300 Pa)
+    or ``raven`` (the full raven set: valve shut at rest, mass rho pi a h d / 4, damping kappa 300 1/s
+    whatever the frequency, mass law eps 10, bronchial volume 1 ml).
+    ``radiation``: ``lowpass`` (reflection corner 4 kHz), ``piston`` (corner where k b = 2, i.e.
+    c / (pi b) for the beak radius b: the open end reflects below, radiates above) or ``fletcher``
+    (piston, then a first-order roll-off from 3 kHz: the radiated spectrum falls 6-12 dB/octave).
+    ``beak_gape_m``: tip gape of a conical beak 12 x ``beak_radius_m`` long; the trachea is then lengthened
+    by `beak_end_correction` at the mean valve frequency instead of 0.6 b."""
+    if membrane not in SYRINX_SETS:
+        raise ValueError("membrane must be sweep, fletcher or raven")
+    if radiation not in ("lowpass", "piston", "fletcher"):
+        raise ValueError("radiation must be lowpass, piston or fletcher")
     n = _n_of(dur, pressure_env if isinstance(pressure_env, np.ndarray) else None)
     os_ = int(oversample)
     fs = SR * os_
@@ -2042,30 +2125,75 @@ def syrinx(pressure_env, f_env=(500.0, 505.0), dur: float | None = None, *,
     w2a = TWO_PI * fb if second_valve else np.zeros(m_)
     w2b = w2a * mode_ratio
     rho, c = 1.2, 343.0
-    # Fletcher 1988 J Theor Biol 135:455 Table 1 ("crow or raven"): trachea 2a = 7 mm, membrane 2h = 7 mm,
-    # d = 100 um, x0 = 0 (closed at rest), Q = 2 at f1 150 Hz, mass nonlinearity eta = 10. Only a is taken:
-    # with low Q this sweep-tuned set does not self-oscillate (see above); the rest untried, need a listen.
-    a = trachea_radius_m                     # valve half-width = trachea radius (Fletcher 1988 Table 1, eq. 5)
-    h = 0.003                                # UNSOURCED: membrane half-length 3 mm (Fletcher: 3.5 mm)
-    x0 = 0.0005                              # UNSOURCED: rest opening 0.5 mm (Fletcher: 0)
-    # density 1000 kg/m3: Kahrs & Avanzini DAFx-01 sec. 4.1 (after Titze). UNSOURCED: 1 mm thick (Fletcher: 0.1 mm)
-    m = 1000.0 * (2 * a) * (2 * h) * 1e-3
-    eps = 1.0                                # UNSOURCED (Fletcher eta: 10)
-    q = 30.0                                 # UNSOURCED: modal Q (Fletcher: 2 at 150 Hz, ~10 at 1 kHz)
-    gamma = 30.0                             # within the paper's 10..100
-    zs = 2.0e6                               # UNSOURCED: air-sac impedance
-    vol = math.pi * 0.0015 ** 2 * 0.010      # oil-bird bronchus 10 mm x 1.5 mm radius (K&A)
-    z0 = rho * c / (math.pi * a * a)         # characteristic impedance of the trachea
-    dl = max(2, int(round(trachea_length_m / c * fs)))
-    omega = TWO_PI * 1000.0                  # UNSOURCED: wall loss evaluated at 1 kHz
+    ms = SYRINX_SETS[membrane]
+    a = trachea_radius_m
+    h = ms["h"]
+    x0 = ms["x0"]
+    m = 1000.0 * (ms["mass"] * a * h if "mass" in ms else (2 * a) * (2 * h)) * ms["thickness"]
+    eps = ms.get("eps", 1.0)
+    q = ms["q"]
+    gamma = 30.0
+    zs = 2.0e6
+    vol = ms.get("vol", _VOL_OILBIRD)
+    z0 = rho * c / (math.pi * a * a)
+    length = trachea_length_m + (0.6 * beak_radius_m if beak_gape_m is None else
+                                 beak_end_correction(float(np.mean(fa)), beak_gape_m, 12.0 * beak_radius_m))
+    dl = max(2, int(round(length / c * fs)))
+    omega = TWO_PI * 1000.0
     alpha = 1.2e-5 * math.sqrt(omega) / a
-    beta = math.exp(-alpha * 2.0 * trachea_length_m)
-    fc_beak = 4000.0                         # UNSOURCED: beak LPF corner
-    lp_a = 1.0 - math.exp(-TWO_PI * fc_beak / fs)
+    beta = math.exp(-alpha * 2.0 * length)
+    fc_beak = 4000.0 if radiation == "lowpass" else c / (math.pi * beak_radius_m)
+    lp_a = 1.0 - math.exp(-TWO_PI * min(fc_beak, 0.45 * fs) / fs)
     y = _syrinx_kernel(ps, w1a, w1b, w2a, w2b, float(fs), a, h, x0, m, eps, q, gamma, zs, vol,
-                       rho, c, z0, beta, lp_a, dl)
+                       rho, c, z0, beta, lp_a, dl, ms.get("kappa", 0.0))
     y = _sig.resample_poly(y, 1, os_)[:n]
-    return _pd_hip(y, 20.0, float(SR)) * 1e-3          # output pressure in kPa
+    if radiation == "fletcher":
+        y = _pd_lop(y, SYRINX_RAD_ROLLOFF_HZ, float(SR))
+    if beak_open is not None:
+        y = beak_filter(y, beak_open)
+    return _pd_hip(y, 20.0, float(SR)) * 1e-3
+
+
+BEAK_GAIN_DB, BEAK_BAND_HZ = 10.0, (4000.0, 8000.0)
+
+
+def beak_end_correction(f: float, gape_m: float, beak_length_m: float) -> float:
+    """End correction (m) a conical beak of length L opened to tip gape g adds to the trachea at f Hz:
+    0.05 L + 1e-5 f L^2 / g. Meant for g < L (gape angle under about 60 degrees) and f < 500 / L."""
+    L = float(beak_length_m)
+    return 0.05 * L + 1e-5 * float(f) * L * L / max(float(gape_m), 1e-4)
+
+
+def beak_filter(x: np.ndarray, opening) -> np.ndarray:
+    """Beak opening (0 closed .. 1 wide, envelope): 0 to +10 dB on a 4-8 kHz plateau."""
+    n = len(x)
+    g = 10.0 ** (BEAK_GAIN_DB * np.clip(_env(opening, n), 0.0, 1.0) / 20.0) - 1.0
+    hi = min(BEAK_BAND_HZ[1], 0.45 * SR)
+    band = _sig.sosfilt(_sig.butter(2, (BEAK_BAND_HZ[0], hi), "bandpass", fs=SR, output="sos"), x)
+    return x + g * band
+
+
+def beak_resonance(x: np.ndarray, f0_env, opening, q: float = 4.0) -> np.ndarray:
+    """Conical beak: a resonance that follows f0, raised as the beak opens (0..1)."""
+    n = len(x)
+    f = np.clip(_env(f0_env, n), 50.0, 0.45 * SR)
+    o = np.clip(_env(opening, n), 0.0, 1.0)
+    w = TWO_PI * f / SR
+    r = np.exp(-w / (2.0 * q))
+    y = _tv_reson(np.ascontiguousarray(x, np.float64), 2.0 * r * np.cos(w), -r * r, 1.0 - r)
+    return (1.0 - 0.5 * o) * x + o * y * q
+
+
+@numba.njit(cache=True)
+def _tv_reson(x, b1, b2, g):
+    y = np.zeros(len(x))
+    y1 = y2 = 0.0
+    for i in range(len(x)):
+        v = g[i] * x[i] + b1[i] * y1 + b2[i] * y2
+        y[i] = v
+        y2 = y1
+        y1 = v
+    return y
 
 
 # ==========================================================================================
@@ -2182,6 +2310,9 @@ def _f0_track(x: np.ndarray, fmin: float = 25.0, fmax: float = 600.0, hop: float
         ts.append((s + nw / 2) / SR)
         fs_.append(SR / (i + dd))
     return np.array(ts), np.array(fs_)
+
+
+f0_track = _f0_track
 
 
 def _cents(a, b):

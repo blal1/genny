@@ -115,3 +115,22 @@ def test_every_system_renders_through_the_chip_layer(system, channels):
     assert np.isfinite(y).all() and 0.05 < np.abs(y).max() <= 1.0 and len(y) / sr >= 2.0
     with pytest.raises(SP.SpecError):
         SP.render_spec({"sr": SR, "layers": [{"type": "chip", "system": system, "channels": {"nope": {"steps": "C4"}}}]})
+
+
+def test_stk_fm_rhodey_octave_wurley_fixed_resonance_and_tremolo():
+    y = C2.stk_fm(220.0, 0.5, SR, voice="rhodey")
+    assert abs(peak_hz(y[: SR // 4], 300, 600) - 440.0) < 3.0
+    for f in (196.0, 262.0):
+        y = C2.stk_fm(f, 0.5, SR, voice="wurley", control2=2.0, control1=0.0)
+        assert abs(peak_hz(y[: SR // 4], 400, 700) - 510.0) < 3.0
+    y = C2.stk_fm(220.0, 1.0, SR, voice="rhodey", mod=0.5)
+    e = np.abs(np.fft.rfft(np.abs(y[SR // 10: SR]) - np.abs(y[SR // 10: SR]).mean(), 1 << 18))
+    fr = np.fft.rfftfreq(1 << 18, 1 / SR)
+    band = (fr > 1.0) & (fr < 20.0)
+    assert abs(fr[band][np.argmax(e[band])] - 6.0) < 0.2
+
+
+def test_stk_fm_b3_lfo_and_tube_bell_attack_match_stk():
+    # FM.cpp:42 sets the LFO to 6 Hz and BeeThree.cpp leaves it; TubeBell.cpp:58 gives operator 3 a 4 ms attack
+    assert C2._STK_FM["b3"][3] == 6.0
+    assert C2._STK_FM["tube_bell"][5][3][2][0] == 0.004

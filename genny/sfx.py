@@ -237,15 +237,24 @@ def radar(sr=DEFAULT_SR, freq=1200):
     return x * perc(0.6, 0.002, sr, curve=1.0) * 0.8
 
 
-@sfx("riser", "Tension riser (noise + pitch climbing).", dur=(2.0, "s"), start=(100, "Hz"), end=(2000, "Hz"))
-def riser(sr=DEFAULT_SR, dur=2.0, start=100, end=2000):
+@sfx("riser", "Tension riser (noise + pitch climbing).", dur=(2.0, "s"), start=(100, "Hz"), end=(2000, "Hz"),
+     pulse=(0.0, "0..1 depth of a pulsing that speeds up from 2 to 16 per second as it climbs"))
+def riser(sr=DEFAULT_SR, dur=2.0, start=100, end=2000, pulse=0.0):
     n = samples(dur, sr)
     f = O.sweep(start, end, dur, sr)
     tone = O.saw(f, n, sr) * 0.4
     nz = F.biquad(O.white(n, seed=28), "bandpass", f * 4, sr, q=0.8)
     env = np.linspace(0, 1, n) ** 2
+    if pulse > 0:
+        env = env * (1.0 - float(np.clip(pulse, 0, 1)) * (0.5 - 0.5 * np.cos(2 * np.pi * riser_pulse_phase(n, sr))))
     y = (tone + nz) * env
     return F.highpass(y, 80, sr) * 0.8
+
+
+def riser_pulse_phase(n, sr, lo=2.0, hi=16.0):
+    """Cycles of a pulse whose rate rises exponentially from lo to hi per second over n samples."""
+    rate = lo * (hi / lo) ** np.linspace(0.0, 1.0, int(n))
+    return np.cumsum(rate) / sr
 
 
 @sfx("sweep_up", "Pure tone sweep upward.", start=(200, "Hz"), end=(2000, "Hz"), dur=(0.4, "s"), wave=("sine", "sine|saw|square"))
@@ -388,8 +397,9 @@ def countdown(sr=DEFAULT_SR, freq=660):
 
 
 @sfx("vinyl", "Vinyl record surface: crackle, pops and a little hiss and rumble (the bed under lo-fi music; loop it with \"loop\": true).",
-     dur=(4.0, "s"), crackle=(14.0, "clicks per second"), hiss=(0.3, "0..1 surface noise"), seed=(0, "variation"))
-def vinyl(sr=DEFAULT_SR, dur=4.0, crackle=14.0, hiss=0.3, seed=0):
+     dur=(4.0, "s"), crackle=(14.0, "clicks per second"), hiss=(0.3, "0..1 surface noise"), seed=(0, "variation"),
+     wear=(0.0, "0..1 worn record: a narrow band of noise near 5 kHz, and the crackle repeats every 1.6 s (one turn)"))
+def vinyl(sr=DEFAULT_SR, dur=4.0, crackle=14.0, hiss=0.3, seed=0, wear=0.0):
     n = samples(dur, sr)
     rng = np.random.default_rng(40 + int(seed))
     y = np.zeros(n)
@@ -401,7 +411,43 @@ def vinyl(sr=DEFAULT_SR, dur=4.0, crackle=14.0, hiss=0.3, seed=0):
     y = F.lowpass(F.highpass(y, 500, sr), 4500, sr)
     y += F.lowpass(F.highpass(O.pink(n, seed=41 + int(seed)), 1500, sr), 6000, sr) * 0.03 * hiss
     y += F.lowpass(O.brown(n, seed=42 + int(seed), sr=sr), 60, sr) * 0.1 * hiss
+    w = float(np.clip(wear, 0.0, 1.0))
+    if w > 0:
+        turn = samples(VINYL_WEAR_LOOP, sr)
+        if n > turn:
+            reps = np.resize(y[:turn], n)
+            y = (1 - w) * y + w * reps
+        y += F.biquad(O.white(n, seed=43 + int(seed)), "bandpass", VINYL_WEAR_HZ, sr, q=8.0) * 0.08 * w
     return y * 0.8
+
+
+VINYL_WEAR_HZ = 5000.0
+VINYL_WEAR_LOOP = 1.6
+SCRATCH_CYCLE = 0.26           # s, a baby scratch back and forth
+SCRATCH_PULL = 0.6             # share of the cycle spent pulling back (slower than the push)
+SCRATCH_RATES = {"baby": 1.0 / 0.26, "scribble": 20.0 / 2.0, "hydroplane": 30.0}
+
+
+@sfx("scratch", "DJ scratch on a turntable: the record pushed and pulled under the needle (baby, scribble), or slowed by the "
+     "fingertip (hydroplane).", kind=("baby", "baby | scribble | hydroplane"), dur=(1.5, "s"), pitch=(220.0, "Hz of the "
+     "scratched sound at normal speed"), seed=(0, "variation"))
+def scratch(sr=DEFAULT_SR, kind="baby", dur=1.5, pitch=220.0, seed=0):
+    if kind not in SCRATCH_RATES:
+        raise ValueError("scratch kind must be baby|scribble|hydroplane")
+    n = samples(dur, sr)
+    t = np.arange(n) / sr
+    if kind == "hydroplane":
+        rate = 1.0 - 0.6 * (0.5 + 0.5 * np.sin(2 * np.pi * SCRATCH_RATES[kind] * t))
+    else:
+        ph = (t * SCRATCH_RATES[kind]) % 1.0
+        push = 1.0 - SCRATCH_PULL
+        rate = np.where(ph < push, np.sin(np.pi * ph / push) * 2.0 / push * 0.5,
+                        -np.sin(np.pi * (ph - push) / SCRATCH_PULL) * 2.0 / SCRATCH_PULL * 0.5)
+    src_n = n * 3
+    src = O.saw(np.full(src_n, float(pitch)), src_n, sr) * 0.5 + F.biquad(O.white(src_n, seed=44 + int(seed)), "bandpass", 1200.0, sr, q=1.0) * 0.5
+    pos = np.clip(np.cumsum(rate) + src_n // 3, 0, src_n - 2)
+    y = np.interp(pos, np.arange(src_n), src) * np.minimum(np.abs(rate), 1.0)
+    return F.highpass(y, 60, sr) * 0.8
 
 
 def _full_scale(y):
@@ -454,19 +500,26 @@ def wind(sr=DEFAULT_SR, dur=3.0, scale=1.0, seed=0):
 
 @sfx("thunder", "Thunder: Farnell's layered patch blended with Few's tortuous channel of N-waves, heard from `distance`.",
      dur=(2.5, "s"), distance=(80.0, "m from the strike"), channel=(0.5, "0 Farnell patch only .. 1 physical channel only"),
-     seed=(0, "variation"))
-def thunder(sr=DEFAULT_SR, dur=2.5, distance=80.0, channel=0.5, seed=0):
-    from .physics import Environment, _to_sr
+     strokes=(1, "return strokes down the same channel, 1..3"), walk=("farnell", "channel shape: farnell | ribner (3-D walk)"),
+     fineberg=(0, "1 = add the multi-impact strikes (1-5 noise sub-impacts through a falling band-pass bank), the afterimage (to 14 s) and deepener (to 18.5 s) layers; 2 = also the 0.6 s feedback delay on the strikes and the paper's compressor"), seed=(0, "variation"))
+def thunder(sr=DEFAULT_SR, dur=2.5, distance=80.0, channel=0.5, strokes=1, walk="farnell", fineberg=0, seed=0):
+    from .physics import _PHYS_SR, Environment, _to_sr
     from .physical import ambience as amb
     dur = max(float(dur), 0.2)
     # the patch's distance runs 0..1; 3 km = 1 as in matter.storm
-    y = Environment(seed=32 + int(seed)).thunder(dur, distance=float(np.clip(float(distance) / 3000.0, 0.0, 1.0)), sr=sr)
+    d01 = float(np.clip(float(distance) / 3000.0, 0.0, 1.0))
+    if fineberg:
+        y = np.asarray(amb.thunder(np.random.default_rng(32 + int(seed)), dur=max(dur, 1.25), distance=d01, fineberg=True, post=int(fineberg) >= 2), float)
+        y = _to_sr(y[:max(1, int(round(dur * _PHYS_SR)))], sr)
+    else:
+        y = Environment(seed=32 + int(seed)).thunder(dur, distance=d01, sr=sr)
     if np.asarray(y).ndim == 2:
         y = np.mean(y, axis=1)
     y = np.asarray(y, float).copy()
     c = float(np.clip(channel, 0.0, 1.0))
     if c > 0:
-        ch = _to_sr(amb.thunder_channel(np.random.default_rng(32 + int(seed)), dur=dur, distance_m=max(float(distance), 1.0)), sr)
+        ch = _to_sr(amb.thunder_channel(np.random.default_rng(32 + int(seed)), dur=dur, distance_m=max(float(distance), 1.0),
+                                       strokes=int(strokes), walk=str(walk)), sr)
         ch = np.pad(ch, (0, max(0, len(y) - len(ch))))[:len(y)]
         rms = lambda v: float(np.sqrt(np.mean(v * v))) + 1e-12  # noqa: E731
         y = (1.0 - c) * y / rms(y) + c * ch / rms(ch)
@@ -593,10 +646,10 @@ def jet_engine(sr=DEFAULT_SR,dur=3.0,rpm=9000,throttle=.7,seed=0):
     return JetEngine(float(rpm),24,36,float(throttle)).render(float(dur),sr=sr,seed=int(seed))
 
 
-@sfx("helicopter", "Physical rotor helicopter: main rotor, tail rotor, turbine and blade-vortex slap.", dur=(3.0,"s"), rpm=(320,"main rotor RPM"), blades=(4,"main blade count"), load=(.55,"0..1"), seed=(0,"variation"))
-def helicopter(sr=DEFAULT_SR,dur=3.0,rpm=320,blades=4,load=.55,seed=0):
+@sfx("helicopter", "Physical rotor helicopter: main rotor, tail rotor, turbine and blade-vortex slap.", dur=(3.0,"s"), rpm=(320,"main rotor RPM"), blades=(4,"main blade count"), load=(.55,"0..1"), rotors=(1,"main rotors 1..8 (multirotor: neighbouring speeds beat)"), spread=(.03,"0..0.2 relative rpm spread of the rotors"), fuselage=(0.0,"0..1 airframe modes 120-400 Hz driven by the rotor"), box=(0.0,"0..1 main gearbox whine (mesh 250 Hz)"), partials=(0.0,"0..1 turbine partials x1, x2.81, x9.41 of the shaft rate"), seed=(0,"variation"))
+def helicopter(sr=DEFAULT_SR,dur=3.0,rpm=320,blades=4,load=.55,rotors=1,spread=.03,fuselage=0.0,box=0.0,partials=0.0,seed=0):
     from .physics import Helicopter
-    return Helicopter(float(rpm),int(blades),1600,4,float(load)).render(float(dur),sr=sr,seed=int(seed))
+    return Helicopter(float(rpm),int(blades),1600,4,float(load),int(rotors),float(spread),float(fuselage),float(box),float(partials)).render(float(dur),sr=sr,seed=int(seed))
 
 
 @sfx("shatter", "Physical fracture/destruction event with time-varying modal body.", dur=(2.0,"s"), material=("glass","glass|steel|wood|stone"), energy=(1.0,"strength"), seed=(0,"variation"))
@@ -627,10 +680,27 @@ def gears(sr=DEFAULT_SR,dur=2.0,rpm=1800,driver_teeth=20,driven_teeth=40,backlas
         float(dur),sr=sr,seed=int(seed))
 
 
-@sfx("explosion", "Physical blast: Friedlander shock sized by charge and distance (JRC / Kinney fits), low-frequency expansion, debris and distance propagation.", dur=(1.5,"s"), energy=(1.0,"charge, kg of TNT: sets the shock's length with the distance"), distance=(8.0,"m"), debris=(0.45,"0..1"), enclosure=(0.15,"0..1"), seed=(0,"variation"), boom=(None,"legacy name for energy"))
-def explosion(sr=DEFAULT_SR,dur=1.5,energy=1.0,distance=8.0,debris=.45,enclosure=.15,seed=0,boom=None):
+@sfx("explosion", "Physical blast: Friedlander shock sized by charge and distance, low-frequency expansion, debris and distance propagation.", dur=(1.5,"s"), energy=(1.0,"charge, kg of TNT: sets the shock's length with the distance"), distance=(8.0,"m"), debris=(0.45,"0..1"), enclosure=(0.15,"0..1"),
+     windows=(0.0,"0..1 level of the listener's windows shattering, only where the overpressure breaks glass (1 kPa)"),
+     explosive=("tnt","charge type, energy x its TNT equivalent: tnt c4 comp_b petn rdx hmx semtex nitroglycerin anfo black_powder tetryl picric_acid tatp tritonal torpex"),
+     burst=("air","air | surface (ground reflection, apparent yield x1.5) | rigid (x2) | crater (x1.4)"), seed=(0,"variation"), boom=(None,"legacy name for energy"))
+def explosion(sr=DEFAULT_SR,dur=1.5,energy=1.0,distance=8.0,debris=.45,enclosure=.15,windows=0.0,seed=0,boom=None,explosive="tnt",burst="air"):
     # ``boom`` remains accepted for compatibility; map it to physical energy.
     if boom is not None: energy=float(boom)
-    from .physics import Explosion
-    return Explosion(float(energy),float(distance),float(debris),float(enclosure)).render(
+    from .ordnance import RE
+    from .physics import BURST_YIELD, Explosion
+    energy=float(energy)*RE[str(explosive)]*BURST_YIELD[str(burst)]
+    return Explosion(float(energy),float(distance),float(debris),float(enclosure),float(windows)).render(
         float(dur),sr=sr,seed=int(seed))
+
+
+@sfx("fm_machine", "Auditory-icon machine: a sine whose frequency size + mod is modulated at modfreq, with a modulation depth that swings with the work cycle.",
+     dur=(2.0, "s"), size=(180.0, "Hz: base frequency, smaller machine = higher"), work=(60.0, "Hz: depth of the work modulation"),
+     speed=(1.5, "Hz: work cycles per second"), modfreq=(35.0, "Hz: rate of the mechanism"))
+def fm_machine(sr=DEFAULT_SR, dur=2.0, size=180.0, work=60.0, speed=1.5, modfreq=35.0):
+    """modamp = work sin(2 pi speed t); mod = modamp sin(2 pi modfreq t); the instantaneous frequency is size + mod."""
+    n = samples(float(dur), sr)
+    t = np.arange(n) / sr
+    mod = float(work) * np.sin(2 * np.pi * float(speed) * t) * np.sin(2 * np.pi * float(modfreq) * t)
+    x = O.sine(np.maximum(float(size) + mod, 1.0), n, sr)
+    return x * adsr(float(dur) - 0.05, 0.02, 0.0, 1.0, 0.05, sr)[:n] * 0.6

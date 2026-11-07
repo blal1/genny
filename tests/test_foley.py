@@ -5,6 +5,7 @@ Run:  uv run --with pytest pytest tests/test_foley.py -q     (or: uv run python 
 import math
 
 import numpy as np
+import pytest
 
 from genny import drums as D
 from genny import foley as fo
@@ -183,7 +184,7 @@ def test_gunshot_nwave_and_distance():
         crack = y[:int(0.008 * sr)]
         hi, lo = int(np.argmax(crack)), int(np.argmin(crack))
         if d >= 150:                                               # the crack stands clear of the blast
-            assert abs((lo - hi) / sr * 1e3 - 2.0) < 0.3, (d, (lo - hi) / sr * 1e3)
+            assert abs((lo - hi) / sr * 1e3 - fo.crack_ms("rifle")) < 3e3 / sr, (d, (lo - hi) / sr * 1e3)   # 3 samples: the declicker rounds it
         env = np.convolve(np.abs(y), np.ones(96) / 96, "same")
         want = d * (1 / fo.C_AIR - 1 / v)
         a = int((want + 0.004) * sr)                               # the blast window: after its predicted arrival
@@ -274,10 +275,13 @@ def test_bell_partials_match_the_table():
                 worst = max(worst, abs(1200 * math.log2(f / tab[j])))
             n += 1
         hum = _peak_hz(y[int(0.05 * SR):], SR, f_note * 0.97, f_note * 1.03)
+        assert n >= 6 and worst < 3.0, (typ, n, worst)
+        if t["kind"] == "vdd":                              # a recording: unsorted modes, a single hum, no doublet to average
+            assert abs(1200 * math.log2(hum / f_note)) < 10, (typ, hum)
+            continue
         lo, hi = t["freqs"][0] * k, t["freqs"][1] * k
         print(f"{typ:9s} hum doublet {lo:.2f}/{hi:.2f} Hz for a written {f_note} Hz, measured hum peak {hum:.2f}; {n} spectral peaks, all within {worst:.2f} cents"
               f" of a table mode; next partials / hum {[round(x / t['freqs'][0], 3) for x in t['freqs'][2:9:2]]}")
-        assert n >= 6 and worst < 3.0, (typ, n, worst)
         assert lo - 0.5 < hum < hi + 0.5 and abs(1200 * math.log2(hum / f_note)) < 10, (typ, hum)
         assert abs(1200 * math.log2((lo * g[0] + hi * g[1]) / (g[0] + g[1]) / f_note)) < 0.01
     # prime tuning moves the same table so that the second doublet is the written note
@@ -468,3 +472,68 @@ def test_aero_sfx_render():
                      ("aeolian_harp", {"dur": 1.0})):
         y = S.REGISTRY[name]["fn"](SR, **kw)
         assert y.ndim == 1 and np.isfinite(y).all() and np.abs(y).max() > 0.1
+
+
+def test_gun_crack_is_whithams_n_wave():
+    from genny.arms import CALIBERS, n_wave_pa
+    d, l = CALIBERS["762x51"][:2]
+    assert abs(fo.crack_ms("rifle") - n_wave_pa(850.0, d, l, fo.CRACK_MISS)[1] * 1e3) < 1e-9
+    assert 0.1 < fo.crack_ms("rifle") < 0.3 and fo.crack_ms("silenced") == 0.0
+    y = fo._gunshot("rifle", np.random.default_rng(0), 0.0, 1.0, 50.0, 0.0)
+    w = y[:fo._n(0.002)]
+    assert abs((int(np.argmin(w)) - int(np.argmax(w))) / fo.P * 1e3 - fo.crack_ms("rifle")) < 1.5e3 / fo.P
+
+
+def test_aeolian_strouhal_against_published_table():
+    from genny.physical import modal as m
+    for u, d, f in ((20, 4, 1038), (40, 4, 1988), (15, 6, 515), (69, 19, 674), (68.58, 12.7, 1008), (42.67, 12.7, 635),
+                    (16.6, 25.4, 125), (26.7, 25.4, 197), (32.3, 25.4, 238)):
+        re = m.RHO_AIR * u * d * 1e-3 / m.MU_AIR
+        got = float(m.fey_strouhal(np.array([re]))[0]) * u / (d * 1e-3)
+        assert abs(got / f - 1.0) < 0.005, (u, d, got, f)
+
+
+def test_guitar_body_two_oscillators():
+    f1, f2 = fo.guitar_body_modes(200.0, 100.0, 0.014, 0.2, 0.0814)
+    assert abs(f1 - 86.0) < 1.0 and abs(f2 - 206.5) < 1.0
+    assert abs(f1 ** 2 + f2 ** 2 - (200.0 ** 2 + 100.0 ** 2)) < 1e-6 * 5e4          # w1^2 + w2^2 = wp^2 + wh^2
+    assert fo.guitar_body_modes(top_area=1e-4) == pytest.approx((100.0, 200.0), rel=1e-3)   # uncoupled
+
+
+def test_body_hit_size_law():
+    def centroid(y):
+        X = np.abs(np.fft.rfft(y)) ** 2
+        f = np.fft.rfftfreq(len(y), 1 / SR)
+        return float((X * f).sum() / X.sum())
+
+    def peak(y):
+        f = np.fft.rfftfreq(len(y), 1 / SR)
+        return float(f[np.argmax(np.abs(np.fft.rfft(y)) * (f > 100.0))])
+    for mat, how in (("stone", centroid), ("bone", peak)):
+        a, b = (how(S.render_sfx("body_hit", SR, material=mat, size=k)) for k in (1.0, 4.0))
+        want = fo.body_hit_scale(mat, 4.0) / fo.body_hit_scale(mat, 1.0)
+        assert abs(b / a / want - 1.0) < 0.2, (mat, b / a, want)
+    assert abs(fo.body_hit_scale("flesh", 4.0) - 0.25) < 1e-12
+
+
+def test_weapon_bodies_and_targets():
+    for w in fo.WEAPON_BODIES:
+        for t in fo._TARGETS:
+            y = S.render_sfx("stab", SR, target=t, weapon=w)
+            assert np.isfinite(y).all() and np.abs(y).max() > 0.1, (w, t)
+    assert fo._hit_ms("heavy", "flesh", False) == 35.0 and fo._hit_ms("blade", "stone", True) == 0.05
+    assert fo._hit_ms("blade", "flesh", False) == fo._TARGET_MS["flesh"][0]          # the blade keeps its measured contacts
+
+
+def test_casing_ricochet_option():
+    from genny.arms import casing_ricochet
+    a = S.render_sfx("casing", SR, ricochet=True, seed=3)
+    b = casing_ricochet(SR, "556", "concrete", 1.2, 1, 0.25, seed=3)
+    assert len(a) == len(b) and np.allclose(a, b)
+
+
+def test_helmholtz_end_corrections():
+    assert (fo.END_FLANGED, fo.END_UNFLANGED) == (0.8216, 0.6133)
+    r, V, L = 9.25e-3, 750e-6, 0.08
+    want = fo.C_AIR / (2 * math.pi) * math.sqrt(math.pi * r * r / (V * (L + 1.4349 * r)))
+    assert abs(fo.helmholtz_hz(750.0, 18.5, 80.0) - want) < 1e-9

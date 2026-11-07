@@ -249,21 +249,51 @@ def epiano(freq, dur, sr=DEFAULT_SR, vel=1.0, tremolo=0.2, decay=1.8):
     return y * (0.4 + 0.6 * vel)
 
 
+ORGAN_CLICK_DECAY = 0.07
+
+
 @instrument("organ", "Drawbar organ with rotary wobble; the top drawbars fold back an octave on high notes like a Hammond.",
-            family="keys", span=("C2", "C6"), rotary=(0.3, "0..1"), upper=(1.0, "level of the upper drawbars: 0 = flute stops only .. 1.5 = full"))
-def organ(freq, dur, sr=DEFAULT_SR, vel=1.0, rotary=0.3, upper=1.0):
+            family="keys", span=("C2", "C6"), rotary=(0.3, "0..1"), upper=(1.0, "level of the upper drawbars: 0 = flute stops only .. 1.5 = full"),
+            registration=("", "nine drawbar digits 0-8 (16', 5 1/3', 8', 4', 2 2/3', 2', 1 3/5', 1 1/3', 1'), e.g. 888000000 jazz, 888888888 full; 3 dB per step; empty = the default voicing"),
+            key_click=(0.0, "0..1 key-contact click: 1 ms of noise at 0.1 x the note level"),
+            click=("noise", "noise | wheel: the click is the 6th harmonic keyed with the note, fading to zero in 70 ms"))
+def organ(freq, dur, sr=DEFAULT_SR, vel=1.0, rotary=0.3, upper=1.0, registration="", key_click=0.0, click="noise"):
     rel = 0.05
     n = _n(dur, sr, rel)
     x = np.zeros(n)
-    for h, g in zip((1, 2, 3, 4, 6, 8), (1.0, 0.6, 0.4, 0.3, 0.2, 0.1)):
-        fh = freq * h
-        while fh > 4200.0 and fh > freq * 1.01:   # tonewheel fold-back
-            fh /= 2
-        x += g * (upper if h > 2 else 1.0) * float(_roll(fh, 3500.0) / _roll(freq, 3500.0)) * O.sine(fh, n, sr)
-    x /= 2.6
+    if registration:
+        digits = [int(c) for c in str(registration).ljust(9, "0")[:9]]
+        for h, d in zip((0.5, 1.5, 1, 2, 3, 4, 5, 6, 8), digits):
+            if d == 0:
+                continue
+            fh = freq * h
+            while fh > 4200.0 and fh > freq * 1.01:
+                fh /= 2
+            x += 10.0 ** (3.0 * (d - 8) / 20.0) * O.sine(fh, n, sr)
+        x /= max(sum(10.0 ** (3.0 * (d - 8) / 20.0) for d in digits if d), 1.0)
+        env = adsr(dur, 0.005, 0.0, 1.0, 0.005, sr)
+    else:
+        for h, g in zip((1, 2, 3, 4, 6, 8), (1.0, 0.6, 0.4, 0.3, 0.2, 0.1)):
+            fh = freq * h
+            while fh > 4200.0 and fh > freq * 1.01:   # tonewheel fold-back
+                fh /= 2
+            x += g * (upper if h > 2 else 1.0) * float(_roll(fh, 3500.0) / _roll(freq, 3500.0)) * O.sine(fh, n, sr)
+        x /= 2.6
+        env = adsr(dur, 0.01, 0.0, 1.0, rel, sr)
     if rotary > 0:
         x *= 1 - rotary * 0.3 * (1 + lfo(n / sr, 6.0, sr)[:n]) / 2
-    return apply(x, adsr(dur, 0.01, 0.0, 1.0, rel, sr)) * 0.7 * (0.6 + 0.4 * vel)
+    y = apply(x, env)
+    if key_click > 0 and click == "wheel":
+        fh = freq * 6
+        while fh > 4200.0 and fh > freq * 1.01:
+            fh /= 2
+        m = min(samples(ORGAN_CLICK_DECAY, sr), n)
+        fade = env[:m] * (1.0 - np.arange(m) / max(samples(ORGAN_CLICK_DECAY, sr), 1))
+        y[:m] += float(key_click) * float(np.max(np.abs(y)) + 1e-12) * fade * O.sine(fh, m, sr)
+    elif key_click > 0:
+        m = min(samples(0.001, sr), n)
+        y[:m] += float(key_click) * 0.1 * float(np.max(np.abs(y)) + 1e-12) * O.white(m, seed=int(freq))
+    return y * 0.7 * (0.6 + 0.4 * vel)
 
 
 # ---------------------------------------------------------------- plucked strings
@@ -411,12 +441,24 @@ def strings(freq, dur, sr=DEFAULT_SR, vel=1.0, attack=0.25, release=0.5):
 
 
 @instrument("brass", "Synth brass section with an opening filter (fanfares, stabs).", family="brass", span=("C2", "C6"),
-            attack=(0.06, "s"), bright=(1.0, "0.5 mellow .. 2 blaring"))
-def brass(freq, dur, sr=DEFAULT_SR, vel=1.0, attack=0.06, bright=1.0):
+            attack=(0.06, "s"), bright=(1.0, "0.5 mellow .. 2 blaring"),
+            follow=(0, "1 = the cutoff follows the amplitude envelope, f (1.5 + 10 bright vel env), with a pitch scoop"))
+def brass(freq, dur, sr=DEFAULT_SR, vel=1.0, attack=0.06, bright=1.0, follow=0):
     rel = 0.25
     n = _n(dur, sr, rel)
-    x = O.saw(freq, n, sr) * 0.7 + O.saw(freq * 1.005, n, sr) * 0.3
     t = np.arange(n) / sr
+    if follow:
+        rel = 0.08
+        n = _n(dur, sr, rel)
+        t = np.arange(n) / sr
+        f = freq * (1.0 - 0.02 * np.exp(-t / 0.04))
+        x = O.saw(f, n, sr) * 0.7 + O.saw(f * 1.005, n, sr) * 0.3
+        env = adsr(dur, 0.07, 0.1, 0.85, rel, sr)[:n]
+        env = np.concatenate([env, np.zeros(n - env.size)])
+        fenv = np.minimum(freq * (1.5 + 10.0 * bright * vel * env), 0.45 * sr)
+        x = F.biquad(x, "lowpass", fenv, sr, q=1.1, order=2)
+        return x * env * 0.55 * (0.5 + 0.5 * vel)
+    x = O.saw(freq, n, sr) * 0.7 + O.saw(freq * 1.005, n, sr) * 0.3
     pk = max(2600.0 * vel * bright, min(freq * 1.6, 3600.0))
     fenv = 350 + pk * (1 - np.exp(-t / 0.08)) * (0.6 + 0.4 * np.exp(-t / 0.5))
     x = F.biquad(x, "lowpass", fenv, sr, q=1.1, order=2)
@@ -474,13 +516,26 @@ def glass(freq, dur, sr=DEFAULT_SR, vel=1.0):
     return x * perc(ring, 0.004, sr, curve=1.2) * 0.75 * (0.55 + 0.45 * vel)
 
 
+def _bar_tube(x, freq, sr, level):
+    """Bar plus its tuned stopped tube (Doutaut, Matignon & Chaigne, JASA 1998, sec. III-IV): radius 18.5 mm, the tube
+    keeps the fundamental, the bar's upper partials stay about 20 dB under it. wet level = the bar's RMS x `level`;
+    bars above 2 kHz (a 4 cm tube) go without. # ponytail: the 2(d + l)/c arrival is the tube's own transit, d = 0."""
+    if level <= 0 or freq > 2000.0:
+        return x
+    from .tubes import _pipe, _through
+    t = _pipe(round(float(freq), 2), 0.0185, 1.0)
+    wet = np.asarray(_through(x, sr, lambda u: t.run(u, src_pos=1.5 / t.N, pick_pos=0.72)["u_out"], 1.0))
+    return x + min(float(level), 2.0) * wet * np.sqrt(np.mean(x * x) / (np.mean(wet * wet) + 1e-30))
+
+
 @instrument("marimba", "Wooden mallet on a rosewood bar with resonator: round, woody, short.", family="mallet", span=("C2", "C7"),
-            decay=(0.6, "seconds"))
-def marimba(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=0.6):
+            decay=(0.6, "seconds"), resonator=(1.0, "0..2 level of the stopped tube under the bar"))
+def marimba(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=0.6, resonator=1.0):
     ring = max(dur, decay * _kt(freq, 1.3, 0.6, f_lo=130.0))
     n = _n(ring, sr)
     x = _modes(freq, n, sr, [(1.0, 1.0, ring / 2.2), (4.0, 0.3 * vel, ring / 9), (9.2, 0.1 * vel, ring / 22)], corner=2600.0)
     click = F.bandpass(O.white(n, seed=11), _cut(freq, 3, 700, 2200), sr, 0.8) * decay_env(n, 0.004, sr) * 0.12 * vel
+    x = _bar_tube(x, freq, sr, resonator)
     return (x + click) * perc(ring, 0.001, sr, curve=1.0) * (0.6 + 0.4 * vel)
 
 
@@ -494,11 +549,12 @@ def kalimba(freq, dur, sr=DEFAULT_SR, vel=1.0):
 
 
 @instrument("vibraphone", "Vibraphone: soft mallets on metal bars with motor tremolo.", family="mallet", span=("F3", "F6"),
-            motor=(4.5, "tremolo Hz (0 = motor off)"))
-def vibraphone(freq, dur, sr=DEFAULT_SR, vel=1.0, motor=4.5):
+            motor=(4.5, "tremolo Hz (0 = motor off)"), resonator=(1.0, "0..2 level of the stopped tube under the bar"))
+def vibraphone(freq, dur, sr=DEFAULT_SR, vel=1.0, motor=4.5, resonator=1.0):
     ring = max(dur, 1.8)
     n = _n(ring, sr)
     x = _modes(freq, n, sr, [(1.0, 1.0, 0.9), (4.0, 0.25 * vel, 0.3), (10.0, 0.06 * vel, 0.06)], corner=2800.0)
+    x = _bar_tube(x, freq, sr, resonator)
     if motor > 0:
         x *= 1 - 0.3 * (1 + lfo(n / sr, motor, sr)[:n]) / 2
     return x * perc(ring, 0.002, sr, curve=1.0) * _off(n, dur + 0.6, sr, 0.25) * 0.8 * (0.6 + 0.4 * vel)
@@ -658,12 +714,18 @@ from ._levels import TRIM  # noqa: E402
 # -----------------------------------------------------------------------------
 # Physical-engine compatibility override (v0.5)
 @instrument("piano", "Concert grand (Steinway D strings and hammers): modal strings with measured damping, hereditary felt hammer, "
-            "beating unisons with two-stage decay, phantom partials, modal soundboard (Bank 2010).",
-            family="keys", span=("A0", "C8"), decay=(2.5, "ring: 2.5 as measured, higher rings longer"), bright=(1.0, "felt hardness: 0.5 mellow .. 2 bright"))
-def piano(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=2.5, bright=1.0):
+            "beating unisons with two-stage decay, phantom partials, modal soundboard.",
+            family="keys", span=("A0", "C8"), decay=(2.5, "ring: 2.5 as measured, higher rings longer"), bright=(1.0, "felt hardness: 0.5 mellow .. 2 bright"),
+            unison=(0.0, "trichord tuning factor e_p (0..1, 0.999 = +-0.87 cent); 0 = tuners' spread"),
+            pedal=(0, "1 = sustain pedal down: the note is not damped and every other string rings in sympathy"),
+            soft=(0, "1 = una corda (left pedal): the hammer misses one string, softer and rounder"),
+            lid=("open", "open | half | closed: a closed lid takes the top off (above 2 kHz)"))
+def piano(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=2.5, bright=1.0, unison=0.0, pedal=0, soft=0, lid="open"):
     from .physical import bank_piano
     y = bank_piano.note(freq, dur, sr, vel, tail=1.0, loss=2.5 / float(np.clip(decay, 0.3, 20.0)),
-                        hardness=float(np.clip(bright, 0.3, 3.0)))
+                        hardness=float(np.clip(bright, 0.3, 3.0)),
+                        tuning_factor=float(unison) if 0.0 < float(unison) < 1.0 else None,
+                        pedal=bool(pedal), una_corda=bool(soft), lid_state=str(lid))
     # Every note at the same peak, then the usual velocity scale: the hammer already makes a soft note darker
     return y / (np.max(np.abs(y)) + 1e-12) * (0.3 + 0.7 * float(np.clip(vel, 0.0, 1.0)))
 

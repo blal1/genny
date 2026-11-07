@@ -46,9 +46,10 @@ import math
 
 import numba
 import numpy as np
+from scipy.ndimage import uniform_filter1d
 
 from . import modal_data as md
-from .core import (SR, DEV_DIR, contact_pulse, decay_rate, one_pole_coef, one_pole_lp, pow_decay, rate_radius, seconds,
+from .core import (SR, DEV_DIR, contact_pulse, decay_rate, one_pole_coef, one_pole_lp, pow_decay, rate_radius, seconds, soft_ends,
                    spectrum_peaks, tv_bandpass, write_wav)
 
 LN1000 = float(np.log(1000.0))
@@ -59,10 +60,10 @@ LN1000 = float(np.log(1000.0))
 # ==========================================================================================
 
 @numba.njit(cache=True)
-def _bank(x, b0, b2, a1, a2, stop, kill, fade):
+def _bank(x, b0, b2, a1, a2, stop, tails, kill, fade):
     """Sum of biquads y_k = b0 x + b2 x[n-2] - a1 y[n-1] - a2 y[n-2].
 
-    ``stop[k]``: sample after which mode k is no longer computed (it has decayed away).
+    ``stop[k]``: sample after which mode k is no longer computed (it has decayed away); it closes over the ``tails[k]`` samples before.
     ``kill``: sample at which every resonator state is destroyed (-1: never); the output of
     the killed modes ramps to zero over ``fade`` samples (fracture spectral discontinuity).
     """
@@ -76,6 +77,7 @@ def _bank(x, b0, b2, a1, a2, stop, kill, fade):
         end = min(n, stop[k])
         if kill >= 0:
             end = min(end, kill + fade)
+        tail = stop[k] - tails[k]                       # the last stretch before the floor closes: a mode stopping dead is a step
         for i in range(end):
             xi = x[i]
             yi = b0[k] * xi + b2[k] * x2 - a1[k] * y1 - a2[k] * y2
@@ -85,6 +87,9 @@ def _bank(x, b0, b2, a1, a2, stop, kill, fade):
             y1 = yi
             if kill >= 0 and i >= kill:
                 g = 1.0 - (i - kill) / fade
+                y[i] += yi * g * g
+            elif i >= tail:
+                g = math.cos(0.5 * math.pi * (i - tail + 1) / tails[k])
                 y[i] += yi * g * g
             else:
                 y[i] += yi
@@ -119,9 +124,19 @@ class Modes:
         return Modes(self.freqs[mask], self.decays[mask], self.gains[mask], self.form, self.norm)
 
 
-def _interp_rows(rows, position: float) -> np.ndarray:
-    """Gain vector at a fractional strike position in [0, 1] across the measured points."""
+def _interp_rows(rows, position, grid=None) -> np.ndarray:
+    """Gain vector at a fractional strike position in [0, 1] across the measured points. With ``grid`` = (ny, nx),
+    the rows are points measured on a surface (row-major) and ``position`` = (u, v) in [0, 1]^2 is bilinear."""
     rows = np.asarray(rows, float)
+    if grid is not None and np.ndim(position) == 1:
+        ny, nx = int(grid[0]), int(grid[1])
+        R = rows.reshape(ny, nx, -1)
+        u = float(np.clip(position[0], 0.0, 1.0)) * (nx - 1)
+        v = float(np.clip(position[1], 0.0, 1.0)) * (ny - 1)
+        i, j = min(int(u), max(nx - 2, 0)), min(int(v), max(ny - 2, 0))
+        a, b = u - i, v - j
+        i1, j1 = min(i + 1, nx - 1), min(j + 1, ny - 1)
+        return ((1 - a) * (1 - b) * R[j, i] + a * (1 - b) * R[j, i1] + (1 - a) * b * R[j1, i] + a * b * R[j1, i1])
     if len(rows) == 1:
         return rows[0]
     p = np.clip(position, 0.0, 1.0) * (len(rows) - 1)
@@ -150,12 +165,14 @@ def resolve(table: dict | str, f_scale: float = 1.0, position: float = 0.0, *, d
     if kind == "vdd":
         f = np.asarray(t["freqs"]) * t["fscale"] * f_scale
         d = np.asarray(t["decays"]) * t["dscale"] * d_scale
-        g = _interp_rows(t["gains"], position) * t["ascale"] * a_scale
+        if t is md.SY_S100:                                  # points x = 0.025 .. 0.5 of a string: fold past the middle
+            position = 2.0 * min(float(position), 1.0 - float(position))
+        g = _interp_rows(t["gains"], position, t.get("grid")) * t["ascale"] * a_scale
         m = Modes(f, d, g, "vdd")
         return m.keep((f > 0) & (f < 0.45 * SR))            # VdD code: skip fn >= 0.45 sr
     if kind == "faust":
         n = len(t["gains"][0])
-        g = _interp_rows(t["gains"], position) * a_scale
+        g = _interp_rows(t["gains"], position, t.get("grid")) * a_scale
         if "ratios" in t:                                    # marimbaBarModel(freq, ...)
             base = (f0 or 65.4) * f_scale
             r = np.asarray(t["ratios"])
@@ -208,7 +225,7 @@ def render_modes(force: np.ndarray, modes: Modes, *, kill_at: int = -1, fade_ms:
     ring = np.log(10 ** (-floor_db / 20)) / np.maximum(modes.decays, 1e-6)
     stop = (last + ring * SR + 2).astype(np.int64)
     fade = max(int(fade_ms * 1e-3 * SR), 1)
-    return _bank(force, b0, b2, a1, a2, stop, int(kill_at), fade)
+    return _bank(force, b0, b2, a1, a2, stop, np.maximum((0.1 * ring * SR).astype(np.int64), 1), int(kill_at), fade)
 
 
 def ring_time(modes: Modes, db: float = 60.0) -> float:
@@ -222,9 +239,27 @@ def ring_time(modes: Modes, db: float = 60.0) -> float:
     return float(t[below[0]]) if len(below) else 60.0
 
 
+def tension_glide(modes: Modes, n: int, alpha: float) -> np.ndarray:
+    """Free decay of string ``modes`` (mode m at wavenumber m pi, m = f / f_min) under Kirchhoff-Carrier tension:
+    every frequency scales by sqrt(1 + alpha^2 / 2 ||u_x||^2), ||u_x||^2 averaged over a cycle = sum (m pi A_m)^2 / 4."""
+    t = np.arange(int(n)) / SR
+    k = np.pi * modes.freqs / modes.freqs.min()
+    G = np.ones(t.size)
+    for km, g, d in zip(k, modes.gains, modes.decays):
+        G += float(alpha) ** 2 / 8.0 * (km * g) ** 2 * np.exp(-2.0 * d * t)
+    s = np.sqrt(G) / SR
+    y = np.zeros(t.size)
+    for f, g, d in zip(modes.freqs, modes.gains, modes.decays):
+        y += g * np.exp(-d * t) * np.sin(2.0 * np.pi * f * np.cumsum(s))
+    return y
+
+
 # ==========================================================================================
 # Excitation
 # ==========================================================================================
+
+MICRO_WINDOW_MS = 15.0
+
 
 def bang(ms: float, magnitude: float = 1.0) -> np.ndarray:
     """VdD ``BangForce``: 0.5 (1 - cos(2 pi (i+1)/(N+1))), scaled to area ``magnitude``."""
@@ -258,22 +293,20 @@ def faust_strike(n: int, rng: np.random.Generator, cutoff: float = 7000.0, sharp
 
 def micro_collisions(force: np.ndarray, modes: Modes, count: int, contact_ms: float, velocity: float,
                      rng: np.random.Generator, start: int = 0) -> None:
-    """Add FoleyAutomatic micro-collisions in place: a short train of re-contacts spaced by the
-    periods of the dominant mode (VdD-P p.5).
-
-    # UNSOURCED: the re-contact spacing (1-3 periods of the dominant mode), the amplitude ratio
-    # (0.35-0.7 per re-contact) and the halved contact time are not given by the source.
-    """
-    if count <= 0 or len(modes.freqs) == 0:
+    """Add FoleyAutomatic micro-collisions in place: a short train of re-contacts, each spaced by
+    the period of one of the four lowest modes, the whole train within ``MICRO_WINDOW_MS`` of the
+    first contact (VdD-P p.5)."""
+    f = np.sort(modes.freqs[modes.freqs > 0])[:4]
+    if count <= 0 or len(f) == 0:
         return
-    dom = modes.freqs[int(np.argmax(np.abs(modes.gains)))]
+    end = min(start + int(MICRO_WINDOW_MS * 1e-3 * SR), len(force))
     t = start + len(bang(contact_ms))
     amp = velocity
     for _ in range(count):
-        t += int(round(rng.integers(1, 4) * SR / dom))
+        t += int(round(SR / f[rng.integers(len(f))]))
         amp *= rng.uniform(0.35, 0.7)
         p = bang(contact_ms * 0.5, amp)
-        if t + len(p) >= len(force):
+        if t + len(p) > end:
             break
         force[t:t + len(p)] += p
 
@@ -315,6 +348,8 @@ def strike(table: dict | str, f_scale: float = 1.0, contact_ms: float = 1.0, pos
     if dur is None and natural > max_dur:
         nf = int(0.2 * len(y))
         y[-nf:] *= pow_decay(nf, 4.0)
+    elif dur is None:                                       # the buffer stops at -60 dB, a step: its last tenth closes
+        y *= soft_ends(len(y), 1, max(len(y) // 10, 1))
     return y
 
 
@@ -368,18 +403,42 @@ def _ead4(n: int, attack_ms: float, decay_s: float) -> np.ndarray:
     return line ** 4
 
 
+# Per-partial attack, decay and onset delay (ms): the highs leave first, the fundamental blooms after 400 ms.
+ADDITIVE_TABLES = {
+    "delayed_bell": {"ratios": (1.0, 2.06, 2.44, 4.06, 5.52, 6.14, 8.1, 11.2, 13.9, 17.0),
+                     "attacks_ms": (300, 700, 400, 200, 37, 31, 20, 15, 5, 2),
+                     "decay_ms": (9000, 8000, 7000, 6000, 5000, 4000, 3000, 1500, 1000, 500),
+                     "delays_ms": (400, 100, 32, 20, 17, 12, 7, 5, 2, 0), "amp_scale": 0.08, "phases": "free"},
+    "struck_wire": {"ratios": (1.0, 2.01, 4.02, 6.06, 8.12, 10.25, 12.5, 14.8, 17.0, 19.02),
+                    "attacks_ms": (300, 700, 400, 200, 37, 31, 20, 15, 5, 2),
+                    "decay_ms": (9000, 8000, 7000, 6000, 5000, 3200, 1600, 800, 600, 300),
+                    "delays_ms": (400, 100, 32, 20, 17, 12, 7, 5, 2, 0), "amp_scale": 0.01, "phases": "aligned"},
+}
+
+
 def additive_bell(table: dict | str, f0: float, dur: float, rng: np.random.Generator | None = None) -> np.ndarray:
     """Risset (``risset_bell``) or chinatown (``chinabell``) additive bell.
 
     Risset: partial k at ratio*f0 + detune, amplitude amp*0.1, quartic envelope with 5 ms attack
     and decay over dur*rel_duration. Chinabell: ratio*f0, amp, ead~(5 ms, decay_ms)^4 (``dur``
     unused except as the render length). Phases free-run (random), as Farnell allows for bells.
+    A table with ``delays_ms`` (``ADDITIVE_TABLES``: ``delayed_bell``, ``struck_wire``) gives each partial its own
+    attack, decay and onset delay; ``phases`` aligned starts every partial at phase 0.
     """
     rng = rng or np.random.default_rng(0)
-    t = md.TABLES[table] if isinstance(table, str) else table
+    t = (ADDITIVE_TABLES.get(table) or md.TABLES[table]) if isinstance(table, str) else table
     n = seconds(dur)
     tt = np.arange(n) / SR
     out = np.zeros(n)
+    if "delays_ms" in t:
+        aligned = t.get("phases") == "aligned"
+        for r, a_ms, d_ms, w_ms in zip(t["ratios"], t["attacks_ms"], t["decay_ms"], t["delays_ms"]):
+            k = min(int(w_ms * 1e-3 * SR), n)
+            env = np.zeros(n)
+            env[k:] = _ead4(n - k, a_ms, d_ms * 1e-3)
+            ph = 0.0 if aligned else rng.uniform(0, 2 * np.pi)
+            out += env * t["amp_scale"] * np.sin(2 * np.pi * r * f0 * tt + ph)
+        return out
     if "rel_durations" in t:
         for a, rd, r, dt in zip(t["amps"], t["rel_durations"], t["ratios"], t["detune_hz"]):
             env = _ead4(n, t["attack_ms"], dur * rd) * a * t["amp_scale"]
@@ -438,7 +497,7 @@ def _scaled_piece(parent: Modes, gamma: float, alpha: float, beta: float) -> Mod
 def _ground_slab(rng: np.random.Generator, n_modes: int = 1000) -> Modes:
     """Concrete slab 9 x 9 x 0.9 m, 1000 modes in 700 Hz - 4 kHz (Z-J §2.3).
 
-    # UNSOURCED: Z-J give only the band and mode count; frequencies are drawn uniformly, gains
+    # Z-J give only the band and mode count; frequencies are drawn uniformly, gains
     # Gaussian / sqrt(N), and the decay rate 60 /s (a dull concrete thud) is chosen here.
     """
     f = rng.uniform(700.0, 4000.0, n_modes)
@@ -447,11 +506,39 @@ def _ground_slab(rng: np.random.Generator, n_modes: int = 1000) -> Modes:
     return Modes(f, d, g, "vdd")
 
 
+FRACTURE_ETA = 0.8          # at most this share of the strain energy goes into new crack surface
+
+
+def fracture_budget(mass: float, velocity: float, size: float, toughness: float,
+                    strain_share: float = 0.5) -> tuple[int, float]:
+    """Energy budget of a brittle break: E_S = strain_share m v^2 / 2, crack area A_F = eta E_S / G_c; a body of
+    side `size` cut into n equal cells has 3 size^2 (n^(1/3) - 1) of new surface, so n = (1 + A_F / 3 size^2)^3.
+    Returns (pieces, kinetic energy released to the debris E_S - G_c A_F)."""
+    es = float(strain_share) * 0.5 * mass * velocity * velocity
+    af = FRACTURE_ETA * es / max(float(toughness), 1e-9)
+    n = int(np.clip(round((1.0 + af / (3.0 * size * size)) ** 3), 2, 64))
+    return n, es - toughness * af
+
+
+def ellipsoid_axes(inertia, mass: float) -> np.ndarray:
+    """Semi-axes of the solid ellipsoid with the same principal moments: a^2 = 5 (I2 + I3 - I1) / (2 m), ..."""
+    i1, i2, i3 = (float(v) for v in inertia)
+    s = 5.0 / (2.0 * mass)
+    return np.sqrt(np.maximum(s * np.array([i2 + i3 - i1, i1 + i3 - i2, i1 + i2 - i3]), 0.0))
+
+
+def ellipsoid_gamma(piece_axes, parent_axes) -> float:
+    """Size ratio of a debris proxy to its parent: for the same shape family the modes go as 1/size, so gamma =
+    omega_parent / omega_piece is the ratio of the geometric-mean semi-axes."""
+    return float(np.prod(piece_axes) / np.prod(parent_axes)) ** (1.0 / 3.0)
+
+
 def fracture(table: dict | str, rng: np.random.Generator, *, f_scale: float = 1.0, toughness: float = 80.0,
              t_break: float = 0.004, n_pieces: int | None = None, contact_ms: float = 0.2,
              velocity: float = 1.0, fall_height: float = 0.8, restitution: float = 0.45,
              ground: bool = True, ground_gain: float = 0.3, position: float = 0.0,
-             crack_gain: float = 1.0, dur: float | None = None, f0: float | None = None) -> np.ndarray:
+             crack_gain: float = 1.0, dur: float | None = None, f0: float | None = None,
+             mass: float | None = None, size: float = 0.1) -> np.ndarray:
     """Brittle fracture as a time-varying modal model (Zheng & James, research 06 §2.4).
 
     (a)-(b) impact ``bang(contact_ms)`` makes the parent ring at its base frequency;
@@ -463,13 +550,22 @@ def fracture(table: dict | str, rng: np.random.Generator, *, f_scale: float = 1.
     (restitution), re-exciting its own modes and the ground slab.
     Lower ``toughness`` (G_c, J/m^2; glass 80, ceramic 200 in Z-J Table 1) -> more, smaller,
     higher pieces.
+    ``mass`` (kg) and ``size`` (m) switch on the energy budget: the piece count comes from
+    `fracture_budget`, every piece leaves with v = sqrt(2 dE / m) (impulse ~ its volume) and its modes are
+    scaled by gamma^-3/2 (mass-normalised shapes of a smaller body).
     """
     parent = resolve(table, f_scale, position, f0=f0)
     alpha, beta = _rayleigh_fit(parent)
+    budget = mass is not None and mass > 0
+    if budget:
+        n_auto, d_ek = fracture_budget(float(mass), float(velocity), float(size), float(toughness))
+        v_debris = math.sqrt(2.0 * max(d_ek, 0.0) / float(mass))
+        if n_pieces is None:
+            n_pieces = n_auto
     if n_pieces is None:
-        # UNSOURCED: Z-J give only the trend (lower G_c -> more debris); count = 6 at glass G_c.
+        # Z-J give only the trend (lower G_c -> more debris); count = 6 at glass G_c.
         n_pieces = int(np.clip(round(6 * 80.0 / max(toughness, 1.0)), 2, 24))
-    # UNSOURCED: volume fractions from a flat Dirichlet (Voronoi pieces seeded by strain energy
+    # volume fractions from a flat Dirichlet (Voronoi pieces seeded by strain energy
     # are not simulated here); the largest piece keeps the most energy share.
     vol = np.sort(rng.dirichlet(np.ones(n_pieces)))[::-1]
     g_grav = 9.81
@@ -503,8 +599,12 @@ def fracture(table: dict | str, rng: np.random.Generator, *, f_scale: float = 1.
         gamma = vol[i] ** (1.0 / 3.0)
         piece = _scaled_piece(parent, gamma, alpha, beta)
         fpi = np.zeros(n)
-        # UNSOURCED: energy share proportional to volume -> impulse amplitude sqrt(vol)
-        c = crack * crack_gain * velocity * np.sqrt(vol[i])
+        if budget:
+            piece = Modes(piece.freqs, piece.decays, piece.gains * gamma ** -1.5, piece.form, piece.norm)
+            c = crack * crack_gain * v_debris * vol[i]
+        else:
+            # energy share proportional to volume -> impulse amplitude sqrt(vol)
+            c = crack * crack_gain * velocity * np.sqrt(vol[i])
         fpi[kb:kb + len(c)] += c[: n - kb]
         for (j, t, v) in events:
             if j != i:
@@ -512,7 +612,7 @@ def fracture(table: dict | str, rng: np.random.Generator, *, f_scale: float = 1.
             k = seconds(t)
             if k >= n:
                 continue
-            # UNSOURCED: bounce contact 0.1 ms at 1 m/s, amplitude ~ v * sqrt(volume)
+            # bounce contact 0.1 ms at 1 m/s, amplitude ~ v * sqrt(volume)
             p = bang(contact_time(0.1, v), v / v_imp * np.sqrt(vol[i]) * 0.5)
             m = min(len(p), n - k)
             fpi[k:k + m] += p[:m]
@@ -531,6 +631,13 @@ RHO_AIR = 1.225          # freqCalcCyl4HiFi.pd
 MU_AIR = 1.81e-5
 C_SOUND = 343.56         # GoldfreqGainSword: c^3 = 4.05513e7
 ARM = 0.35               # SwordCorInterp arm length (m)
+_SWING_BASE = {k: md.SWORD_PRESETS["presets"]["SWD1"][k]
+               for k in ("Xpos", "Ypos", "Zpos", "PreAzim", "PostAzim", "PreElev", "PostElev", "Gain")}
+SWING_PRESETS = {**md.SWORD_PRESETS["presets"],
+                 "BROOM": {**_SWING_BASE, "Len": 1.3, "TopSpeed": 20.0, "HiltThick": 0.027,
+                           "TipThick": 0.027, "Source": "broom"},
+                 "WOODSWD": {**_SWING_BASE, "Len": 0.607, "TopSpeed": 30.0, "HiltThick": 0.0117,
+                             "TipThick": 0.0095, "Source": "wood_sword"}}
 P_REF = 2e-5             # Dipoles2017D1 dB reference
 
 
@@ -561,7 +668,7 @@ def _db_scale(g: np.ndarray, k: float, natural: bool) -> np.ndarray:
     """
     ratio = np.maximum(np.abs(g), 1e-30) / P_REF
     lg = np.log(ratio) if natural else np.log10(ratio)
-    return P_REF * 10.0 ** (k * lg)
+    return uniform_filter1d(P_REF * 10.0 ** (k * lg), seconds(0.005))   # |g|^k has an infinite slope where the directivity crosses 0 (measured: 5f, baton, 0.072 s). 5 ms
 
 
 def _cascade_bp(x, f, q):
@@ -569,12 +676,69 @@ def _cascade_bp(x, f, q):
     return tv_bandpass(tv_bandpass(x, f, q), f, q)
 
 
+CORR_LENGTH_D = 3.0
+WAKE_GAMMA = 0.2
+WAKE_POLE = 0.99
+
+
+def exp_sigmoid(x, exponent: float = 10.0, max_value: float = 2.0, threshold: float = 1e-7):
+    """Exponentiated sigmoid for positive gains: max_value * sigmoid(x) ** ln(exponent) + threshold."""
+    return max_value * _sig(np.asarray(x, float)) ** math.log(exponent) + threshold
+
+
+def goldstein_intensity(u, d: float, st, *, length: float | None = None, theta: float = 90.0, phi: float = 0.0,
+                        r: float = 1.0, kappa: float = 1.0):
+    """Lift-dipole intensity (W/m^2) of a cylinder of diameter ``d`` at speed ``u``:
+    sqrt(2 pi) kappa^2 St^2 l b rho u^6 sin^2 th cos^2 ph / (32 c^3 r^2 (1 - M cos th)^4)
+    x exp(-0.5 (2 pi M St l / d)^2 sin^2 th sin^2 ph), b = d, l = correlation length (``CORR_LENGTH_D`` d)."""
+    u = np.asarray(u, float)
+    l = CORR_LENGTH_D * d if length is None else float(length)
+    th, ph = math.radians(theta), math.radians(phi)
+    M = u / C_SOUND
+    I = (math.sqrt(2 * math.pi) * kappa ** 2 * st ** 2 * l * d * RHO_AIR * u ** 6 * math.sin(th) ** 2 * math.cos(ph) ** 2
+         / (32 * C_SOUND ** 3 * r ** 2 * (1 - M * math.cos(th)) ** 4))
+    return I * np.exp(-0.5 * (2 * math.pi * M * st * l / d) ** 2 * math.sin(th) ** 2 * math.sin(ph) ** 2)
+
+
+def wake_intensity(u, d: float, st, *, length: float | None = None, theta: float = 90.0, phi: float = 0.0,
+                   r: float = 1.0, kappa: float = 1.0, B: float = 1.0, gamma: float = WAKE_GAMMA):
+    """Lateral-quadrupole wake intensity: Gamma sqrt(2 pi) kappa^2 St^2 l b rho u^8 / (16 pi^2 c^5 (1 - M cos(pi - th))^5 r^2)
+    x [1 + B cos^4 th - (B + 3)/4 sin^2(2 th) sin^2 ph], B in [-1, 3]."""
+    u = np.asarray(u, float)
+    l = CORR_LENGTH_D * d if length is None else float(length)
+    th, ph = math.radians(theta), math.radians(phi)
+    B = float(np.clip(B, -1.0, 3.0))
+    M = u / C_SOUND
+    dirn = 1 + B * math.cos(th) ** 4 - (B + 3) / 4 * math.sin(2 * th) ** 2 * math.sin(ph) ** 2
+    return (gamma * math.sqrt(2 * math.pi) * kappa ** 2 * st ** 2 * l * d * RHO_AIR * u ** 8
+            / (16 * math.pi ** 2 * C_SOUND ** 5 * (1 - M * math.cos(math.pi - th)) ** 5 * r ** 2) * max(dirn, 0.0))
+
+
+def wake_noise(u, d: float, dur: float, rng: np.random.Generator, **kw) -> np.ndarray:
+    """Wake noise in Pa: brown noise 1 / (1 - 0.99 z^-1) through two one-pole high-passes at the shedding
+    frequency (little energy below it, falling above), scaled to sqrt(I_w rho c)."""
+    from scipy.signal import lfilter
+    n = seconds(dur)
+    u = np.broadcast_to(np.asarray(u, float), (n,)).copy()
+    st = fey_strouhal(RHO_AIR * u * d / MU_AIR)
+    fl = float(np.clip(np.median(st * u / d), 1.0, 0.45 * SR))
+    x = lfilter([1.0], [1.0, -WAKE_POLE], rng.standard_normal(n))
+    a = math.exp(-2 * math.pi * fl / SR)
+    for _ in range(2):
+        x = lfilter([(1 + a) / 2, -(1 + a) / 2], [1.0, -a], x)
+    x /= np.sqrt(np.mean(x * x)) + 1e-30
+    return x * np.sqrt(wake_intensity(u, d, st, **kw) * RHO_AIR * C_SOUND)
+
+
 def aeolian_tone(u: np.ndarray | float, d: float, dur: float, rng: np.random.Generator,
-                 model: str = "patch") -> np.ndarray:
+                 model: str = "patch", *, physical: bool = False, wake: bool = False, theta: float = 90.0,
+                 phi: float = 0.0, r: float = 1.0, length: float | None = None) -> np.ndarray:
     """One compact cylinder source at speed ``u`` (m/s, scalar or per-sample), diameter ``d`` (m).
 
     Lift fundamental only (unit gain): noise through two cascaded band-passes at St(Re) u / d
     with the bandwidth-derived Q. ``model="loq"`` fixes St = 0.2 and Q = 10 (Selfridge LoQ).
+    ``physical``: the tone is scaled to the dipole pressure sqrt(I rho c) in Pa (``goldstein_intensity``
+    at elevation ``theta``, azimuth ``phi``, distance ``r``); ``wake`` adds ``wake_noise`` on the same scale.
     """
     n = seconds(dur)
     u = np.broadcast_to(np.asarray(u, float), (n,)).copy()
@@ -582,7 +746,14 @@ def aeolian_tone(u: np.ndarray | float, d: float, dur: float, rng: np.random.Gen
     st = np.full(n, 0.2) if model == "loq" else fey_strouhal(re)
     q = np.full(n, 10.0) if model == "loq" else strouhal_q(re)
     f = np.clip(st * u / d, 1.0, 0.45 * SR)
-    return _cascade_bp(rng.standard_normal(n), f, q)
+    y = _cascade_bp(rng.standard_normal(n), f, q)
+    if not (physical or wake):
+        return y
+    kw = dict(length=length, theta=theta, phi=phi, r=r)
+    y = y / (np.sqrt(np.mean(y * y)) + 1e-30) * np.sqrt(goldstein_intensity(u, d, st, **kw) * RHO_AIR * C_SOUND)
+    if wake:
+        y = y + wake_noise(u, d, dur, rng, **kw)
+    return y
 
 
 def _sig(x):
@@ -750,12 +921,14 @@ _ABSORB = ((90, 0.0), (180, 0.2), (355, 0.6), (710, 1.0), (1400, 1.8), (2800, 3.
 
 
 def propeller_tone(rpm, blades: int, radius: float, power_hp: float, dur: float, rng: np.random.Generator, *,
-                   chord: float = 0.15, angle: float = 110.0, distance: float = 30.0) -> np.ndarray:
+                   chord: float = 0.15, angle: float = 110.0, distance: float = 30.0, vortex_harmonics: int = 1,
+                   chord_tip: float | None = None) -> np.ndarray:
     """Propeller in pascals at ``distance`` m, ``angle`` degrees from the flight direction (Selfridge et al.
     2017). Loading noise: the ten-step Hamilton Standard estimate (eqs 3-11, dB re 20 uPa) for harmonics
     1..10 of the blade-passing frequency, each band-passed noise; atmospheric absorption from Table 2.
     Vortex noise: seven compact Aeolian sources per blade at St 0.85 on the chord (eq. 13), Q from the
-    cylinder bandwidth law, intensity of eq. 2 at the source's own speed, p = sqrt(I rho c)."""
+    cylinder bandwidth law, intensity of eq. 2 at the source's own speed, p = sqrt(I rho c). ``vortex_harmonics`` up to 3
+    adds 0.85 N u / chord at 1 / N^2; ``chord_tip``: the chord tapers linearly from ``chord`` at the root."""
     n = seconds(dur)
     rpm = np.maximum(np.broadcast_to(np.asarray(rpm, float), (n,)), 1.0)
     B, R, D = max(int(blades), 1), max(float(radius), 0.05), 2.0 * max(float(radius), 0.05)
@@ -778,7 +951,9 @@ def propeller_tone(rpm, blades: int, radius: float, power_hp: float, dur: float,
         y += g * _bp(rng.standard_normal(n), f, np.full(n, 75.0))
     span = R / 7.0
     s2 = math.sin(math.radians(th)) ** 2
+    c0 = chord
     for i in range(7):
+        chord = c0 if chord_tip is None else c0 + (float(chord_tip) - c0) * (i + 0.5) / 7.0
         u = 2 * np.pi * rpm / 60.0 * (i + 0.5) * span
         M = u / C_SOUND
         re = RHO_AIR * u * chord / MU_AIR
@@ -789,19 +964,37 @@ def propeller_tone(rpm, blades: int, radius: float, power_hp: float, dur: float,
         for _ in range(B):
             # ponytail: the cylinder bandwidth law diverges past Re ~2e5 (Q -> 0.1); held at its Re 193260 value (Q 10)
             y += p * _bp(rng.standard_normal(n), np.minimum(0.85 * u / chord, 0.45 * SR), strouhal_q(np.minimum(re, 193260.0)))
+            for N in range(2, int(np.clip(vortex_harmonics, 1, 3)) + 1):
+                y += p / N ** 2 * _bp(rng.standard_normal(n), np.minimum(0.85 * N * u / chord, 0.45 * SR),
+                                      strouhal_q(np.minimum(re, 193260.0)))
     return y
 
 
-def aeolian_harp(u, notes, dur: float, rng: np.random.Generator, *, diameter: float = 5e-4, length: float = 0.61,
-                 density: float = 2432.2, mass_damping: float = 0.05, index: float = 1.0) -> np.ndarray:
+LOCK_HYST = 1.1
+
+
+def lock_state(V, lo: float = 0.8, hi: float = 1.27, hyst: float = LOCK_HYST) -> np.ndarray:
+    """Lock-in with hysteresis: a string locks when the reduced velocity V enters [lo, hi] and lets go only
+    once V leaves the wider window [lo / hyst, hi hyst]; returns 0/1 per sample."""
+    V = np.asarray(V, float)
+    s = np.zeros(len(V))
+    on = False
+    for i, v in enumerate(V):
+        on = (lo / hyst <= v <= hi * hyst) if on else (lo <= v <= hi)
+        s[i] = on
+    return s
+
+
+def aeolian_harp(u, notes, dur: float, rng: np.random.Generator, *, diameter: float = 5e-4,
+                 mass_damping: float = 0.05, index: float = 1.0, hysteresis: bool = False) -> np.ndarray:
     """Strings in the wind (Selfridge, Moffat, Reiss & Avital, ICSV24 2017). Each string sheds an Aeolian
     tone at St(Re) u / d; when that frequency nears string harmonic eta (eq. 9) and the reduced velocity
     V = u / (2 pi d f_eta) (eq. 3) lies in the lock-in range 0.8..1.27, the shedding locks to f_eta and the
     string sings: an FM tone with carrier f_eta and modulator f_(eta+1) - f_eta (eqs 8, 13-14), scaled by
     the Govardhan-Williamson peak amplitude (eq. 7) for mass-damping alpha = ``mass_damping`` * eta (eq. 12).
-    ``notes`` are the strings' fundamentals (Hz); tension follows from them, ``density`` and ``diameter``.
-    # ponytail: no hysteresis loop (lock-in is a smooth window in V); Lambda, the window steepness and the
-    # default mass_damping are UNSOURCED (the paper's values are in absolute units genny does not carry)."""
+    ``notes`` are the strings' fundamentals (Hz).
+    ``hysteresis``: lock-in follows ``lock_state`` (a sweeping wind holds the string past the window edges)
+    instead of the smooth window. Lambda, the window steepness and the default mass_damping are voicing choices."""
     n = seconds(dur)
     u = np.maximum(np.broadcast_to(np.asarray(u, float), (n,)), 0.05)
     d = max(float(diameter), 1e-5)
@@ -813,10 +1006,14 @@ def aeolian_harp(u, notes, dur: float, rng: np.random.Generator, *, diameter: fl
         eta = np.maximum(np.round(fs / f1), 1.0)
         feta = eta * f1
         V = u / (2 * np.pi * d * feta)
-        lock = _sig((V - 0.8) / 0.02) * _sig((1.27 - V) / 0.02)
+        if hysteresis:
+            lock = uniform_filter1d(lock_state(V), seconds(0.01), mode="nearest")
+        else:
+            lock = _sig((V - 0.8) / 0.02) * _sig((1.27 - V) / 0.02)
         al = np.minimum(mass_damping * eta, 1.87)               # past the vertex the fit no longer holds
         coef = np.where(re > 500.0, 1 - 1.12 * al + 0.30 * al * al, 1 - 1.29 * al + 0.59 * al * al)
-        amax = np.maximum(coef, 0.0) * a_re
+        # amax and lock jump where eta rounds to the next harmonic: a step in the singing tone (measured d2 -41 dB). 10 ms:
+        sung = uniform_filter1d(np.maximum(coef, 0.0) * a_re * lock, seconds(0.01), mode="nearest")
         fv = lock * feta + (1 - lock) * fs
         fdm = feta + f1 - fv
         ph_d = 2 * np.pi * np.cumsum(fdm) / SR
@@ -824,7 +1021,7 @@ def aeolian_harp(u, notes, dur: float, rng: np.random.Generator, *, diameter: fl
         sing = np.cos(ph_v + index * np.sin(ph_d)) + 0.1 * np.cos(ph_d + index * np.sin(ph_d))
         g = _cascade_bp(rng.standard_normal(n), np.clip(fs, 1.0, 0.45 * SR), strouhal_q(re))
         g /= np.sqrt(np.mean(g * g)) + 1e-30
-        y += g + 3.0 * amax * lock * sing                        # UNSOURCED: Lambda = 3 against a unit-RMS tone
+        y += g + 3.0 * sung * sing                               # Lambda = 3 against a unit-RMS tone
     return y
 
 
@@ -844,7 +1041,7 @@ def _swing_kinematics(p: dict, lead: float, tail: float):
     az = np.concatenate([np.full(n_lead, pre), pre + (180 - pre) * tau1 ** 2,
                          180 + (post - 180) * (1 - (1 - tau2) ** 2), np.full(n_tail, post)])
     u = np.concatenate([np.zeros(n_lead), top * tau1, top * (1 - tau2), np.zeros(n_tail)])
-    # UNSOURCED: the patch moves elevation pre -> mid -> post; mid is not a preset field, so the
+    # the patch moves elevation pre -> mid -> post; mid is not a preset field, so the
     # elevation is interpolated linearly with swing progress.
     prog = np.clip((az - pre) / (post - pre), 0, 1) if post != pre else np.zeros_like(az)
     el = p["PreElev"] + (p["PostElev"] - p["PreElev"]) * prog
@@ -856,7 +1053,7 @@ def sword_swing(preset: str | dict = "SWD1", rng: np.random.Generator | None = N
                 model: str = "patch", doppler: bool = True, n_sources: int = 8,
                 top_speed: float | None = None, lead: float = 0.05, tail: float = 0.15,
                 partials: tuple[int, ...] = (1, 2, 3, 4, 5)) -> np.ndarray:
-    """Selfridge Aeolian swing, stereo (n, 2), from a ``SWORD_PRESETS`` preset (SWD1, SWD2, PGA, MLB).
+    """Selfridge Aeolian swing, stereo (n, 2), from a ``SWORD_PRESETS`` preset (SWD1, SWD2, PGA, MLB), or BROOM, WOODSWD (``SWING_PRESETS``).
 
     Per source k (8, stepping 7 d inward from the tip, d tapering linearly hilt -> tip):
     u_k = u_tip * (arm + pos_k) / (arm + Len); Re = rho u d / mu; St (Fey) or 0.2 (LoQ);
@@ -870,14 +1067,14 @@ def sword_swing(preset: str | dict = "SWD1", rng: np.random.Generator | None = N
     dipole pattern that the patch evaluates from elevation and azimuth.
     """
     rng = rng or np.random.default_rng(0)
-    p = dict(md.SWORD_PRESETS["presets"][preset]) if isinstance(preset, str) else dict(preset)
+    p = dict(SWING_PRESETS[preset]) if isinstance(preset, str) else dict(preset)
     if top_speed is not None:
         p["TopSpeed"] = top_speed
     az, el, u_tip, sign = _swing_kinematics(p, lead, tail)
     n = len(az)
     L = p["Len"]
     hilt, tip = p["HiltThick"], p["TipThick"]
-    # UNSOURCED: axis convention - shoulder at the origin, x right, y front, z up; listener at the
+    # axis convention - shoulder at the origin, x right, y front, z up; listener at the
     # preset (Xpos, Ypos, Zpos); azimuth 0 = behind, 180 = in front; elevation from vertical.
     listener = np.array([p["Xpos"], p["Ypos"], p["Zpos"]])
     phi = np.radians(az)
@@ -886,21 +1083,34 @@ def sword_swing(preset: str | dict = "SWD1", rng: np.random.Generator | None = N
     v_dir = np.stack([np.sin(eps) * np.cos(phi), np.sin(eps) * np.sin(phi), np.zeros(n)], axis=1) * sign
     v_dir /= np.maximum(np.linalg.norm(v_dir, axis=1, keepdims=True), 1e-9)
     lift_dir = np.cross(a, v_dir)
+    measured = md.SWING_SOURCES.get(p.get("Source", ""))
+    if measured:
+        span = np.array([s[0] for s in measured])
+        span = span * L / span[-1]
+        dia = np.array([s[1] for s in measured])
+        corr = md.SWING_CORRELATION.get(p["Source"], md.SWING_CORRELATION_DEFAULT)
+
+        def thick(pos):
+            return float(np.interp(pos, span, dia))
+    else:
+        corr = 7.0
+
+        def thick(pos):
+            return hilt + (tip - hilt) * pos / L
     positions = [L]
     for _ in range(n_sources - 1):
         pos = positions[-1]
-        dk = hilt + (tip - hilt) * pos / L
-        positions.append(pos - 7 * dk)
+        positions.append(pos - corr * thick(pos))
     out = np.zeros((n, 2))
     for pos in positions:
         if pos <= 0:
             break
-        d = hilt + (tip - hilt) * pos / L
+        d = thick(pos)
         radius = ARM + pos
         u = u_tip * radius / (ARM + L)
         src = a * radius
         rel = listener[None, :] - src
-        dist = np.maximum(np.linalg.norm(rel, axis=1), 0.3)   # UNSOURCED: 0.3 m floor on distance
+        dist = np.maximum(np.linalg.norm(rel, axis=1), 0.3)   # 0.3 m floor on distance
         nvec = rel / dist[:, None]
         cos_t = np.sum(nvec * v_dir, axis=1)
         mach = u / C_SOUND
@@ -917,19 +1127,19 @@ def sword_swing(preset: str | dict = "SWD1", rng: np.random.Generator | None = N
             f = f / conv
         dl = np.sum(nvec * lift_dir, axis=1)
         dd = cos_t
-        common = 2.50663 * RHO_AIR * st ** 2 * (7 * d) * L * u ** 6 / (32 * C_SOUND ** 3 * dist ** 2 * conv ** 4)
+        # 7 d as the authors' patch has it: its Norberg corrLen (44.67 Re^-0.245) reaches an inlet that nothing reads
+        common = 2.50663 * RHO_AIR * st ** 2 * (corr * d) * L * u ** 6 / (32 * C_SOUND ** 3 * dist ** 2 * conv ** 4)
         gl = common * dl
         gd = 0.1 * common * dd
         noise = rng.standard_normal(n)
         sig = np.zeros(n)
-        live = u > 0.05
+        live = np.sin(0.5 * np.pi * np.clip(u / 2.0, 0.0, 1.0)) ** 2     # the dB-scaled partials go as u^.6: a hard cut at rest is a step. 2 m/s
         for mult, gain in ((1, gl), (2, gd), (3, _db_scale(gl, 0.6, False)), (4, _db_scale(gd, 0.125, True)),
                            (5, _db_scale(gl, 0.1, True))):
             if mult not in partials:
                 continue
             fc = np.clip(mult * f, 20.0, 0.45 * SR)
-            gain = np.where(live, gain, 0.0)
-            sig += _cascade_bp(noise, fc, np.maximum(q, 0.5)) * gain
+            sig += _cascade_bp(noise, fc, np.maximum(q, 0.5)) * gain * live
         # equal-power pan from the source's lateral offset (fcpan)
         pan = np.clip(-rel[:, 0] / dist, -1, 1)
         ang = (pan + 1) * np.pi / 4
@@ -940,7 +1150,7 @@ def sword_swing(preset: str | dict = "SWD1", rng: np.random.Generator | None = N
 
 def swing_peak_tone(preset: str | dict = "SWD1", model: str = "patch") -> float:
     """Tip lift-tone frequency at top speed, St(Re) u / d (no Doppler) - for checks."""
-    p = md.SWORD_PRESETS["presets"][preset] if isinstance(preset, str) else preset
+    p = SWING_PRESETS[preset] if isinstance(preset, str) else preset
     u, d = p["TopSpeed"], p["TipThick"]
     re = RHO_AIR * u * d / MU_AIR
     st = 0.2 if model == "loq" else float(fey_strouhal(np.array([re]))[0])
@@ -1074,3 +1284,29 @@ if __name__ == "__main__":
               f"all 8 sources {f_all:.0f} Hz ({rel_all:+.1f} dB re {strongest_all:.0f} Hz); 0.2u/d = {f02:.0f} Hz, "
               f"St(Re)u/d = {fst:.0f} Hz; loudest {t_loud:+.0f} ms from top speed; length {len(sw) / SR * 1000:.0f} ms")
     print("modal self-test", "OK" if ok else "FAILED")
+
+
+REN_CZ, REN_CD = 5.0, 100.0
+
+
+def ren_features(f, d):
+    """Perceptual feature point of a mode (f Hz, damping d 1/s): (cz Z(f), cd / d), Z(f) = 6 asinh(f / 600) Bark."""
+    f, d = np.asarray(f, float), np.asarray(d, float)
+    return np.stack([REN_CZ * 6.0 * np.arcsinh(f / 600.0), REN_CD / d], axis=-1)
+
+
+def ren_match_score(D):
+    """Point-to-point match k(D): 1 - D / 2 up to D = 1, then 0.5 / D up to 5, then 0."""
+    D = np.asarray(D, float)
+    return np.where(D <= 1.0, 1.0 - 0.5 * D, np.where(D <= 5.0, 0.5 / np.maximum(D, 1e-12), 0.0))
+
+
+def ren_match_ratio(ref, est, weights=None):
+    """How well the estimated modes ``est`` [(f, d), ...] cover the reference ``ref``: sum_i w_i R_i / sum_i w_i,
+    R_i = sum_j u_ij k_ij / sum_j u_ij, u_ij = 1 where k_ij > 0. 1 = every reference mode matched exactly."""
+    a, b = ren_features(*np.asarray(ref, float).T), ren_features(*np.asarray(est, float).T)
+    k = ren_match_score(np.linalg.norm(a[:, None, :] - b[None, :, :], axis=-1))
+    u = k > 0
+    r = np.where(u.any(axis=1), (k * u).sum(axis=1) / np.maximum(u.sum(axis=1), 1), 0.0)
+    w = np.ones(len(r)) if weights is None else np.asarray(weights, float)
+    return float((w * r).sum() / w.sum())

@@ -17,6 +17,12 @@ the NES 2A03, the Game Boy, the Yamaha YM2612, YM2151 and YM2610, the SN76489, t
 | instrument | `sn_tone`, `sn_noise` | SN76489 (Master System, BBC Micro): square from a 10-bit counter; white or looped-register noise |
 | instrument | `sid` | MOS 8580 SID voice (Commodore 64): four waveforms, the chip's ADSR, its resonant filter (C1-C7) |
 | instrument | `pokey` | Atari POKEY channel: pure tone, or the chip's polynomial counters for buzz and noise (C2-C7) |
+| instrument | `glitch_saw` | glitch-circuit saw: phase reset each time a Schmitt trigger on a comparator ramp switches, the two states at two pitches (`freq2` 1, `comparator` 2, `hysteresis` 10 samples, `lowlim` 0.5, `uplim` 0.3, `bright` 0.5) (C2-C6) |
+| instrument | `tia` | Atari 2600 (VCS) TIA channel: 5-bit divider into a toggle or 4/5/9-bit polynomial counters; each wave has its own coarse, out-of-tune note grid (C2-C6) |
+| instrument | `chowning` | Chowning's 1973 FM tones (`voice` clarinet, woodwind, bassoon, brass, bell, drum, wood_drum, soprano: a second carrier on the harmonic nearest 2100 Hz shares the modulator, a sung formant) |
+| instrument | `stk_fmvoice` | STK FMVoices: three carriers on the harmonics nearest the vowel's formants, one shared modulator at the note; `vowel` ah, eh, ee, oh, oo; `tilt` 0.9 (carrier gains amp, amp², amp³); `vib` 0.005 at 6 Hz (C2-C5) |
+| instrument | `stk_fm` | four-operator FM on TX81Z tables with STK's patches (`voice` rhodey, wurley, tube_bell, b3, heavy_metal, perc_flute); `dac` 1 = the TX81Z output filters (one-pole lowpass 4.4 kHz then highpass 9.2 Hz; also `chiptune2.tx81z_dac(x, sr)`), default 0 (C2-C5) |
+| instrument | `jaw_harp` | buzzing reed under three mouth formants; `kind` bashkir, khomus; `path` circle, sine, line, figure8, triangle: the mouth's walk in the F1-F2 plane, `rate` Hz (C2-C4) |
 | effect | `dpcm` | NES delta-modulation channel: any sound as 1-bit delta samples at one of the 2A03's sixteen rates |
 
 The sfxr and ZzFX effect generators and the AY-3-8910 voice are in [`retro.md`](retro.md).
@@ -41,12 +47,12 @@ The sfxr and ZzFX effect generators and the AY-3-8910 voice are in [`retro.md`](
 
 | key | default | meaning |
 |---|---|---|
-| `system` | `nes` | `nes` (channels `pulse1`, `pulse2`, `triangle`, `noise`), `gb` (`pulse1`, `pulse2`, `wave`, `noise`), `ym2612` (`fm1` .. `fm6`), `ym2151` (`fm1` .. `fm8`), `ym2610` (`fm1` .. `fm4`, `ssg1` .. `ssg3`), `sn76489` (`tone1` .. `tone3`, `noise`), `sid` (`voice1` .. `voice3`), `pokey` (`ch1` .. `ch4`); see below |
+| `system` | `nes` | `nes` (channels `pulse1`, `pulse2`, `triangle`, `noise`), `gb` (`pulse1`, `pulse2`, `wave`, `noise`), `ym2612` (`fm1` .. `fm6`), `ym2151` (`fm1` .. `fm8`), `ym2610` (`fm1` .. `fm4`, `ssg1` .. `ssg3`), `sn76489` (`tone1` .. `tone3`, `noise`), `sid` (`voice1` .. `voice3`), `pokey` (`ch1` .. `ch4`), `tia` (`ch1`, `ch2`); see below |
 | `channels` | - | channel name -> a lane, or a list of lanes sharing the channel (the latest note cuts the one before, as when a driver shares the noise channel between its drums) |
 | `region` | `ntsc` | NES: `ntsc` (CPU 1789773 Hz) or `pal` (1662607 Hz); changes the pitch grid, the noise rates and the envelope clock |
 | `filters` | `nes` | NES output: `nes` (high-pass 90 Hz, high-pass 440 Hz, low-pass 14 kHz), `famicom` (high-pass 37 Hz), `none` |
 | `dmc` | 0 | NES: the level 0..127 the DMC channel rests at. A high level makes the triangle and the noise quieter (the mixer is not linear) |
-| `wave` | `triangle` | Game Boy wave RAM: 32 values 0..15, 32 hex digits, or `triangle`, `saw`, `square`, `pulse25`, `sine`, `organ`, `bass` |
+| `wave` | `triangle` | Game Boy wave RAM: 32 values 0..15, 32 hex digits, `triangle`, `saw`, `square`, `pulse25`, `sine`, `organ`, `bass`, or `{"spectrum": [a1, a2, ...], "phases": [...]}` (the 32 four-bit samples built from up to 16 harmonic amplitudes) |
 | `model` | `dmg` | Game Boy output high-pass: `dmg` or `cgb` (stronger) |
 | `mode` | `hardware_accurate` | `retro_stylized` drops the NES filters and the Game Boy panning |
 
@@ -185,7 +191,8 @@ register tapped at bits 0 and 3; `ti`: 15-bit, bits 0 and 1). The chip has no en
 
 Layer keys: `region` (`pal`, `ntsc`), `tail`, and `filter`: `cutoff` 0..2047 (linear to 12.5 kHz) or a table of
 values for a sweep, `res` 0..15, `mode` (`lp`, `bp`, `hp`, `notch`, `lp+bp`, `bp+hp`, `off`), `voices` (which
-voices pass through it). The model is the 8580. Not modelled: combined waveforms, the 6581's non-linear filter, the
+voices pass through it), `fc_max` (Hz at register 2047, default 12500: SIDs varied from lot to lot, lower it for
+a darker filter; also a `sid` instrument parameter). The model is the 8580. Not modelled: combined waveforms, the 6581's non-linear filter, the
 ADSR delay bug.
 
 ## POKEY
@@ -196,6 +203,25 @@ ADSR delay bug.
 `clock`: `64k`, `15k` (the chip's coarse grids: notes are audibly off, as on the machine), `1.79m` (above
 3.5 kHz, channels 1 and 3 only), or `auto`. `volume` 0..15, linear. Not modelled: 16-bit joined channels, the
 high-pass flip-flops, two-tone mode.
+
+## TIA
+
+`"system": "tia"` (Atari 2600 VCS): two mono channels `ch1`, `ch2`. Each is a 5-bit divider (AUDF 0-31) of the
+31.4 kHz audio clock (NTSC; 31.1 kHz with `"region": "pal"`) feeding a toggle or the 4, 5 or 9-bit polynomial
+counters chosen by `wave` (AUDC 0-15, or by name: `saw` 1, `engine` 3, `square` 4, `bass` 6, `pitfall` 7, `noise` 8,
+`lead` 12, `low` 14, `buzz` 15). `volume` 0..15 (AUDV, linear). Every wave has its own coarse, out-of-tune note
+grid (the A4 of `lead` comes out at 436 Hz, −15 cents; PAL −31): `mode` `hardware_accurate` lets you hear it,
+`retro_stylized` (default) plays the written pitch. Ranges: `square` 490 Hz-15.7 kHz, `lead` 164 Hz-5.2 kHz, `saw`
+65 Hz-2.1 kHz, `bass` and `pitfall` 32 Hz-1 kHz, `low` 11-340 Hz.
+
+```json
+{"type": "chip", "system": "tia", "region": "ntsc", "channels": {
+  "ch1": [{"steps": "E4 G4 A4:2", "wave": "lead"}],
+  "ch2": [{"steps": "A2:2 E2:2", "wave": "bass"}]}}
+```
+
+For a real VCS sound: a bass and a melody on different waves hardly ever land in tune together; pick notes the two
+grids share, or stay on one voice.
 
 ## Effect `dpcm`
 

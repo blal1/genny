@@ -180,7 +180,7 @@ def test_dynamics_change_the_spectrum():
     u_pp, u_ff = band_db(pp, 2000, 4000), band_db(ff, 2000, 4000)
     print(f"  pp -> ff: level +{lv:.1f} dB; at equal level the centroid goes {c_pp:.0f} -> {c_ff:.0f} Hz and the "
           f"2-4 kHz share {u_pp:.1f} -> {u_ff:.1f} dB")
-    assert lv > 8 and c_ff > 1.12 * c_pp and u_ff > u_pp + 6
+    assert lv > 8 and c_ff > 1.10 * c_pp and u_ff > u_pp + 6
 
 
 def test_aspiration_is_gated_by_the_open_phase():

@@ -180,7 +180,7 @@ COOK_MEASURED: dict[str, dict] = {
                                "Cook 2002 p.197-199 / Gait Table: 12670+-3264 Hz, r 0.843, N 1068",
                                fs_src=22050.0), radius_fs=STK_FS),
 }
-# UNSOURCED: baseGain 4.0 for the Cook gravels (the book uses its own log4 gain formula); taken from
+# baseGain 4.0 for the Cook gravels (the book uses its own log4 gain formula); taken from
 # the STK rock presets so levels match them.
 
 
@@ -407,7 +407,7 @@ def cook_shakes(dur: float, period: float = 5050 / 22050.0, shake_len: float = 0
     """Per-sample energy injection for repeated shakes (Cook Example 13.3, research 04 section 2.2).
 
     One shake is a raised cosine over 50 ms, repeated every 5050 samples at 22.05 kHz (0.229 s).
-    UNSOURCED: each shake injects ``amount`` (default MAX_SHAKE) in total; Cook's book has its own
+    each shake injects ``amount`` (default MAX_SHAKE) in total; Cook's book has its own
     unclamped energy scale.
     """
     n = int(round(dur * SR))
@@ -433,7 +433,7 @@ def shaker(preset_name: str, dur: float, rng: np.random.Generator,
         ``energy_mode="inject"``: added to the energy every sample, like noteOn/CC2 (E += x, clamp 1),
         Cook Ex.13.3 drives it the same way. ``energy_mode="level"``: the curve is the energy the
         system is pushed up to (E = max(E, x)); it then falls at the preset's system decay.
-        UNSOURCED convenience mapping, handy for a foot-pressure curve in [0, 1].
+        convenience mapping, handy for a foot-pressure curve in [0, 1].
         For Guiro / Wrench the curve is the scrape speed (ratchetDelta = base * speed; STK CC2 sets
         ratchetCount = |controller change|, Shakers.cpp:693-697); 0 = no scraping.
         None: repeated Cook shakes (``cook_shakes``); ratchets scrape at base speed throughout.
@@ -498,18 +498,18 @@ GROUNDS: dict[str, dict] = {
                                                "(lower freq / higher R is inference, not applied)"),
     "bone": dict(layers=("BigRocks",), source="research 11 A3 table: coral, bone -> Big rocks "
                                               "(lower freq / higher R is inference, not applied)"),
-    # UNSOURCED: no source has an ash preset (research 11 A3); nearest sourced texture = Crunch.
-    "ash": dict(layers=("Crunch",), source="UNSOURCED: nearest sourced preset Crunch", unsourced=True),
-    # UNSOURCED: Farnell thesis 5.3 says use bubbles for mud but gives no mud numbers; nearest sourced
+    # no source has an ash preset (research 11 A3); nearest sourced texture = Crunch.
+    "ash": dict(layers=("Crunch",), source="nearest sourced preset Crunch", unsourced=True),
+    # Farnell thesis 5.3 says use bubbles for mud but gives no mud numbers; nearest sourced
     # PhISEM preset = WaterDrops (a bubble model).
-    "mud": dict(layers=("WaterDrops",), source="UNSOURCED: nearest sourced preset WaterDrops "
+    "mud": dict(layers=("WaterDrops",), source="nearest sourced preset WaterDrops "
                                                "(Farnell T 5.3: mud -> bubbles)", unsourced=True),
 }
 
 # Visell: crumpling exponent -1.6 < gamma < -1.3 (Sethna & Dahmen); per-ground values not published.
-VISELL_GAMMA = -1.45   # UNSOURCED midpoint of the published crumpling range
-VISELL_B = 20.0        # UNSOURCED: B * u with u normalised to its maximum; (1+tanh)/2 is then ~ a step
-GRAIN_E_MIN = 1e-3     # UNSOURCED: lower cut of the power law (60 dB energy span)
+VISELL_GAMMA = -1.45   # midpoint of the published crumpling range
+VISELL_B = 20.0        # B * u with u normalised to its maximum; (1+tanh)/2 is then ~ a step
+GRAIN_E_MIN = 1e-3     # lower cut of the power law (60 dB energy span)
 FORCE_LP_HZ = 300.0    # Visell: f_L = force below ~300 Hz
 
 
@@ -555,13 +555,13 @@ def granular_footstep_texture(force: np.ndarray, ground: str, rng: np.random.Gen
     Grain times: non-homogeneous Poisson, ``lambda(t) = A u (1+tanh(B u))/2``, ``u = dF_L/dt`` - grains
       fire only while the foot is loading, in proportion to how fast the force rises (Visell eq. 1-2).
       A is set so the mean rate over the loading phase equals the preset's PhISEM collision rate
-      (N/1024 per 44.1 kHz sample) times ``density`` (UNSOURCED bridge: Visell publishes no A).
+      (N/1024 per 44.1 kHz sample) times ``density`` (bridge: Visell publishes no A).
     Grain energies: ``p(E) ~ E**gamma``, scaled so they sum to the step energy (``energy``, default
       max(force)); each grain adds sqrt(E_i) to the PhISEM sound level (Visell energy budget).
     Grains: resonant impacts through the preset's resonators, retuned per grain (STK vary factor),
       and, with ``tone_coherence``, moved by the force: f * 2**(Fn**2 - 0.5) (Farnell: grain density
       and tone rise with the GRF, gravel range x2 = 600..1200 Hz with f ~ GRF**2; centring the x2 range
-      on the preset frequency is UNSOURCED).
+      on the preset frequency is a choice).
     Returns len(force) + tail seconds of audio (and an info dict when ``return_info``).
     """
     if ground not in GROUNDS:
@@ -600,7 +600,7 @@ def granular_footstep_texture(force: np.ndarray, ground: str, rng: np.random.Gen
         amps = np.zeros(n)
         if k:
             e = _powerlaw(rng, k, GRAIN_E_MIN, 1.0, gamma)
-            e *= (E_step / len(layers)) / e.sum()     # UNSOURCED: equal energy split between layers
+            e *= (E_step / len(layers)) / e.sum()     # equal energy split between layers
             amps[ev] = np.sqrt(e)
         info["grains"][name] = k
         info["grains_while_unloading"] += int((ev & (u <= 0)).sum())
@@ -644,10 +644,42 @@ def _bubble_sum(n, starts, f0s, betas, amps, xi):
     return out
 
 
+PLUME_R = (0.1e-3, 1.3e-3, 5e-3)        # plume radii: lower bound, break, upper bound (m)
+PLUME_ALPHA = (2.5, 4.5)                # n(a) ~ a^-2.5 below the break, a^-4.5 above
+PLUME_SKIN = ((100.0, 20000.0), (0.40, 0.001))   # Hz -> m: depth sound gets into a dense plume
+MICRO = (2e-3, 3000.0, (0.1e-3, 1e-3), 1.5, 0.1, 50.0)   # parent r min, N per metre of parent r, r range, law, s before, gain
+
+
+def plume_radii(rng, k: int, lo: float = PLUME_R[0], brk: float = PLUME_R[1], hi: float = PLUME_R[2]):
+    """Bubble radii (m) of a surf-zone plume: broken power law a^-2.5 / a^-4.5 at 1.3 mm."""
+    return broken_powerlaw(rng, int(k), lo, hi, brk, -PLUME_ALPHA[0], -PLUME_ALPHA[1])
+
+
+def plume_skin_depth(f):
+    """Depth (m) at which sound of frequency f (Hz) falls by 1/e inside a dense bubble plume,
+    log-log between 0.40 m at 100 Hz and 1 mm at 20 kHz."""
+    (f1, f2), (l1, l2) = PLUME_SKIN
+    s = math.log(l2 / l1) / math.log(f2 / f1)
+    return l1 * (np.maximum(np.asarray(f, float), 1.0) / f1) ** s
+
+
+def micro_bubbles(rng, r_parent: float, amp_parent: float):
+    """Small bubbles a breaking parent bubble leaves behind: none under 2 mm; above, N uniform in
+    [0, 3000 r_parent] (r in m), radii 0.1-1 mm with p(r) ~ r^-3/2, onsets uniform in the 0.1 s
+    before the parent, amplitude 50 amp_parent r^(1/3). Returns (offsets s, radii m, amplitudes)."""
+    rmin, per_m, (lo, hi), law, before, gain = MICRO
+    if r_parent < rmin:
+        return np.zeros(0), np.zeros(0), np.zeros(0)
+    k = int(rng.integers(0, int(per_m * r_parent) + 1))
+    r = _powerlaw(rng, k, lo, hi, -law)
+    return -rng.uniform(0.0, before, k), r, gain * amp_parent * r ** (1.0 / 3.0)
+
+
 def bubble_field(dur: float, rng: np.random.Generator, rate: float | np.ndarray = 50.0,
                  alpha: float = 2.9, r_range: tuple[float, float] = (0.5e-3, 5e-3),
                  eps: tuple[float, float, float] = (0.01, 0.1, 2.0), *, xi: float = MOSS_XI,
-                 delta_th: float = DELTA_TH, return_info: bool = False):
+                 delta_th: float | None = None, return_info: bool = False,
+                 plume: float = 0.0, micro: bool = False):
     """Moss et al. bubble ensemble (research 06 section 3.1, 3.3).
 
     rate: bubbles per second (Poisson), a number or a per-sample envelope (Moss: formation follows
@@ -656,10 +688,13 @@ def bubble_field(dur: float, rng: np.random.Generator, rate: float | np.ndarray 
       (alpha_small, alpha_large, r_break) for a broken law, e.g. breaking waves (1.5, 10/3, 1e-3): jet and drop
       impact below the Hinze scale, turbulent fragmentation above (Deane & Stokes, Nature 418:839, 2002).
     eps: (lo, hi, mu) initial displacement, power law g(eps) ~ eps**-mu on [lo, hi] (Moss: [0.01, 0.1],
-      most below 10 %; mu = 2 is UNSOURCED, research 06 sketch).
+      most below 10 %; mu = 2 is a choice, research 06 sketch).
     Each bubble: p(t) = eps r sin(2 pi f0 (t + xi b0 t^2/2)) exp(-b0 t), f0 = 3.29/r,
-      b0 = pi f0 (delta_rad + delta_th). Amplitude is eps * r with r in millimetres (scale choice).
+      b0 = pi f0 (delta_rad + delta_th) when ``delta_th`` is given; by default (None) b0 is
+      ``matter.bubble_params``. Amplitude is eps * r with r in millimetres (scale choice).
     Onsets are spread at random sample positions (Moss: avoid in-phase artefacts).
+    plume: m of dense bubble plume the sound crosses: each bubble x exp(-plume / plume_skin_depth(f0)).
+    micro: bubbles of 2 mm and more leave ``micro_bubbles``.
     """
     n = int(round(dur * SR))
     if np.ndim(rate) == 0:
@@ -677,8 +712,22 @@ def bubble_field(dur: float, rng: np.random.Generator, rate: float | np.ndarray 
         r = _powerlaw(rng, k, r_range[0], r_range[1], -alpha)
     e = _powerlaw(rng, k, eps[0], eps[1], -eps[2])
     f0 = MINNAERT_FR / r
-    beta = np.pi * f0 * (DELTA_RAD + delta_th)
+    if delta_th is None:
+        from ..matter import bubble_params            # circular import
+        beta = bubble_params(r)[1] if k else np.zeros(0)
+    else:
+        beta = np.pi * f0 * (DELTA_RAD + delta_th)
     amp = e * r * 1e3
+    if micro and k:
+        ch = [micro_bubbles(rng, float(ri), float(ai)) for ri, ai in zip(r, amp)]
+        if sum(len(c[0]) for c in ch):
+            st = np.concatenate([np.maximum(s + (c[0] * SR).astype(np.int64), 0) for s, c in zip(starts, ch)])
+            rc = np.concatenate([c[1] for c in ch])
+            starts, r, amp = np.concatenate([starts, st]), np.concatenate([r, rc]), np.concatenate([amp, np.concatenate([c[2] for c in ch])])
+            f0 = MINNAERT_FR / r
+            beta = (bubble_params(r)[1] if delta_th is None else np.pi * f0 * (DELTA_RAD + delta_th))
+    if plume > 0:
+        amp = amp * np.exp(-plume / plume_skin_depth(f0))
     keep = f0 < 0.45 * SR
     y = _bubble_sum(n, starts[keep], f0[keep], beta[keep], amp[keep], float(xi))
     if return_info:
@@ -702,20 +751,81 @@ def surfacing_bubble(rng: np.random.Generator, dim: float = 0.5, dur: float = 0.
     f(t) = fmin + (1 - D) fmax + sweep (1 - (1 - t/T)**4)
     a(t) = lop~12((1 - t/T)**8) (D + 0.1) vol
     Defaults are the patch defaults (dur 90 ms, range 2000 Hz, fmin 60, fmax 300, dim 0.5).
-    The lop~ tail is rendered for 4 time constants after T with the pitch held.
+    The lop~ tail runs to 60 dB under the peak, then a 10 ms raised-cosine close.
     """
     D = dim * (1.0 - mydim * rng.random())
     D = max(D, 1e-3)
     d = dur * (1.0 + mydur * (rng.random() - 0.5))
     T = D * d
     m = max(int(T * SR), 8)
-    tail = int(4 * SR / (2 * np.pi * 12.0))
+    tail = int(9 * SR / (2 * np.pi * 12.0))
     t = np.arange(m + tail) / SR
     x = np.clip(t / T, 0.0, 1.0)
     l = 1.0 - x
     f = fmin + (1.0 - D) * fmax + sweep * (1.0 - l ** 4)
     a = _onepole_lp_hz(l ** 8, 12.0) * (D + 0.1) * vol
-    return a * np.sin(2 * np.pi * np.cumsum(f) / SR)
+    pk = float(np.max(a))
+    end = len(a) - int(np.argmax(a[::-1] > 1e-3 * pk)) if pk > 0 else len(a)
+    a = a[:max(end, 8)]
+    c = min(int(0.01 * SR), len(a) // 2)
+    a[-c:] *= np.cos(0.5 * np.pi * (np.arange(c) + 1) / c) ** 2
+    return a * np.sin(2 * np.pi * np.cumsum(f[:len(a)]) / SR)
+
+
+CAP_K, CAP_R_RATIO = 1.0 / 3.0, 3.82 / 2.49        # drainage constant; cap curvature radius / bubble radius
+C_AIR = 343.0
+
+
+def film_thickness(rb: float, life: float, eta: float = 1e-3, sigma: float = 0.072, rho: float = 1000.0) -> float:
+    """Cap film thickness m of a bubble of radius ``rb`` m after draining ``life`` s at the surface."""
+    a = math.sqrt(sigma / (rho * 9.81))
+    return CAP_K * (eta / (a * sigma * max(life, 1e-4))) ** (2.0 / 3.0) * rb ** (7.0 / 3.0)
+
+
+def retraction_speed(h: float, sigma: float = 0.072, rho: float = 1000.0) -> float:
+    """Taylor-Culick speed m/s of a film of thickness ``h`` m."""
+    return math.sqrt(2.0 * sigma / (rho * h))
+
+
+def cap_burst(rb: float, life: float = 0.007, eta: float = 1e-3, sigma: float = 0.072, rho: float = 1000.0,
+              c: float = C_AIR) -> np.ndarray:
+    """Sound in air of a floating bubble whose cap film bursts after ``life`` s: the hole opens at the
+    Taylor-Culick speed and the bubble rings as a Helmholtz resonator, a chirp rising until the cap is gone,
+    then a short ring at the final pitch. Unit peak."""
+    u = retraction_speed(film_thickness(rb, life, eta, sigma, rho), sigma, rho)
+    R, V = CAP_R_RATIO * rb, 4.0 / 3.0 * math.pi * rb ** 3
+    tr = math.pi * R / (2.0 * u)
+    fmax = c / (2 * math.pi) * math.sqrt(3 * math.pi ** 2 * R / (16 * V))
+    A, l = math.pi * R * R, 16.0 * R / (3.0 * math.pi)
+    tau = 2 * math.pi * math.sqrt(V * l ** 3 / A ** 3) / (math.pi * fmax)
+    m, k = max(int(tr * SR), 4), int(6.0 * tau * SR) + 1
+    t = np.arange(m + k) / SR
+    f = np.where(t < tr, fmax * np.sqrt(np.sin(np.minimum(u * t / R, 0.5 * math.pi))), fmax)
+    env = np.where(t < tr, np.minimum(t / (0.1 * tr), 1.0), np.exp(-(t - tr) / tau))
+    return env * np.sin(2 * np.pi * np.cumsum(np.minimum(f, 0.45 * SR)) / SR)
+
+
+POP_DRAIN = (1e-3, 0.02)          # s: cap drainage time, uniform
+POP_AMP = (0.001, 0.03)           # pop peak / peak of the bubble's own ringing, uniform
+
+
+def bubble_pop(rb: float, rng: np.random.Generator, life: float | None = None) -> np.ndarray:
+    """A bubble bursting at the surface: ``cap_burst`` after a drainage time uniform in POP_DRAIN,
+    shaped by mod(t) = exp(ln(1e-5) t / t_max) (2 / pi) atan(t / (2 t_max)) over its length t_max and
+    scaled by a uniform POP_AMP factor (relative to a unit-peak bubble). 48 kHz."""
+    life = rng.uniform(*POP_DRAIN) if life is None else float(life)
+    y = cap_burst(float(rb), life)
+    tm = len(y) / SR
+    t = np.arange(len(y)) / SR
+    mod = np.exp(math.log(1e-5) * t / tm) * (2.0 / math.pi) * np.arctan(t / (2.0 * tm))
+    y = y * mod
+    m = float(np.max(np.abs(y)))
+    return y * (rng.uniform(*POP_AMP) / m if m > 0 else 0.0)
+
+
+def hinze_radius(eps: float, gamma: float = 0.0728, wec: float = 4.7, rho: float = 1025.0) -> float:
+    """Hinze scale m: the largest bubble turbulence of dissipation ``eps`` W/kg cannot split."""
+    return 2.0 ** (-8.0 / 5.0) * eps ** (-2.0 / 5.0) * (gamma * wec / rho) ** (3.0 / 5.0)
 
 
 def drip(rng: np.random.Generator, f0: float | None = None, *, voice: int | None = None,
@@ -729,7 +839,7 @@ def drip(rng: np.random.Generator, f0: float | None = None, *, voice: int | None
     600 * (0.75 | 1.0 | 1.25 + 0.25 u).
     click: Farnell rain on water (research 02 section 10): impact click, then the bubble whistle; the
       click is a parabolic pulse 1-4(x-.5)^2 of width 0.1 + 12 U ms with amplitude sqrt(w) + 0.1
-      (Poisson-click rain). UNSOURCED: click_level (Moss: the impact is far quieter than the bubble).
+      (Poisson-click rain). click_level (Moss: the impact is far quieter than the bubble).
     """
     p = STK_PRESETS["WaterDrops"]
     q = _engine_params(p, None, 1.0, None)
@@ -924,7 +1034,7 @@ def _selftest():
         cen, main, peaks = _analyse(y)
         ok &= bool(np.all(np.isfinite(y))) and info["grains_while_unloading"] == 0
         srcf = "/".join(f"{preset(l)['freqs'][0]:g}" for l in g["layers"])
-        tag = " UNSOURCED" if g.get("unsourced") else ""
+        tag = " (nearest preset)" if g.get("unsourced") else ""
         print(f"  {ground:<14} layers {'+'.join(g['layers']):<20} grains {info['grains']} "
               f"unloading {info['grains_while_unloading']}  centroid {cen:6.0f}  main {main:6.0f} "
               f"(preset f {srcf}){tag}")

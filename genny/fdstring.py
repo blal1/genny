@@ -23,7 +23,7 @@ from functools import lru_cache
 import numpy as np
 from numba import njit
 from scipy.linalg import eig_banded
-from scipy.signal import resample_poly
+from scipy.signal import butter, cheby1, ellip, lfilter, resample_poly, sosfilt
 
 from . import filters as F
 from .core import DEFAULT_SR, samples
@@ -32,6 +32,12 @@ from .instruments import instrument
 from .sfx import sfx
 
 SS, CL, FR = 0, 1, 2            # simply supported, clamped, free
+IMPLICIT_GRID = 4.0
+THETA_4TH = 1.0 / 12.0
+SECOND_CUT_W = 0.05
+INTERCEPT_W, INTERCEPT_CLOTH_W = 3.0e4, 3.0e3
+INTERCEPT_ARM = 20.0
+SCHEMES = {"explicit": (0.0, 0.0), "theta4": (THETA_4TH, 0.0), "stable": (0.25, 0.0), "bensa": (0.25, 0.25)}
 _BC = {"ss": SS, "supported": SS, "clamped": CL, "free": FR}
 _LN1000 = 3.0 * np.log(10.0)
 
@@ -47,14 +53,16 @@ def _d2(u, q, N, bcl, bcr):
 
 
 @njit(cache=True)
-def _lin(u, u1, qv, qp, G, W, Bb, N, lam2, mu2, s0, s1, bcl, bcr, phi3, iphi):
-    """Linear part of scheme (7.30a), split as u+ = W + g*Bb (Bb is the tension term, g = 1 if linear).
+def _lin(u, u1, qv, qp, G, W, Bb, N, lam2, mu2, s0, s1, bcl, bcr, phi3, iphi, theta=0.0, r=0.0):
+    """Linear part of the scheme, split as u+ = W + g*Bb (Bb is the tension term, g = 1 if linear).
+    theta, r > 0: the explicit parts of the theta-weighted stiffness term theta u+ + (1 - 2 theta) u + theta u-
+    and of the r-weighted tension term; the u+ parts are left to the implicit solve.
 
     The 4th difference is D2(phi^3 D2 u) = D2^T D2, symmetric for every end type, so the lossless
     scheme conserves 1/2|d_t- u|^2 + 1/2 <u, K e_t- u> exactly."""
     _d2(u, qv, N, bcl, bcr)
     for l in range(N + 1):
-        G[l + 1] = phi3[l] * qv[l]
+        G[l + 1] = phi3[l] * ((1.0 - 2.0 * theta) * qv[l] + theta * qp[l])
     lo = 0 if bcl == 2 else 1
     hi = N if bcr == 2 else N - 1
     inv = 1.0 / (1.0 + s0)
@@ -69,18 +77,78 @@ def _lin(u, u1, qv, qp, G, W, Bb, N, lam2, mu2, s0, s1, bcl, bcr, phi3, iphi):
             d2p = u1[N - 1] - u1[N]
         d4 = G[l + 2] - 2.0 * G[l + 1] + G[l]
         W[l] = (2.0 * u[l] - (1.0 - s0) * u1[l] + iphi[l] * (s1 * (d2 - d2p) - mu2 * d4)) * inv
-        Bb[l] = iphi[l] * lam2 * d2 * inv
+        Bb[l] = iphi[l] * lam2 * ((1.0 - 2.0 * r) * d2 + r * d2p) * inv
 
 
 @njit(cache=True)
-def _fd_kernel(U, U1, nstep, N, h, k, lam2, mu2, s0, s1, bcl, bcr, phi3, iphi, kc, ham, el, RS, pick, rig, want_e):
+def _band_factor(A, p):
+    """In-place LU (no pivoting) of a banded matrix of half-bandwidth p, stored dense."""
+    n = A.shape[0]
+    for i in range(n):
+        for rr in range(i + 1, min(i + p + 1, n)):
+            f = A[rr, i] / A[i, i]
+            A[rr, i] = f
+            for c in range(i + 1, min(i + p + 1, n)):
+                A[rr, c] -= f * A[i, c]
+
+
+@njit(cache=True)
+def _band_solve(A, p, x):
+    n = A.shape[0]
+    for i in range(n):
+        for c in range(max(0, i - p), i):
+            x[i] -= A[i, c] * x[c]
+    for i in range(n - 1, -1, -1):
+        for c in range(i + 1, min(i + p + 1, n)):
+            x[i] -= A[i, c] * x[c]
+        x[i] /= A[i, i]
+
+
+@njit(cache=True)
+def _hr(u, HI, HW):
+    s = 0.0
+    for i in range(HI.shape[0]):
+        s += HW[i] * u[HI[i]]
+    return s
+
+
+@njit(cache=True)
+def _dgrad(e, e1, wHa, al):
+    """Discrete gradient of Psi(e) = wHa [e]+^(al+1) / (al+1) between e1 and e, and its derivative in e."""
+    pe = wHa * max(e, 0.0) ** (al + 1.0) / (al + 1.0)
+    d = e - e1
+    if abs(d) < 1e-13:
+        return wHa * max(e, 0.0) ** al, 0.5 * al * wHa * max(e, 0.0) ** (al - 1.0) if e > 0.0 else 0.0
+    p1 = wHa * max(e1, 0.0) ** (al + 1.0) / (al + 1.0)
+    g = (pe - p1) / d
+    return g, (wHa * max(e, 0.0) ** al - g) / d
+
+
+@njit(cache=True)
+def _fd_kernel(U, U1, nstep, N, h, k, lam2, mu2, s0, s1, bcl, bcr, phi3, iphi, kc, ham, el, RS, pick, rig, want_e,
+               LW, LC, LR2, LB, LX, LF, theta, rr, LU, COLS, HI, HW, PX):
     """U, U1: (strings, N+1) displacement at steps n, n-1. Returns (out[n,2], energy, hammer force, U, U1).
 
     ham = [on, grid index, mass ratio M, wH^(1+alpha), alpha, uH, uH_prev]
     el rows = [kind (1 spring/damper, 2 rattle), grid index, w0^2, w1^4, sigma_P, wR^(1+alpha), alpha, eps, M_rattle]
     RS[string, element] = (uR, uR_prev) rattle positions. kc = alpha^2 of Kirchhoff-Carrier (0 = linear).
-    rig: acceleration per unit hammer force that cancels the rigid-body part of the blow (free-free bars)."""
+    rig: acceleration per unit hammer force that cancels the rigid-body part of the blow (free-free bars).
+    LW, LC, LR2, LB: longitudinal modes k = 1..K (omega, 2 r cos(omega k), r^2, gain); LX[string, k] = (xi_n, xi_n-1);
+    LF[string, k] the last modal force. Their dynamic part sets the tension along the string (tension decomposition).
+    theta, rr > 0: implicit stiffness / tension weights; LU[string] is the band LU of the implicit matrix and
+    COLS[string, j] its inverse applied to the grid point of the hammer (j = 0) and of element j - 1.
+    ham[7] = 1: energy-conserving hammer (discrete gradient of the felt potential, Newton), ham[8] its loss rH.
+    HI, HW: grid points and weights (sum 1) of the hammer's contact; one point of weight 1 for a point hammer."""
     nq = U.shape[0]
+    imp = theta > 0.0 or rr > 0.0
+    cons = ham.shape[0] > 7 and ham[7] > 0.5
+    rH = ham[8] if ham.shape[0] > 8 else 0.0
+    cq = np.zeros(nq)
+    xq = np.zeros(nq)
+    eq = np.zeros(nq)
+    e1q = np.zeros(nq)
+    Jm = np.zeros((nq, nq))
+    Rv = np.zeros(nq)
     Un = np.zeros_like(U)
     Q = np.zeros_like(U)
     Qp = np.zeros_like(U)
@@ -110,6 +178,13 @@ def _fd_kernel(U, U1, nstep, N, h, k, lam2, mu2, s0, s1, bcl, bcr, phi3, iphi, k
     A_ = np.zeros(nq)
     e_ = np.zeros(nq)
     ek = h / (2.0 * k * k)
+    KL = LW.shape[0]
+    CS = np.zeros((KL, N))
+    for j in range(KL):
+        for l in range(N):
+            CS[j, l] = math.cos((j + 1) * math.pi * (l + 0.5) * h)
+    tau = np.zeros(N)
+    sx = np.zeros(N)
     for n in range(nstep):
         E = 0.0
         for q in range(nq):
@@ -118,7 +193,30 @@ def _fd_kernel(U, U1, nstep, N, h, k, lam2, mu2, s0, s1, bcl, bcr, phi3, iphi, k
             qv = Q[q]
             qp = Qp[q]
             un = Un[q]
-            _lin(u, u1, qv, qp, G, W, Bb, N, lam2[q], mu2[q], s0, s1, bcl, bcr, phi3, iphi)
+            _lin(u, u1, qv, qp, G, W, Bb, N, lam2[q], mu2[q], s0, s1, bcl, bcr, phi3, iphi, theta, rr)
+            if KL > 0:
+                for l in range(N):
+                    sx[l] = 0.5 * ((u[l + 1] - u[l]) / h) ** 2
+                    tau[l] = 0.0
+                for j in range(KL):
+                    sp = 0.0
+                    for l in range(N):
+                        sp += sx[l] * CS[j, l]
+                    w2 = LW[j] * LW[j]
+                    Fj = -2.0 * w2 / ((j + 1) * math.pi) * sp * h
+                    xt = LX[q, j, 0] - Fj / w2
+                    for l in range(N):
+                        tau[l] += kc * math.pi * (j + 1) * xt * CS[j, l]
+                    xn = LC[j] * LX[q, j, 0] - LR2[j] * LX[q, j, 1] + LB[j] * Fj
+                    LX[q, j, 1] = LX[q, j, 0]
+                    LX[q, j, 0] = xn
+                    LF[q, j] = Fj
+                cf = lam2[q] / (1.0 + s0)
+                for l in range(1, N):
+                    W[l] += iphi[l] * cf * (tau[l] * (u[l + 1] - u[l]) - tau[l - 1] * (u[l] - u[l - 1]))
+            if imp:
+                _band_solve(LU[q], 2, W)
+                _band_solve(LU[q], 2, Bb)
             g = 1.0
             if kc > 0.0:                # (8.9): g = 1 + alpha^2/4 (<p,p+> + <p,p->), linear in u+
                 sa = 0.0
@@ -152,27 +250,70 @@ def _fd_kernel(U, U1, nstep, N, h, k, lam2, mu2, s0, s1, bcl, bcr, phi3, iphi, k
             en[n] = E
         if ham_on:                      # (7.37)/(7.38): F_q = G_q mu_t.(eta_q), one hammer on all strings
             cr = k * k / (1.0 + s0)
-            c = c0 * iphi[lH] - cr * rig[lH]
+            c = -cr * rig[lH]
+            for i_ in range(HI.shape[0]):
+                c += c0 * iphi[HI[i_]] * HW[i_] * HW[i_]
+            for q in range(nq):
+                cq[q] = c
+                if imp:
+                    cq[q] = -cr * rig[lH]
+                    for i_ in range(HI.shape[0]):
+                        cq[q] += c0 * HW[i_] * COLS[q, 0, HI[i_]]
             pred = 2.0 * uH - uH1
-            SA = 0.0
-            SAe = 0.0
-            for q in range(nq):
-                eta = uH - U[q, lH]
-                Gq = min(wHa * eta ** (alH - 1.0), 1.0 / (k * k + c * Mr)) if eta > 0.0 else 0.0
-                A_[q] = 0.5 * Gq / (1.0 + 0.5 * Gq * c * Mr)
-                # [eta-]+ here and F >= 0 below: no adhesive pull at make/break. What remains is the energy
-                # credited at first detection, M G eta^2/4 ~ (k wH)^2/2 of the hammer energy for alpha = 1
-                e_[q] = pred - Un[q, lH] + max(uH1 - U1[q, lH], 0.0)
-                SA += A_[q]
-                SAe += A_[q] * e_[q]
-            S0 = SAe / (1.0 + k * k * SA)
             S = 0.0
-            for q in range(nq):
-                A_[q] = max(A_[q] * (e_[q] - k * k * S0), 0.0)
-                S += A_[q]
+            if cons:
+                for q in range(nq):
+                    e1q[q] = uH1 - _hr(U1[q], HI, HW)
+                    xq[q] = pred - _hr(Un[q], HI, HW)
+                for it in range(30):
+                    sa = 0.0
+                    for q in range(nq):
+                        gq, dq = _dgrad(xq[q], e1q[q], wHa, alH)
+                        if xq[q] > 0.0 or e1q[q] > 0.0:
+                            gq += rH * (xq[q] - e1q[q]) / (2.0 * k)
+                            dq += rH / (2.0 * k)
+                        else:
+                            gq, dq = 0.0, 0.0
+                        A_[q] = max(gq, 0.0)
+                        eq[q] = dq if gq > 0.0 else 0.0
+                        sa += A_[q]
+                    err = 0.0
+                    for q in range(nq):
+                        Rv[q] = xq[q] - (pred - _hr(Un[q], HI, HW)) + k * k * sa + cq[q] * Mr * A_[q]
+                        err = max(err, abs(Rv[q]))
+                        for p_ in range(nq):
+                            Jm[q, p_] = (1.0 if p_ == q else 0.0) + (k * k + (cq[q] * Mr if p_ == q else 0.0)) * eq[p_]
+                    if err < 1e-15 * (1.0 + abs(pred)):
+                        break
+                    dx = np.linalg.solve(Jm, Rv)
+                    for q in range(nq):
+                        xq[q] -= dx[q]
+                for q in range(nq):
+                    S += A_[q]
+            else:
+                SA = 0.0
+                SAe = 0.0
+                for q in range(nq):
+                    eta = uH - _hr(U[q], HI, HW)
+                    Gq = min(wHa * eta ** (alH - 1.0), 1.0 / (k * k + cq[q] * Mr)) if eta > 0.0 else 0.0
+                    A_[q] = 0.5 * Gq / (1.0 + 0.5 * Gq * cq[q] * Mr)
+                    # [eta-]+ here and F >= 0 below: no adhesive pull at make/break. What remains is the energy
+                    # credited at first detection, M G eta^2/4 ~ (k wH)^2/2 of the hammer energy for alpha = 1
+                    e_[q] = pred - _hr(Un[q], HI, HW) + max(uH1 - _hr(U1[q], HI, HW), 0.0)
+                    SA += A_[q]
+                    SAe += A_[q] * e_[q]
+                S0 = SAe / (1.0 + k * k * SA)
+                for q in range(nq):
+                    A_[q] = max(A_[q] * (e_[q] - k * k * S0), 0.0)
+                    S += A_[q]
             for q in range(nq):
                 Fq = Mr * A_[q]
-                Un[q, lH] += c0 * iphi[lH] * Fq
+                if imp:
+                    for l in range(N + 1):
+                        Un[q, l] += c0 * Fq * COLS[q, 0, l]
+                else:
+                    for i_ in range(HI.shape[0]):
+                        Un[q, HI[i_]] += c0 * iphi[HI[i_]] * Fq * HW[i_]
                 if rig[lH] != 0.0:
                     for l in range(N + 1):
                         Un[q, l] -= cr * Fq * rig[l]
@@ -182,13 +323,17 @@ def _fd_kernel(U, U1, nstep, N, h, k, lam2, mu2, s0, s1, bcl, bcr, phi3, iphi, k
         for q in range(nq):
             for j in range(ne):
                 l = int(el[j, 1])
-                c = c0 * iphi[l]
+                c = c0 * iphi[l] * (COLS[q, j + 1, l] if imp else 1.0)
                 eta = U[q, l]
                 eta1 = U1[q, l]
+                old = Un[q, l]
                 if el[j, 0] == 1.0:     # (7.42) spring + cubic spring + damper
                     K = 0.5 * (el[j, 2] + el[j, 3] * eta * eta)
                     D = el[j, 4] / k
                     Un[q, l] = (Un[q, l] + c * (D - K) * eta1) / (1.0 + c * (K + D))
+                elif el[j, 0] == 3.0:   # point mass: F = -m (u+ - 2u + u-) / k^2, m in units of a cell's mass
+                    mk = el[j, 2] * h / (k * k)
+                    Un[q, l] = (Un[q, l] + c * mk * (2.0 * eta - eta1)) / (1.0 + c * mk)
                 else:                   # Problem 7.19 rattle, free play eps
                     uR = RS[q, j, 0]
                     uR1 = RS[q, j, 1]
@@ -211,7 +356,16 @@ def _fd_kernel(U, U1, nstep, N, h, k, lam2, mu2, s0, s1, bcl, bcr, phi3, iphi, k
                         Fr = -s * max(Gc * pen / (1.0 + 0.5 * Gc * (c + k * k * el[j, 8])), 0.0)
                     Un[q, l] += c * Fr
                     RS[q, j, 1] = uR
-                    RS[q, j, 0] = 2.0 * uR - uR1 - k * k * el[j, 8] * Fr
+                    RS[q, j, 0] = 2.0 * uR - uR1 - k * k * el[j, 8] * Fr - k * k * el[j, 2]
+                if imp and Un[q, l] != old:
+                    dl = (Un[q, l] - old) / COLS[q, j + 1, l]
+                    Un[q, l] = old
+                    for i_ in range(N + 1):
+                        Un[q, i_] += dl * COLS[q, j + 1, i_]
+        if PX.shape[0] > 0:
+            p = min(max(PX[min(n, PX.shape[0] - 1)], 0.0), 1.0) * N
+            pi_[0] = min(int(p), N - 1)
+            pf[0] = p - pi_[0]
         for c in range(2):
             sm = 0.0
             for q in range(nq):
@@ -293,29 +447,69 @@ def _bow_kernel(u, u1, nstep, N, h, k, lam2, mu2, s0, s1, bcl, bcr, phi3, iphi, 
 
 
 @njit(cache=True)
-def _spring_kernel(x, n_ap, K, a, D, fb, lp):
-    """Feedback delay loop holding a chain of stretched allpasses (a + z^-K)/(1 + a z^-K) and a one-pole
-    low-pass: each trip round the loop smears the pulse into a longer downward-to-upward chirp."""
+def _biquads(s, sos, z):
+    for q in range(sos.shape[0]):
+        y = sos[q, 0] * s + z[q, 0]
+        z[q, 0] = sos[q, 1] * s - sos[q, 4] * y + z[q, 1]
+        z[q, 1] = sos[q, 2] * s - sos[q, 5] * y
+        s = y
+    return s
+
+
+@njit(cache=True)
+def _spring_kernel(x, M, Ki, eta, a, g, taps_d, taps_g, mod, rdc, clip, sos_lo, sos_hi, dlow):
+    """Feedback loop of a spring: input + g x (multi-tap, slowly modulated delay line) -> dc blocker ->
+    [optional crossover: the high band goes through the chain, the low band through a plain delay] ->
+    M stretched allpasses (a + D)/(1 + a D), D = z^-Ki times a first-order Thiran fraction (eta). Returns the
+    chain output, sample by sample; each trip round the loop smears the pulse into a longer chirp."""
     n = x.shape[0]
     y = np.zeros(n)
-    xs = np.zeros((n_ap, K))
-    ys = np.zeros((n_ap, K))
-    dl = np.zeros(D)
-    z = 0.0
+    R = Ki + 2
+    wb = np.zeros((M, R))
+    v1 = np.zeros(M)
+    nd = int(np.max(taps_d) + np.max(np.abs(mod))) + 4
+    dl = np.zeros(nd)
+    lb = np.zeros(max(dlow, 1) + 1)
+    zl = np.zeros((sos_lo.shape[0], 2))
+    zh = np.zeros((sos_hi.shape[0], 2))
+    dx1 = 0.0
+    dy1 = 0.0
+    wp = 0
     p = 0
-    d = 0
+    lp = 0
     for i in range(n):
-        s = x[i] + fb * dl[d]
-        for j in range(n_ap):
-            t = a * s + xs[j, p] - a * ys[j, p]
-            xs[j, p] = s
-            ys[j, p] = t
-            s = t
-        z += lp * (s - z)
-        dl[d] = z
-        y[i] = z
-        d = (d + 1) % D
-        p = (p + 1) % K
+        fb = 0.0
+        for t in range(taps_d.shape[0]):
+            pos = wp - taps_d[t] - mod[i]
+            ip = int(np.floor(pos))
+            fr = pos - ip
+            fb += taps_g[t] * ((1.0 - fr) * dl[ip % nd] + fr * dl[(ip + 1) % nd])
+        s = x[i] + g * fb
+        dy1 = 0.5 * (1.0 + rdc) * (s - dx1) + rdc * dy1
+        dx1 = s
+        s = dy1
+        if clip > 0.0:
+            s = min(max(s, -clip), clip)
+        low = 0.0
+        if sos_lo.shape[0] > 0:
+            lo = _biquads(s, sos_lo, zl)
+            s = _biquads(s, sos_hi, zh)
+            lb[lp] = lo
+            low = lb[(lp - dlow) % lb.shape[0]]
+            lp = (lp + 1) % lb.shape[0]
+        for j in range(M):
+            u = wb[j, (p - Ki) % R]
+            u1 = wb[j, (p - Ki - 1) % R]
+            v = eta * u + u1 - eta * v1[j]
+            v1[j] = v
+            w = s - a * v
+            wb[j, p] = w
+            s = a * w + v
+        s += low
+        wp = (wp + 1) % nd
+        dl[wp] = s
+        y[i] = s
+        p = (p + 1) % R
     return y
 
 
@@ -336,19 +530,23 @@ def loss_coeffs(gamma, kappa, fa, Ta, fb, Tb):
     return float(s0), float(s1)
 
 
-def _hmin(gamma, kappa, sig1, k):
-    """Stability bound of (7.30a): lambda^2 + 4 mu^2 + 4 sigma1 k / h^2 <= 1 (von Neumann, checked numerically)."""
-    a = gamma * gamma * k * k + 4.0 * sig1 * k
-    return np.sqrt(0.5 * (a + np.sqrt(a * a + 16.0 * kappa * kappa * k * k)))
+def _hmin(gamma, kappa, sig1, k, theta=0.0, r=0.0):
+    """Stability bound: lambda^2 (1 - 4 r) + 4 mu^2 (1 - 4 theta) + 4 sigma1 k / h^2 <= 1 (von Neumann); a weight
+    of 1/4 or more makes its term unconditionally stable."""
+    a = gamma * gamma * k * k * max(1.0 - 4.0 * r, 0.0) + 4.0 * sig1 * k
+    return np.sqrt(0.5 * (a + np.sqrt(a * a + 16.0 * kappa * kappa * k * k * max(1.0 - 4.0 * theta, 0.0))))
 
 
-def ss_mode(p, N, gamma, kappa, sig0, sig1, k):
+def ss_mode(p, N, gamma, kappa, sig0, sig1, k, theta=0.0, r=0.0):
     """(frequency Hz, decay rate 1/s) of mode p of the simply-supported scheme (exact: sin modes diagonalise it)."""
     h = 1.0 / N
     s = np.sin(0.5 * p * np.pi * h) ** 2
     s0, s1 = sig0 * k, 2.0 * sig1 * k / h ** 2
-    a1 = (2.0 - 4.0 * (gamma * k / h) ** 2 * s - 16.0 * (kappa * k / h ** 2) ** 2 * s * s - 4.0 * s1 * s) / (1.0 + s0)
-    a2 = (1.0 - s0 - 4.0 * s1 * s) / (1.0 + s0)
+    lt = 4.0 * (gamma * k / h) ** 2 * s
+    st = 16.0 * (kappa * k / h ** 2) ** 2 * s * s
+    den = 1.0 + s0 + theta * st + r * lt
+    a1 = (2.0 - (1.0 - 2.0 * r) * lt - (1.0 - 2.0 * theta) * st - 4.0 * s1 * s) / den
+    a2 = (1.0 - s0 - 4.0 * s1 * s + theta * st + r * lt) / den
     return np.arccos(np.clip(a1 / (2.0 * np.sqrt(a2)), -1.0, 1.0)) / (2.0 * np.pi * k), -np.log(a2) / (2.0 * k)
 
 
@@ -384,21 +582,23 @@ def _eig(N, lam2, mu2, bcl, bcr, phi, m=6):
 
 
 @lru_cache(maxsize=1024)
-def _design_string(f1, B, sr_i, loss, backoff, bcl, bcr, spread):
-    """gamma, kappa, sigma0, sigma1, N such that the *scheme's* first partial is f1 (g02 1.4 grid rule,
-    then gamma is corrected for numerical dispersion and stiffness). f_n = n f0 sqrt(1 + B n^2), f1 = partial 1."""
+def _design_string(f1, B, sr_i, loss, backoff, bcl, bcr, spread, theta=0.0, r=0.0):
+    """gamma, kappa, sigma0, sigma1, N such that the *scheme's* first partial is f1 (grid rule, then gamma is
+    corrected for numerical dispersion and stiffness). f_n = n f0 sqrt(1 + B n^2), f1 = partial 1.
+    theta, r: implicit weights; the grid is then at most IMPLICIT_GRID times the explicit one."""
     k = 1.0 / sr_i
     g = 2.0 * f1 / np.sqrt(1.0 + B)
     N = 0
     for it in range(10):
         kap = g * np.sqrt(B) / np.pi
         s0, s1 = loss_coeffs(g, kap, *loss) if loss else (0.0, 0.0)
-        Nn = int(backoff / _hmin(g * 2.0 ** (spread / 2400.0), kap, s1, k))
+        ge = g * 2.0 ** (spread / 2400.0)
+        Nn = int(backoff / max(_hmin(ge, kap, s1, k, theta, r), _hmin(ge, kap, s1, k) / IMPLICIT_GRID))
         N = Nn if it < 3 else min(N, Nn)
         if N < 3:
             raise ValueError("string too short for this sample rate")
         if bcl == SS and bcr == SS:
-            f = ss_mode(1, N, g, kap, s0, s1, k)[0]
+            f = ss_mode(1, N, g, kap, s0, s1, k, theta, r)[0]
         else:
             ev = _eig(N, (g * k * N) ** 2, (kap * k * N * N) ** 2, bcl, bcr, np.ones(N + 1), 1)[0]
             f = np.arcsin(min(1.0, 0.5 * np.sqrt(ev[0]))) / (np.pi * k)
@@ -414,13 +614,56 @@ def arch(x, xs, b, phi_min):
     return phi_min + (1.0 - phi_min) * 0.5 * (1.0 + np.cos(np.pi * t))
 
 
+@lru_cache(maxsize=64)
+def _arch2(N, bcl, bcr, r1, r2):
+    """Arch (shoulder, taper, depth) whose modes 2 and 3 sit at r1 and r2 times mode 1: grid, then simplex."""
+    from scipy.optimize import minimize
+    x = np.linspace(0.0, 1.0, N + 1)
+
+    def err(p):
+        xs, b, pm = p
+        if not (0.02 < xs < 0.45 and 0.01 < b < 0.45 and 0.05 < pm <= 1.0):
+            return 1e3
+        ev = _eig(N, 0.0, 1.0, bcl, bcr, arch(x, xs, b, pm), 3)[0]
+        return np.log(np.sqrt(ev[1] / ev[0]) / r1) ** 2 + np.log(np.sqrt(ev[2] / ev[0]) / r2) ** 2
+    grid = [(xs, b, pm) for xs in (0.1, 0.15, 0.2) for b in (0.03, 0.08, 0.15, 0.25) for pm in (0.15, 0.25, 0.4, 0.6)]
+    p0 = min(grid, key=err)
+    r = minimize(err, p0, method="Nelder-Mead", options={"xatol": 1e-5, "fatol": 1e-10, "maxiter": 600})
+    if r.fun < 1e-8:
+        return arch(x, *r.x)
+
+    def err2(p):
+        xs, b, pm, x2, d2 = p
+        if not (0.0 <= d2 < 0.8 and 0.2 < x2 < 0.5):
+            return 1e3
+        ph = arch(x, xs, b, pm) * second_cut(x, x2, d2)
+        if not (0.02 < xs < 0.45 and 0.01 < b < 0.45 and 0.05 < pm <= 1.0) or ph.min() < 0.04:
+            return 1e3
+        ev = _eig(N, 0.0, 1.0, bcl, bcr, ph, 3)[0]
+        return np.log(np.sqrt(ev[1] / ev[0]) / r1) ** 2 + np.log(np.sqrt(ev[2] / ev[0]) / r2) ** 2
+    best = min(((xs, b, pm, x2, d2) for xs in (0.1, 0.15, 0.2, 0.25) for b in (0.05, 0.1, 0.2)
+                for pm in (0.2, 0.3, 0.45, 0.6) for x2 in (0.22, 0.28, 0.34, 0.4, 0.46) for d2 in (0.1, 0.3, 0.5, 0.7)),
+               key=err2)
+    r2_ = minimize(err2, best, method="Nelder-Mead", options={"xatol": 1e-6, "fatol": 1e-12, "maxiter": 2000})
+    p = r2_.x if r2_.fun < r.fun else (*r.x, 0.3, 0.0)
+    return arch(x, *p[:3]) * second_cut(x, p[3], p[4])
+
+
+def second_cut(x, x2, depth, width=SECOND_CUT_W):
+    """Second, narrow undercut (both sides, symmetric) of relative depth `depth` centred at x2 from the end."""
+    x = np.minimum(x, 1.0 - x)
+    return 1.0 - depth * np.exp(-((x - x2) / width) ** 2)
+
+
 @lru_cache(maxsize=1024)
-def _design_bar(f1, sr, bcl, bcr, N, loss, ratio):
+def _design_bar(f1, sr, bcl, bcr, N, loss, ratio, theta=0.0):
     """Bar grid: fixed N, internal rate sr*os chosen so the explicit scheme (7.11) is stable, mu set so the
     scheme's first mode is f1. ratio > 0: search the arch depth so mode2/mode1 = ratio (g02 11.2)."""
     x = np.linspace(0.0, 1.0, N + 1)
     phi = np.ones(N + 1)
-    if ratio > 0.0:
+    if isinstance(ratio, tuple):
+        phi = _arch2(N, bcl, bcr, *ratio)
+    elif ratio > 0.0:
         lo_, hi_ = 0.25, 1.0
         for _ in range(24):             # deeper arch -> larger ratio
             mid = 0.5 * (lo_ + hi_)
@@ -432,16 +675,20 @@ def _design_bar(f1, sr, bcl, bcr, N, loss, ratio):
         phi = arch(x, 0.18, 0.2, 0.5 * (lo_ + hi_))
     ev, emax, xi1 = _eig(N, 0.0, 1.0, bcl, bcr, phi, 6)
     os_ = max(1, int(np.ceil(np.pi * f1 * np.sqrt(emax / ev[0]) / (0.99 * sr))))
+    if theta >= 0.25:
+        os_ = max(1, int(np.ceil(os_ / IMPLICIT_GRID)))
     while True:
         k = 1.0 / (sr * os_)
-        mu = 2.0 * np.sin(np.pi * f1 * k) / np.sqrt(ev[0])
+        C = np.cos(2.0 * np.pi * f1 * k)
+        mu = np.sqrt((1.0 - C) / (ev[0] * (C * theta + 0.5 - theta)))
         kap = mu / (N * N * k)
         # loss law (7.29) assumes beta^2 = omega/kappa; use the first mode's own beta^2 (differs for arched bars)
         s0, s1 = loss_coeffs(0.0, 2.0 * np.pi * f1 / xi1, *loss) if loss else (0.0, 0.0)
-        if 0.25 * mu * mu * emax + 4.0 * s1 * k * N * N <= 0.98:
+        if 0.25 * mu * mu * emax * max(1.0 - 4.0 * theta, 0.0) + 4.0 * s1 * k * N * N <= 0.98:
             break
         os_ += 1
-    modes = np.arcsin(0.5 * mu * np.sqrt(ev)) / (np.pi * k)
+    x_ = mu * mu * ev
+    modes = np.arccos(np.clip((1.0 - x_ * (1.0 - 2.0 * theta) / 2.0) / (1.0 + theta * x_), -1.0, 1.0)) / (2.0 * np.pi * k)
     return mu, kap, s0, s1, os_, phi, modes
 
 
@@ -455,10 +702,75 @@ class _FD:
         self.k = 1.0 / self.sr_i
         self.U = np.zeros((nq, N + 1))
         self.U1 = np.zeros((nq, N + 1))
-        self.ham = np.zeros(7)
+        self.ham = np.zeros(9)
         self.el = np.zeros((0, 9))
         self.kc = 0.0
         self.force = np.zeros(0)
+        self._imp = None
+        self.longitudinal(0)
+
+    def _implicit(self):
+        """(LU, COLS) of the implicit matrix M = I + (theta mu2 D4 - r lam2 D2) / (1 + s0) for each string, built
+        from the kernel's own stencil; COLS[q, j] = M^-1 e_l for the hammer (j = 0) and each element."""
+        theta, r = getattr(self, "theta", 0.0), getattr(self, "r", 0.0)
+        nq, N = self.U.shape[0], self.N
+        pts = [int(self.ham[1])] + [int(e[1]) for e in self.el]
+        HI, HW = self._spread()
+        key = (theta, r, tuple(pts), tuple(HI), tuple(HW))
+        if theta <= 0.0 and r <= 0.0:
+            return np.zeros((nq, 1, 1)), np.zeros((nq, len(pts), 1))
+        if self._imp is not None and self._imp[0] == key:
+            return self._imp[1]
+        p3, ip = self.phi ** 3, 1.0 / self.phi
+        qv, qp, G, W, Bb = (np.zeros(N + 1), np.zeros(N + 1), np.zeros(N + 3), np.zeros(N + 1), np.zeros(N + 1))
+        D4 = np.zeros((N + 1, N + 1))
+        D2 = np.zeros((N + 1, N + 1))
+        z = np.zeros(N + 1)
+        for j in range(N + 1):
+            e = np.zeros(N + 1)
+            e[j] = 1.0
+            _lin(e, z, qv, qp, G, W, Bb, N, 1.0, 1.0, 0.0, 0.0, self.bcl, self.bcr, p3, ip, 0.0, 0.0)
+            lo = 0 if self.bcl == FR else 1
+            hi = N if self.bcr == FR else N - 1
+            col = 2.0 * e - W
+            col[:lo] = 0.0
+            col[hi + 1:] = 0.0
+            D4[:, j] = col
+            b = Bb.copy()
+            b[:lo] = 0.0
+            b[hi + 1:] = 0.0
+            D2[:, j] = b
+        LU = np.zeros((nq, N + 1, N + 1))
+        COLS = np.zeros((nq, len(pts), N + 1))
+        for q in range(nq):
+            M = np.eye(N + 1) + (theta * self.mu2[q] * D4 - r * self.lam2[q] * D2) / (1.0 + self.s0)
+            for j, l in enumerate(pts):
+                e = np.zeros(N + 1)
+                if j == 0:
+                    e[HI] = HW / self.phi[HI]
+                else:
+                    e[l] = 1.0
+                COLS[q, j] = np.linalg.solve(M, e)
+            _band_factor(M, 2)
+            LU[q] = M
+        self._imp = (key, (LU, COLS))
+        return LU, COLS
+
+    def longitudinal(self, K=10, tau=0.15):
+        """Bidirectional coupling with the first K longitudinal modes (needs kc = ES/T0 > 0); 0 = off.
+        Modes at or above 0.45 of the internal rate are left out. The tension term is explicit: large
+        amplitudes need a lower backoff (A = 0.005 L at kc 225 runs at backoff 0.7, not 0.9)."""
+        cl = self.gamma * math.sqrt(max(self.kc, 0.0)) if hasattr(self, "gamma") else 0.0
+        w = np.pi * cl * np.arange(1, int(K) + 1)
+        w = w[(w > 0.0) & (w * self.k < 0.9 * np.pi)]
+        r = math.exp(-self.k / tau)
+        self.LW = w
+        self.LC = 2.0 * r * np.cos(w * self.k)
+        self.LR2 = np.full(w.size, r * r)
+        self.LB = (1.0 - self.LC + r * r) / np.maximum(w * w, 1e-30)
+        self.LX = np.zeros((self.U.shape[0], w.size, 2))
+        self.LF = np.zeros((self.U.shape[0], w.size))
+        return self
 
     def _idx(self, pos):
         lo = 0 if self.bcl == FR else 1
@@ -490,21 +802,75 @@ class _FD:
         self.U1 -= self.k * vel * self.shape(pos, halfwidth)
         return self
 
-    def hammer(self, pos=0.12, mass=0.75, w=3000.0, alpha=2.5, v=1.5):
-        """Hammer / mallet of mass ratio `mass` (hammer / string), F = w^(1+alpha) [uH - u]+^alpha (g02 section 6)."""
-        self.ham[:] = (0.0, 0, 0.0, 0.0, 0.0, 0.0, 0.0)
-        self.ham[:] = (1.0, self._idx(pos), mass, w ** (1.0 + alpha), max(alpha, 1.0), 0.0, -self.k * v)
+    def hammer(self, pos=0.12, mass=0.75, w=3000.0, alpha=2.5, v=1.5, conservative=False, loss=0.0, width=0.0):
+        """Hammer / mallet of mass ratio `mass` (hammer / string), F = w^(1+alpha) [uH - u]+^alpha.
+        conservative: the force is the discrete gradient of the felt potential (energy-conserving, no backoff
+        needed), with a felt loss F += loss * d(eta)/dt while in contact.
+        width > 0 (fraction of the length): the felt touches the grid over a raised cosine of that width, at the
+        exact position (linear interpolation between the two nearest points when narrower than two cells);
+        0 = one grid point."""
+        self._hpos, self._hwidth = float(pos), float(max(width, 0.0))
+        self.ham[:] = 0.0
+        self.ham[:] = (1.0, self._idx(pos), mass, w ** (1.0 + alpha), max(alpha, 1.0), 0.0, -self.k * v,
+                       1.0 if conservative else 0.0, float(loss))
         return self
+
+    def _spread(self):
+        """(grid points, weights summing to 1) of the hammer contact."""
+        l = int(self.ham[1])
+        w = getattr(self, "_hwidth", 0.0)
+        if w <= 0.0:
+            return np.array([l], np.int64), np.array([1.0])
+        lo = 0 if self.bcl == FR else 1
+        hi = self.N if self.bcr == FR else self.N - 1
+        x = self._hpos * self.N
+        if w * self.N < 2.0:
+            i = int(np.clip(math.floor(x), lo, hi - 1))
+            a = float(np.clip(x - i, 0.0, 1.0))
+            return np.array([i, i + 1], np.int64), np.array([1.0 - a, a])
+        g = np.arange(self.N + 1, dtype=float)
+        c = np.where(np.abs(g - x) < 0.5 * w * self.N, 1.0 + np.cos(2.0 * np.pi * (g - x) / (w * self.N)), 0.0)
+        c[:lo] = 0.0
+        c[hi + 1:] = 0.0
+        idx = np.nonzero(c)[0]
+        return idx.astype(np.int64), c[idx] / c[idx].sum()
 
     def spring(self, pos, w0=0.0, w1=0.0, sigma=0.0):
         """Lumped spring w0, cubic spring w1 and damper sigma at pos (g02 8.1)."""
         self.el = np.vstack([self.el, [1.0, self._idx(pos), w0 ** 2, w1 ** 4, sigma, 0.0, 0.0, 0.0, 0.0]])
         return self
 
-    def rattle(self, pos, w=3000.0, eps=0.05, mass_ratio=1.0, alpha=2.0, offset=0.0):
-        """Rattle with free play eps (g02 8.2). mass_ratio = string / rattle mass; 0 = a rigid stop at `offset`."""
+    def mass(self, pos, ratio=0.1):
+        """Point mass fixed on the string (a capo, a bead, a weight), `ratio` = its mass / the string's."""
+        self.el = np.vstack([self.el, [3.0, self._idx(pos), float(ratio) * self.N, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
+        return self
+
+    def end(self, side="right", mass=0.0, spring=0.0, damp=0.0, absorb=0.0):
+        """Terminate one end on a mass / spring / damper instead of a rigid support: the end becomes free and the
+        lumped elements sit on its grid point. mass = end mass / string mass; spring = Hz, stiffness
+        K = M_string (2 pi spring)^2; damp = R / M_string (1/s); absorb 0..1 adds the wave-matched damper
+        R = sqrt(T rho) (1 = no reflection of the transverse wave: an absorbing, infinitely long string)."""
+        l = 0 if side in ("left", 0) else self.N
+        if l == 0:
+            self.bcl = FR
+        else:
+            self.bcr = FR
+        self._imp = None
+        sig = 0.5 * float(damp) + 0.5 * float(np.clip(absorb, 0.0, 1.0)) * float(getattr(self, "gamma", 0.0))
+        if spring > 0.0 or sig > 0.0:
+            w0 = 2.0 * math.pi * float(spring)
+            self.el = np.vstack([self.el, [1.0, l, w0 * w0, 0.0, sig, 0.0, 0.0, 0.0, 0.0]])
+        if mass > 0.0:
+            self.el = np.vstack([self.el, [3.0, l, float(mass) * self.N, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
+        return self
+
+    def rattle(self, pos, w=3000.0, eps=0.05, mass_ratio=1.0, alpha=2.0, offset=0.0, gravity=0.0):
+        """Rattle with free play eps (g02 8.2). mass_ratio = string / rattle mass; 0 = a rigid stop at `offset`.
+        ``gravity``: weight on a free rattle, u_R'' = -F - g, in string lengths per s^2 (g / L: 9.81 / 0.65 on a
+        guitar string)."""
         a = max(alpha, 1.0)
-        self.el = np.vstack([self.el, [2.0, self._idx(pos), 0.0, 0.0, 0.0, w ** (1.0 + a), a, eps, mass_ratio]])
+        gr = float(gravity) if mass_ratio > 0 else 0.0
+        self.el = np.vstack([self.el, [2.0, self._idx(pos), gr, 0.0, 0.0, w ** (1.0 + a), a, eps, mass_ratio]])
         self._off = getattr(self, "_off", []) + [(len(self.el) - 1, offset)]
         return self
 
@@ -512,15 +878,16 @@ class _FD:
         """Free-free bar: the blow's net force and torque are taken up by an ideal suspension, i.e. the hammer
         force is applied minus its projection on the two rigid-body modes (which would only drift)."""
         r = np.zeros(self.N + 1)
-        if self.bcl == FR and self.bcr == FR and self.ham[0] > 0.5:
+        if self.bcl == FR and self.bcr == FR and self.ham[0] > 0.5 and not np.isin(self.el[:, 1], (0, self.N)).any():
             x = np.linspace(0.0, 1.0, self.N + 1)
             m = self.h * self.phi
             xc = float(np.sum(m * x) / np.sum(m))
             r = 1.0 / np.sum(m) + (x[int(self.ham[1])] - xc) * (x - xc) / np.sum(m * (x - xc) ** 2)
         return r
 
-    def run(self, n, pickups=(0.3, 0.73), energy=False):
-        """Advance n internal steps; returns displacement at two pickups (n, 2) [and the discrete energy]."""
+    def run(self, n, pickups=(0.3, 0.73), energy=False, scan=None):
+        """Advance n internal steps; returns displacement at two pickups (n, 2) [and the discrete energy].
+        scan: per-step position (0..1) of a moving readout that replaces the first pickup."""
         nq = self.U.shape[0]
         if getattr(self, "RS", None) is None or self.RS.shape[1] != len(self.el):
             self.RS = np.zeros((nq, len(self.el), 2))
@@ -529,7 +896,9 @@ class _FD:
         out, en, self.force, self.U, self.U1 = _fd_kernel(
             self.U, self.U1, int(n), self.N, self.h, self.k, self.lam2, self.mu2, self.s0, self.s1, self.bcl, self.bcr,
             self.phi ** 3, 1.0 / self.phi, float(self.kc), self.ham, np.ascontiguousarray(self.el), self.RS,
-            np.asarray(pickups, dtype=np.float64), self._rigid(), bool(energy))
+            np.asarray(pickups, dtype=np.float64), self._rigid(), bool(energy), self.LW, self.LC, self.LR2, self.LB,
+            self.LX, self.LF, float(getattr(self, "theta", 0.0)), float(getattr(self, "r", 0.0)), *self._implicit(),
+            *self._spread(), np.zeros(0) if scan is None else np.ascontiguousarray(scan, dtype=np.float64))
         return (out, en) if energy else out
 
     def bow(self, force, speed, pos, pickups=(0.3, 0.73), a=100.0):
@@ -557,14 +926,15 @@ class StiffString(_FD):
     tension = alpha^2 of the Kirchhoff-Carrier term (g02 section 12), 0 = linear."""
 
     def __init__(self, f1, sr=DEFAULT_SR, B=1e-4, t60=(100.0, 5.0, 2000.0, 3.0), n_strings=1, detune=0.0,
-                 bc=("ss", "ss"), backoff=1.0, tension=0.0, oversample=0):
+                 bc=("ss", "ss"), backoff=1.0, tension=0.0, oversample=0, theta=0.0, r=0.0):
         self.os = int(oversample) or max(1, int(np.ceil(30.0 * f1 / sr)))
         self.sr_i = sr * self.os
         self.bcl, self.bcr = _BC[bc[0]], _BC[bc[1]]
+        self.theta, self.r = float(max(theta, 0.0)), float(max(r, 0.0))
         B = float(np.clip(B, 0.0, 0.05))
         self.gamma, self.kappa, self.sig0, self.sig1, self.N = _design_string(
             float(f1), B, int(self.sr_i), None if t60 is None else tuple(float(v) for v in t60), float(backoff),
-            self.bcl, self.bcr, float(abs(detune)) if n_strings > 1 else 0.0)
+            self.bcl, self.bcr, float(abs(detune)) if n_strings > 1 else 0.0, self.theta, self.r)
         self._alloc(n_strings)
         q = np.arange(1, n_strings + 1)
         gq = self.gamma * (2.0 ** ((2 * q - 1 - n_strings) * detune / (2400.0 * max(1, n_strings - 1))))
@@ -577,7 +947,7 @@ class StiffString(_FD):
 
     def partial(self, p):
         """Scheme frequency (Hz) and T60 (s) of partial p (simply-supported ends)."""
-        f, s = ss_mode(p, self.N, self.gamma, self.kappa, self.sig0, self.sig1, self.k)
+        f, s = ss_mode(p, self.N, self.gamma, self.kappa, self.sig0, self.sig1, self.k, self.theta, self.r)
         return float(f), float(_LN1000 / s) if s > 0 else np.inf
 
 
@@ -589,12 +959,14 @@ class Bar(_FD):
     stable here because of the oversampling) so that mode 2 = ratio * mode 1."""
 
     def __init__(self, f1, sr=DEFAULT_SR, bc=("free", "free"), t60=(440.0, 1.0, 4000.0, 0.2), N=32, ratio=0.0,
-                 max_rate=1.5e6):
+                 max_rate=1.5e6, theta=0.0):
         self.bcl, self.bcr = _BC[bc[0]], _BC[bc[1]]
         self.N = int(N)
+        self.theta, self.r = float(max(theta, 0.0)), 0.0
         while True:                     # keep the internal rate under max_rate by coarsening the grid
             mu, self.kappa, self.sig0, self.sig1, self.os, phi, self.modes = _design_bar(
-                float(f1), int(sr), self.bcl, self.bcr, self.N, None if t60 is None else tuple(float(v) for v in t60), float(ratio))
+                float(f1), int(sr), self.bcl, self.bcr, self.N, None if t60 is None else tuple(float(v) for v in t60),
+                tuple(float(v) for v in ratio) if isinstance(ratio, (tuple, list)) else float(ratio), self.theta)
             if self.os * sr <= max_rate or self.N <= 8:
                 break
             self.N = max(8, int(self.N * 0.85))
@@ -687,14 +1059,19 @@ def _bow_note(freq, dur, sr, vel, force, speed, pos, travel, B, t60_lo, t60_hi, 
             t60_lo=(4.0, "seconds of ring (60 dB) at the note"),
             t60_hi=(0.6, "seconds of ring at max(4 kHz, 3x the note): lower = duller, faster-fading top"),
             pickup=(0.3, "readout point 0..1 (a second one sits 0.43 further along)"),
-            bright=(1.0, "0.5 mellow .. 2 open (scales the output ceiling, about 6 partials inside 1.6..4.2 kHz)"))
+            bright=(1.0, "0.5 mellow .. 2 open (scales the output ceiling, about 6 partials inside 1.6..4.2 kHz)"),
+            bead=(0.0, "mass fixed on the string (a bead, a weight, a capo) as a fraction of the string's mass: "
+                       "detunes the partials unevenly, 0 = none"),
+            bead_pos=(0.5, "where the bead sits, 0..1"))
 def fd_string(freq, dur, sr=DEFAULT_SR, vel=1.0, excitation="pluck", position=0.18, B=1e-4, t60_lo=4.0, t60_hi=0.6,
-              pickup=0.3, bright=1.0):
+              pickup=0.3, bright=1.0, bead=0.0, bead_pos=0.5):
     pos = float(np.clip(position, 0.03, 0.97))
     if excitation == "bow":
         s, y = _bow_note(freq, dur, sr, vel, 1.0, 1.0, min(pos, 1.0 - pos), 0.0, B, t60_lo, t60_hi, pickup, 0.3)
         return _finish(_vel_out(s, y), sr, dur, vel, 0.55, 0.08, _lp(freq, bright))
     s = StiffString(_flat(freq, B, 3.0), sr, B=_key_B(B, freq), t60=_t60(freq, t60_lo, t60_hi))
+    if bead > 0.0:
+        s.mass(float(np.clip(bead_pos, 0.03, 0.97)), float(np.clip(bead, 0.0, 5.0)))
     hw = 0.03 + 0.06 * (1.0 - float(np.clip(vel, 0.0, 1.0)))       # soft touch = wide, dull excitation
     if excitation == "strike":
         s.strike(pos, hw, 1.0)
@@ -714,18 +1091,29 @@ def _piano_key_B(B, freq):
     return float(np.clip(B * steinway_B(midi) / steinway_B(60.0), 0.0, 2.5e-3))
 
 
-def _piano_string(freq, sr, strings, detune, B, t60_lo, t60_hi, hammer_mass, hardness, position, vel, backoff=0.95):
+def _stretch_cents(freq):
+    """Fundamental of a freshly tuned Steinway D against equal temperament, normalised to A4 (Klouche, DAGA 2014,
+    Fig. 5 / Results D): a U-shaped stretch, about +5 cents at A1 and rising from A4 to about +20 cents in the top
+    octave; within 4 cents over the middle five octaves."""
+    midi = 69.0 + 12.0 * math.log2(max(float(freq), 1.0) / 440.0)
+    return float(np.interp(midi, (33.0, 69.0, 93.0), (5.0, 0.0, 20.0)))
+
+
+def _piano_string(freq, sr, strings, detune, B, t60_lo, t60_hi, hammer_mass, hardness, position, vel, backoff=0.95,
+                  theta=0.0, r=0.0, conservative=False, width=0.0):
     f1 = _flat(freq, B, 2.0)
     B = _piano_key_B(B, freq)
     if strings <= 0:
         strings = 1 if freq < 70.0 else 2 if freq < 180.0 else 3
     strings = int(np.clip(strings, 1, 3))
     # backoff < 1: the semi-implicit hammer still rings at lambda = 1 (g02 section 6 warning)
-    s = StiffString(f1, sr, B=B, t60=_t60(freq, t60_lo, t60_hi), n_strings=strings, detune=detune, backoff=backoff)
-    kt = (freq / 262.0) ** 0.5          # UNSOURCED: key-tracking of the Fig 7.11 preset (M 0.75, wH 3000, alpha 2.5 at C4)
+    s = StiffString(f1, sr, B=B, t60=_t60(freq, t60_lo, t60_hi), n_strings=strings, detune=detune,
+                    backoff=1.0 if conservative else backoff, theta=theta, r=r)
+    kt = (freq / 262.0) ** 0.5          # key-tracking of the Fig 7.11 preset (M 0.75, wH 3000, alpha 2.5 at C4)
     v = 0.5 * 10.0 ** float(np.clip(vel, 0.0, 1.0))                # 0.5 (pp) .. 5 (ff), Fig 7.11
     s.hammer(position, mass=float(np.clip(0.75 * hammer_mass * kt, 0.02, 4.0)) / strings,
-             w=3000.0 * kt * float(np.clip(hardness, 0.2, 5.0)), alpha=2.5, v=v)
+             w=3000.0 * kt * float(np.clip(hardness, 0.2, 5.0)), alpha=2.5, v=v, conservative=conservative,
+             width=width)
     return s, v
 
 
@@ -739,17 +1127,68 @@ def _piano_string(freq, sr, strings, detune, B, t60_lo, t60_hi, hammer_mass, har
             B=(3e-4, "inharmonicity at C4; across the keyboard it follows a Steinway D (least at the bass/tenor break)"),
             decay=(6.0, "seconds of ring at the note"),
             t60_hi=(1.0, "seconds of ring at max(4 kHz, 3x the note)"),
-            bright=(1.0, "0.5 mellow .. 2 open"))
+            bright=(1.0, "0.5 mellow .. 2 open"),
+            stretch=(0.0, "octave stretch of a concert tuning, 0 = equal temperament, 1 = measured (A1 +5, A7 +20 cents)"),
+            tuning=("klouche", "curve scaled by `stretch`: klouche (measured Steinway D) | matched (octaves matched on "
+                               "the m:n partials of each register, from the string's B) | railsback (Railsback 1938, -17..+40)"),
+            restrike=("", "seconds after the onset at which the hammer strikes again the still-moving string, e.g. \"0.032,0.4\""),
+            scheme=("explicit", "explicit | theta4 (stiffness weighted theta = 1/12: fourth order, less numerical "
+                                "dispersion) | stable (theta = 1/4: stiffness unconditionally stable, finer grid) | "
+                                "bensa (r = 1/4 on the tension too)"),
+            hammer_model=("semi", "semi (semi-implicit felt law) | conservative (energy-conserving felt, no backoff)"),
+            hammer_width=(0.0, "felt contact width as a fraction of the string (0 = one grid point; about 0.016 for a "
+                               "real felt at C4): the touch is spread over the grid, softening the top"))
 def fd_piano(freq, dur, sr=DEFAULT_SR, vel=1.0, strings=0, detune=3.0, hammer_mass=1.0, hardness=1.0, position=0.12,
-             B=3e-4, decay=6.0, t60_hi=1.0, bright=1.0):
+             B=3e-4, decay=6.0, t60_hi=1.0, bright=1.0, stretch=0.0, tuning="klouche", restrike="", scheme="explicit",
+             hammer_model="semi", hammer_width=0.0):
+    freq = freq * 2.0 ** (float(np.clip(stretch, 0.0, 2.0)) * tuning_curve_cents(freq, tuning) / 1200.0)
     lo = decay * float(np.clip((262.0 / freq) ** 0.5, 0.25, 2.0))
+    if scheme not in SCHEMES:
+        raise ValueError(f"scheme {scheme!r}: {', '.join(SCHEMES)}")
+    if hammer_model not in ("semi", "conservative"):
+        raise ValueError(f"hammer_model {hammer_model!r}: semi or conservative")
+    th, rr = SCHEMES[scheme]
+    cons = hammer_model == "conservative"
     s, _ = _piano_string(freq, sr, strings, float(np.clip(detune, 0.0, 30.0)), B, lo, t60_hi, hammer_mass, hardness,
-                         float(np.clip(position, 0.04, 0.5)), vel)
-    y = s.run(int((dur + 0.45) * s.sr_i), (0.31, 0.77))
+                         float(np.clip(position, 0.04, 0.5)), vel, theta=th, r=rr, conservative=cons,
+                         width=float(np.clip(hammer_width, 0.0, 0.2)))
+    total = int((dur + 0.45) * s.sr_i)
+    times = sorted(float(t) for t in str(restrike).replace(";", ",").split(",") if t.strip()) if restrike != "" else []
+    parts, done = [], 0
+    for t in times:
+        i = min(int(t * s.sr_i), total)
+        if i > done:
+            parts.append(s.run(i - done, (0.31, 0.77)))
+            done = i
+            ham = s.ham.copy()
+            s.hammer(float(np.clip(position, 0.04, 0.5)), mass=ham[2], w=ham[3] ** (1.0 / (1.0 + ham[4])), alpha=ham[4],
+                     v=-ham[6] / s.k if ham[6] else 0.5 * 10.0 ** float(np.clip(vel, 0.0, 1.0)),
+                     conservative=ham[7] > 0.5, loss=ham[8], width=s._hwidth)
+            s.ham[5] = s.U[0, int(s.ham[1])]
+            s.ham[6] = s.ham[5] - s.k * 0.5 * 10.0 ** float(np.clip(vel, 0.0, 1.0))
+    parts.append(s.run(total - done, (0.31, 0.77)))
+    y = np.concatenate(parts, axis=0)
     return _finish(_vel_out(s, y), sr, dur, vel, 0.7, 0.09, _lp(freq, bright))
 
 
-# UNSOURCED: the four names are mapped onto the book's element presets (g02 section 8); gap sizes are relative to
+RAILSBACK = ((21.0, -17.0), (45.0, -4.0), (69.0, 0.0), (93.0, 12.0), (108.0, 40.0))
+
+
+def tuning_curve_cents(freq, curve="klouche"):
+    """Cents from equal temperament (A4 = 0) of a tuned piano: klouche (measured Steinway D), matched (built from the
+    inharmonicity, `strings.matched_tuning_cents`) or railsback (aural tuning curve, -17 cents at A0 to +40 at C8)."""
+    midi = 69.0 + 12.0 * math.log2(max(float(freq), 1.0) / 440.0)
+    if curve == "klouche":
+        return _stretch_cents(freq)
+    if curve == "matched":
+        from .strings import matched_tuning_cents
+        return float(matched_tuning_cents(int(np.clip(round(midi), 21, 108))))
+    if curve == "railsback":
+        return float(np.interp(midi, [a for a, _ in RAILSBACK], [b for _, b in RAILSBACK]))
+    raise ValueError(f"tuning {curve!r}: klouche, matched or railsback")
+
+
+# the four names are mapped onto the book's element presets (g02 section 8); gap sizes are relative to
 # the string's expected excursion (hammer momentum / 2 gamma), since the book gives them for unit-amplitude plucks.
 _PREP = {"rattle": 0, "rubber": 1, "bolt": 2, "screw": 3}
 
@@ -808,18 +1247,19 @@ def slack_string(freq, dur, sr=DEFAULT_SR, vel=1.0, glide=0.7, position=0.8, dec
 
 
 def sitar_fd(freq, dur, sr=DEFAULT_SR, vel=1.0, buzz=0.45, B=1e-4):
-    """Siddiq, "A physical model of the nonlinear sitar string", Arch. Acoust. 37(1), 73-79 (2012): a dispersive
-    string whose first points rest on the flat bridge, a one-sided obstacle that the string strikes and leaves
-    every period (so the vibrating length changes and the Young-Helmholtz law fails, his Fig. 11). Here the stiff
-    string of this module, the bridge a row of rigid one-sided stops over the first 4 % of the string, curved as
-    depth (x / l)^2 (jawari), depth = 2e-4 (1 - buzz) string lengths; buzz 0 = no bridge. UNSOURCED (Siddiq gives
-    no geometry): the bridge length, curvature, contact stiffness and the 5 mm pluck."""
-    s = StiffString(_flat(freq, B, 3.0), sr, B=_key_B(B, freq), t60=_t60(freq, 8.0, 1.5))
+    """Sitar: a dispersive string whose first points rest on the flat bridge, a one-sided obstacle that the string
+    strikes and leaves every period (so the vibrating length changes and a pluck at a node no longer silences that
+    partial). The stiff string of this module, the bridge a row of rigid one-sided stops over the first 1 % of the
+    string, curved as depth (x / l)^2 (jawari), depth = 2e-3 (1 - buzz) string lengths; buzz 0 = no bridge; plucked
+    at one fifth. Bridge length, curvature, contact stiffness and the 5 mm pluck are chosen. Measured at D3, buzz .45: 30 % of the
+    energy above 8 f0 late in the note (free string 43 %); a 4 % bridge at 2e-4 pinned the string and left .5 %, and a
+    coarser grid (oversample 1) has no point inside 1 %. Higher buzz presses harder and takes this share down again."""
+    s = StiffString(_flat(freq, B, 3.0), sr, B=_key_B(B, freq), t60=_t60(freq, 8.0, 1.5), oversample=max(4, int(np.ceil(30.0 * freq / sr))))
     b = float(np.clip(buzz, 0.0, 1.0))
     if b > 0.0:
-        depth = 2e-4 * (1.0 - b)
-        for x in np.arange(s.h, 0.04, s.h):
-            s.rattle(x, w=3e4, eps=2.0, mass_ratio=0.0, alpha=1.5, offset=1.0 - depth * (x / 0.04) ** 2)
+        depth = 2e-3 * (1.0 - b)
+        for x in np.arange(s.h, 0.01, s.h):
+            s.rattle(x, w=3e4, eps=2.0, mass_ratio=0.0, alpha=1.5, offset=1.0 - depth * (x / 0.01) ** 2)
     s.pluck(0.2, 0.002, 0.005 * (0.4 + 0.6 * float(np.clip(vel, 0.0, 1.0))))
     y = s.run(int((dur + 1.2) * s.sr_i), (0.73, 0.31))
     return _finish(_disp_out(s, y), sr, dur, vel, 0.57, 0.25, 5000.0)   # as loud as the waveguide sitar
@@ -852,47 +1292,75 @@ def string_bridge_plate(freq, dur, sr=DEFAULT_SR, vel=1.0, config="body"):
     return _finish(y, sr, dur, vel, 0.95, 0.4, 6000.0)
 
 
-# UNSOURCED: order-of-magnitude decay times (T60 at the note for A4, T60 at 4 kHz); no table in the book
-_MATERIAL = {"wood": (0.7, 0.06), "metal": (4.0, 0.9), "glass": (1.6, 0.35), "plastic": (0.25, 0.03)}
+# order-of-magnitude decay times (T60 at the note for A4, T60 at 4 kHz); no table in the book
+_MATERIAL = {"wood": (0.7, 0.06), "metal": (4.0, 0.9), "glass": (1.6, 0.35), "plastic": (0.25, 0.03),
+             "rosewood": (13.8155 * 2.13e10 / ((2 * np.pi * 440.0) ** 2 * 5.0e3), 13.8155 * 2.13e10 / ((2 * np.pi * 4000.0) ** 2 * 5.0e3))}
 _BOUNDARY = {"free": ("free", "free"), "clamped_free": ("clamped", "free"), "clamped": ("clamped", "clamped"),
              "supported": ("ss", "ss")}
-_TUNING = {"none": 0.0, "xylophone": 3.0, "marimba": 4.0}
+_TUNING = {"none": 0.0, "xylophone": (3.0, 6.0), "marimba": (4.0, 10.0)}
 
 
-def _bar_note(freq, n_sec, sr, vel, material, boundary, mallet, tuning, position, pickup, quality, decay=1.0):
+def _bar_note(freq, n_sec, sr, vel, material, boundary, mallet, tuning, position, pickup, quality, decay=1.0,
+              theta=0.0, scan=0.0):
     if material not in _MATERIAL or boundary not in _BOUNDARY or tuning not in _TUNING:
         raise ValueError("fd_bar: unknown material, boundary or tuning")
     lo, hi = _MATERIAL[material]
     lo *= decay * float(np.clip((440.0 / freq) ** 0.5, 0.3, 3.0))
     N = (20, 32, 48)[int(np.clip(quality, 0, 2))]
     ratio = _TUNING[tuning] if boundary == "free" else 0.0
-    s = Bar(freq, sr, _BOUNDARY[boundary], _t60(freq, lo, min(hi, lo)), N, ratio)
+    s = Bar(freq, sr, _BOUNDARY[boundary], _t60(freq, lo, min(hi, lo)), N, ratio, theta=theta)
     v = 0.5 * 10.0 ** float(np.clip(vel, 0.0, 1.0))
     # contact time 2.5 ms (soft) .. 0.25 ms (hard) at v = 1.5 on a rigid target, shorter when hit harder:
     # Tc ~ 3 eta_max / v, eta_max = ((alpha+1) v^2 / 2)^(1/(alpha+1)) / wH
     al, tc = 2.0, 2.5e-3 * 0.1 ** float(np.clip(mallet, 0.0, 1.0)) * float(np.clip((440.0 / freq) ** 0.4, 0.4, 2.5))
     wH = 3.0 * ((al + 1.0) * 1.5 ** 2 / 2.0) ** (1.0 / (al + 1.0)) / (1.5 * tc)
-    s.hammer(position, mass=0.3, w=wH, alpha=al, v=v)   # UNSOURCED: mallet / bar mass ratio 0.3
-    y = s.run(int(n_sec * s.sr_i), _pick(pickup))
+    s.hammer(position, mass=0.3, w=wH, alpha=al, v=v)   # mallet / bar mass ratio 0.3
+    n = int(n_sec * s.sr_i)
+    px = None
+    if scan > 0.0:
+        t = np.arange(n) / s.sr_i
+        px = np.clip(pickup + 0.3 * np.sin(2.0 * np.pi * float(scan) * t), 0.03, 0.97)
+    y = s.run(n, _pick(pickup), scan=px)
     return s, y
+
+
+def amplitude_glide(y, sr, cents):
+    """Pitch that falls with the amplitude: the time base runs faster by `cents` at the peak of the envelope and
+    by cents x (envelope / peak)^2 after (the stiffening of a large vibration grows with its square)."""
+    if cents <= 0.0 or y.size < 4:
+        return y
+    from scipy.signal import lfilter
+    a = math.exp(-1.0 / (0.01 * sr))
+    env = np.sqrt(lfilter([1.0 - a], [1.0, -a], y * y))
+    rate = 2.0 ** (float(cents) * (env / (env.max() + 1e-30)) ** 2 / 1200.0)
+    tau = np.concatenate(([0.0], np.cumsum(rate[:-1])))
+    return np.interp(tau, np.arange(y.size), y, right=0.0)
 
 
 @instrument("fd_bar", "Finite-difference bar struck by a mallet: wood/metal/glass, free (marimba, xylophone, glockenspiel) or clamped (tine, ruler).",
             family="mallet", span=("C3", "C7"),
-            material=("wood", "wood | metal | glass | plastic (sets the ring time)"),
+            material=("wood", "wood | metal | glass | plastic | rosewood (E and viscosity of a measured xylophone bar) (sets the ring time)"),
             boundary=("free", "free (partials 1 : 2.76 : 5.40) | clamped_free (1 : 6.27 : 17.5) | clamped | supported (1 : 4 : 9)"),
             mallet=(0.5, "mallet hardness 0 (soft yarn, contact about 2.7 ms at A4) .. 1 (hard, 0.45 ms, clicky)"),
-            tuning=("none", "undercut arch for free bars: none | xylophone (2nd partial at 3x) | marimba (4x)"),
+            tuning=("none", "undercut arch for free bars: none | xylophone (2nd partial at 3x) | marimba (2nd and 3rd at 4x and 10x)"),
             position=(0.5, "strike point 0..1"),
             pickup=(0.42, "readout point 0..1"),
             decay=(1.0, "ring-time scale"),
             quality=(1, "grid size 0 (20 points) | 1 (32) | 2 (48): finer = truer upper partials, slower"),
-            bright=(1.0, "0.5 mellow .. 2 open"))
+            bright=(1.0, "0.5 mellow .. 2 open"),
+            glide=(0.0, "cents the note starts sharp when hit hard (amplitude stiffening), settling as it decays"),
+            scan=(0.0, "Hz: the readout sweeps +-0.3 of the bar around `pickup` (a moving microphone; 0 = fixed)"),
+            scheme=("explicit", "explicit | implicit (theta = 1/4: unconditionally stable, 4x lower internal rate)"))
 def fd_bar(freq, dur, sr=DEFAULT_SR, vel=1.0, material="wood", boundary="free", mallet=0.5, tuning="none", position=0.5,
-           pickup=0.42, decay=1.0, quality=1, bright=1.0):
+           pickup=0.42, decay=1.0, quality=1, bright=1.0, glide=0.0, scan=0.0, scheme="explicit"):
+    if scheme not in ("explicit", "implicit"):
+        raise ValueError("fd_bar scheme must be explicit or implicit")
     ring = max(dur, min(2.5, 1.2 * _MATERIAL.get(material, (1.0,))[0] * decay * float(np.clip((440.0 / freq) ** 0.5, 0.3, 3.0))))
-    s, y = _bar_note(freq, ring + 0.05, sr, vel, material, boundary, mallet, tuning, position, pickup, quality, decay)
-    return _finish(_vel_out(s, y), sr, ring, vel, 0.9, 0.05, _lp(freq, bright), hp=min(60.0, 0.4 * freq))
+    s, y = _bar_note(freq, ring + 0.05, sr, vel, material, boundary, mallet, tuning, position, pickup, quality, decay,
+                     0.25 if scheme == "implicit" else 0.0, float(max(scan, 0.0)))
+    out = _vel_out(s, y)
+    out = amplitude_glide(out, sr, float(np.clip(glide, 0.0, 200.0)) * float(np.clip(vel, 0.0, 1.0)))
+    return _finish(out, sr, ring, vel, 0.9, 0.05, _lp(freq, bright), hp=min(60.0, 0.4 * freq))
 
 
 @instrument("bowed_string_fd", "Bowed stiff string (finite difference, implicit friction solve) with a bow that can travel along the string.",
@@ -912,14 +1380,52 @@ def bowed_string_fd(freq, dur, sr=DEFAULT_SR, vel=1.0, force=1.0, speed=1.0, pos
     return _finish(_vel_out(s, y), sr, dur, vel, 0.55, 0.08, _lp(freq, bright))
 
 
+@instrument("interceptor_string", "Plucked string with an interceptor: a screw set near the string that it buzzes "
+            "against (gap sets how much), or two screws on wooden arms knocking each other every cycle (`tuba`), "
+            "with a cloth that softens the contact.",
+            family="strings", span=("E1", "C5"),
+            kind=("screw", "screw (fixed stop near the string: sitar-like buzz) | tuba (a light arm carrying a screw, "
+                           "thrown against its partner every vibration: a brassy, rattling drone)"),
+            gap=(0.6, "distance of the stop as a fraction of the pluck amplitude: small = more buzz; under ~0.5 the stop "
+                      "locks the low notes off pitch (-80 cents at E1)"),
+            cloth=(0.0, "0 bare metal .. 1 cloth over the contact: softer, darker touch"),
+            position=(0.85, "where the interceptor sits along the string, 0..1"),
+            decay=(4.0, "seconds of ring at the note"))
+def interceptor_string(freq, dur, sr=DEFAULT_SR, vel=1.0, kind="screw", gap=0.6, cloth=0.0, position=0.85, decay=4.0):
+    if kind not in ("screw", "tuba"):
+        raise ValueError("interceptor_string kind must be screw or tuba")
+    return _interceptor(freq, dur, sr, vel, kind, gap, cloth, position, decay)
+
+
+def _interceptor(freq, dur, sr, vel, kind, gap, cloth, position, decay):
+    s = StiffString(_flat(freq, 1e-4, 3.0), sr, B=_key_B(1e-4, freq), t60=_t60(freq, decay, 0.8),
+                    oversample=max(2, int(np.ceil(30.0 * freq / sr))))
+    amp = 0.005 * (0.4 + 0.6 * float(np.clip(vel, 0.0, 1.0)))
+    c = float(np.clip(cloth, 0.0, 1.0))
+    w = INTERCEPT_W * (INTERCEPT_CLOTH_W / INTERCEPT_W) ** c
+    al = 1.5 + 1.5 * c
+    x = float(np.clip(position, 0.05, 0.95))
+    reach = amp * math.sin(math.pi * x) / max(math.sin(math.pi * 0.2), 1e-3) if x < 0.2 else amp * (1.0 - x) / 0.8
+    g = float(np.clip(gap, 0.02, 2.0)) * max(reach, 1e-6)
+    if kind == "screw":
+        s.rattle(x, w=w, eps=2.0, mass_ratio=0.0, alpha=al, offset=g - 1.0)
+    else:
+        s.rattle(x, w=w, eps=2.0 * g, mass_ratio=INTERCEPT_ARM, alpha=al, offset=0.0)
+    s.pluck(0.2, 0.01, amp)
+    y = s.run(int((dur + 1.0) * s.sr_i), (0.73, 0.31))
+    return _finish(_disp_out(s, y), sr, dur, vel, 0.6, 0.12, 4500.0 * (1.0 - 0.4 * c))
+
+
 # ------------------------------------------------------------------ sfx / fx
 @sfx("twang", "Twang: 'band' = rubber band / slack string that starts sharp and sags; 'ruler' = ruler flicked on a desk edge, buzzing against it.",
      kind=("band", "band | ruler"), freq=(140.0, "Hz, settled pitch"), dur=(0.9, "seconds"),
-     amount=(1.0, "0..2: band = glide depth (4 semitones at 1), ruler = how hard it slaps the desk"))
-def twang(sr=DEFAULT_SR, kind="band", freq=140.0, dur=0.9, amount=1.0):
+     amount=(1.0, "0..2: band = glide depth (4 semitones at 1), ruler = how hard it slaps the desk"),
+     slide=(0.0, "ruler: -0.5..0.6 fraction of the free length pulled in over `dur` (> 0 shortens it: the pitch rises as 1/L^2)"))
+def twang(sr=DEFAULT_SR, kind="band", freq=140.0, dur=0.9, amount=1.0, slide=0.0):
     freq = float(np.clip(freq, 30.0, 1500.0))
     dur = float(np.clip(dur, 0.1, 6.0))
     amt = float(np.clip(amount, 0.0, 2.0))
+    sl = float(np.clip(slide, -0.5, 0.6))
     if kind == "band":
         s, y = _slack(freq, dur, sr, 4.0 * amt, 1.0, 0.7, 0.9 * dur, 0.3)
     elif kind == "ruler":
@@ -927,35 +1433,330 @@ def twang(sr=DEFAULT_SR, kind="band", freq=140.0, dur=0.9, amount=1.0):
         s.pluck(1.0, 0.5, 1.0)
         if amt > 0.0:                   # rigid stop just under the ruler near the clamp: one-sided slap
             s.rattle(0.3, w=2 * np.pi * freq * 30.0, eps=4.0, mass_ratio=0.0, alpha=1.0, offset=2.0 - 0.02 / amt)
-        y = s.run(int(dur * s.sr_i), (0.9, 0.6))
+        y = s.run(int(dur / (1.0 - sl) * s.sr_i), (0.9, 0.6))
+        if sl:
+            return _finish(length_slide(_vel_out(s, y), sl, int(round(dur * sr))), sr, dur, 1.0, 0.7, 0.0, 6000.0, hp=25.0)
     else:
         raise ValueError("kind must be band or ruler")
     return _finish(_vel_out(s, y), sr, dur, 1.0, 0.7, 0.0, 6000.0, hp=25.0)
 
 
-@effect("spring_reverb", "Spring-tank reverb as a dispersive allpass-chain loop (chirping 'boing' echoes); not the helical-spring FD model.",
-        mix=(0.3, "wet level 0..1"), decay=(1.7, "seconds of ring"), delay=(0.053, "seconds per trip along the spring"),
-        cutoff=(4300.0, "Hz: top of the chirps"), density=(100, "allpass sections 10..200: more = longer chirps"))
-def spring_reverb(x, sr=DEFAULT_SR, mix=0.3, decay=1.7, delay=0.053, cutoff=4300.0, density=100):
-    """Dispersive allpass-chain spring (the structure of parametric spring reverbs), NOT Bilbao's helical-spring
-    scheme (g02 section 10): that equation set is the least reliably extracted part of the source and its
-    coupling/boundary terms could not be recovered, so it is not used.
-    Defaults: the Leem Pro KA-1210 spring 1 as calibrated by Valimaki, Parker & Abel 2010 (JAES 58(7/8)) Table 1
-    p.558: Td 0.056 s, fC 4300 Hz, M_low 100, g_lf -0.8 (confirmed); a1 0.62 from their Sec. 1.3 p.550 and Sec. 2.1
-    p.553 (same values in Gamper, Parker & Valimaki, DAFx-11, Table 1). delay = Td less the chain's dc group delay
-    K M (1 - a1)/(1 + a1) (their eq. 10-11: L about 2350 samples, 53 ms, Sec. 2.1 p.553); decay = the -1.94 dB per Td
-    of g_lf, 60 dB in 1.7 s."""
+def length_slide(y, slide, n):
+    """Read a clamped-free bar's sound as its free length goes L0 (1 - slide u), u = 0..1 over n samples: every
+    mode scales as 1/L^2, so the time base runs at 1/(1 - slide u)^2; ``y`` must last n / (1 - slide)."""
+    u = np.arange(n) / max(n, 1)
+    tau = n * u / (1.0 - slide * u)                    # integral of 1/(1 - s u)^2 du, in samples
+    return np.interp(tau, np.arange(len(y)), y, right=0.0)
+
+
+STEEL_E = 2.0e11
+STEEL_RHO = 7850.0
+
+SPRING_PRESETS = {
+    "leem1": dict(td=0.056, fc=4300.0, a=0.62, M=100, g=-0.8, gmod=8.0, c1=0.1, g_rip=0.1, g_echo=0.1, f_eq=95.0, b_eq=130.0),
+    "leem2": dict(td=0.044, fc=4400.0, a=0.62, M=100, g=-0.8, gmod=12.0, c1=0.1, g_rip=0.1, g_echo=0.1, f_eq=95.0, b_eq=130.0),
+    "leem3": dict(td=0.047, fc=4450.0, a=0.62, M=100, g=-0.8, gmod=10.0, c1=0.1, g_rip=0.1, g_echo=0.1, f_eq=95.0, b_eq=130.0),
+    "sansui": dict(td=0.056, fc=3526.0, a=0.62, M=100, g=-0.8, gmod=6.0, c1=0.2, g_rip=-0.2, g_echo=0.1, f_eq=95.0, b_eq=130.0),
+    "leem_auto": dict(td=0.056, fc=4275.0, a=0.63, M=100, g=-0.64, gmod=8.0, c1=0.1, g_rip=0.1, g_echo=0.1, f_eq=183.0, b_eq=146.0),
+}
+SPRING_TANKS = {
+    "single": None,
+    "two_spring": ((1.0e-4, 2.5e-3, 112), (1.0e-4, 2.5e-3, 126)),
+    "three_spring": ((1.0e-4, 2.5e-3, 96), (1.0e-4, 2.5e-3, 129), (1.0e-4, 2.5e-3, 166)),
+}
+SPRING_HF = dict(a=-0.6, M=200, g=-0.77, ratio=2.3, level=0.001)
+SPRING_RIPPLE_N = 0.5
+SPRING_DC_HZ = 40.0
+SPRING_MOD_HZ = 2.0
+SPRING_WANDER_A = 0.93
+
+
+def spring_wire_length(R: float, turns: float, height: float = 0.0) -> float:
+    """Unwound wire length of a helix of radius R with `turns` turns over an axial `height`."""
+    return math.sqrt((2.0 * math.pi * R * turns) ** 2 + height ** 2)
+
+
+def spring_geometry(r: float, R: float, turns: float, height: float = 0.0, E: float = STEEL_E, rho: float = STEEL_RHO) -> dict:
+    """Echo spacing TD = 4 L R / (r c) and chirp cutoff fC = 3 r c / (16 R^2 sqrt(5 pi)) of a helical spring of wire
+    radius r and helix radius R (c = sqrt(E / rho))."""
+    c = math.sqrt(E / rho)
+    L = spring_wire_length(R, turns, height)
+    return {"L": L, "td": 4.0 * L * R / (r * c), "fc": 3.0 * r * c / (16.0 * R * R * math.sqrt(5.0 * math.pi))}
+
+
+def spring_dispersion(r: float, R: float, E: float = STEEL_E, rho: float = STEEL_RHO, n: int = 20000):
+    """Dispersion of a helical spring at zero helix angle (two coupled equations, longitudinal u and transverse v):
+    (w^2 - c^2 b^2)(w^2 - g^2 (b^2 - k^2)^2 - c^2 k^2) = c^4 k^2 b^2, c^2 = E/rho, g^2 = E r^2 / (4 rho), k = 1/R.
+    Returns (beta rad/m, f Hz, group velocity m/s) on the lower (audio) branch below its maximum fC, and fC."""
+    c2 = E / rho
+    g2 = E * r * r / (4.0 * rho)
+    k2 = 1.0 / (R * R)
+    b = np.linspace(1e-6, 1.0, n) * math.sqrt(k2)
+    b2 = b * b
+    S = c2 * b2 + g2 * (b2 - k2) ** 2 + c2 * k2
+    P = c2 * g2 * b2 * (b2 - k2) ** 2
+    w = np.sqrt(0.5 * (S - np.sqrt(np.maximum(S * S - 4.0 * P, 0.0))))
+    top = int(np.argmax(w))
+    vg = np.gradient(w, b)
+    return b[:top], w[:top] / (2.0 * np.pi), vg[:top], float(w[top] / (2.0 * np.pi))
+
+
+def spring_echo_time(f, r: float, R: float, turns: float, height: float = 0.0, E: float = STEEL_E, rho: float = STEEL_RHO):
+    """Round-trip time 2 L / v_g(f) of the audio branch, seconds (inf at and above fC)."""
+    _, fb, vg, fc = spring_dispersion(r, R, E, rho)
+    L = spring_wire_length(R, turns, height)
+    f = np.asarray(f, float)
+    return np.where(f < fc, 2.0 * L / np.interp(f, fb, np.maximum(vg, 1e-9)), np.inf)
+
+
+def spring_chain_delay(f, M: int, K: float, a: float, sr: float):
+    """Group delay in samples of M stretched allpasses (a + z^-K)/(1 + a z^-K): M K (1 - a^2)/(1 + 2 a cos(w K) + a^2)."""
+    w = 2.0 * np.pi * np.asarray(f, float) / sr
+    return M * K * (1.0 - a * a) / (1.0 + 2.0 * a * np.cos(w * K) + a * a)
+
+
+def spring_cost(M_low: int = 100, M_high: int = 200, efficient: bool = False) -> float:
+    """Multiplications per output sample of the parametric spring (chain sections cost 3 each at stretch K, 2 at K 1)."""
+    if not efficient:
+        return 6 * M_low + 1 + 18 + 2 * M_high + 1 + 3
+    lf = 6 * (M_low / 2) / 4 + 1 / 4 + 18 + 10 + 2 + 20
+    hf = 2 * (M_high / 2) + 1 + 24 + 2
+    return lf + hf + 3
+
+
+def _stretch(K: float):
+    """Integer part and first-order Thiran coefficient of a (possibly fractional) stretch K >= 1."""
+    if K < 1.5:
+        return 0, 0.0
+    Ki = max(int(math.floor(K - 0.5)), 1)
+    d = K - Ki
+    return Ki, (1.0 - d) / (1.0 + d)
+
+
+def spring_eq(f_peak: float, B: float, K: float, sr: float):
+    """Stretched resonator of the first chirp, (A0/2)(1 - z^-2Keq)/(1 + a1 z^-Keq + a2 z^-2Keq), Keq = floor(K)."""
+    Keq = max(1, int(math.floor(K)))
+    Rr = 1.0 - math.pi * B * Keq / sr
+    ct = float(np.clip((1.0 + Rr * Rr) / (2.0 * Rr) * math.cos(2.0 * math.pi * f_peak * Keq / sr), -1.0, 1.0))
+    b = np.zeros(2 * Keq + 1)
+    a = np.zeros(2 * Keq + 1)
+    b[0], b[-1] = (1.0 - Rr * Rr) / 2.0, -(1.0 - Rr * Rr) / 2.0
+    a[0], a[Keq], a[-1] = 1.0, -2.0 * Rr * ct, Rr * Rr
+    return b, a
+
+
+def _uniform_wander(n, sr, rng):
+    """Uniform noise (variance 1/3) through the one-pole (1 - a)/(1 - a z^-1), a = SPRING_WANDER_A at 44.1 kHz
+    (variance about 0.012), bounded to +-1."""
+    a = SPRING_WANDER_A ** (44100.0 / sr)
+    v = lfilter([1.0 - a], [1.0, -a], rng.uniform(-1.0, 1.0, n))
+    return np.clip(v, -1.0, 1.0)
+
+
+def _slow_noise(n, sr, rng):
+    v = rng.standard_normal(n)
+    p = math.exp(-2.0 * math.pi * SPRING_MOD_HZ / sr)
+    v = lfilter([1.0 - p], [1.0, -p], v)
+    return v / (np.max(np.abs(v)) + 1e-12)
+
+
+def _spring_loop(xin, fs, K, a, M, g, L, taps, gmod, clip, sos_lo, sos_hi, dlow, rng, wander="smooth"):
+    Ki, eta = _stretch(K)
+    s_abs = sum(abs(t[1]) for t in taps)
+    g_eff = float(np.clip(g, -0.999, 0.999))          # taps sum to 1 in amplitude: the loop gain is g, the T60 holds
+    lo_d = max(abs(gmod) + 2.0, 2.0)
+    td = np.array([max(L + t[0], lo_d) - 1.0 for t in taps])
+    tg = np.array([t[1] / s_abs for t in taps])
+    noise = _uniform_wander if wander == "uniform" else _slow_noise
+    mod = gmod * noise(xin.shape[0], fs, rng) if gmod > 0 else np.zeros(xin.shape[0])
+    rdc = 1.0 - 2.0 * math.pi * SPRING_DC_HZ / fs
+    xin = np.ascontiguousarray(xin)
+    return _spring_kernel(xin, int(M), Ki, eta, a, g_eff, td, tg, mod, rdc, float(clip),
+                          sos_lo, sos_hi, int(dlow))
+
+
+def _spring_one(ch, sr, P, td, fc, M, decay, delay, hf, efficient, clip, seed, wander="smooth"):
+    rng = np.random.default_rng(seed)
+    a, g = P["a"], P["g"]
+    K = sr / (2.0 * fc)
+    none = np.zeros((0, 6))
+    if efficient:
+        aa = cheby1(10, 2.0, 0.9 * sr / 8.0, fs=sr, output="sos")
+        xin, fs = sosfilt(aa, ch)[::4], sr / 4.0
+        Kc, ac, Mc = K / 2.0, -a, max(1, M // 2)
+        lo = butter(4, fc / 2.0, fs=fs, output="sos")
+        hi = butter(4, fc / 2.0, "high", fs=fs, output="sos")
+        sos_lo, sos_hi = np.vstack([lo, lo]), np.vstack([hi, hi])
+        dlow = int(round(float(spring_chain_delay(fc / 2.0, Mc, Kc, ac, fs))))
+        tau = float(dlow)
+    else:
+        xin, fs, Kc, ac, Mc, sos_lo, sos_hi, dlow = ch, float(sr), K, a, M, none, none, 0
+        tau = float(spring_chain_delay(0.0, Mc, Kc, ac, fs))
+    L = (delay * fs) if delay is not None else max(td * fs - tau, 4.0)
+    trip = (L + tau) / fs
+    if decay is not None:
+        g = -(10.0 ** (-3.0 * trip / max(float(decay), 0.05)))
+    taps = ((-L / 5.0, P["g_echo"]), (0.0, 1.0), (2.0 * Kc * SPRING_RIPPLE_N, P["g_rip"]))
+    gmod = P["gmod"] * fs / 44100.0
+    y = _spring_loop(xin, fs, Kc, ac, Mc, g, L, taps, gmod, clip, sos_lo, sos_hi, dlow, rng, wander)
+    if efficient:
+        up = np.zeros(ch.shape[0])
+        m = min(up[::4].shape[0], y.shape[0])
+        up[::4][:m] = 4.0 * y[:m]
+        y = sosfilt(aa, up)
+    L_full = L * sr / fs
+    b, a_eq = spring_eq(P["f_eq"], P["b_eq"], K, sr)
+    out = lfilter(b, a_eq, y)
+    out = sosfilt(ellip(8, 0.5, 60.0, min(fc, 0.45 * sr), fs=sr, output="sos"), out)
+    out *= math.sqrt(float(np.sum(y * y)) / (float(np.sum(out * out)) + 1e-30))
+    if hf > 0:
+        H = SPRING_HF
+        xh = np.ascontiguousarray(ch + P["c1"] * y)
+        if efficient:
+            lo = butter(2, sr / 4.0, fs=sr, output="sos")
+            hi = butter(2, sr / 4.0, "high", fs=sr, output="sos")
+            Kh, Mh, sl, sh = 2.0, H["M"] // 2, np.vstack([lo, lo]), np.vstack([hi, hi])
+            dl = int(round(float(spring_chain_delay(sr / 4.0, Mh, Kh, H["a"], sr))))
+        else:
+            Kh, Mh, sl, sh, dl = 1.0, H["M"], none, none, 0
+        yh = _spring_loop(xh, float(sr), Kh, H["a"], Mh, H["g"], max(L_full / H["ratio"], 4.0), ((0.0, 1.0),), 0.0,
+                          clip, sl, sh, dl, rng)
+        out = out + H["level"] * float(hf) * yh
+    return out
+
+
+def spring_fd(x, sr=DEFAULT_SR, r=1.0e-4, R=2.5e-3, turns=112, height=0.0, decay=1.7, E=STEEL_E, rho=STEEL_RHO,
+              fmax=5000.0):
+    """Helical spring as two coupled PDEs (curved bar, zero helix angle):
+    u_tt = c^2 (u_ss - k v_s) - 2 s u_t,  v_tt = -g^2 (v_ssss + 2 k^2 v_ss + k^4 v) + c^2 k (u_s - k v) - 2 s v_t,
+    simply supported ends, energy-conserving staggered differences, implicit average-acceleration time step
+    (unconditionally stable). Driven by a transverse force near one end, read as transverse velocity near the other."""
+    from scipy import sparse
+    from scipy.linalg import cholesky_banded, cho_solve_banded
+    x = np.asarray(x, float)
+    c2, g2, kap = E / rho, E * r * r / (4.0 * rho), 1.0 / R
+    L = spring_wire_length(R, turns, height)
+    beta = math.sqrt(2.0 * math.pi * fmax / math.sqrt(g2))
+    N = int(np.clip(math.ceil(2.0 * beta * L / math.pi), 16, 4000))
+    h, k = L / N, 1.0 / sr
+    n = N - 1
+    Dp = sparse.diags([np.ones(n), -np.ones(n)], [0, -1], shape=(N, n)) / h
+    Mu = sparse.diags([np.ones(n), np.ones(n)], [0, -1], shape=(N, n)) * 0.5
+    B = sparse.hstack([Dp, -kap * Mu])
+    D2 = sparse.diags([np.ones(n - 1), -2.0 * np.ones(n), np.ones(n - 1)], [-1, 0, 1]) / (h * h)
+    Lv = D2 + kap * kap * sparse.identity(n)
+    A = c2 * (B.T @ B) + sparse.block_diag([sparse.csr_matrix((n, n)), g2 * (Lv.T @ Lv)])
+    perm = np.empty(2 * n, int)
+    perm[0::2], perm[1::2] = np.arange(n), n + np.arange(n)
+    A = A.tocsr()[perm][:, perm]
+    sig = 3.0 * math.log(10.0) / max(float(decay), 0.05)
+    th = 0.25
+    Lhs = (1.0 + sig * k) * sparse.identity(2 * n) + th * k * k * A
+    bw = 5
+    ab = np.zeros((bw + 1, 2 * n))
+    Lc = Lhs.todia()
+    for off, row in zip(Lc.offsets, Lc.data):
+        if 0 <= off <= bw:
+            ab[bw - off, off:] = row[off:]
+    cb = cholesky_banded(ab)
+    M1 = (2.0 * sparse.identity(2 * n) - (1.0 - 2.0 * th) * k * k * A).tocsr()
+    M0 = ((1.0 - sig * k) * sparse.identity(2 * n) + th * k * k * A).tocsr()
+    i_in, i_out = 2 * 1 + 1, 2 * (n - 2) + 1
+    mono = x if x.ndim == 1 else x.mean(axis=1)
+    w0 = np.zeros(2 * n)
+    w1 = np.zeros(2 * n)
+    y = np.zeros(mono.shape[0])
+    for t in range(mono.shape[0]):
+        rhs = M1 @ w1 - M0 @ w0
+        rhs[i_in] += k * k * mono[t]
+        w2 = cho_solve_banded((cb, False), rhs)
+        y[t] = (w2[i_out] - w0[i_out]) / (2.0 * k)
+        w0, w1 = w1, w2
+    y /= (np.max(np.abs(y)) + 1e-30)
+    return y * (np.max(np.abs(mono)) + 1e-30)
+
+
+@effect("spring_reverb", "Spring-tank reverb: dispersive allpass-chain loops for the low chirps and the wide-band chirps, with the tank's pre-echo, ripple and wandering delay (chirping 'boing' echoes); or the helical spring itself solved as a curved bar (`model=fd`, slow).",
+        mix=(0.3, "wet level 0..1"),
+        preset=("leem1", "leem1 | leem2 | leem3 (the three springs of a Leem Pro KA-1210) | sansui (darker, wobblier) | leem_auto (automatically fitted leem1)"),
+        tank=("single", "single | two_spring | three_spring: springs of the given geometry side by side (overrides the preset's delay and cutoff)"),
+        decay=(None, "seconds of ring (default from the preset's loop gain: 1.7 s for leem1)"),
+        delay=(None, "seconds per trip along the spring, chain delay excluded (default from the preset)"),
+        cutoff=(None, "Hz: top of the low chirps (default from the preset, 4300 Hz)"),
+        density=(None, "allpass sections 10..200: more = longer chirps (default 100)"),
+        hf=(1.0, "level of the wide-band chirp series: 1 = the -60 dB of the measured spring; 0 = off, half the cost"),
+        efficient=(False, "true = the low chain at a quarter of the rate (about a third of the cost, a small notch at fC/2)"),
+        clip=(0.0, "hard limit inside the loop (0 = off; 0.1..1 = an overdriven tank crashing)"),
+        model=("chain", "chain (allpass loops) | fd (wire as two coupled wave equations, slow)"),
+        seed=(0, "variation of the delay wander"),
+        wander=("smooth", "smooth (slow 2 Hz drift) | uniform (fast random jitter of the delay: uniform noise "
+                          "smoothed by a one-pole, the published spring model)"))
+def spring_reverb(x, sr=DEFAULT_SR, mix=0.3, preset="leem1", tank="single", decay=None, delay=None, cutoff=None,
+                  density=None, hf=1.0, efficient=False, clip=0.0, model="chain", seed=0, wander="smooth"):
+    """Parametric spring reverb: low-chirp loop C_lf (dc blocker, M stretched allpasses, three-tap modulated delay,
+    elliptic low-pass and first-chirp resonator outside the loop) and wide-band loop C_hf (200 unit allpasses,
+    fed by the input and c1 x C_lf). `tank` runs one loop pair per spring, with TD and fC from its geometry."""
     x = np.asarray(x, dtype=np.float64)
-    fc = float(np.clip(cutoff, 500.0, 0.45 * sr))
-    K = max(1, int(round(sr / (2.0 * fc))))                    # stretch: dispersion confined below sr / 2K
-    M = int(np.clip(density, 10, 200))
-    D = max(2, int(float(np.clip(delay, 0.005, 0.5)) * sr))
-    trip = D / sr + M * K * (1.0 - 0.62) / (1.0 + 0.62) / sr   # chain dc delay K M (1-a1)/(1+a1) (Valimaki et al. 2010 eq. 11)
-    fb = -(10.0 ** (-3.0 * trip / max(float(decay), 0.05)))    # inverting loop (g_lf < 0, Gamper et al. DAFx-11 Table 1), -60 dB after `decay`
-    lp = 1.0 - np.exp(-2.0 * np.pi * fc / sr)
+    if preset not in SPRING_PRESETS:
+        raise ValueError(f"spring_reverb preset must be one of {sorted(SPRING_PRESETS)}")
+    if tank not in SPRING_TANKS:
+        raise ValueError(f"spring_reverb tank must be one of {sorted(SPRING_TANKS)}")
+    P = SPRING_PRESETS[preset]
+    M = int(np.clip(P["M"] if density is None else density, 10, 200))
+    dl = None if delay is None else float(np.clip(delay, 0.005, 0.5))
+    if tank == "single":
+        springs = [(P["td"], P["fc"] if cutoff is None else float(cutoff))]
+    else:
+        springs = [(gm["td"], gm["fc"] if cutoff is None else float(cutoff))
+                   for gm in (spring_geometry(*s) for s in SPRING_TANKS[tank])]
 
     def one(ch):
-        return _spring_kernel(np.ascontiguousarray(ch), M, K, 0.62, D, fb, lp)   # a1 0.62 (Valimaki et al. 2010 Sec. 2.1 p.553)
+        ch = np.ascontiguousarray(ch)
+        if model == "fd":
+            out = 0.0
+            for j, s in enumerate(SPRING_TANKS[tank] or ((1.0e-4, 2.5e-3, 112),)):
+                out = out + spring_fd(ch, sr, *s, decay=1.7 if decay is None else float(decay))
+            return out
+        out = 0.0
+        for j, (td, fc) in enumerate(springs):
+            fc = float(np.clip(fc, 500.0, 0.45 * sr))
+            out = out + _spring_one(ch, sr, P, td, fc, M, decay, dl, float(hf), bool(efficient), float(clip), seed + j,
+                                    wander)
+        return out / math.sqrt(len(springs))
+
+    if model not in ("chain", "fd"):
+        raise ValueError("spring_reverb model must be chain or fd")
+    if wander not in ("smooth", "uniform"):
+        raise ValueError("spring_reverb wander must be smooth or uniform")
     wet = one(x) if x.ndim == 1 else np.stack([one(x[:, 0]), one(x[:, 1])], axis=1)
     m = float(np.clip(mix, 0.0, 1.0))
     return (1.0 - m) * x + m * wet
+
+
+def spring_fit(ir, sr=DEFAULT_SR, fc=None, td=None):
+    """Fit the low-chirp chain (M, a) to a measured spring impulse response: the arrival time of the first chirp per
+    frequency bin below fC (peak of a short-time spectrum), then nonlinear least squares on
+    tau(f) = L + M K (1 - a^2)/(1 + 2 a cos(2 pi f K / sr) + a^2). Returns dict(M, a, L, K, fc, td)."""
+    from scipy.optimize import least_squares
+    from scipy.signal import stft
+    ir = np.asarray(ir, float)
+    if ir.ndim == 2:
+        ir = ir.mean(axis=1)
+    if td is None:
+        ac = np.correlate(ir, ir, "full")[ir.shape[0] - 1:]
+        lo = int(0.01 * sr)
+        td = (lo + int(np.argmax(np.abs(ac[lo:int(0.2 * sr)])))) / sr       # g < 0: echoes alternate in sign
+    f, t, Z = stft(ir[:int(1.2 * td * sr)], sr, nperseg=256, noverlap=224)
+    mag = np.abs(Z)
+    if fc is None:
+        prof = mag.sum(axis=1)
+        fc = float(f[int(np.argmax(prof * (f > 1000.0)))])
+    K = sr / (2.0 * fc)
+    sel = (f > 100.0) & (f < 0.95 * fc)
+    ff, tt = f[sel], t[np.argmax(mag[sel], axis=1)] * sr
+
+    def res(p):
+        return p[2] + spring_chain_delay(ff, p[0], K, p[1], sr) - tt
+
+    sol = least_squares(res, x0=[100.0, 0.6, float(np.min(tt))], bounds=([1.0, -0.95, 0.0], [400.0, 0.95, 10.0 * sr]))
+    return {"M": float(sol.x[0]), "a": float(sol.x[1]), "L": float(sol.x[2]), "K": K, "fc": fc, "td": float(td)}

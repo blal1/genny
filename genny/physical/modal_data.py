@@ -857,6 +857,32 @@ TABLES = {
 # END GENERATED
 # ==========================================================================================
 
+# Measured swung objects: (distance from the hilt / grip end in m, diameter in m) at each Aeolian source,
+# and the spanwise correlation length in diameters. Arm length 0.35 m.
+SWING_SOURCES = {
+    'metal_sword': ((0.0, 0.0046), (0.418, 0.0046), (0.777, 0.0046), (0.780, 0.0037), (0.810, 0.0029),
+                    (0.821, 0.0022), (0.830, 0.0017), (0.836, 0.0013)),
+    'wood_sword': ((0.0, 0.0117), (0.307, 0.0111), (0.370, 0.0108), (0.417, 0.0105), (0.465, 0.0103),
+                   (0.512, 0.0100), (0.560, 0.0098), (0.607, 0.0095)),
+    'bat': ((0.0, 0.0237), (0.159, 0.0237), (0.314, 0.0246), (0.371, 0.0286), (0.444, 0.0366),
+            (0.549, 0.0504), (0.672, 0.0637), (0.804, 0.0659)),
+    'wood3': ((0.0, 0.0258), (0.383, 0.0124), (0.767, 0.0095), (0.813, 0.0092), (0.857, 0.0089),
+              (0.900, 0.0086), (1.050, 0.0154), (1.100, 0.0388)),
+    'broom': tuple((r, 0.0270) for r in (0.0, 0.313, 0.625, 0.760, 0.895, 1.030, 1.165, 1.300)),
+}
+SWING_CORRELATION = {'bat': 2.0}      # correlation length / d; 5 for every other object
+SWING_CORRELATION_DEFAULT = 5.0
+SWING_ARM = 0.35
+
+
+ARIUTTI_BELL = {
+    'kind': 'additive_squared',
+    'ratios': [1.0, 2.0, 2.803, 3.871, 5.074, 7.81, 10.948, 14.421],
+    'amps': [1.0, 0.044, 0.891, 0.0891, 0.794, 0.1, 0.281, 0.079],
+    'rel_durations': [1.0, 0.205, 1.0, 0.196, 0.339, 0.047, 0.058, 0.047],
+    'out_gain': 0.25,
+}
+TABLES['ariutti_bell'] = ARIUTTI_BELL
 
 # ------------------------------------------------------------------------------------------
 # Convenience groups
@@ -1252,6 +1278,27 @@ def _verify() -> int:
         pos = len(t["gains"]) if "gains" in t else "-"
         print(f"  {name:28s} kind={t['kind']:15s} modes={n!s:4s} positions={pos}")
     return bad
+
+
+TINE_BEAM_MASS = 0.243        # effective mass share of a cantilever (3 / 1.8751^4)
+
+
+def tonebar_f0(Lt: float, w: float, h: float, E: float, rho: float, m_e: float = 0.0, Le: float = 0.0,
+               k: float = TINE_BEAM_MASS) -> float:
+    """Fundamental (Hz) of a cantilever bar of length Lt, width w, thickness h with a point mass m_e at Le:
+    f0 = (1/2 pi) sqrt(3 E I / ((m_t' + m_e') Lt^3)), I = w h^3 / 12, m_t' = k Lt w h rho, m_e' = m_e (Le/Lt)^3."""
+    import math
+    I = w * h ** 3 / 12.0
+    m = k * Lt * w * h * rho + m_e * (Le / Lt) ** 3
+    return math.sqrt(3.0 * E * I / (m * Lt ** 3)) / (2.0 * math.pi)
+
+
+def tonebar_length(f0: float, w: float, h: float, E: float, rho: float, m_e: float = 0.0, Le: float = 0.0,
+                   k: float = TINE_BEAM_MASS) -> float:
+    """Length Lt tuning ``tonebar_f0`` to f0: Lt^4 = (3 E I / (2 pi f0)^2 - m_e Le^3) / (k w h rho)."""
+    import math
+    I = w * h ** 3 / 12.0
+    return ((3.0 * E * I / (2.0 * math.pi * f0) ** 2 - m_e * Le ** 3) / (k * w * h * rho)) ** 0.25
 
 
 if __name__ == "__main__":

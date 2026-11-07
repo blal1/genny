@@ -1,5 +1,7 @@
 """Analysis/resynthesis helpers for fitting procedural models to recordings."""
 from __future__ import annotations
+import math
+
 import numpy as np
 from .core import DEFAULT_SR, resample
 from .physical import analysis as _a
@@ -27,11 +29,9 @@ def modal_fit(x: np.ndarray, *, sr: int = DEFAULT_SR, **kwargs):
 # ---------------------------------------------------------------------------------------------
 # Machines: from a recording to the parameters of the genny.cyber model that makes it
 # ---------------------------------------------------------------------------------------------
-# Peak picking with parabolic interpolation is Essentia's PeakDetection (standard/peakdetection.cpp)
-# and librosa's piptrack; the envelope spectrum of a high band is the bearing-diagnostics method of
-# Randall & Antoni (MSSP 25, 2011, section 5: the squared envelope). The decision rules and their
-# thresholds are # UNSOURCED: set on genny's own renders and, for bearings, on the FSTF, AHU and SUBF
-# recordings (results in docs/cyber.md, "Limits").
+# Peak picking with parabolic interpolation; the squared envelope spectrum of a high band for bearings.
+# The decision rules and their thresholds were set on genny's own renders and, for bearings, on the FSTF,
+# AHU and SUBF recordings (results in docs/cyber.md, "Limits"); sources in research/SOURCES.md.
 # ponytail: one steady operating point (no run-up tracking), four machine kinds, no fan or motor
 # orders. Track the strongest line over time and work per segment when a recording changes speed.
 
@@ -120,13 +120,12 @@ def identify_machine(x: np.ndarray, sr: int = DEFAULT_SR, rpm: float | None = No
         cand &= np.array([_has(ef, 2 * v, 0.6) and (kurt > 2.0 or _has(ef, 3 * v, 0.9)) for v in ef], dtype=bool)
         if cand.any():
             fe = float(ef[cand][0])
-            # "Inner race faults would be modulated at shaft speed, and rolling element faults at cage
-            # speed. For unidirectional load, an outer race fault would not be modulated" (Randall & Antoni
-            # 2011, section 6): its harmonics then stand above whatever sidebands unbalance gives it.
+            # inner race: modulated at shaft speed; rolling element: at cage speed; outer race under a fixed
+            # load: not modulated, its harmonics stand above whatever sidebands unbalance gives it.
             lv = lambda hz, tol=0.4: float(np.max(el[np.abs(ef - hz) < tol], initial=-np.inf))
             pair = lambda d: min(lv(fe - d), lv(fe + d))         # a modulation shows on both sides
             by_shaft, by_cage = pair(fr), max(pair(c * fr) for c in np.arange(0.34, 0.465, 0.01))
-            if max(by_shaft, by_cage) < lv(2 * fe, 0.6) - 12.0:    # UNSOURCED: 12 dB, set on the AHU and FSTF recordings
+            if max(by_shaft, by_cage) < lv(2 * fe, 0.6) - 12.0:    # 12 dB
                 state, balls = "outer", fe / fr / 0.4            # BPFO = n / 2 (1 - d/D), with d/D = 0.2
             elif by_shaft >= by_cage:
                 state, balls = "inner", fe / fr / 0.6            # BPFI = n / 2 (1 + d/D)
@@ -202,3 +201,185 @@ def identify_machine(x: np.ndarray, sr: int = DEFAULT_SR, rpm: float | None = No
         out.update(kind="engine", sfx="pipe_engine", params={"rpm": round(120.0 * f0 / (cyl or 4), 1), "cylinders": cyl or 4})
         out["evidence"].update(firing_hz=round(f0, 2), cylinders_assumed=cyl is None)
     return out
+
+
+def pcen(S: np.ndarray, sr: int, hop: int, gain: float = 0.98, bias: float = 2.0, power: float = 0.5,
+         time_constant: float = 0.400, eps: float = 1e-6) -> np.ndarray:
+    """Per-channel energy normalisation of a magnitude spectrogram S[freq, time], as librosa.pcen
+    (core/spectrum.py): M = first-order low-pass of S along time with b = (sqrt(1 + 4 T^2) - 1) / (2 T^2),
+    T = time_constant sr / hop frames, started at its unit-input steady state; out = (bias + S / (eps + M)^gain)^power
+    - bias^power. librosa defaults. A steady drone flattens towards a constant, onsets stand out."""
+    from scipy.signal import lfilter, lfilter_zi
+    S = np.abs(np.asarray(S, float))
+    t = time_constant * sr / hop
+    b = (np.sqrt(1 + 4 * t * t) - 1) / (2 * t * t)
+    zi = np.full((S.shape[0], 1), lfilter_zi([b], [1, b - 1])[0])
+    M, _ = lfilter([b], [1, b - 1], S, zi=zi, axis=-1)
+    smooth = np.exp(-gain * (np.log(eps) + np.log1p(M / eps)))
+    return bias ** power * np.expm1(power * np.log1p(S * smooth / bias))
+
+
+SK_NFFT = 64
+
+
+def spectral_kurtosis(x: np.ndarray, sr: int, nfft: int = SK_NFFT) -> tuple[np.ndarray, np.ndarray]:
+    """(f, K(f)) with K = <|X|^4> / <|X|^2>^2 - 2 over Hann STFT frames of ``nfft`` samples (longer than one
+    impulse, shorter than their spacing: 32-64 at 48 kHz), hop nfft/4. 0 for Gaussian noise, large in the bands
+    where impulsive faults (bearing, gear) ring. The Wiener filter of the impulses is sqrt(max(K, 0))."""
+    x = np.asarray(x, float)
+    if x.size < nfft:
+        x = np.pad(x, (0, nfft - x.size))
+    fr = np.lib.stride_tricks.sliding_window_view(x, nfft)[::max(1, nfft // 4)] * np.hanning(nfft)
+    P = np.abs(np.fft.rfft(fr, axis=1)) ** 2
+    K = (P ** 2).mean(axis=0) / (P.mean(axis=0) ** 2 + 1e-30) - 2.0
+    return np.fft.rfftfreq(nfft, 1.0 / sr), K
+
+
+VELVET_FIT_ORDER = 10
+VELVET_FIT_DENSITY = (100.0, 40.0)
+VELVET_FIT_ALLPASS = ((225, 341, 441, 556), 0.7)
+
+
+def velvet_fit(rir: np.ndarray, sr: int = DEFAULT_SR, seg: float = 0.05, order: int = VELVET_FIT_ORDER) -> dict:
+    """Late-reverb model of an impulse response: per segment of ``seg`` s, LPC coefficients (``order``) and the RMS."""
+    from scipy.linalg import solve_toeplitz
+    x = np.asarray(rir, float)
+    x = x.mean(axis=1) if x.ndim == 2 else x
+    n = max(int(seg * sr), 4 * order)
+    A, G = [], []
+    for i in range(0, x.size - n + 1, n):
+        s = x[i:i + n] * np.hanning(n)
+        r = np.correlate(s, s, "full")[n - 1:n + order]
+        r[0] = r[0] * (1.0 + 1e-9) + 1e-20
+        A.append(np.concatenate(([1.0], -solve_toeplitz(r[:order], r[1:order + 1]))))
+        G.append(float(np.sqrt(np.mean(x[i:i + n] ** 2))))
+    return {"sr": sr, "seg": n, "a": np.array(A), "rms": np.array(G)}
+
+
+def velvet_render(fit: dict, sr: int | None = None, seed: int = 0) -> np.ndarray:
+    """Filtered velvet noise from ``velvet_fit``: per segment, velvet noise (density 100 -> 40 /s across the
+    response) through 1/A(z), scaled to the segment RMS, then four Schroeder all-passes (225, 341, 441, 556; 0.7)."""
+    from scipy.signal import lfilter
+    from .reverbs import velvet_noise
+    sr = int(fit["sr"] if sr is None else sr)
+    n, a, g = int(fit["seg"]), fit["a"], fit["rms"]
+    rng = np.random.default_rng(seed)
+    dens = np.linspace(*VELVET_FIT_DENSITY, max(len(g), 1))
+    out = np.zeros(n * len(g))
+    for k in range(len(g)):
+        e = lfilter([1.0], a[k], velvet_noise(n, sr, dens[k], rng))
+        out[k * n:(k + 1) * n] = e * g[k] / (np.sqrt(np.mean(e * e)) + 1e-20)
+    lens, c = VELVET_FIT_ALLPASS
+    for d in lens:
+        b = np.zeros(d + 1)
+        b[0], b[d] = -c, 1.0
+        aa = np.zeros(d + 1)
+        aa[0], aa[d] = 1.0, -c
+        out = lfilter(b, aa, out)
+    return out
+
+
+# ---------------------------------------------------------------------------------------------
+# Separating the periodic part of a machine signal from the random part (bearing faults sit in the random part)
+# ---------------------------------------------------------------------------------------------
+def tsa(x: np.ndarray, period: float, n: int | None = None) -> np.ndarray:
+    """Time synchronous average over ``n`` periods (``period`` in samples, fractional allowed: each period is
+    resampled onto round(period) points). Harmonics of 1/period pass; the rest falls as 1/N in power
+    (|H(f)| = |sin(N pi T f) / (N sin(pi T f))|, a gain of 10 log10 N)."""
+    x = np.asarray(x, float)
+    m = int(round(period))
+    k = int(min(n or 10 ** 9, (len(x) - 1) // period))
+    if k < 1:
+        raise ValueError("tsa: the signal is shorter than one period")
+    grid = np.arange(m) * (period / m)
+    idx = np.arange(len(x))
+    return np.mean([np.interp(i * period + grid, idx, x) for i in range(k)], axis=0)
+
+
+def drs(x: np.ndarray, delay: int, nfft: int = 4096) -> tuple[np.ndarray, np.ndarray]:
+    """Discrete random separation: (deterministic, random). H(f) = E{Y Y_D*} / E|Y_D|^2 between blocks of x and of x
+    delayed by ``delay`` samples (longer than the random part's correlation, a few hundred periods of the band
+    centre), averaged over nfft-point blocks; the deterministic part is x delayed by D through H, so the periodic
+    lines pass with gain 1 and the random part with about 0. The delay is applied in time (D may exceed nfft);
+    the first D samples, which have no past, use x D samples ahead instead."""
+    from scipy.signal import fftconvolve
+    x = np.asarray(x, float)
+    d = int(delay)
+    if len(x) < d + 2 * nfft:
+        raise ValueError("drs: the signal is too short for this delay and block size")
+    w = np.hanning(nfft)
+    num = np.zeros(nfft // 2 + 1, complex)
+    den = np.zeros(nfft // 2 + 1)
+    for i in range(d, len(x) - nfft + 1, nfft // 2):
+        Y = np.fft.rfft(w * x[i:i + nfft])
+        YD = np.fft.rfft(w * x[i - d:i - d + nfft])
+        num += Y * np.conj(YD)
+        den += np.abs(YD) ** 2
+    h = np.fft.irfft(num / (den + 1e-30), nfft)
+    h = np.roll(h, nfft // 2) * np.hanning(nfft)
+    xd = np.concatenate((x[d:2 * d], x[:len(x) - d])) if d > 0 else x
+    det = fftconvolve(xd, h, mode="full")[nfft // 2:nfft // 2 + len(x)]
+    return det, x - det
+
+
+def sanc(x: np.ndarray, delay: int, order: int, mu: float = 0.01) -> tuple[np.ndarray, np.ndarray]:
+    """Self-adaptive noise cancellation (normalized LMS): x predicted from its own past ``delay`` samples back
+    through an FIR of ``order`` taps (about one period of the slowest line, twice that is safer).
+    Returns (deterministic = prediction, random = error)."""
+    x = np.asarray(x, float)
+    w = np.zeros(int(order))
+    pred = np.zeros_like(x)
+    for n in range(int(delay) + int(order), len(x)):
+        r = x[n - int(delay) - int(order) + 1:n - int(delay) + 1][::-1]
+        pred[n] = w @ r
+        w += mu * (x[n] - pred[n]) * r / (r @ r + 1e-12)
+    return pred, x - pred
+
+
+def med(x: np.ndarray, order: int = 30, iters: int = 30) -> tuple[np.ndarray, np.ndarray]:
+    """Minimum entropy deconvolution (Wiggins): the FIR f of ``order`` taps that maximizes the kurtosis
+    sum y^4 / (sum y^2)^2 of y = f * x, by the fixed point R f = (sum y^2 / sum y^4) sum y^3 x(n - l).
+    Returns (y, f): impulses smeared by the transmission path come back sharp."""
+    from scipy.linalg import solve_toeplitz
+    x = np.asarray(x, float)
+    L = int(order)
+    r = np.correlate(x, x, "full")[len(x) - 1:len(x) - 1 + L]
+    r[0] *= 1.0 + 1e-6
+    f = np.zeros(L)
+    f[L // 2] = 1.0
+    X = np.lib.stride_tricks.sliding_window_view(np.r_[np.zeros(L - 1), x], L)[:, ::-1]
+    for _ in range(int(iters)):
+        y = X @ f
+        g = (np.sum(y * y) / (np.sum(y ** 4) + 1e-30)) * (X.T @ y ** 3)
+        f = solve_toeplitz(r, g)
+        f /= np.sqrt(np.sum(f * f)) + 1e-30
+    return X @ f, f
+
+
+def kurtosis4(x: np.ndarray) -> float:
+    """sum x^4 / (sum x^2)^2 times the length: 3 for Gaussian noise, large for sparse impulses."""
+    x = np.asarray(x, float) - np.mean(x)
+    return float(len(x) * np.sum(x ** 4) / (np.sum(x * x) ** 2 + 1e-30))
+
+
+def ar_residual(x: np.ndarray, order: int = 40) -> np.ndarray:
+    """Linear-prediction (AR) whitening: the residual of x through its own Levinson A(z): steady lines and the
+    smooth spectrum go, impulses stay."""
+    from scipy.signal import lfilter
+    x = np.asarray(x, float)
+    r = np.correlate(x, x, "full")[len(x) - 1:len(x) + order]
+    a, _, _ = _a._levinson(r, int(order))
+    return lfilter(a, [1.0], x)
+
+
+def material_from_modes(freqs, decays) -> list[tuple[str, float]]:
+    """Materials ranked by how well the modes' f/d (Hz over 1/s amplitude decay) fit each material's measured
+    distribution: ln(f/d) Gaussian around ln(fd) with sd ln(1 + scatter) (genny.contact.MATERIALS).
+    Returns [(name, mean log-likelihood), ...], best first."""
+    from .contact import MATERIALS
+    q = np.log(np.asarray(freqs, float) / np.maximum(np.asarray(decays, float), 1e-12))
+    out = []
+    for name, m in MATERIALS.items():
+        s = math.log1p(max(m.scatter, 0.05))
+        out.append((name, float(np.mean(-0.5 * ((q - math.log(m.fd)) / s) ** 2 - math.log(s)))))
+    return sorted(out, key=lambda t: -t[1])

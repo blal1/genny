@@ -86,6 +86,9 @@ class PianoHammerAction:
     strings' own impedance is 12-15), 82 at C7 where the agraffe reflection returns within 30 us.
     The returned waveform is normalized for the realtime string renderer, while ``last_force_n``
     retains the force-domain pulse for diagnostics and future fully unit-preserving coupling.
+    ``agraffe=True``: the string is a dashpot plus the wave sent toward the agraffe, which comes back
+    inverted after 2 d / c = (hammer position ratio) / f0 and pushes the hammer off (string velocity
+    (F(t) - F(t - tau)) / R). Contact then depends less on hammer mass in the bass and more on speed.
     """
     midi_note: int
     sr: int = 48000
@@ -94,6 +97,7 @@ class PianoHammerAction:
     hammer_mass_kg: float | None = None
     restitution: float = 0.28
     string_impedance: float | None = None
+    agraffe: bool = False
 
     _NOTES = (36.0, 60.0, 96.0)
 
@@ -111,6 +115,11 @@ class PianoHammerAction:
         self.last_rebound_velocity_m_s=0.0
         self.last_contact_time_s=0.0
 
+    def agraffe_delay_s(self) -> float:
+        """Round trip hammer -> agraffe -> hammer: beta / f0, beta the course's hammer position ratio."""
+        kp=float(np.clip((self.midi_note-21)/87.0,0.0,1.0))
+        return (0.145-0.060*kp)/midi_frequency(self.midi_note)
+
     def strike(self, velocity: float, *, soft: bool=False) -> np.ndarray:
         vel=float(np.clip(velocity,0.0,1.0))
         # hammer speed 0.5 (pp) .. 1.5 (mf, vel 0.53) .. 4 m/s (ff): Chaigne & Askenfelt's three levels
@@ -119,15 +128,21 @@ class PianoHammerAction:
         R=max(self.string_impedance,1e-3)
         os=max(1,int(math.ceil(192000/self.sr)))       # the treble contact is a few samples long
         dt=1.0/(self.sr*os); yh=ys=0.0; force=[]
+        d=max(1,int(round(self.agraffe_delay_s()/dt))) if self.agraffe else 0
+        last=0
         for i in range(max(8,int(round(0.018*self.sr)))*os):
             yh+=v*dt
             c=yh-ys
-            if c<=0.0 and i>0:
+            # the agraffe wave can bring the string back onto the hammer up to d steps after a separation
+            if c<=0.0 and i>0 and i-last>d:
                 break
             f=k*c**p if c>0.0 else 0.0
+            if f>0.0:
+                last=i
             force.append(f)
             v-=f/m*dt
-            ys+=f/R*dt
+            ys+=(f-(force[i-d] if d and i>=d else 0.0))/R*dt
+        force=force[:last+1]
         arr=np.asarray(force,float)
         arr=np.pad(arr,(0,(-len(arr))%os)).reshape(-1,os).mean(axis=1)
         if len(arr)==0 or not np.any(arr):
@@ -137,6 +152,44 @@ class PianoHammerAction:
         self.last_rebound_velocity_m_s=-abs(v)*float(np.clip(self.restitution,0.0,1.0))
         peak=max(float(np.max(np.abs(arr))),1e-12)
         return arr/peak * (0.18 + 0.82*vel**1.4) * (0.78 if soft else 1.0)
+
+
+ORTH_RADIATION = 10 ** (-10.0 / 20.0)    # horizontal plane radiates 10 dB below the vertical
+N_REGIONS = 8                             # bridge regions of the sympathetic bank: F_p = B F_b
+
+
+def piano_loop_loss(f0: float, B: float, L: float, sr: int) -> tuple[float, float, float]:
+    """(dc, hf, smoothing) of the one-pole loop filter fitted to the damped stiff string's partial decay rates
+    (``strings.piano_decay_rate``)."""
+    from .acoustic import bank_loss_fit
+    from .strings import piano_decay_rate
+    fk = f0 * np.arange(1, max(2, int(0.45 * sr / f0)) + 1)
+    fk = fk * np.sqrt(1.0 + B * (fk / f0) ** 2)
+    fk = fk[fk < 0.45 * sr]
+    return bank_loss_fit(f0, fk, 1.0 / piano_decay_rate(fk, f0, B, L), sr)
+
+
+def nonrigid_end_ratio(f: float, tension_n: float, length_m: float, im_admittance: float) -> float:
+    """Frequency ratio L / (L + dL) of a partial at ``f`` Hz when the string ends on a termination of
+    imaginary admittance ``im_admittance`` m/(N s): dL = (T / w) Im Y."""
+    dl = tension_n / (2.0 * math.pi * max(f, 1e-6)) * float(im_admittance)
+    return length_m / max(length_m + dl, 0.05 * length_m)
+
+
+def hammer_impulses(pulse, delay, vel, sr, refl=0.22, count=3):
+    """Commuted hammer: the pulse and its reflections between hammer and agraffe, each pass low-passed once more
+    (one-pole cascade LPF1 -> LPF2 -> LPF3) with a cutoff that rises with velocity (1.5 kHz pp .. 6 kHz ff)."""
+    from scipy.signal import lfilter
+    n = len(pulse)
+    exc = np.zeros(n + count * delay, dtype=float)
+    exc[:n] += pulse
+    fc = 1500.0 * 4.0 ** float(np.clip(vel, 0.0, 1.0))
+    a = math.exp(-2 * math.pi * fc / sr)
+    p = np.asarray(pulse, float)
+    for k in range(1, count + 1):
+        p = lfilter([1 - a], [1, -a], p)
+        exc[k * delay:k * delay + n] += (-refl) ** k * p
+    return exc
 
 
 @dataclass
@@ -150,6 +203,8 @@ class PianoStringCourse:
     loss_dc: float = 0.99972
     loss_hf: float = 0.990
     damper_closed_loss: float = 0.91
+    measured_loss: bool = True
+    bridge_im_admittance: float = 0.0
 
     def __post_init__(self):
         f0 = midi_frequency(self.midi_note)
@@ -171,6 +226,10 @@ class PianoStringCourse:
                                      frequency_hz=f, t60_s=5.8*(1.0-keyboard_pos)+2.0*keyboard_pos)
             for f in self.frequencies
         ]
+        if self.bridge_im_admittance:
+            # Non-rigid bridge: the string ends dL = (T / w) Im Y beyond the bridge (Im Y > 0 springy = flat).
+            self.frequencies = tuple(f * nonrigid_end_ratio(f, q.tension_n, q.length_m, self.bridge_im_admittance)
+                                     for f, q in zip(self.frequencies, self.physical_properties))
         self.physical_bridge_impedance_n_s_m = float(np.mean(
             [q.characteristic_impedance_n_s_m for q in self.physical_properties]))
         self.lines = []
@@ -179,13 +238,14 @@ class PianoStringCourse:
         # Dispersion: the Steinway D inharmonicity of this key (Chabassier & Durufle 2012) through a cascade of
         # identical first-order allpasses designed to put the loop's partials on n f0 sqrt(1 + B n^2)
         # (Rauhala & Valimaki, DAFx-06); their phase delay at f0 comes off the delay line so the note stays in tune.
-        from .physical.piano_data import dispersion_allpass, steinway_B
+        from .physical.piano_data import dispersion_allpass, inharmonicity_audible, steinway_B
         self.inharmonicity_B = steinway_B(self.midi_note)
         for f,q in zip(self.frequencies,self.physical_properties):
-            a1, dd, nsec = dispersion_allpass(f, self.inharmonicity_B, self.sr)
+            a1, dd, nsec = dispersion_allpass(f, self.inharmonicity_B if inharmonicity_audible(f, self.inharmonicity_B) else 0.0, self.sr)
             d = max(2.05, self.sr / max(f, 1.0) - dd)
+            ldc, lhf, lsm = piano_loop_loss(f, self.inharmonicity_B, q.length_m, self.sr) if self.measured_loss else (self.loss_dc, self.loss_hf, 0.45)
             self.lines.append((ThiranDelay(d, max(64, int(self.sr / 8))),
-                               FrequencyDependentLoss(self.loss_dc, self.loss_hf, 0.45)))
+                               FrequencyDependentLoss(ldc, lhf, lsm)))
             # Second transverse polarization with a tiny frequency split.
             f2=f*2.0**(q.polarization_split_cents/1200.0)
             d2=max(2.05,self.sr/max(f2,1.0) - dd)
@@ -214,7 +274,7 @@ class PianoStringCourse:
         self._polarization_coupling=float(0.012 + 0.014*keyboard_pos)
         # One reduced longitudinal mode.  It is weak but exchanges energy with
         # the transverse planes at the bridge.
-        self.longitudinal_frequency_hz=min(0.38*self.sr, f0*(6.0+2.0*keyboard_pos))
+        self.longitudinal_frequency_hz=min(0.38*self.sr, self.physical_properties[0].longitudinal_frequency_hz)
         lr=10**(-3.0/max(0.42*self.sr,1.0))
         lth=2*math.pi*self.longitudinal_frequency_hz/self.sr
         self._long_a1=2*lr*math.cos(lth); self._long_a2=-(lr*lr)
@@ -234,10 +294,7 @@ class PianoStringCourse:
         f0 = midi_frequency(self.midi_note)
         pos = self.hammer_position_ratio + (0.008 if self.soft_pedal else 0.0)
         echo_delay = max(1, int(round((self.sr / max(f0, 1.0)) * pos)))
-        n=len(pulse)
-        exc = np.zeros(n + echo_delay, dtype=float)
-        exc[:n] += pulse
-        exc[echo_delay:echo_delay+n] -= pulse * (0.14 if self.soft_pedal else 0.22)
+        exc = hammer_impulses(pulse, echo_delay, vel, self.sr, 0.14 if self.soft_pedal else 0.22)
         self._hammer = exc
         self._hammer_pos = 0
 
@@ -297,7 +354,7 @@ class PianoStringCourse:
         drive=0.0018*(float(common_velocity)-0.5*(float(np.mean(vals))+float(np.mean(ovals))))
         ly=self._long_a1*self._long_y1 + self._long_a2*self._long_y2 + drive
         self._long_y2=self._long_y1; self._long_y1=ly
-        self.last_direct=float(np.sum(vals) + 0.22*np.sum(ovals) + 0.035*ly)
+        self.last_direct=float(np.sum(vals) + ORTH_RADIATION*np.sum(ovals) + 0.035*ly)
         return self.last_direct
 
     def polarization_energy(self) -> float:
@@ -320,6 +377,7 @@ class SympatheticResonatorBank:
     midi_high: int = 108
     coupling: float = 0.0028
     aliquot_ratios: tuple[float, ...] = (2.0, 3.0)
+    regions: np.ndarray | None = None
 
     def __post_init__(self):
         self.notes = np.arange(self.midi_low, self.midi_high + 1)
@@ -353,6 +411,8 @@ class SympatheticResonatorBank:
         self.key_down = np.zeros(self.base_count, dtype=bool)
         self.sustain = False
         self._phase = 2 * np.pi * self.freq / self.sr
+        src = np.concatenate([self.notes, np.asarray(self.aliquot_source_notes, int)]) if len(extra) else self.notes
+        self.region = np.clip(((src - self.midi_low) * N_REGIONS) // (self.midi_high - self.midi_low + 1), 0, N_REGIONS - 1)
 
     def set_key(self, midi_note: int, down: bool):
         if self.midi_low <= midi_note <= self.midi_high:
@@ -372,7 +432,12 @@ class SympatheticResonatorBank:
         a1 = 2.0 * r * np.cos(self._phase)
         a2 = -(r * r)
         # Weak drive prevents this bank from becoming an artificial chorus.
-        drive = self.coupling * float(bridge_velocity) * np.sin(self._phase)
+        bv = np.atleast_1d(np.asarray(bridge_velocity, float))
+        if bv.size == N_REGIONS:
+            fr = (self.regions if self.regions is not None else np.eye(N_REGIONS)) @ bv
+            drive = self.coupling * fr[self.region] * np.sin(self._phase)
+        else:
+            drive = self.coupling * float(bv[0]) * np.sin(self._phase)
         y = a1 * self.y1 + a2 * self.y2 + drive
         self.y2 = self.y1
         self.y1 = y

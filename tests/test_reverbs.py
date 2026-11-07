@@ -214,11 +214,12 @@ def test_early_reflections_geometry():
 
 
 def test_room_presets_ordered_by_decay():
-    indoor = ["closet", "studio", "bedroom", "bathroom", "hall", "church", "cave"]
+    indoor = ["closet", "studio", "bedroom", "bathroom", "hall", "church", "priory", "cave"]
     outdoor = ["forest", "street", "canyon"]
-    assert set(indoor + outdoor) == set(R.ROOM_PRESETS)
-    sab = {p: float(np.mean(R.room_info(p)["t60"][2:4])) for p in R.ROOM_PRESETS}
-    meas = {p: decay_time(R.room(impulse(SR // 10, 10), SR, preset=p, mix=1.0).mean(axis=1), SR) for p in R.ROOM_PRESETS}
+    sourced = ["practice_room", "orchestra_studio", "opera", "concert_hall", "arena", "amphitheater"]    # tests/test_espaces.py
+    assert set(indoor + outdoor + sourced) == set(R.ROOM_PRESETS)
+    sab = {p: float(np.mean(R.room_info(p)["t60"][2:4])) for p in indoor + outdoor}
+    meas = {p: decay_time(R.room(impulse(SR // 10, 10), SR, preset=p, mix=1.0).mean(axis=1), SR) for p in indoor + outdoor}
     for chain in (indoor, outdoor):
         for a, b in zip(chain, chain[1:]):
             assert sab[a] < sab[b], ("sabine", a, sab[a], b, sab[b])
@@ -321,31 +322,32 @@ def test_old_parameter_names_still_work():
 def test_leslie_rotor_speeds():
     s = np.sin(2 * np.pi * 2000 * np.arange(3 * SR) / SR) * 0.3
     f = np.fft.rfftfreq(1 << 20, 1 / SR)
-    for speed, rate in (("fast", 6.7), ("slow", 0.8)):
+    for speed, rate in (("fast", 6.92), ("slow", 0.83)):
         y = R.leslie(s, SR, speed=speed, drive=0.0)
         env = np.abs(hilbert(y[:, 0]))[2000:-2000]
         E = np.abs(np.fft.rfft((env - env.mean()) * np.hanning(len(env)), 1 << 20))
         got = f[np.argmax(E[: len(E) // 100])]
         assert abs(got - rate) < 0.25, (speed, got)                       # tremolo at the horn rate
     # far-field Doppler: w_l = w_s [1 - (r_s w_m / c) sin(w_m t)] -> peak deviation about r_s w_m / c
-    # (measured on the direct horn path alone: the cabinet image adds a second, opposite shift)
+    # (measured on the direct horn path alone: the cabinet image adds a second, opposite shift, the leak an
+    # unshifted copy, and the 12 dB/octave crossover lets the drum carry 2 kHz at -17 dB: no leak, crossover low)
     keep = R._CAB_GAIN
     try:
         R._CAB_GAIN = 0.0
-        y = R.leslie(s, SR, speed="fast", drive=0.0, mic=3.0, spread=0.0)[:, 0]
+        y = R.leslie(s, SR, speed="fast", drive=0.0, mic=3.0, spread=0.0, leak=-60.0, crossover=100.0)[:, 0]
     finally:
         R._CAB_GAIN = keep
     inst = np.diff(np.unwrap(np.angle(hilbert(y)))) * SR / (2 * np.pi)
     inst = np.convolve(inst, np.ones(200) / 200, "same")[5000:-5000]
     dev = (inst.max() - inst.min()) / 2 / 2000.0
-    pred = R._HORN_R * 2 * np.pi * 6.7 / C
+    pred = R._HORN_R * 2 * np.pi * 6.92 / C
     assert abs(dev / pred - 1) < 0.15, (dev, pred)
     # brake: no modulation; slow -> fast accelerates
     b = R.leslie(s, SR, speed="brake", drive=0.0)[:, 0]
     assert np.std(np.abs(b[SR:2 * SR].reshape(-1, 441)).max(axis=1)) < 1e-3
-    th = R._rotor_angle(3 * SR, SR, 0.8, 6.7, R._LESLIE_TAU[0])
+    th = R._rotor_angle(5 * SR, SR, 0.83, 6.92, R._LESLIE_TAU[0])      # horn time constant 1 s: 5 s to settle
     rate = np.diff(th) * SR / (2 * np.pi)
-    assert abs(rate[0] - 0.8) < 0.01 and abs(rate[-1] - 6.7) < 0.2 and np.all(np.diff(rate) > 0)
+    assert abs(rate[0] - 0.83) < 0.01 and abs(rate[-1] - 6.92) < 0.2 and np.all(np.diff(rate) > 0)
     acc = R.leslie(s, SR, speed="fast", start="slow", drive=0.0)[:, 0]
     env = sosfiltfilt(butter(2, 30.0, "low", fs=SR, output="sos"), np.abs(hilbert(acc)))
 
@@ -526,3 +528,19 @@ def test_ground_effect_over_grass():
         raise AssertionError("bad ground accepted")
     except ValueError:
         pass
+
+
+def test_read_wav_falls_back_on_float_and_aiff(tmp_path):
+    import soundfile as sf
+    from genny.core import read_wav
+    x = np.sin(np.arange(4000) * 0.05) * 0.5
+    for name, sub in (("f.wav", "FLOAT"), ("a.aiff", "PCM_24")):
+        sf.write(tmp_path / name, x, 44100, subtype=sub)
+        y, fs = read_wav(tmp_path / name)
+        assert fs == 44100 and np.max(np.abs(y - x)) < 1e-3
+
+
+def test_doppler_speed_of_sound_under_water():
+    from genny.reverbs import flyby_path
+    tau, *_ = flyby_path(48000, 48000, 20.0, 5.0, 0.5, c=1500.0)
+    assert abs(np.median(np.diff(tau)) * 48000 - 1.0) < 0.02       # 20 m/s is barely a shift in water

@@ -13,7 +13,7 @@ plates) strike force change the sound the way they do on the real object.
 | sfx | `metal_plate`, `glass_pane`, `wood_panel` | struck linear plates with material constants |
 | sfx | `plate_bow` | bowed plate edge (bowed cymbal, waterphone, metal scrape) |
 | fx | `plate_reverb` | the signal drives a lossy steel plate, two pickups give stereo |
-| fx | `room2d` | 2D wave-equation room with rigid walls |
+| fx | `room2d` | 2D wave-equation room with rigid or absorbing (`absorb`) walls |
 
 The existing `crash`, `ride`, `gong`, `tom` drums and the `timpani` instrument are untouched.
 
@@ -49,6 +49,12 @@ Circular head on a square grid with a staircase rim. Pitch is not a parameter, i
 | `stiffness` | 0 | 0..1 bending stiffness: stretches the upper partials |
 | `contact` | 0 | 1 = power-law mallet contact instead of a force pulse: contact time and brightness then follow `vel` |
 | `scan` | 0 | Hz, moving pickup (slow phasing) |
+| `force` | 200 | N peak stick force at `vel` 1 (with `berger`: how far the pitch is pushed up) |
+| `berger` | 0 | 1 = tension modulation (Mylar head): a hard hit (`force` N) starts sharp and settles as it rings |
+| `detune` | 0 | 0..0.3 tension anisotropy: splits the modes into beating doublets (0.07 = a real head) |
+| `under`, `flip` | 0, 0 | second mic under the head, as on `tom` / `snare` below |
+| `snare` | 0 | 1 = snare wires under the head: energy-conserving collisions give the buzz |
+| `snare_gap` | 0.0 | m, rest gap between wires and head (negative = pressed in) |
 | `quality` | 1 | see above |
 
 ```json
@@ -56,7 +62,10 @@ Circular head on a square grid with a staircase rim. Pitch is not a parameter, i
 {"type": "drum", "kind": "fd_drum", "params": {"tension": 3000, "size": 0.2, "pos": 0.8, "hardness": 0.9, "air": 0.2, "decay": 0.3}}
 {"type": "drum", "kind": "fd_drum", "params": {"tension": 1500, "size": 0.6, "air": 1.0, "depth": 0.45, "hardness": 0.2, "decay": 1.8, "damping": 0.3}}
 ```
-(a floor tom, a high bongo-like head, a kettledrum.) `plates.membrane(..., stereo=True)` in Python returns
+(a floor tom, a high bongo-like head, a kettledrum.) `plates.membrane(snare=True, snare_gap=)` is the same in
+Python; `collision_step(a0, b, g, kap, al)` solves one collision update (discrete gradient: r + g(Φ(r+a) − Φ(a))/r
++ b = 0, Φ = κ/(α+1)[η]₊^(α+1)) and `simulate_snare(mdl, force, exc, pickups, size, gap=0.0)` runs the head with
+its wires. `plates.membrane(..., stereo=True)` in Python returns
 two pickups.
 
 ## Nonlinear plates: `plate_crash`, `plate_ride`, `plate_china`, `plate_gong`, `tam_tam`
@@ -71,8 +80,8 @@ stick has left. The nonlinearity goes with `force / (thickness^2 x size^2)`.
 | `size` | 0.4 | 0.5 | 0.45 | 0.5 | 1.0 | diameter, m |
 | `thickness` | 1.0 | 2.0 | 0.8 | 4.0 | 2.5 | mm |
 | `force` | 400 | 600 | 400 | 6000 | 2000 | peak strike force in N at `vel` 1 (scales with `vel`^2) |
-| `decay` | 5 | 7 | 3 | 9 | 12 | T60 of the low modes, s |
-| `dur` | 2.2 | 2.2 | 1.6 | 4 | 5 | rendered length, s |
+| `decay` | 6.9 | 7 | 3 | 9 | 75 | T60 of the low modes, s. Cymbals (and `shell_crash`) follow the crash-cymbal damping law μ = 0.007 ω^0.6 + 2: high modes die faster, T60 at 1 kHz = 0.6 x `decay`; tam-tam 4 s at 8 kHz |
+| `dur` | 2.2 | 2.2 | 1.6 | 4 | 8 | rendered length, s |
 | `bright` | 0.6 | 0.6 | 0.6 | 0.6 | 0.6 | output lowpass 1.5 kHz (0) .. 12 kHz (1); 0.6 = 5.2 kHz |
 | `model` | vk | | | | | `vk`, `vk_simple`, `berger`, `linear` |
 | `quality` | 1 | | | | | |
@@ -98,8 +107,9 @@ the point where the stress guard acts.
 
 Limits, stated plainly:
 - The plate is flat, rectangular and simply supported. The book's presets use free edges, and real cymbals
-  are curved shells (book sec. 13.3), which is what crowds their mid range. Neither is implemented, so
-  these are darker than a real cymbal: the default crash has its centroid near 1.2 kHz.
+  are curved shells (book sec. 13.3), which is what crowds their mid range. Neither is on this grid, so
+  these are darker than a real cymbal: the default crash has its centroid near 1.2 kHz. The modal engine below
+  (`vk_cymbal`, `vk_gong`) has both.
 - Two guards keep extreme settings finite: the in-plane stress is capped when it would exceed what the
   time step can represent, and displacement is limited to 50 scaled units. Past roughly 3 x the default
   `force` the first one acts and more force stops adding brightness.
@@ -111,6 +121,53 @@ Limits, stated plainly:
 {"type": "drum", "kind": "plate_gong", "params": {"force": 20000, "dur": 5, "decay": 10}}
 {"type": "drum", "kind": "tam_tam", "params": {"size": 1.2, "force": 4000, "dur": 6}, "fx": [{"type": "plate_reverb", "mix": 0.2}]}
 ```
+
+## Modal von Karman: `vk_cymbal`, `vk_gong`
+
+`physical/vkmodal.py` solves the von Karman plate or shallow shell on its modes instead of a grid: Rayleigh-Ritz
+modes of the strain energy (variable thickness, any edge), clamped Airy modes, the coupling tensor H and an
+imperfection w0, run by an SAV (explicit, energy-stable) or a conservative (energy-conserving) scheme with the
+exact linear update.
+
+- `vk_cymbal`: measured thickness profile (thick bell, thin edge), shallow-shell `dome`, free edge, power-law modal
+  damping (μ = 0.007 ω^0.6 + 2); the crash wash builds up from the hit. `kind` crash | ride | splash | china,
+  `dome` (rise of the cap in m, -1 = the kind's own, 0 = flat).
+- `vk_gong`: `kind` opera (flat: the pitch glides down as it rings), curved (small domed gong: glides up),
+  tam_tam (swells into a shimmer), rectangle (the supported 0.4 x 0.6 m steel test plate).
+- Both: `force` (N at `vel` 1, 0 = the kind's own), `dur` 2.5, `bright` 0.6, `modes` 48 (more = brighter wash,
+  slower; cost ~ modes²), `scheme` sav | conservative | linear.
+- `vk_plate(...)` in Python is the function behind both: `profile`, `dome`, `edges`, `law`, `basis` (grid |
+  ritz), `radiation` (radiation loss of each mode, on by default), `distance` (dipole near field).
+- Helpers: `modal_density`, `prestressed_modes`, `coincidence`, `radiation_efficiency`, `radiation_damping`,
+  `near_field`, `point_force_pressure`, `PLASTICS` / `rayleigh_t60`. `radiation_efficiency` and
+  `radiation_damping` take `stiffeners` (total length in m of ribs fixed on the plate, default 0): below the
+  coincidence frequency they multiply the radiation efficiency by 1 + 2 L/P (P the perimeter), capped at 1.
+
+## `bodhran`
+
+Irish frame drum: a slack goatskin head with no shell cavity, played with a tipper. `pos` 0.3 (0 centre, deep
+thud .. 1 rim, ringing overtones), `damp` 0 (the left hand pressing the back of the skin: shorter, duller, a
+little higher), `size` 0.46 m, `tension` 400 N/m.
+
+## `polar_shell`
+
+Cymbal or gong as a shallow spherical shell on a polar finite-difference grid (`physical/fdgrid.py`): free circular
+rim, clamped or free centre, von Karman nonlinearity, so a hard hit crashes. `kind` cymbal | flat | deep | gong,
+`q` curvature (−1 = the kind's; more curvature empties the bottom of the spectrum), `pos` strike radius 0..1 (−1 =
+the kind's), `dur` 2 s, `fs` internal rate 32000 Hz, `rings` 16 radial grid points. `zone` bell | bow | edge: strike
+at 0.12 / 0.5 / 0.92 of the radius on a domed, tapered cymbal (`percussion.cymbal_thickness(r)`, profile
+`CYMBAL_TAPER`), with the force scaled by (hc/h(r))³ (`percussion.zone_drive(r)`): the thin edge is louder and
+brighter. Default `""` = as before.
+
+## `perrin_bell`
+
+Church bell from the measured modes of one real bell: 63 modes up to 9.2 kHz, the split doublets included (slow
+beats on the partials). `tune` = the hum in Hz (292.72), `dur` 8 s.
+
+## `tom`, `snare`: double miking
+
+`under` 0..1: level of a second mic under the drum (the head seen from below: inverted, later, darker). `flip` 1 =
+that mic's polarity flipped back (full lows); 0 = raw, the lows partly cancel.
 
 ## `thunder_sheet`
 
@@ -197,7 +254,9 @@ Measured: requested 2.0 s / 1.0 s gives 500 Hz and 2 kHz band decay times within
 The 2D wave equation on a floor plan with rigid walls, one source and two listeners. It has real room
 modes and flutter, but it is two-dimensional and band-limited: use it as a small-room colour, not as a
 hall. Params: `mix` 0.3, `size` 5 m (2..15), `aspect` 1.4, `t60` 0.8 s, `damping` 0.5 (extra
-high-frequency absorption), `predelay` 0, `width` 1, `tail` auto, `quality` 1. Rooms above about 7 m lower
+high-frequency absorption), `predelay` 0, `width` 1, `tail` auto, `quality` 1, `absorb` 0 (wall absorption 0..1 at
+normal incidence, one value or four for the walls x0, x1, y0, y1: impedance walls; Python `wall_impedance(alpha)`,
+`wall_damping`, `_model(..., wall=)`). Rooms above about 7 m lower
 the internal rate further to keep the grid under about 11 000 points.
 
 ```json
@@ -207,13 +266,21 @@ the internal rate further to keep the grid under about 11 000 points.
 
 ## Python API
 
+`nl_plate(edges="supported")` or `"free"`: von Kármán plate with free edges (Φ clamped, the force on u the adjoint
+of the bracket, energy still conserved; no `dome`); `simulate_nl` accepts a "ffff" model.
 `plates.membrane`, `plates.struck_plate`, `plates.nl_plate` are the functions behind the catalog names,
 with every physical constant exposed (`nl_plate(..., drive=fn)` takes an arbitrary force signal, e.g. a
 roll). Lower level: `_model(fs, eps, bc, kappa, gamma, sig0, sig1, nu, ortho, circle, cav)` builds a grid
 (`bc` is four letters for the edges x=0, x=max, y=0, y=max: `f` free, `s` supported/fixed, `c` clamped),
-`simulate` / `simulate_nl` run it, `loss_coeffs` turns two (Hz, T60) pairs into the loss constants,
+`simulate` / `simulate_nl` run it (`simulate_nl(airy="dst")`: two sine-transform Poisson solves with Φ held at
+the edge, faster on big grids; default `"chol"`; `nl_plate(scan_order=3)` reads the moving pickup with 4-point
+interpolation instead of linear), `loss_coeffs` turns two (Hz, T60) pairs into the loss constants,
 `plate_modes` / `membrane_modes` give the analytic mode frequencies and `scheme_modes` the ones the grid
-actually produces.
+actually produces. `thermoelastic(freqs, thickness, material="steel")` gives the Zener thermoelastic loss factor and
+decay rate of a thin metal or glass plate (peak at 1/(2π τ), τ = ρ C h²/(k π²)); a library function, the presets
+do not use it. `apnl(x, a1, a2)`: Faust's nonlinear allpass, a first-order allpass whose coefficient is a1 while the
+input is positive and a2 otherwise. `wgr(f, n, sr, r)`: waveguide resonator returning a quadrature pair of unit
+amplitude when r = 1.
 
 ## What differs from the book
 

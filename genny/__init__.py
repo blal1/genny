@@ -44,7 +44,9 @@ from .strings import StringMaterial, STRING_MATERIALS, StringPhysicalProperties,
 import importlib as _importlib
 from . import spec as _spec  # noqa: F401
 for _name in ("retro", "chiptune", "chiptune2", "contact", "friction", "fdstring", "plates", "tubes", "spectral", "dsp",
-              "reverbs", "matter", "creatures", "choir", "foley", "compose", "klang", "cyber"):
+              "reverbs", "matter", "creatures", "choir", "foley", "arms", "geo", "compose", "klang", "cyber", "ordnance", "melee", "energy_arms", "engines", "road",
+              "heavy_vehicles", "rail", "aero", "marine", "viscous", "fauna", "human", "household", "machines", "nature",
+              "designed", "sports", "instruments_extra", "scenes"):
     try:
         _importlib.import_module(f"{__name__}.{_name}")
     except ModuleNotFoundError as _e:

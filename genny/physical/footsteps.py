@@ -5,79 +5,46 @@
 
 Manifest ids ``sfx.foley.step.<ground>`` ("Subject: one footstep on <ground>").
 
-Ports (research notes in ``out/research``):
+Model:
 
-* **GRF curve** - Farnell, "Marching onwards: procedural synthetic footsteps" (PdCon 2007) and
-  *Designing Sound* Practical 26 (research 03 §2.3-2.5, 05 §5.2):
-  ``p(x) = 1.5 (1 - x) (N x - N x^3)``, N = 3.3333, per phase; the foot phase is compressed to
-  3/4 of the contact (``clip 0..0.75 x 1.3333``) and split into heel ``clip 0..1/3 x 3``,
-  roll/outstep ``clip 0.125..0.875 - 0.125 x 1.3333`` and ball ``clip 2/3..1 - 2/3 x 3``.
-  As printed, N multiplies the whole pulse (``(1-x)(Nx - Nx^3) = N x (1-x)^2 (1+x)``), so the per
-  phase N are the phase amplitudes; we set them from the PD phase ratios **3:2:3 walking** and
-  **1:2:3 slow uphill / difficult (snow)**. Acceleration term of the patch: ``ballf = a + 0.5``,
+* **GRF curve** - per phase ``p(x) = 1.5 (1 - x) (N x - N x^3)``, N = 3.3333; the foot phase is
+  compressed to 3/4 of the contact (``clip 0..0.75 x 1.3333``) and split into heel ``clip 0..1/3 x 3``,
+  roll/outstep ``clip 0.125..0.875 - 0.125 x 1.3333`` and ball ``clip 2/3..1 - 2/3 x 3``. N multiplies
+  the whole pulse (``N x (1-x)^2 (1+x)``), so the per phase N are the phase amplitudes: **3:2:3
+  walking**, **1:2:3 slow uphill / difficult (snow)**. Acceleration: ``ballf = a + 0.5``,
   ``heelf = (1 - a) 1.7``, applied relative to a = 0 (heel x (1 - a), ball x (1 + 2a)).
-* **Two-foot phasor** - Farnell fig. 49.4 / PD §4: right foot = phasor + 0.5, each foot's phase
-  ``min(p, c)/c``. Walking overlap 10-20 % of the cycle (thesis T p.443): the trailing foot is
-  still on the ground (its ball push-off) when the leading heel lands; both feet drive their own
-  texture generator ("at least two overlapping sound generators", research 03 §2.1).
-* **Pace** - Visell et al.: 75-125 steps/min, ~0.5 s (female) to ~0.8 s (male) between steps;
-  expressive tempo irregularity is more natural than a constant pace (research 06 §7.1).
-* **Per-step variation** - Cook, "Modeling Bill's Gait" / *Real Sound Synthesis* Ch.15
-  (research 04 §3): every step is a prototype envelope plus per-breakpoint deviation, and the two
-  feet differ (left/right asymmetry). Here the deviation is applied to the GRF phase amplitudes,
-  split points and pace.
-* **Aggregate grounds** - Visell (research 06 §7.3): grains fire only while the foot loads,
-  ``lambda = A u (1 + tanh(B u))/2``, ``u = dF_L/dt``; grain energies ``p(E) ~ E^gamma`` summing
-  to the step energy; each grain a resonant impact through Cook's PhISEM resonators (STK
-  ``Shakers.cpp`` presets and Cook's measured gravels, ``particles.py``). Farnell coherence: grain
-  tone follows the pressure (research 05 §1, §5.3). Blends of 2-3 texture synths (Farnell T 5.3).
-* **Hard grounds** - Visell §3.3.1 source-filter (heel strike and toe slap are two impacts into
-  the floor and/or shoe modal response); van den Doel & Pai contact pulse ``(1 - cos)``, hardness =
-  contact duration (research 06 §1.3); Farnell: stone/concrete = square of the rate of work
-  envelopes a noise burst into the surface filter; resonant surfaces: "contact time increases
-  damping, so we can integrate the GRF" - the pressing foot adds damping in proportion to the GRF
-  and the surface rings on after the lift (research 03 §2.1, 05 §5.3). FoleyAutomatic
-  micro-collisions for glassy/metal contacts (research 06 §1.3).
-* **Soft thud** - van den Doel recipe "dull low thud": ``stick.sy`` at fscale ~0.1, bang
-  T = 30-50 ms (research 06 §1.5); heel impact energy sits in 100-500 Hz (Visell / Pastore).
-  Plastic grounds (mud, ash, sand) do not ring, they thud (Farnell rule 6, research 01).
-* **Snow squeak** - Farnell: snow deforms asymmetrically and squeaks (research 03 §2.1); built with
-  Farnell's efficient stick-slip (thesis discovery: a pulse train whose amplitudes are
-  proportional to the square root of the pulse separation, research 05 §0.4) exciting the snow's
-  own Crunch resonance.
-* **Water / mud** - Moss bubble ensembles with formation rate ~ u^2 (research 06 §3.3), STK water
-  drops after the lift, Farnell surfacing bubbles for the mud suction (``particles.py``).
+* **Two-foot phasor** - right foot = phasor + 0.5, each foot's phase ``min(p, c)/c``; walking overlap
+  10-20 % of the cycle: the trailing foot is still on the ground when the leading heel lands; each foot
+  drives its own texture generator.
+* **Pace** - 75-125 steps/min, ~0.5 s to ~0.8 s between steps, with tempo irregularity.
+* **Per-step variation** - each step is a prototype plus per-breakpoint deviation, and the two feet
+  differ (left/right asymmetry): applied to the GRF phase amplitudes, split points and pace.
+* **Aggregate grounds** - grains fire only while the foot loads, ``lambda = A u (1 + tanh(B u))/2``,
+  ``u = dF_L/dt``; grain energies ``p(E) ~ E^gamma`` summing to the step energy; each grain a resonant
+  impact through the PhISEM resonators (``particles.py``); grain tone follows the pressure; blends of
+  2-3 texture layers.
+* **Hard grounds** - source-filter: heel strike and toe slap are two impacts into the floor and/or shoe
+  modal response; contact pulse ``(1 - cos)``, hardness = contact duration; stone/concrete = square of
+  the rate of work envelopes a noise burst into the surface filter; resonant surfaces: the pressing
+  foot adds damping in proportion to the GRF and the surface rings on after the lift; micro-collisions
+  for glassy/metal contacts.
+* **Soft thud** - ``stick.sy`` at fscale ~0.1, T = 30-50 ms; heel energy in 100-500 Hz. Plastic grounds
+  (mud, ash, sand) do not ring, they thud.
+* **Snow squeak** - stick-slip pulse train whose amplitudes are proportional to the square root of the
+  pulse separation, shaped by measured third-octave squeak spectra (``ARABADZHI_SQUEAK``) at -1.5 C
+  (maximum near 300 Hz, nothing above 1 kHz) and -15 C (flat to 2.5 kHz, weak maximum near 3 kHz,
+  energy up to 8 kHz), interpolated with temperature.
+* **Water / mud** - bubble ensembles with formation rate ~ u^2, water drops after the lift, surfacing
+  bubbles for the mud suction (``particles.py``).
 
-Measured tables used for the hard grounds (``modal_data``), and why:
+Modal tables of the hard grounds (``modal_data``): wood ``body_squareBig``; metal_web ``wok.sy`` +
+CokeCan grains; ice ``calona0.sy``; crystal ``calona0.sy`` (2 bodies); stone, concrete, cobblestone
+ModalBar ``Clump``; hard_floor ModalBar ``Wood2``; marble ``vase.sy`` + ``Clump`` slab; bone and shoe
+heel ``stick.sy``; coral ``vase.sy`` heavily damped.
 
-=============  ===========================  ===============================================
-ground         table                        reason
-=============  ===========================  ===============================================
-wood           Faust ``body_squareBig``     measured wooden body (modeInterpRes); a plank
-                                            floor is a large square wooden body
-metal_web      modalpaper ``wok.sy`` +      iron, measured; STK mapping "metal web: Coke can"
-               STK CokeCan grains           (research 07 table) for the rattle; Cook: grains
-                                            into the web modes plus the modal thump
-ice            modalpaper ``calona0.sy``    glass bottle: the only measured brittle glassy
-                                            body; frozen things ring (Farnell)
-crystal        ``calona0.sy`` (2 bodies)    glassy crystal pieces
-stone,         STK ModalBar ``Clump``       research 07 mapping "stone/marble/...: ModalBar
-concrete,                                   Wood1/Wood2/Clump + short Shakers grit layer";
-cobblestone                                 Clump's clustered ratios 1-1.73 match Farnell's
-                                            "stone: many clustered resonances"
-hard_floor     STK ModalBar ``Wood2``       same research 07 mapping; short dead knock
-marble         modalpaper ``vase.sy``       measured ceramic: homogeneous brittle material
-               + ``Clump`` slab             gives purer tones (Farnell T p.58)
-bone           modalpaper ``stick.sy``      nearest measured stiff dry rod (UNSOURCED)
-coral          modalpaper ``vase.sy``       nearest measured brittle calcareous body
-                                            (UNSOURCED), heavily damped (porous)
-shoe heel      modalpaper ``stick.sy``      Visell: "the resonator is the floor and/or the
-                                            shoe sole"; stacked leather/wood heel (UNSOURCED)
-=============  ===========================  ===============================================
-
-Everything marked ``# UNSOURCED`` is a mapping or a number no source gives (layer mix levels,
-table choices for bone/coral/ash/salt/mud/wet grounds, f0 of the ModalBar floors, the foot
-damping amount, the squeak pulse rate, bubble/drip counts).
+Mappings and numbers no source gives (layer mix levels, table choices for bone/coral/ash/salt/mud/wet
+grounds, f0 of the ModalBar floors, the foot damping amount, the squeak pulse rate, bubble/drip counts)
+are justified in research/SOURCES.md, section V2D, `physical/footsteps.py`.
 """
 
 from __future__ import annotations
@@ -91,29 +58,63 @@ import numpy as np
 
 from . import modal
 from . import particles as pt
-from .core import SR, highpass, lowpass, one_pole_coef, one_pole_lp, reson, master, pow_decay, seconds, spectrum_peaks, write_wav
+from .core import SR, lowpass, one_pole_coef, one_pole_lp, master, pow_decay, seconds, spectrum_peaks, write_wav
 
 FAMILY_PREFIXES: tuple[str, ...] = ("sfx.foley.step.",)
 
 # ==========================================================================================
-# GRF (Farnell PdCon 2007 / Practical 26)
+# GRF
 # ==========================================================================================
 
-GRF_N = 3.3333                              # PD §4.2 default N
-PHASE_RATIOS = {                            # PD §4: heel : roll : ball amplitude ratios
+GRF_N = 3.3333                              # default N
+PHASE_RATIOS = {                            # heel : roll : ball amplitude ratios
     "walk": (3.0, 2.0, 3.0),
     "run": (3.0, 1.0, 3.0),
     "difficult": (1.0, 2.0, 3.0),           # "slow uphill / difficult (snow)"
 }
-SPLITS = ((0.0, 1.0 / 3.0), (0.125, 0.875), (2.0 / 3.0, 1.0))   # PD §4 curve generator
+SPLITS = ((0.0, 1.0 / 3.0), (0.125, 0.875), (2.0 / 3.0, 1.0))   # curve generator split points
 COMPRESS = 0.75                             # "compress X to 3/4 of the step"
-WALK_OVERLAP = (0.10, 0.20)                 # thesis T p.443: walk overlap 10-20 % of the cycle
-STEP_INTERVAL = (0.48, 0.80)                # Visell: 75-125 steps/min
+WALK_OVERLAP = (0.10, 0.20)                 # walk overlap 10-20 % of the cycle
+
+# Measured snow squeak under a footstep, mic 10 cm above the snow: third-octave band levels in dB
+# re an arbitrary level (+-0.5 dB). At -1.5 C the 500 Hz -> 1 kHz slope (-4.5 dB/oct) is continued
+# above 1 kHz, and 125 Hz is extrapolated from 160-200 Hz. Recorder band 50 Hz - 8 kHz.
+ARABADZHI_BANDS = np.array([125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000,
+                            2500, 3150, 4000, 5000, 6300, 8000], float)
+ARABADZHI_SQUEAK = {
+    -1.5: np.array([2.3, 4.1, 5.9, 4.8, 8.2, 7.4, 6.8, 4.0, 3.8, 2.3, 0.8, -0.8, -2.2,
+                    -3.7, -5.2, -6.7, -8.2, -9.7, -11.2]),
+    -15.0: np.array([3.0, 5.0, 6.7, 4.0, 6.8, 5.1, 5.8, 5.4, 5.3, 4.7, 4.9, 5.1, 4.9,
+                     5.6, 6.3, 5.1, 4.2, 3.3, 1.7]),
+}
+
+
+def snow_squeak_bands(temperature: float) -> np.ndarray:
+    """Measured third-octave squeak levels (dB) at ``temperature`` (C): linear in dB between the
+    -1.5 C and -15 C curves ("the spectrum widens gradually"), clamped outside that range."""
+    w = float(np.clip((-1.5 - temperature) / 13.5, 0.0, 1.0))
+    return (1.0 - w) * ARABADZHI_SQUEAK[-1.5] + w * ARABADZHI_SQUEAK[-15.0]
+
+
+def snow_squeak_shape(x: np.ndarray, temperature: float) -> np.ndarray:
+    """Impose the measured squeak spectrum on a broadband excitation (FFT magnitude weighting).
+    Third-octave bands are ~0.23 f wide, so the band level L becomes a density L - 10 log10 f;
+    outside 125 Hz - 8 kHz the curve falls 12 dB/oct (recorder band limits)."""
+    n = len(x)
+    f = np.fft.rfftfreq(n, 1.0 / SR)
+    lf = np.log2(np.maximum(f, 1.0))
+    lb = np.log2(ARABADZHI_BANDS)
+    db = np.interp(lf, lb, snow_squeak_bands(temperature) - 10.0 * np.log10(ARABADZHI_BANDS))
+    db -= 12.0 * (np.clip(lb[0] - lf, 0, None) + np.clip(lf - lb[-1], 0, None))
+    g = 10.0 ** (db / 20.0)
+    g[0] = 0.0
+    return np.fft.irfft(np.fft.rfft(x) * g, n)
+STEP_INTERVAL = (0.48, 0.80)                # 75-125 steps/min
 
 
 def grf_poly(x: np.ndarray) -> np.ndarray:
-    """Farnell's GRF pulse with N factored out: 1.5 x (1-x)^2 (1+x); peak 0.3027 at x = 0.390
-    (x N = 3.3333: 1.009, research 03 §2.4).
+    """GRF pulse with N factored out: 1.5 x (1-x)^2 (1+x); peak 0.3027 at x = 0.390
+    (x N = 3.3333: 1.009).
 
     ``1.5 (1-x)(N x^3 - N x)`` is <= 0 on [0,1]; its magnitude is N * this function.
     """
@@ -139,27 +140,23 @@ def foot_grf(n: int, contact: float, amps=(3.0, 2.0, 3.0), splits=SPLITS, offset
 
 
 # ==========================================================================================
-# Gait: pace, overlap, foot, per-step deviation (Visell pace; Cook deviation and asymmetry)
+# Gait: pace, overlap, foot, per-step deviation and asymmetry
 # ==========================================================================================
 
-def _gait(variation: int, rng: np.random.Generator, ratios: str) -> dict:
+def _gait(variation: int, rng: np.random.Generator, ratios: str, push: float = 0.0) -> dict:
     """Pace and GRF shape of one natural step. Variation = which foot and a slightly different pace.
 
-    Pace +-2.25 % uniform = 1.3 % sd, the stride-time CV of healthy young adults (Hausdorff, Zemany, Peng &
-    Goldberger 1999, J. Appl. Physiol. 86(3), p. 1041; applied to the step, not the stride). Same order as
-    Hausdorff, Purdon, Peng et al. 1996 (J. Appl. Physiol. 80(5), p. 1450): stride SD 22 ms on 1.1 s (2 %) at
-    the normal pace, CV "~3 %" over all paces, but over 1-h walks that include the long-range (alpha 0.95)
-    drift; the short-run 1.3 % is kept for one step.
-    # UNSOURCED: the other deviation sizes (phase amplitudes +-12 %, split points +-0.02,
-    # acceleration term +-0.08) and the left-foot asymmetry (heel x0.92, ball x1.06, pace x0.97)
-    # are not given by Cook or Farnell (Cook prints shapes only); they sit inside Visell's pace range.
+    Pace +-2.25 % uniform = 1.3 % sd, the stride-time CV of healthy young adults, applied to the step;
+    the larger ~2-3 % CVs of hour-long walks include the long-range drift, so the short-run value is kept.
+    Other deviation sizes: phase amplitudes +-12 %, split points +-0.02, acceleration term +-0.08;
+    left-foot asymmetry heel x0.92, ball x1.06, pace x0.97.
     """
     base = {0: (0.50, "R", 0.0), 1: (0.48, "L", -0.05), 2: (0.53, "R", 0.08)}[variation % 3]
     T, foot, accel = base
     T *= 1.0 + rng.uniform(-0.0225, 0.0225)
     T = float(np.clip(T, STEP_INTERVAL[0] - 0.03, STEP_INTERVAL[1]))
     ov = rng.uniform(WALK_OVERLAP[0], 0.14)           # low half of 10-20 %: trailing ball ends near heel strike
-    accel += rng.uniform(-0.08, 0.08)
+    accel = float(np.clip(accel + rng.uniform(-0.08, 0.08) + push, -0.5, 0.5))
     h, r, b = PHASE_RATIOS[ratios]
     dev = 1.0 + rng.uniform(-0.12, 0.12, 3)
     h, r, b = h * dev[0] * (1 - accel), r * dev[1], b * dev[2] * (1 + 2 * accel)   # patch heelf/ballf
@@ -179,7 +176,7 @@ def _gait(variation: int, rng: np.random.Generator, ratios: str) -> dict:
 
 @numba.njit(cache=True)
 def _tv_bank(x, f, d, g, vdd, norm, extra):
-    """Modal bank (van den Doel reson / Faust modeFilter forms) with a per-sample extra decay
+    """Modal bank (two-pole resonators) with a per-sample extra decay
     rate ``extra`` (1/s) shared by all modes: the pressing foot's damping."""
     n = x.shape[0]
     y = np.zeros(n)
@@ -223,7 +220,7 @@ def _db(v: float) -> float:
 
 def _grain_events(force: np.ndarray, rate_per_s: float, density: float, gamma: float,
                   energy: float, rng: np.random.Generator):
-    """Visell grain times and energies (research 06 §7.3), same law as
+    """Grain times and energies under a loading force, same law as
     ``particles.granular_footstep_texture``: returns (amps per sample, normalised force)."""
     fl = pt._lowpass_force(force)
     fmax = float(np.max(np.abs(fl))) or 1.0
@@ -248,7 +245,7 @@ def _grain_events(force: np.ndarray, rate_per_s: float, density: float, gamma: f
 
 def _texture(force: np.ndarray, preset_name: str, rng: np.random.Generator, *, rscale: float = 1.0,
              density: float = 1.0, gamma: float = pt.VISELL_GAMMA, info: dict | None = None):
-    """PhISEM grains of any preset driven by a GRF (Visell law + Farnell tone coherence).
+    """PhISEM grains of any preset driven by a GRF (loading-only law, tone follows pressure).
 
     Private extension of ``particles.granular_footstep_texture``, which only accepts its own
     ``GROUNDS`` keys; the grain law, energy budget, per-grain retune and tone coherence
@@ -270,8 +267,8 @@ def _texture(force: np.ndarray, preset_name: str, rng: np.random.Generator, *, r
 
 
 def _modal_grains(force: np.ndarray, spec: dict, rng: np.random.Generator) -> np.ndarray:
-    """Cook's stochastic-resonance PhISEM for bone/coral clatter (research 04 §2.5 "coins in a
-    mug": per collision a small object with its own mode set): the loudest Visell grains each
+    """Stochastic-resonance PhISEM for bone/coral clatter (
+    per collision a small object with its own mode set): the loudest grains each
     strike a measured modal body at a random size (f_scale)."""
     amps, fn, u = _grain_events(force, spec["rate"], 1.0, pt.VISELL_GAMMA, 1.0, rng)
     idx = np.flatnonzero(amps)
@@ -294,7 +291,7 @@ def _modal_grains(force: np.ndarray, spec: dict, rng: np.random.Generator) -> np
 
 @numba.njit(cache=True)
 def _stick_slip_pulses(n, fn, dfn, thresh, rate_lo, rate_hi, jitter, seed):
-    """Farnell efficient stick-slip: pulses whose amplitude ~ sqrt(separation) (research 05 §0.4),
+    """Efficient stick-slip: pulses whose amplitude ~ sqrt(separation),
     firing while the pressure is above ``thresh`` and rising (compaction)."""
     np.random.seed(seed)
     out = np.zeros(n)
@@ -315,6 +312,38 @@ def _stick_slip_pulses(n, fn, dfn, thresh, rate_lo, rate_hi, jitter, seed):
     return out
 
 
+STICK_CS = 636.0           # torsional wave speed of a wooden stick, m/s
+STICK_ALPHA = 14.0         # clamp / stick rotary inertia in cot(bL) = alpha bL
+STICK_Q = 60.0
+
+
+def stick_modes(length: float = 0.3, alpha: float = STICK_ALPHA, fmax: float = 8000.0) -> np.ndarray:
+    """Torsional modes of a stick held in snow at one end and clamped at the other: roots of
+    cot(x) = alpha x above pi (the clamp's rocking mode left out), f = x cs / (2 pi L), near n cs / 2L."""
+    n = np.arange(1, 64)
+    lo, hi = n * np.pi + 1e-9, (n + 1) * np.pi - 1e-9
+    for _ in range(60):
+        mid = 0.5 * (lo + hi)
+        up = 1.0 / np.tan(mid) - alpha * mid > 0.0
+        lo, hi = np.where(up, mid, lo), np.where(up, hi, mid)
+    f = 0.5 * (lo + hi) * STICK_CS / (2.0 * np.pi * max(length, 0.01))
+    return f[f < fmax]
+
+
+def stick_squeal(length: float = 0.3, dur: float = 1.0, temperature: float = -15.0, seed: int = 0,
+                 alpha: float = STICK_ALPHA) -> np.ndarray:
+    """A stick rubbed and twisted in cold dry snow: stick-slip locked to the first torsional mode
+    drives the stick's harmonic series. Silent above -5 C, full below -10 C. 48 kHz."""
+    n = seconds(dur)
+    f = stick_modes(length, alpha)
+    fn = np.linspace(0.5, 1.0, n)
+    pulses = _stick_slip_pulses(n, fn, np.gradient(fn), 0.45, f[0], f[0], 0.04, int(seed))
+    k = np.arange(1, f.size + 1, dtype=float)
+    y = _tv_bank(pulses, f, np.pi * f / STICK_Q, 1.0 / k, True, 1.0, np.zeros(n))
+    y *= _ramp_in(n, 20.0) * _ramp_in(n, 60.0)[::-1]
+    return _norm(y) * float(np.clip((-temperature - 5.0) / 5.0, 0.0, 1.0))
+
+
 def _ramp_in(n: int, ms: float) -> np.ndarray:
     m = max(2, seconds(ms * 1e-3))
     r = np.ones(n)
@@ -326,7 +355,7 @@ def _ramp_in(n: int, ms: float) -> np.ndarray:
 # ==========================================================================================
 # Ground specs
 # ==========================================================================================
-# layer mix levels (dB, each layer peak-normalised first) are UNSOURCED throughout.
+# layer mix levels in dB, each layer peak-normalised first.
 # grains: (PhISEM preset, dB, resonance_scale, density)
 
 def _floor(table, db, heel_ms, toe_ms, *, f_scale=1.0, f0=None, d_scale=1.0, foot_damp=60.0,
@@ -336,115 +365,68 @@ def _floor(table, db, heel_ms, toe_ms, *, f_scale=1.0, f0=None, d_scale=1.0, foo
                 contact_spread=contact_spread)
 
 
-THUD = dict(table="sy_stick", f_scale=0.1)       # VdD "dull low thud": stick.sy fscale ~0.1, T 30-50 ms
-SHOE = dict(table="sy_stick", f_scale=0.7, d_scale=1.5, heel_ms=2.5, toe_ms=5.0)   # UNSOURCED (see doc)
+THUD = dict(table="sy_stick", f_scale=0.1)       # dull low thud: stick.sy fscale ~0.1, T 30-50 ms
+SHOE = dict(table="sy_stick", f_scale=0.7, d_scale=1.5, heel_ms=2.5, toe_ms=5.0)
 
 GROUND_SPECS: dict[str, dict] = {
     # ---------------- aggregate / soft grounds ----------------
-    "snow": dict(friction=-9.0, ratios="difficult", thud=(45.0, -4.0), grains=[("Crunch", 0.0, 1.0, 1.0)], squeak=-20.0,
-                 src="PhOLIES Crunch1 'like new fallen snow' 800 Hz r.95 N7 (phisem.c:41); PD 1:2:3 snow; "
-                     "Farnell snow squeak"),
-    "sand": dict(soft_lp=3000.0, friction=-6.0, ratios="difficult", thud=(50.0, -3.0), grains=[("Sandpaper", 0.0, 1.0, 1.0)],
-                 src="research 11 A3 sand -> Sandpaper 4500 Hz r.6 N128; plastic -> thud (Farnell rule 6)",
-                 unsourced="1:2:3 'difficult' ratios extended from snow to sand"),
+    "snow": dict(friction=-9.0, ratios="difficult", thud=(45.0, -4.0), grains=[("Crunch", 0.0, 1.0, 1.0)], squeak=-20.0),
+    "sand": dict(soft_lp=3000.0, friction=-6.0, ratios="difficult", thud=(50.0, -3.0), grains=[("Sandpaper", 0.0, 1.0, 1.0)]),
     "wet_sand": dict(soft_lp=2000.0, friction=-9.0, ratios="difficult", thud=(45.0, 0.0), grains=[("Sandpaper", -6.0, 0.55, 0.5)],
-                     bubbles=dict(peak_rate=120.0, r=(1.0e-3, 4.0e-3), alpha=2.9, delta_th=0.08, db=-14.0),
-                     src="Sandpaper grains + Moss bubbles",
-                     unsourced="wet sand: Sandpaper resonance x0.55, density 0.5, a few damped bubbles"),
-    "ash": dict(soft_lp=2000.0, friction=-8.0, ratios="walk", thud=(50.0, 0.0), grains=[("Sandpaper", -4.0, 0.5, 0.7), ("Crunch", -8.0, 0.7, 0.6)],
-                src="ash is plastic: thud, no ring (Farnell rule 6, research 01)",
-                unsourced="no source has an ash preset: Sandpaper x0.5 + Crunch x0.7 (research 11: "
-                          "'Sandpaper or Cabasa with the resonator lowered')"),
+                     bubbles=dict(peak_rate=120.0, r=(1.0e-3, 4.0e-3), alpha=2.9, delta_th=0.08, db=-14.0)),
+    "ash": dict(soft_lp=2000.0, friction=-8.0, ratios="walk", thud=(50.0, 0.0), grains=[("Sandpaper", -4.0, 0.5, 0.7), ("Crunch", -8.0, 0.7, 0.6)]),
     "mud": dict(soft_lp=2500.0, friction=-8.0, ratios="difficult", thud=(50.0, 0.0), grains=[("WaterDrops", -10.0, 0.7, 0.5)],
                 bubbles=dict(peak_rate=900.0, r=(2.0e-3, 1.2e-2), alpha=2.9, delta_th=0.12, db=-2.0),
-                suction=(1, 3, -6.0),
-                src="Farnell T 5.3: mud -> bubbles (Moss); surfacing bubbles (Farnell) for the suction",
-                unsourced="mud bubble radii 2-12 mm, thermal/viscous damping 0.12, rates, suction count"),
+                suction=(1, 3, -6.0)),
     "shallow_water": dict(friction=-10.0, ratios="walk", thud=(35.0, -8.0), grains=[("WaterDrops", -3.0, 1.0, 1.0),
                                                                  ("Maraca", -9.0, 1.0, 0.6)],
                           bubbles=dict(peak_rate=900.0, r=(0.8e-3, 6.0e-3), alpha=2.9, delta_th=0.02, db=0.0),
-                          drips=(3, 6, -9.0),
-                          src="research 11 A3: Water drops + Maraca splash; Moss rain alpha 2.9; STK drops",
-                          unsourced="splash bubble rate ~ u^2 peak 900/s, drip count 3-6"),
-    "leaves": dict(friction=-9.0, ratios="walk", thud=(30.0, -8.0), grains=[("Sekere", 0.0, 1.0, 1.0), ("Sticks", -8.0, 1.0, 0.8)],
-                   src="research 11 A3 leaves -> Stix1/Sekere 5500 Hz r.6"),
-    "grass": dict(soft_lp=4500.0, friction=-8.0, ratios="walk", thud=(35.0, -2.0), grains=[("Sekere", -4.0, 0.8, 0.45)],
-                  src="research 11 A3 dry grass -> Sekere",
-                  unsourced="grass is softer than leaves: Sekere x0.8, density 0.45"),
+                          drips=(3, 6, -9.0)),
+    "leaves": dict(friction=-9.0, ratios="walk", thud=(30.0, -8.0), grains=[("Sekere", 0.0, 1.0, 1.0), ("Sticks", -8.0, 1.0, 0.8)]),
+    "grass": dict(soft_lp=4500.0, friction=-8.0, ratios="walk", thud=(35.0, -2.0), grains=[("Sekere", -4.0, 0.8, 0.45)]),
     "forest_floor": dict(friction=-9.0, ratios="walk", thud=(35.0, -2.0), grains=[("Sekere", -3.0, 0.9, 0.6), ("Sticks", -6.0, 1.0, 0.7),
-                                                                 ("Crunch", -10.0, 0.8, 0.5)],
-                         src="Farnell exercise: blend earth + grass + twigs (research 03 §2.6; T 5.3 blend 2-3 synths)",
-                         unsourced="layer levels"),
+                                                                 ("Crunch", -10.0, 0.8, 0.5)]),
     "gravel": dict(friction=-9.0, ratios="walk", thud=(30.0, -6.0), grains=[("CookLargeGravel", 0.0, 1.0, 1.0),
-                                                          ("CookSmallGravel", -9.0, 1.0, 0.5)],
-                   src="Cook measured gravel: large 6460 Hz r.932 N23, small 12670 Hz r.843 N1068"),
+                                                          ("CookSmallGravel", -9.0, 1.0, 0.5)]),
     "pebbles": dict(friction=-10.0, ratios="walk", thud=(25.0, -6.0), grains=[("BigRocks", 0.0, 0.7, 0.6)],
                     modal_grains=dict(table="stk_clump", fs=(1.0, 1.0), rate=40.0, top=6, d_scale=6.0,
-                                      contact_ms=0.4, db=-10.0, f0=(1800.0, 3200.0)),
-                    src="STK BigRocks; Cook: bigger stones -> lower resonance, fewer collisions",
-                    unsourced="pebbles = BigRocks x0.7, density 0.6; stone-clack Clump grains 1.8-3.2 kHz"),
-    "salt": dict(friction=-9.0, ratios="walk", thud=(30.0, -8.0), grains=[("Crunch", -2.0, 1.6, 1.0), ("LittleRocks", -4.0, 1.0, 0.5)],
-                 src="Cook: salt shaker is a maraca-type PhISEM (research 04 §2.5)",
-                 unsourced="salt crust = Crunch x1.6 + LittleRocks blend"),
+                                      contact_ms=0.4, db=-10.0, f0=(1800.0, 3200.0))),
+    "salt": dict(friction=-9.0, ratios="walk", thud=(30.0, -8.0), grains=[("Crunch", -2.0, 1.6, 1.0), ("LittleRocks", -4.0, 1.0, 0.5)]),
     # ---------------- hard / resonant grounds ----------------
     "stone": dict(friction=-34.0, ratios="walk", floor=_floor("stk_clump", 0.0, 4.0, 7.0, f0=300.0, d_scale=2.0),
-                  shoe=-4.0, scuff=-18.0, grains=[("Sandpaper", -18.0, 1.0, 0.4)],
-                  src="research 07: stone -> ModalBar Clump + short Shakers grit layer",
-                  unsourced="Clump f0 300 Hz, d x2 (slab bedded in ground)"),
+                  shoe=-4.0, scuff=-18.0, grains=[("Sandpaper", -18.0, 1.0, 0.4)]),
     "concrete": dict(friction=-32.0, ratios="walk", floor=_floor("stk_clump", 0.0, 4.0, 7.0, f0=230.0, d_scale=3.0),
-                     shoe=-3.0, scuff=-14.0, grains=[("Sandpaper", -14.0, 1.0, 0.5)],
-                     src="Farnell: concrete = rate-of-work squared envelopes noise into the surface filter",
-                     unsourced="Clump f0 230 Hz, d x3 (monolithic, dead)"),
+                     shoe=-3.0, scuff=-14.0, grains=[("Sandpaper", -14.0, 1.0, 0.5)]),
     "cobblestone": dict(friction=-32.0, ratios="walk", floor=_floor("stk_clump", 0.0, 3.5, 6.0, f0=420.0, d_scale=2.5,
                                                     contact_spread=0.15),
-                        shoe=-4.0, scuff=-16.0, grains=[("Sandpaper", -16.0, 1.0, 0.4), ("BigRocks", -20.0, 0.8, 0.2)],
-                        src="research 07 Clump + grit; each contact on a different stone",
-                        unsourced="Clump f0 420 Hz +-15 % per contact"),
+                        shoe=-4.0, scuff=-16.0, grains=[("Sandpaper", -16.0, 1.0, 0.4), ("BigRocks", -20.0, 0.8, 0.2)]),
     "wet_stone": dict(friction=-26.0, ratios="walk", floor=_floor("stk_clump", 0.0, 5.0, 8.0, f0=300.0, d_scale=3.0),
                       shoe=-8.0, scuff=-20.0, grains=[("WaterDrops", -10.0, 1.2, 0.5)],
-                      bubbles=dict(peak_rate=250.0, r=(0.5e-3, 2.5e-3), alpha=2.9, delta_th=0.02, db=-12.0),
-                      src="stone floor + a water film: STK drops and Moss bubbles",
-                      unsourced="water film = longer, softer contact; small bubbles"),
+                      bubbles=dict(peak_rate=250.0, r=(0.5e-3, 2.5e-3), alpha=2.9, delta_th=0.02, db=-12.0)),
     "marble": dict(ratios="walk", floor=_floor("sy_vase", 0.0, 2.5, 5.0, d_scale=2.0, foot_damp=40.0),
                    floor2=_floor("stk_clump", -6.0, 3.0, 6.0, f0=340.0, d_scale=1.5),
-                   shoe=-6.0, scuff=-22.0,
-                   src="modalpaper vase.sy (measured ceramic, homogeneous) + Clump slab",
-                   unsourced="vase for marble; d x2"),
+                   shoe=-6.0, scuff=-22.0),
     "hard_floor": dict(friction=-36.0, ratios="walk", floor=_floor("stk_wood2", 0.0, 4.0, 7.0, f0=200.0),
-                       shoe=-3.0, scuff=-16.0, grains=[("Sandpaper", -18.0, 1.0, 0.3)],
-                       src="research 07: hard grounds -> ModalBar Wood1/Wood2/Clump",
-                       unsourced="hard floor = Wood2 at 200 Hz (dead knock)"),
+                       shoe=-3.0, scuff=-16.0, grains=[("Sandpaper", -18.0, 1.0, 0.3)]),
     "wood": dict(ratios="walk", floor=_floor("body_squareBig", 0.0, 3.0, 6.0, foot_damp=30.0),
-                 shoe=-6.0, scuff=-18.0,
-                 src="Faust modeInterpRes squareBig (measured wooden body); Farnell wooden floorboards"),
+                 shoe=-6.0, scuff=-18.0),
     "metal_web": dict(friction=-30.0, ratios="walk", floor=_floor("sy_wok", 0.0, 2.0, 4.0, foot_damp=90.0, micro=3),
-                      shoe=-8.0, scuff=-16.0, grains=[("CokeCan", -8.0, 1.0, 0.5)],
-                      src="modalpaper wok.sy (iron, measured) damped by the foot (Farnell integrate GRF); "
-                          "STK CokeCan rattle (research 07); Cook grains into the web modes",
-                      unsourced="foot damping 90 /s at full GRF"),
+                      shoe=-8.0, scuff=-16.0, grains=[("CokeCan", -8.0, 1.0, 0.5)]),
     "ice": dict(friction=-24.0, ratios="walk", floor=_floor("sy_calona0", 0.0, 2.0, 4.0, f_scale=0.35, foot_damp=40.0, micro=2),
                 floor2=_floor("stk_clump", -6.0, 4.0, 7.0, f0=260.0, d_scale=1.0),
-                shoe=-8.0, grains=[("Crunch", -12.0, 1.4, 0.5)],
-                src="modalpaper calona0.sy glass; frozen things ring (Farnell rule 6); frost crunch",
-                unsourced="calona0 f x0.35 for a large ice sheet"),
+                shoe=-8.0, grains=[("Crunch", -12.0, 1.4, 0.5)]),
     "crystal": dict(friction=-34.0, ratios="walk", floor=_floor("sy_calona0", 0.0, 1.0, 2.5, foot_damp=40.0, micro=3, bodies=2,
                                                 body_ratio=1.37),
-                    shoe=-10.0, grains=[("LittleRocks", -16.0, 1.0, 0.2)],
-                    src="modalpaper calona0.sy glass, two bodies, FoleyAutomatic micro-collisions",
-                    unsourced="second body at 1.37 x"),
+                    shoe=-10.0, grains=[("LittleRocks", -16.0, 1.0, 0.2)]),
     "bone": dict(friction=-14.0, ratios="walk", thud=(20.0, -8.0), floor=_floor("sy_stick", -3.0, 1.5, 3.0, f_scale=0.5, foot_damp=40.0),
                  grains=[("BigRocks", -8.0, 0.55, 0.6)],
                  modal_grains=dict(table="sy_stick", fs=(0.35, 0.8), rate=60.0, top=10, d_scale=0.8,
-                                   contact_ms=0.6, db=-2.0),
-                 src="research 11: bone -> Big rocks with lower freq (inference); Cook coins-in-mug per grain",
-                 unsourced="stick.sy as bone; BigRocks x0.55; bone sizes f x0.35-0.8"),
+                                   contact_ms=0.6, db=-2.0)),
     "coral": dict(friction=-12.0, ratios="walk", thud=(25.0, -8.0), floor=_floor("sy_vase", -6.0, 1.5, 3.0, f_scale=1.4, d_scale=6.0,
                                                               foot_damp=40.0),
                   grains=[("BigRocks", 0.0, 0.8, 0.8)],
                   modal_grains=dict(table="sy_vase", fs=(1.6, 2.6), rate=80.0, top=10, d_scale=8.0,
-                                    contact_ms=0.4, db=-6.0),
-                  src="research 11: coral -> Big rocks; Farnell crushing model driven by GRF",
-                  unsourced="vase.sy as coral, heavily damped (porous); BigRocks x0.8"),
+                                    contact_ms=0.4, db=-6.0)),
 }
 
 
@@ -480,18 +462,21 @@ def _floor_layer(spec: dict, comps_lead, n, rng, foot_press):
 
 
 def _scuff(F_all: np.ndarray, rng: np.random.Generator) -> np.ndarray:
-    """Farnell stone/concrete: (rate of work)^2 envelopes a noise burst (research 05 §5.3)."""
+    """Stone/concrete: (rate of work)^2 envelopes a noise burst."""
     dF = np.clip(np.gradient(F_all) * SR, 0, None)
     env = (dF / (dF.max() or 1.0)) ** 2
     return env * rng.uniform(-1, 1, len(F_all))
 
 
-def render_step(ground: str, variation: int, rng: np.random.Generator, *, return_info: bool = False):
-    """One footstep on ``ground`` (mono, 48 kHz, not mastered)."""
+def render_step(ground: str, variation: int, rng: np.random.Generator, *, return_info: bool = False,
+                temperature: float = -8.0, accel: float = 0.0, incline: float = 0.0):
+    """One footstep on ``ground`` (mono, 48 kHz, not mastered). ``temperature`` (C) only shapes the
+    snow squeak. ``accel`` > 0 (speeding up) or ``incline`` > 0 (uphill) shift the
+    GRF toward the ball, < 0 (slowing, downhill) toward the heel, through the patch's heelf/ballf term."""
     if ground not in GROUND_SPECS:
         raise KeyError(f"unknown ground {ground!r}; known: {list(GROUND_SPECS)}")
     sp = GROUND_SPECS[ground]
-    g = _gait(variation, rng, sp["ratios"])
+    g = _gait(variation, rng, sp["ratios"], accel + incline)
     pre = 0.002
     tail = 0.06
     dur = min(pre + g["contact"] + tail, 0.72)
@@ -511,17 +496,16 @@ def render_step(ground: str, variation: int, rng: np.random.Generator, *, return
         y += _texture(F_trail, name, rng, rscale=rs, density=dens, info=info) * _ramp_in(n, 8.0)
         layers.append((f"grains:{name}", y, db))
 
-    # --- friction / crushing driven by the GRF directly (Farnell T 5.3), Cook's PhISEM friction
-    # engine (research 04 §2.6: "feed PhISEM a control envelope from force x speed"): fills the
-    # roll phase, where Visell's loading-only grains are silent. Same preset as the first grain layer.
+    # --- friction / crushing driven by the GRF directly, PhISEM friction engine fed a control
+    # envelope from force x speed: fills the
+    # roll phase, where the loading-only grains are silent. Same preset as the first grain layer.
     if "grains" in sp and sp.get("friction") is not None:
         name, _, rs, _ = sp["grains"][0]
         ctrl = np.clip(F_lead / fmax, 0.0, 1.0)
-        # UNSOURCED: control level 0.6 of the full shake energy
         y = pt.shaker(name, dur, rng, energy_curve=0.6 * ctrl, energy_mode="level", resonance_scale=rs)
         layers.append((f"friction:{name}", y[:n], sp["friction"]))
 
-    # --- soft heel thud (VdD dull thud recipe) at heel strike and toe slap
+    # --- soft heel thud at heel strike and toe slap
     if "thud" in sp:
         ms, db = sp["thud"]
         m = modal.resolve(THUD["table"], THUD["f_scale"] * (1 + rng.uniform(-0.02, 0.02)))
@@ -579,23 +563,21 @@ def render_step(ground: str, variation: int, rng: np.random.Generator, *, return
         else:
             layers.append(("clatter", _modal_grains(F_lead, mg, rng), mg["db"]))
 
-    # --- snow squeak: stick-slip into the Crunch resonance (800 Hz, r .95 @44.1k)
-    if "squeak" in sp:
+    # --- snow squeak: stick-slip pulses shaped by the measured spectrum
+    # fades out from -1.5 C to 0 C: warm corned snow is near white noise, no squeak
+    if "squeak" in sp and temperature < 0.0:
         fl_ = pt._lowpass_force(F_lead)
         fn = np.clip(fl_ / (fl_.max() or 1), 0, None)
         dfn = np.gradient(fn)
-        # Camp 1987 (J. Phys. Colloq. 48 C1, p. C1-239): the step in cold (-17 C) snow has a "relaxation
-        # character" (stick-slip), warm corned snow is near white noise; he gives no rates.
-        # UNSOURCED: threshold 0.45 of peak GRF, pulse rate 350-1100 Hz, 30 % jitter
+        # stick-slip in cold snow: threshold 0.45 of peak GRF, pulse rate 350-1100 Hz, 30 % jitter
         pulses = _stick_slip_pulses(n, fn, dfn, 0.45 + rng.uniform(-0.05, 0.05), 350.0, 1100.0, 0.30,
                                     int(rng.integers(0, 2**31 - 1)))
-        cr = pt.preset("Crunch")
-        r = pt.rate_radius(cr["radii"][0], cr["fs_src"])
-        y = reson(pulses, cr["freqs"][0] * (1 + rng.uniform(-0.03, 0.03)), r)
-        y = highpass(y, 400.0)
-        layers.append(("squeak", y, sp["squeak"]))
+        y = snow_squeak_shape(pulses, temperature + rng.uniform(-0.5, 0.5))
+        warm = 20.0 * np.log10(max(min(-temperature / 1.5, 1.0), 1e-3))
+        layers.append(("squeak", y, sp["squeak"] + warm))
+        info["temperature"] = temperature
 
-    # --- bubbles (Moss: formation rate ~ u^2), drips after the lift, mud suction
+    # --- bubbles (formation rate ~ u^2), drips after the lift, mud suction
     if "bubbles" in sp:
         b = sp["bubbles"]
         dF = np.clip(np.gradient(pt._lowpass_force(F_lead)) * SR, 0, None)
@@ -629,8 +611,7 @@ def render_step(ground: str, variation: int, rng: np.random.Generator, *, return
     soft = sp.get("soft_lp")
     for name, y, db in layers:
         if soft and (name.startswith("grains") or name.startswith("friction")):
-            # Farnell T 5.3: a brightness/damping control approximates the ground's hardness
-            # (softer ground = HF decays faster). UNSOURCED cut-off per ground.
+            # softer ground = HF decays faster: a low-pass per ground
             y = one_pole_lp(np.ascontiguousarray(y), one_pole_coef(soft))
         mix += _norm(y[:n]) * _db(db)
     nf = seconds(0.04)
@@ -668,12 +649,12 @@ def charter_step(ground: str, variation: int, rng: np.random.Generator, *, chain
       (the smaller contact of the ball);
     * per-take jitter: +-2 dB gain and +-3 % pitch (varispeed of the whole step);
     * **chain layer** (``chained``): a chain clink on the gait's accent - the heel strike - lagging
-      10-30 ms as the links swing (Farnell shell-casing tinkle / chain push, ambience.chain_shift);
+      10-30 ms as the links swing (ambience.chain_shift);
       removed when the collar opens (the unchained render is the same step without it);
-    * **equipment**: cloth (always, quiet: STK Sandpaper friction under the step's force, -24 dB),
+    * **equipment**: cloth (always, quiet: Sandpaper friction under the step's force, -24 dB),
       leather (a small stick-slip creak into the measured vase modes, -22 dB), mail (5-9 small
       tinkles scattered over 40 ms after the heel, -16 dB), plate (a measured-steel clank at the
-      heel, -14 dB). UNSOURCED: all levels and timings."""
+      heel, -14 dB)."""
     from . import ambience as amb
     from . import body
     mix = render_step(ground, variation, rng)

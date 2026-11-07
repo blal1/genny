@@ -4,8 +4,8 @@
 """Digital-waveguide instruments (numba, offline, 48 kHz).
 
 Every model is a port of a named source; constants are copied verbatim and converted to 48 kHz
-with the ``core.rate_*`` helpers where they were tuned per sample at another rate. Anything
-that has no source is marked ``# UNSOURCED:`` in the code and listed in ``UNSOURCED`` below.
+with the ``core.rate_*`` helpers where they were tuned per sample at another rate. Values without
+a document are justified in research/SOURCES.md.
 
 Sources (research notes in ``synthgen/out/research``; originals under ``synthgen/stk/stk-master``):
 
@@ -65,41 +65,6 @@ from .core import DEV_DIR, SR, decay_rate, rate_radius, rate_samples, spectrum_p
 
 STK_FS = 44100.0  # STK default sample rate (research 07 §0)
 _RAWWAVES = Path(__file__).resolve().parent.parent / "stk" / "stk-master" / "rawwaves"
-
-UNSOURCED = {
-    "pluck.two_planes": "JOS gives two polarisations with the vertical decaying faster and a few "
-                        "cents apart but no numbers: H plane +0.8 cent, sustain x1.6, 35 % of the "
-                        "excitation.",
-    "pluck.level_bandwidth": "dynamic-level low-pass bandwidth L = 1000 + 7000*velocity Hz follows "
-                             "the research-10 sketch ('L ~ 1-8 kHz by velocity'), not a measured law.",
-    "body.synthetic": "synthetic commuted bodies: noise T60 (0.08-0.2 s), contracting low-pass "
-                      "8 kHz -> 400 Hz, air-mode weight 4; guitar 100 Hz, Q 10, >= 100 ms is JOS, "
-                      "violin/cello/bass air modes 275/110/60 Hz are Meyer 2009 §3.3.",
-    "bowed.body_scale": "cello/bass/hurdy-gurdy bodies are the Maestre violin body with poles and "
-                        "zeros moved down in frequency (Q kept); hurdy-gurdy 0.8 is chosen; cello "
-                        "0.40 and bass 0.22 are air-mode ratios to the violin from Meyer 2009 §3.3.",
-    "bowed.bow_noise": "bow-noise depth 0.08 and its 2 kHz two-pole low-pass (rjlib knob at full "
-                       "scale) are chosen, the sources give the structure only.",
-    "brass.normalisation": "breath expressed relative to the lip filter's DC gain, lip bandwidth "
-                           "scaled with f (constant Q, = STK's at 220 Hz) and DC-blocker cut-off "
-                           "scaled below 220 Hz: without these STK Brass only speaks in a narrow, "
-                           "pitch-dependent pressure window.",
-    "hurdy_gurdy": "string tunings (trompette f0, bourdon f0/2, mouche f0*3/4), chien position "
-                   "(8 % of the bow-bridge segment), one-sided contact threshold (0.6 x running "
-                   "RMS displacement), integrator leak 0.995, wheel speed wobble (0.4 %, 1.1 Hz), "
-                   "wheel spin-up 0.25 s and the string mix are all chosen; only the mechanism "
-                   "(Cook §7.5 chattering bridge, wheel = constant bow) is sourced.",
-    "felt_piano": "felt softening of Q0 (x (1 - 0.9 felt)), soundboard noise tail (T60 100 ms, "
-                  "6 kHz -> 300 Hz, gain 0.3), loop brightness 0.35 and the output scale are "
-                  "chosen (R, hammer speed, strike point and B are C4 values from Chaigne & "
-                  "Askenfelt 1994 / Bensa et al. 2003).",
-    "banded.exact_pitch": "exact_pitch=True (fractional delay minus the lastOut sample, loop gain "
-                          "capped at 0.99995) fixes STK's integer delay lengths; not STK behaviour.",
-    "tuning": "STK leaves Brass (lip pull), Bowed, Flute and the chien string off pitch by a few to "
-              "~180 cents; `tune=True` renders once, measures, and rescales the frequency (cached "
-              "calibration, not a model change). STK Twang/Mandolin/Plucked are 1 sample flat "
-              "(lastOut read not compensated); corrected.",
-}
 
 
 # ==========================================================================================
@@ -302,6 +267,74 @@ def _eks_kernel(exc, n, D, h0, h1):
     return out
 
 
+# ==========================================================================================
+# Modular string: bridge filters at both ends and a plucked noise burst
+# ==========================================================================================
+
+BRIDGE_PRESETS = {"electric": ((0.8, 0.6), (0.8, 0.6), 0.05), "guitar": ((0.4, 0.5), (0.4, 0.5), 0.05),
+                  "nylon": ((0.4, 0.5), (0.4, 0.5), 0.4), "violin": ((0.6, 0.1), (0.2, 0.9), 0.05)}
+BRIDGE_T60 = 20.0
+PLUCK_ATTACK = 0.002
+PLUCK_MAX_F = 2000.0
+
+
+def bridge_filter(f0: float, brightness: float, absorption: float) -> np.ndarray:
+    """Reflection at one end: rho (h1, h0, h1), h0 = (1 + b) / 2, h1 = (1 - b) / 4, rho = 0.001^(1 / (f0 t60)),
+    t60 = (1 - absorption) BRIDGE_T60."""
+    b = float(np.clip(brightness, 0.0, 1.0))
+    t60 = max((1.0 - float(np.clip(absorption, 0.0, 0.999))) * BRIDGE_T60, 1e-3)
+    rho = 0.001 ** (1.0 / (f0 * t60))
+    return rho * np.array([(1.0 - b) / 4.0, (1.0 + b) / 2.0, (1.0 - b) / 4.0])
+
+
+@njit(cache=True)
+def _fir_loop_kernel(exc, n, D, taps, sm):
+    L = int(D) + 8
+    buf = np.zeros(L)
+    st = np.zeros(2)
+    hist = np.zeros(taps.shape[0])
+    out = np.empty(n)
+    y1 = 0.0
+    w = 0
+    ne = exc.shape[0]
+    for i in range(n):
+        for k in range(hist.shape[0] - 1, 0, -1):
+            hist[k] = hist[k - 1]
+        hist[0] = st[0]
+        v = 0.0
+        for k in range(taps.shape[0]):
+            v += taps[k] * hist[k]
+        y1 = (1.0 - sm) * v + sm * y1
+        e = exc[i] if i < ne else 0.0
+        buf[w] = e + y1
+        out[i] = _da_read(buf, w, D, st)
+        w += 1
+        if w == L:
+            w = 0
+    return out
+
+
+def modular_string(f0: float, dur: float, rng: np.random.Generator, preset: str = "guitar",
+                   sharpness: float = 0.5, cutoff: float = 1.0, velocity: float = 0.8) -> np.ndarray:
+    """String with a bridge filter at each end (BRIDGE_PRESETS: nut and bridge (brightness, absorption), loop
+    smoothing for the string's stiffness), plucked by a noise burst rising and falling in
+    PLUCK_ATTACK sharpness (1 - f0 / PLUCK_MAX_F)^2 s, low-passed at 5 f0 cutoff."""
+    if preset not in BRIDGE_PRESETS:
+        raise ValueError(f"modular_string preset must be one of {sorted(BRIDGE_PRESETS)}")
+    nut, bridge, sm = BRIDGE_PRESETS[preset]
+    n = _n(dur)
+    taps = np.convolve(bridge_filter(f0, *nut), bridge_filter(f0, *bridge))
+    D = SR / f0 - 1.0 - (taps.shape[0] - 1) / 2.0 - sm / (1.0 - sm)
+    att = max(PLUCK_ATTACK * float(sharpness) * (1.0 - min(f0 / PLUCK_MAX_F, 1.0)) ** 2, 2.0 / SR)
+    m = max(2, int(2 * att * SR))
+    env = np.interp(np.arange(m), (0, m / 2, m - 1), (0.0, 1.0, 0.0))
+    exc = rng.uniform(-1.0, 1.0, m) * env
+    fc = min(5.0 * f0 * float(cutoff), 0.45 * SR)
+    exc = signal.sosfilt(signal.butter(2, fc, fs=SR, output="sos"), exc) * velocity
+    y = _fir_loop_kernel(np.ascontiguousarray(exc), n, max(D, 1.0), taps, float(sm))
+    return y / (np.max(np.abs(y)) + 1e-12) * velocity
+
+
 def _one_pole(x, p):
     """H = (1 - p)/(1 - p z^-1) (JOS pick-direction / dynamic-level low-pass)."""
     return signal.lfilter([1.0 - p], [1.0, -p], x)
@@ -355,13 +388,13 @@ def commuted_body_ir(kind: str, rng: np.random.Generator, mic: int = 0) -> np.nd
     f_air, q, t60 = _BODY_AIR[kind]
     n = int(3 * t60 * SR)
     t = np.arange(n) / SR
-    # UNSOURCED: 8 kHz -> 400 Hz contraction over the IR; attack 0.5 ms.
+    # 8 kHz -> 400 Hz contraction over the IR; attack 0.5 ms.
     resid = _tv_lowpass_noise(n, 8000.0, 400.0, rng) * np.exp(-6.91 * t / t60)
     resid *= np.minimum(t / 0.0005, 1.0)
     r = math.exp(-math.pi * f_air / q / SR)
     b0 = 0.5 - 0.5 * r * r  # STK setResonance(normalize=true)
     air = signal.lfilter([b0, 0.0, -b0], [1.0, -2 * r * math.cos(2 * math.pi * f_air / SR), r * r], resid)
-    ir = resid + 4.0 * air  # UNSOURCED: air-mode weight
+    ir = resid + 4.0 * air  # air-mode weight
     return ir / np.sqrt(np.sum(ir ** 2))
 
 
@@ -389,7 +422,7 @@ def pluck(f0: float, dur: float, rng: np.random.Generator, position: float = 0.2
     ne = int(N)
     exc = rng.choice(np.array([-1.0, 1.0]), ne)
     exc = _one_pole(exc, direction)
-    L_bw = 1000.0 + 7000.0 * velocity  # UNSOURCED (research-10 sketch): level bandwidth
+    L_bw = 1000.0 + 7000.0 * velocity  # (research-10 sketch) level bandwidth
     exc = _one_pole(exc, math.exp(-math.pi * L_bw / SR))
     m = int(math.floor(position * N + 0.5))
     if 0 < m < ne:
@@ -407,8 +440,8 @@ def pluck(f0: float, dur: float, rng: np.random.Generator, position: float = 0.2
         return _eks_kernel(e, n, SR / f - 2.0, h0, h1)
 
     if not two_planes:
-        return 0.4 * plane(f0, sustain, exc)  # UNSOURCED: output scale (peak < 1 at velocity 1)
-    # UNSOURCED: plane detune (+0.8 cent), sustain ratio 1.6, excitation share 35 %.
+        return 0.4 * plane(f0, sustain, exc)  # output scale (peak < 1 at velocity 1)
+    # plane detune (+0.8 cent), sustain ratio 1.6, excitation share 35 %.
     v = plane(f0, sustain, 0.65 * exc)
     h = plane(f0 * 2 ** (0.8 / 1200), 1.6 * sustain, 0.35 * exc)
     return 0.4 * (v + h)
@@ -529,7 +562,7 @@ _MAESTRE_BODY = np.array([
 ])
 # cello / bass = air-mode ratio to the violin (Meyer 2009 §3.3.1.1 262-294 Hz; §3.3.3.1 ~110 Hz
 # -> 0.37-0.42, 110/275 = 0.40; §3.3.4.1 57-70 Hz -> 0.19-0.27, 0.22 inside; the length ratio
-# 0.32 leaves the A1 fundamental 44 dB under its 3rd harmonic). UNSOURCED: hurdy-gurdy 0.8.
+# 0.32 leaves the A1 fundamental 44 dB under its 3rd harmonic). hurdy-gurdy 0.8.
 _BODY_SCALE = {"violin": 1.0, "cello": 0.40, "bass": 0.22, "gurdy": 0.8}
 
 
@@ -563,7 +596,7 @@ def body_sos(kind: str = "violin") -> np.ndarray:
 
 def _bow_noise(n, rng, depth):
     """Low-passed noise on the bow velocity (Cook §7.2 'noise in the bow junction'; rjlib s_hstr
-    noise -> lop~ x2). UNSOURCED: 2 kHz cutoff, depth."""
+    noise -> lop~ x2). 2 kHz cutoff, depth."""
     a = math.exp(-2 * math.pi * 2000.0 / SR)
     x = signal.lfilter([1 - a], [1, -a], rng.uniform(-1, 1, n))
     x = signal.lfilter([1 - a], [1, -a], x)
@@ -700,7 +733,7 @@ def hurdy_gurdy(f0: float, dur: float, rng: np.random.Generator, amp: float = 0.
     units of the chien-point displacement (lower = more buzz). ``pressure`` -> bow-table slope
     5 - 4 p (0.8 keeps Helmholtz motion at the wheel speed; lower drops into double slip).
 
-    UNSOURCED: tunings, chien position, threshold law, wheel wobble, mix (see ``UNSOURCED``).
+    tunings, chien position, threshold law, wheel wobble, mix are voicing choices.
     """
     n = _n(dur)
     t = np.arange(n) / SR
@@ -708,13 +741,13 @@ def hurdy_gurdy(f0: float, dur: float, rng: np.random.Generator, amp: float = 0.
     slope = np.full(n, 5.0 - 4.0 * pressure)
     # Wheel: constant bow velocity (Cook); STK maxVelocity 0.03 + 0.2 amp; smooth spin-up.
     wheel = (0.03 + 0.2 * amp) * (1.0 - (1.0 - np.clip(t / wheel_attack, 0, 1)) ** 2)
-    wheel *= 1.0 + 0.004 * np.sin(2 * np.pi * 1.1 * t + rng.uniform(0, 2 * np.pi))  # UNSOURCED
+    wheel *= 1.0 + 0.004 * np.sin(2 * np.pi * 1.1 * t + rng.uniform(0, 2 * np.pi))
     wheel *= 1.0 + _bow_noise(n, rng, 0.05)
     vmax = float(wheel.max())
     zero = np.zeros(n)
     out = np.zeros(n)
     if "trompette" in strings:
-        chien = 0.08  # UNSOURCED: chien point at 8 % of the bow-bridge segment
+        chien = 0.08  # chien point at 8 % of the bow-bridge segment
         key = ("chien", round(f0, 3), round(pressure, 3), round(vmax, 4), buzz)
         if key not in _TUNE_CACHE:  # calibrate the shortened-string pitch shift
             c_ = 1.0
@@ -744,7 +777,7 @@ def hurdy_gurdy(f0: float, dur: float, rng: np.random.Generator, amp: float = 0.
         out += 0.8 * _bowed_kernel(mel * r, slope, np.ones(n), wheel,
                                    delayed_vibrato(n, depth=0.004), 0.127236, pole, float(SR),
                                    int(SR / mel.min()) + 16)
-    return 0.1 * signal.sosfilt(body_sos("gurdy"), out)  # UNSOURCED mix level (STK 0.1248)
+    return 0.1 * signal.sosfilt(body_sos("gurdy"), out)  # mix level (STK 0.1248)
 
 
 # ==========================================================================================
@@ -838,7 +871,7 @@ def banded(preset: str, f0: float, dur: float, rng: np.random.Generator | None =
     ADSR*(0.03 + 0.1 amp) with attack amp*0.001 (or ``bow_env``). ``sustain`` v -> CC1
     gains = basegains*(0.9 + 0.1 v). ``position`` -> Csound wgbowedbar strike gains for the
     first 4 modes. ``exact_pitch`` (default: True when bowed) uses fractional delays
-    (UNSOURCED fix of STK's integer lengths, gain cap 0.99995); struck notes stay STK-exact.
+    (fix of STK's integer lengths, gain cap 0.99995); struck notes stay STK-exact.
     Deterministic; ``rng`` unused (kept for a uniform signature).
     """
     pr = BANDED_PRESETS[preset]
@@ -912,10 +945,11 @@ def banded(preset: str, f0: float, dur: float, rng: np.random.Generator | None =
 # ==========================================================================================
 
 @njit(cache=True)
-def _brass_kernel(f0, lipf, breath, scale, r, dcp, fs, maxlen, tune):
+def _brass_kernel(f0, lipf, breath, scale, r, dcp, fs, maxlen, tune, inward, ratio2):
     """STK Brass::tick (Brass.h): lip = BiQuad resonance (gain 0.03), squared, clipped at 1;
     bore = DelayA of 2 fs/f + 3 samples; DC blocker PoleZero(dcp). ``breath`` is multiplied by
-    ``scale`` (see ``brass``) and the output divided by it."""
+    ``scale`` (see ``brass``) and the output divided by it. ``inward`` > 0 adds a second, inward-swinging lip
+    resonance at ``ratio2`` f, of gain 0.03 inward and opposite sign."""
     n = f0.shape[0]
     L = maxlen + 8
     buf = np.zeros(L)
@@ -923,6 +957,8 @@ def _brass_kernel(f0, lipf, breath, scale, r, dcp, fs, maxlen, tune):
     out = np.empty(n)
     ly1 = 0.0
     ly2 = 0.0
+    my1 = 0.0
+    my2 = 0.0
     dx1 = 0.0
     dy1 = 0.0
     w = 0
@@ -935,9 +971,15 @@ def _brass_kernel(f0, lipf, breath, scale, r, dcp, fs, maxlen, tune):
         y = 0.03 * (mouth - bore) - a1 * ly1 - a2 * ly2
         ly2 = ly1
         ly1 = y
-        dp = y * y
-        if dp > 1.0:
-            dp = 1.0
+        if inward > 0.0:
+            b1 = -2.0 * r * math.cos(2.0 * math.pi * ratio2 * f0[i] / fs)
+            m = 0.03 * inward * (mouth - bore) - b1 * my1 - a2 * my2
+            my2 = my1
+            my1 = m
+            y = y - m
+        dp = y * y                                  # STK clips at 1: a corner per period, a click below C4. Same ceiling, a C1 knee from .75
+        if dp > 0.75:
+            dp = 0.75 + 0.25 * math.tanh((dp - 0.75) / 0.25)
         s = dp * mouth + (1.0 - dp) * bore
         dc = s - dx1 + dcp * dy1
         dx1 = s
@@ -950,49 +992,58 @@ def _brass_kernel(f0, lipf, breath, scale, r, dcp, fs, maxlen, tune):
     return out
 
 
-def _brass_constants(f_ref: float) -> tuple[float, float]:
+def _brass_constants(f_ref: float, lip_q: float | None = None) -> tuple[float, float]:
     """Lip pole radius and DC-blocker pole. STK: 0.997 / 0.99 at 44.1 kHz (rate_radius), i.e. a
-    fixed ~44 Hz lip bandwidth. UNSOURCED: the lip bandwidth is scaled with f so the lip keeps
+    fixed ~44 Hz lip bandwidth. the lip bandwidth is scaled with f so the lip keeps
     the Q it has at 220 Hz at every pitch, and the DC blocker cut-off is scaled down below
     220 Hz. Measured: with STK's fixed radius low notes never speak and notes above ~330 Hz
     turn quasi-periodic (subharmonic) for p >= 0.7; with constant Q every note 110-880 Hz speaks
-    cleanly for p 0.3-0.8."""
+    cleanly for p 0.3-0.8. That radius is Q 5.2. ``lip_q`` sets it, r = exp(-pi f / (Q fs)): measured human lips 1.2-1.8,
+    latex 8-10, glycerine 4-6 (Newton, Campbell & Gilbert 2008); artificial 6-12 (Cullen 2000). Measured here: the
+    speaking threshold climbs as Q falls, p 0.3 speaks from Q 5, 0.45 from Q 3, 0.6 from Q 2, Q 1.5 is silent at 0.6."""
     r0 = rate_radius(0.997, STK_FS)
     d0 = rate_radius(0.99, STK_FS)
     k = f_ref / 220.0
-    return 1.0 - (1.0 - r0) * k, 1.0 - (1.0 - d0) * min(k, 1.0)
+    r = 1.0 - (1.0 - r0) * k if lip_q is None else math.exp(-math.pi * f_ref / (float(lip_q) * SR))
+    return r, 1.0 - (1.0 - d0) * min(k, 1.0)
 
 
 def brass(f0_env, lip_tension, pressure_env, dur: float, rng: np.random.Generator | None = None,
-          vibrato_gain: float = 0.0, vibrato_freq: float = 6.137, tune: bool = True) -> np.ndarray:
+          vibrato_gain: float = 0.0, vibrato_freq: float = 6.137, tune: bool = True,
+          lip_q: float | None = None, inward: float = 0.0,
+          inward_ratio: float = 1.3) -> np.ndarray:
     """STK Brass lip-reed (Brass.cpp, research 07 §7.1; Faust brassModel research 08 §3).
 
     Lip resonance at f * 4**(2 tension - 1) (STK CC2 = Faust brassLipsTable), radius 0.997, lip
     gain 0.03, output area = lip^2 clipped at 1, bore DelayA 2 fs/f + 3, DC blocker 0.99.
 
     ``pressure_env`` p (0..1) is the breath in units of the lip's static opening: the STK
-    breath is p / (0.3 G_dc(f_lip)), G_dc = lip-filter DC gain. UNSOURCED normalisation, found by
+    breath is p / (0.3 G_dc(f_lip)), G_dc = lip-filter DC gain. normalisation, found by
     measurement: STK's unnormalised lip filter has G_dc ~ 1/f^2 (36 at 220 Hz, 140 at 110 Hz), so
     at STK's own noteOn pressures (0.5-1.0) the lip is always saturated open and the loop dies;
     it self-oscillates only while the static lip value 0.3 G_dc breath is ~0.3-1. The output is
     scaled back by the same factor. STK vibrato (6.137 Hz) is added to p. ``tune`` rescales bore
     and lip frequency together to cancel the lip's pitch pull (measured +90..+180 cents at
     tension 0.5; one cached calibration render per pitch/pressure).
+    ``inward`` (0..1) adds a second, inward-striking lip resonance at ``inward_ratio`` x f0
+    (two-mode lip: outward valve above the played note, inward one above it too).
     Deterministic; ``rng`` unused.
     """
     n = _n(dur)
     f0 = _as_env(f0_env, n)
     lipf = f0 * 4.0 ** (2.0 * _as_env(lip_tension, n) - 1.0)
+    inw, rat2 = float(inward), float(inward_ratio)
     p = _as_env(pressure_env, n)
     if vibrato_gain > 0:
         p = p + vibrato_gain * np.sin(2 * np.pi * vibrato_freq * np.arange(n) / SR)
     fm = float(np.median(f0))
-    r, dcp = _brass_constants(fm)
+    r, dcp = _brass_constants(fm, lip_q)
     c = 1.0
     if tune:  # global frequency factor on bore and lip together (pitch ~ c); iterate
         lm = float(np.median(lipf))
         pm = float(np.median(p[p > 0.05])) if np.any(p > 0.05) else 0.5
-        key = ("brass", round(fm, 3), round(lm / fm, 4), round(pm, 3))
+        key = ("brass", round(fm, 3), round(lm / fm, 4), round(pm, 3), round(r, 7), round(inw, 4),
+               round(rat2, 4))
         if key not in _TUNE_CACHE:
             c_ = 1.0
             for _ in range(6):
@@ -1000,7 +1051,7 @@ def brass(f0_env, lip_tension, pressure_env, dur: float, rng: np.random.Generato
                 sc = 1.0 / (0.3 * 0.03 / (1 - 2 * r * math.cos(2 * math.pi * lm * c_ / SR) + r * r))
                 y = _brass_kernel(np.full(m, fm * c_), np.full(m, lm * c_),
                                   np.minimum(np.arange(m) / (0.03 * SR), 1.0) * pm, np.full(m, sc),
-                                  r, dcp, float(SR), int(2 * SR / (fm * c_ * 0.8)) + 16, 1.0)
+                                  r, dcp, float(SR), int(2 * SR / (fm * c_ * 0.8)) + 16, 1.0, inw, rat2)
                 mf = measure_f0(y[int(0.4 * SR):], fm)
                 if mf <= 0 or abs(math.log2(mf / fm)) > 0.25:
                     c_ = 1.0
@@ -1015,12 +1066,16 @@ def brass(f0_env, lip_tension, pressure_env, dur: float, rng: np.random.Generato
     th = 2 * np.pi * lipf / SR
     scale = 1.0 / (0.3 * 0.03 / (1.0 - 2.0 * r * np.cos(th) + r * r))
     maxlen = int(2 * SR / f0.min() + 16)
-    return _brass_kernel(f0, lipf, p, scale, r, dcp, float(SR), maxlen, 1.0)
+    return _brass_kernel(f0, lipf, p, scale, r, dcp, float(SR), maxlen, 1.0, inw, rat2)
 
 
 @njit(cache=True)
-def _clarinet_kernel(f0, bp, noise, vib, slope, fs, maxlen):
-    """STK Clarinet::tick: pd = -0.95 OneZero(delay) - bp; delay <- bp + pd*Reed(pd)."""
+def _clarinet_kernel(f0, bp, noise, vib, slope, fs, maxlen, a1, legato):
+    """STK Clarinet::tick: pd = -0.95 R(delay) - bp; delay <- bp + pd*Reed(pd).
+
+    R is STK's OneZero [0.5, 0.5] when ``a1[0]`` > 0, else the PASP one-pole
+    -(1 + a1) / (1 - a1 z^-1) with a per-sample ``a1`` (vibrato on the bell). ``legato``
+    samples > 0 crossfade two read pointers on a pitch step instead of jumping."""
     n = f0.shape[0]
     L = maxlen + 8
     buf = np.zeros(L)
@@ -1028,13 +1083,28 @@ def _clarinet_kernel(f0, bp, noise, vib, slope, fs, maxlen):
     last = 0.0
     fx1 = 0.0
     w = 0
+    pasp = a1[0] <= 0.0
+    d_old = 0.5 * fs / f0[0] - 1.5
+    d_cur = d_old
+    k = legato
     for i in range(n):
         D = 0.5 * fs / f0[i] - 0.5 - 1.0  # OneZero [0.5,0.5] phase delay 0.5
+        if pasp:
+            D = 0.5 * fs / f0[i] - 1.0 + a1[i] / (1.0 + a1[i])  # one-pole low-f delay -a1/(1+a1)
+        if legato > 0 and abs(D - d_cur) > 0.5:
+            d_old = d_cur
+            k = 0
+        d_cur = D
         b = bp[i]
         b += b * noise[i]
         b += b * vib[i]
-        fo = 0.5 * last + 0.5 * fx1
-        fx1 = last
+        if pasp:
+            fo = -(1.0 + a1[i]) * last - a1[i] * fx1
+            fx1 = fo
+            fo = -fo
+        else:
+            fo = 0.5 * last + 0.5 * fx1
+            fx1 = last
         pd = -0.95 * fo - b
         refl = 0.7 + slope * pd
         if refl > 1.0:
@@ -1042,7 +1112,12 @@ def _clarinet_kernel(f0, bp, noise, vib, slope, fs, maxlen):
         if refl < -1.0:
             refl = -1.0
         buf[w] = b + pd * refl
-        last = _dl_read(buf, w, D)
+        if k < legato:
+            g = k / legato
+            last = (1.0 - g) * _dl_read(buf, w, d_old) + g * _dl_read(buf, w, D)
+            k += 1
+        else:
+            last = _dl_read(buf, w, D)
         out[i] = last
         w += 1
         if w == L:
@@ -1050,13 +1125,66 @@ def _clarinet_kernel(f0, bp, noise, vib, slope, fs, maxlen):
     return out
 
 
+@njit(cache=True)
+def _saxofony_kernel(f0, bp, noise, vib, pos, offset, slope, fs, maxlen):
+    """STK Saxofony::tick: temp = -0.95 OneZero(d0); out = temp - d1; pd = b - out; d1 <- temp; d0 <- b - pd Reed(pd) - temp."""
+    n = f0.shape[0]
+    L = maxlen + 8
+    d0 = np.zeros(L)
+    d1 = np.zeros(L)
+    y = np.empty(n)
+    fx1 = 0.0
+    last0 = 0.0
+    last1 = 0.0
+    w = 0
+    for i in range(n):
+        D = fs / f0[i] - 0.5 - 1.0                     # OneZero [0.5, 0.5] phase delay 0.5
+        b = bp[i]
+        b += b * noise[i]
+        b += b * vib[i]
+        temp = -0.95 * (0.5 * last0 + 0.5 * fx1)
+        fx1 = last0
+        out = temp - last1
+        pd = b - out
+        refl = offset + slope * pd
+        refl = min(max(refl, -1.0), 1.0)
+        d1[w] = temp
+        d0[w] = b - pd * refl - temp
+        last0 = _dl_read(d0, w, max((1.0 - pos) * D, 1.0))
+        last1 = _dl_read(d1, w, max(pos * D, 1.0))
+        y[i] = out
+        w += 1
+        if w == L:
+            w = 0
+    return y
+
+
+def saxofony(f0_env, breath_env, dur: float, rng: np.random.Generator, position: float = 0.2, amp: float = 0.8,
+             noise_gain: float = 0.2, vibrato_gain: float = 0.1, vibrato_freq: float = 5.735) -> np.ndarray:
+    """STK Saxofony (Scavone's conical bore: two delays split at ``position``): reed offset 0.7, slope 0.3 (STK's table
+    takes pd as written here), noise 0.2, vibrato 0.1 at 5.735 Hz; breath 0.55 + 0.3 a; output gain amp + 0.001."""
+    n = _n(dur)
+    f0 = _as_env(f0_env, n)
+    bp = _as_env(breath_env, n)
+    noise = noise_gain * rng.uniform(-1.0, 1.0, n)
+    vib = vibrato_gain * np.sin(2 * np.pi * vibrato_freq * np.arange(n) / SR)
+    y = _saxofony_kernel(f0, bp, noise, vib, float(position), 0.7, 0.3, float(SR), int(SR / f0.min()) + 8)
+    return (amp + 0.001) * y
+
+
 def clarinet(f0_env, breath_env, dur: float, rng: np.random.Generator, amp: float = 0.8,
              reed_stiffness: float | None = None, noise_gain: float = 0.2,
-             vibrato_gain: float = 0.1, vibrato_freq: float = 5.735) -> np.ndarray:
+             vibrato_gain: float = 0.1, vibrato_freq: float = 5.735,
+             reflection: str = "stk", bell_vibrato: float = 0.03, bell_vibrato_freq: float = 5.0,
+             legato: float = 0.0) -> np.ndarray:
     """STK Clarinet (Clarinet.cpp, research 07 §7.4): reed table offset 0.7, slope -0.3
     (or -0.44 + 0.26 v for ``reed_stiffness`` v, CC2 / Faust clarinetModel); delay
     0.5 fs/f - 1.5; noise 0.2 and vibrato 0.1 at 5.735 Hz multiply the breath; output
     gain amp + 0.001. ``breath_env`` = Envelope value (see ``wind_envelope('clarinet')``).
+
+    ``reflection="pasp"``: bell = one-pole lowpass, a1(t) = v(t) - 0.642 with
+    v = ``bell_vibrato`` sin(2 pi ``bell_vibrato_freq`` t). ``legato`` (s): crossfade time
+    between the old and new delay read pointers when ``f0_env`` steps.
     """
     n = _n(dur)
     f0 = _as_env(f0_env, n)
@@ -1064,12 +1192,48 @@ def clarinet(f0_env, breath_env, dur: float, rng: np.random.Generator, amp: floa
     noise = noise_gain * rng.uniform(-1.0, 1.0, n)
     vib = vibrato_gain * np.sin(2 * np.pi * vibrato_freq * np.arange(n) / SR)
     slope = -0.3 if reed_stiffness is None else -0.44 + 0.26 * reed_stiffness
-    y = _clarinet_kernel(f0, bp, noise, vib, slope, float(SR), int(0.5 * SR / f0.min()) + 8)
+    if reflection == "pasp":
+        a1 = bell_vibrato * np.sin(2 * np.pi * bell_vibrato_freq * np.arange(n) / SR) - 0.642
+    elif reflection == "stk":
+        a1 = np.ones(1)
+    else:
+        raise ValueError(f"reflection must be 'stk' or 'pasp', got {reflection!r}")
+    y = _clarinet_kernel(f0, bp, noise, vib, slope, float(SR), int(0.5 * SR / f0.min()) + 8,
+                         a1, int(max(legato, 0.0) * SR))
     return (amp + 0.001) * y
 
 
+NU_AIR = 1.5e-5
+RE_TURB_ON = 700.0
+RE_TURB_FULL = 3000.0
+JET_Y0_AUVRAY = 1e-4
+
+
+def holger_force(Uj: float, V: float, h: float, lam: float, b: float | None = None, rho: float = 1.2) -> float:
+    """Vortex-street limit of the jet drive (N/m): rho lam V Uj^2 phi, phi = (2/3) b tanh(h/2b) (3 - tanh^2(h/2b)).
+    ``h`` = half the jet thickness parameter, ``b`` = jet half-width (h = gamma b, gamma 0.45-0.5: default
+    b = h/0.475), ``lam`` vortex spacing (H/lam ~ 0.5 with H the street width, H/2h = eps Str^(-2/3))."""
+    b = h / 0.475 if b is None else b
+    t = math.tanh(h / (2.0 * b))
+    return rho * lam * V * Uj * Uj * (2.0 / 3.0) * b * t * (3.0 - t * t)
+
+
 @njit(cache=True)
-def _recorder_kernel(f0, pf, noise, fs, noise_gain, tb0, ta1, ta2, psi, maxlen, jetmax, tune):
+def nl_allpass(x, g, mode=0):
+    """Passive nonlinear allpass: y = s x + c w[n-1], w = c x - s w[n-1], s = sin(theta), c = cos(theta);
+    theta = g x (mode 0) or pi tanh(g x) (mode 1). Energy preserving for any theta."""
+    y = np.empty_like(x)
+    w = 0.0
+    for i in range(x.shape[0]):
+        th = g * x[i] if mode == 0 else math.pi * math.tanh(g * x[i])
+        s, c = math.sin(th), math.cos(th)
+        y[i] = s * x[i] + c * w
+        w = c * x[i] - s * w
+    return y
+
+
+@njit(cache=True)
+def _recorder_kernel(f0, pf, noise, fs, noise_gain, tb0, ta1, ta2, psi, maxlen, jetmax, tune, y0=0.0, turb=0):
     """STK Recorder::tick (Recorder.cpp), verbatim physics (Verge 1997 / Bredholt 2023)."""
     rho = 1.2041
     c0 = 343.21
@@ -1183,7 +1347,7 @@ def _recorder_kernel(f0, pf, noise, fs, noise_gain, tb0, ta1, ta2, psi, maxlen, 
         jy2 = jy1
         jy1 = eta
         Q1m1 = Q1
-        Q1 = b * H * Uj * (1 + math.tanh(eta / (psi * b)))
+        Q1 = b * H * Uj * (1 + math.tanh((eta - y0) / (psi * b)))
         pjd = -rho * dd / Sm * (Q1 - Q1m1) / T
         sg = 0.0
         if Qp < 0:
@@ -1192,6 +1356,12 @@ def _recorder_kernel(f0, pf, noise, fs, noise_gain, tb0, ta1, ta2, psi, maxlen, 
             sg = 1.0
         pa = -0.5 * rho * (Qp / (0.6 * Sm)) * (Qp / (0.6 * Sm)) * sg
         tin = noise_gain * noise[i] * 0.5 * rho * Uj * Uj
+        if turb:
+            Re = abs(Uj) * h / NU_AIR
+            if Re < RE_TURB_ON:
+                tin = 0.0
+            elif Re < RE_TURB_FULL:
+                tin *= min(abs(eta) / b, 1.0)
         pt = tb0 * tin - ta1 * ty1 - ta2 * ty2
         ty2 = ty1
         ty1 = pt
@@ -1228,9 +1398,14 @@ def _recorder_kernel(f0, pf, noise, fs, noise_gain, tb0, ta1, ta2, psi, maxlen, 
 
 
 @njit(cache=True)
-def _flute_kernel(f0, bp, noise, vib, pole, dcp, jet_ratio, end_refl, jet_refl, fs, maxlen, tune):
+def _flute_kernel(f0, bp, noise, vib, pole, dcp, jet_ratio, end_refl, jet_refl, fs, maxlen, tune,
+                  offset, shape, bq):
     """STK Flute::tick (Flute.h, Flute.cpp): jet delay + cubic JetTable + DC block after the
-    jet (GPS 2020) + bore DelayL with one-pole reflection loss; overblown ('lastF = 0.66666 f')."""
+    jet (GPS 2020) + bore DelayL with one-pole reflection loss; overblown ('lastF = 0.66666 f').
+
+    ``offset`` shifts the jet against the labium before the jet table; ``shape`` 1 swaps the
+    cubic for tanh; ``bq`` (b0, b1, b2, a1, a2) with bq[0] > 0 replaces the one-pole loss by a
+    biquad of the same corner."""
     n = f0.shape[0]
     L = maxlen + 8
     bore = np.zeros(L)
@@ -1238,24 +1413,45 @@ def _flute_kernel(f0, bp, noise, vib, pole, dcp, jet_ratio, end_refl, jet_refl, 
     out = np.empty(n)
     bore_last = 0.0
     fl = 0.0
+    x1 = 0.0
+    x2 = 0.0
+    y2 = 0.0
     dx1 = 0.0
     dy1 = 0.0
     w = 0
     b0 = 1.0 - pole
+    use_bq = bq[0] > 0.0
     for i in range(n):
         lf = f0[i] * 0.66666
         wv = 2.0 * math.pi * lf / fs
-        # OnePole phase delay at lastF: H = b0 / (1 - p e^-jw)
-        ph = -math.atan2(pole * math.sin(wv), 1.0 - pole * math.cos(wv))
+        if use_bq:
+            z1 = complex(math.cos(wv), -math.sin(wv))
+            z2 = z1 * z1
+            hz = (bq[0] + bq[1] * z1 + bq[2] * z2) / (1.0 + bq[3] * z1 + bq[4] * z2)
+            ph = math.atan2(hz.imag, hz.real)
+        else:
+            # OnePole phase delay at lastF: H = b0 / (1 - p e^-jw)
+            ph = -math.atan2(pole * math.sin(wv), 1.0 - pole * math.cos(wv))
         D = (fs / lf - (-ph / wv) - 1.0) * tune
         b = bp[i]
         b += b * (noise[i] + vib[i])
-        fl = b0 * bore_last + pole * fl
+        if use_bq:
+            yb = bq[0] * bore_last + bq[1] * x1 + bq[2] * x2 - bq[3] * fl - bq[4] * y2
+            x2 = x1
+            x1 = bore_last
+            y2 = fl
+            fl = yb
+        else:
+            fl = b0 * bore_last + pole * fl
         temp = -fl
         pd = b - jet_refl * temp
         jet[w] = pd
-        pd = _dl_read(jet, w, D * jet_ratio)
-        jt = pd * (pd * pd - 1.0)
+        pd = _dl_read(jet, w, D * jet_ratio) - offset
+        if shape == 1:
+            # tanh centred on the jet's operating point (the breath b), with the cubic's slope 3b^2 - 1 there
+            jt = math.tanh((pd - b) * (3.0 * b * b - 1.0))
+        else:
+            jt = pd * (pd * pd - 1.0)
         if jt > 1.0:
             jt = 1.0
         if jt < -1.0:
@@ -1273,10 +1469,22 @@ def _flute_kernel(f0, bp, noise, vib, pole, dcp, jet_ratio, end_refl, jet_refl, 
     return out
 
 
-def _flute(f0, bp, rng, amp, noise_gain, vibrato_gain, jet_ratio, tune):
+def _butter_like(pole: float) -> np.ndarray:
+    """Second-order Butterworth low-pass with the -3 dB corner of the one-pole (1 - p)/(1 - p z^-1)."""
+    cw = 1.0 - (1.0 - pole) ** 2 / (2.0 * pole)
+    w0 = math.acos(min(max(cw, -1.0), 1.0))
+    al = math.sin(w0) / (2.0 / math.sqrt(2.0))
+    a0 = 1.0 + al
+    c = math.cos(w0)
+    return np.array([(1 - c) / 2 / a0, (1 - c) / a0, (1 - c) / 2 / a0, -2 * c / a0, (1 - al) / a0])
+
+
+def _flute(f0, bp, rng, amp, noise_gain, vibrato_gain, jet_ratio, tune, offset=0.0, shape=0,
+           jet_filter="onepole"):
     n = f0.shape[0]
     pole = 0.7 - 0.1 * 22050.0 / SR
     dcp = rate_radius(0.99, STK_FS)
+    bq = _butter_like(pole) if jet_filter == "butter" else np.zeros(5)
     noise = noise_gain * rng.uniform(-1.0, 1.0, n)
     vib = vibrato_gain * np.sin(2 * np.pi * 5.925 * np.arange(n) / SR)
     maxlen = int(SR / (0.66666 * f0.min())) + 8
@@ -1284,30 +1492,34 @@ def _flute(f0, bp, rng, amp, noise_gain, vibrato_gain, jet_ratio, tune):
     if tune:
         fm = float(np.median(f0))
         pm = float(np.median(bp[bp > 0])) if np.any(bp > 0) else 1.0
-        key = ("flute", round(fm, 3), round(pm, 3), jet_ratio)
+        key = ("flute", round(fm, 3), round(pm, 3), jet_ratio, round(offset, 4), shape, jet_filter)
         if key not in _TUNE_CACHE:
             m = int(0.8 * SR)
             y = _flute_kernel(np.full(m, fm), np.minimum(np.arange(m) / (0.03 * SR), 1.0) * pm,
                               np.zeros(m), np.zeros(m), pole, dcp, jet_ratio, 0.5, 0.5, float(SR),
-                              maxlen, 1.0)
+                              maxlen, 1.0, float(offset), int(shape), bq)
             mf = measure_f0(y[int(0.4 * SR):], fm)
             _TUNE_CACHE[key] = mf / fm if mf > 0 and abs(math.log2(mf / fm)) < 0.1 else 1.0
         k = _TUNE_CACHE[key]
     return (amp + 0.001) * _flute_kernel(f0, bp, noise, vib, pole, dcp, jet_ratio, 0.5, 0.5,
-                                         float(SR), int(maxlen * 1.2), k)
+                                         float(SR), int(maxlen * 1.2), k, float(offset), int(shape), bq)
 
 
 def recorder(f0_env, breath_env, dur: float, rng: np.random.Generator, amp: float = 0.8,
              model: str = "flute", noise_gain: float | None = None, breath_cutoff: float = 500.0,
              softness: float = 1.0, jet_ratio: float = 0.32, vibrato_gain: float = 0.05,
-             tune: bool = True) -> np.ndarray:
+             tune: bool = True, jet_offset: float = 0.0, jet_angle: float | None = None,
+             jet_shape: str = "cubic", jet_filter: str = "onepole", convection: float = 0.4,
+             register: bool = False, skill: float = 0.0, turbulence: str = "stk", **auvray) -> np.ndarray:
     """Breathy end-blown flute. ``breath_env=None`` -> the STK noteOn envelope of the model.
 
     ``model='verge'``: STK Recorder (Recorder.cpp, research 07 §17; Verge/Hirschberg/Causse 1997,
     Bredholt 2023), ported sample-exact (checked against a literal transcription of the C++).
     ``breath_env`` = blowing pressure pf (``wind_envelope('recorder')`` = STK noteOn
     35 (1.1 + 0.2 amp) ADSR). Turbulence noise 0.2 * 0.5 rho Uj^2 through the 500 Hz Q 0.99
-    low-pass; ``softness`` psi; output amp/40; visco filter as given; jet-delay cap 200 samples
+    low-pass (``turbulence="reynolds"``: none below Re = Uj h / nu 700, scaled by |eta|/b up to Re 3000);
+    ``jet_offset`` y0/h of the jet against the labium in the tanh (h = 1 mm; 0.1 = Auvray's 0.1 mm,
+    even harmonics); ``softness`` psi; output amp/40; visco filter as given; jet-delay cap 200 samples
     scaled to 48 kHz. Measured: the model does not lock to the requested pitch -- it jumps between
     pipe modes (e.g. 1341 Hz for 523 Hz, regardless of pipe length, at STK's pressures), so it is
     kept only as an option for unstable, overblown 'wrong-shape breath' sounds.
@@ -1317,15 +1529,39 @@ def recorder(f0_env, breath_env, dur: float, rng: np.random.Generator, amp: floa
     (multiplicative turbulence; raise to 0.3-0.4 for shakuhachi-like breath), vibrato 0.05 at
     5.925 Hz, one-pole reflection 0.7 - 0.1*22050/fs, overblown bore fs/(0.66666 f).
     ``breath_env`` = maxPressure*ADSR (``wind_envelope('flute')``). Output amp + 0.001.
+    Flute options: ``jet_offset`` y/h of the jet against the labium (table shift 0.5 y/h; an
+    offset brings the even harmonics up), ``jet_angle`` (deg) adds the offset the jet angle gives
+    (``winds.jet_angle_offset``), ``jet_shape="tanh"`` the tanh jet characteristic,
+    ``jet_filter="butter"`` a 2nd-order Butterworth loop filter at the one-pole's corner,
+    ``convection`` the jet convection ratio cp/Uj (0.4; jet delay scales as 0.4/convection),
+    ``register=True`` follows the register hysteresis of an alto recorder (``winds.register_track``,
+    breath 1 = 400 Pa; register 2 doubles f0), ``skill`` 0..1 widens it as a flutist does.
+
+    ``model='auvray'``: ``winds.auvray_recorder`` (modal window admittance driven by the jet) at
+    the median f0; extra keywords go to it; output scaled to amp.
     """
+    if model == "auvray":
+        from . import winds
+        y = winds.auvray_recorder(float(np.median(_as_env(f0_env, _n(dur)))), dur, SR, **auvray)
+        return amp * y[:_n(dur)]
     if model == "flute":
         n = _n(dur)
         f0 = _as_env(f0_env, n)
         if breath_env is None:
             breath_env = wind_envelope("flute", dur, amp)
         bp = _as_env(breath_env, n)
+        off = float(jet_offset)
+        if jet_angle is not None:
+            from . import winds
+            off += winds.jet_angle_offset(jet_angle)
+        if register:
+            from . import winds
+            f0 = f0 * winds.register_track(400.0 * bp, SR, skill=skill)
+        if jet_shape not in ("cubic", "tanh"):
+            raise ValueError(f"jet_shape must be 'cubic' or 'tanh', got {jet_shape!r}")
         return _flute(f0, bp, rng, amp, 0.15 if noise_gain is None else noise_gain, vibrato_gain,
-                      jet_ratio, tune)
+                      jet_ratio * 0.4 / convection, tune, 0.5 * off, int(jet_shape == "tanh"),
+                      jet_filter)
     if breath_env is None:
         breath_env = wind_envelope("recorder", dur, amp)
     noise_gain = 0.2 if noise_gain is None else noise_gain
@@ -1339,19 +1575,21 @@ def recorder(f0_env, breath_env, dur: float, rng: np.random.Generator, amp: floa
     jetmax = int(round(rate_samples(200.0, STK_FS)))
     maxlen = int(SR / f0.min()) + 8
     k = 1.0
+    y0 = 0.001 * float(jet_offset)
+    turb = int(turbulence == "reynolds")
     if tune:
         fm = float(np.median(f0))
-        key = ("rec", round(fm, 3), round(float(pf.max()), 2), noise_gain, breath_cutoff, softness)
+        key = ("rec", round(fm, 3), round(float(pf.max()), 2), noise_gain, breath_cutoff, softness, y0)
         if key not in _TUNE_CACHE:
             m = int(0.8 * SR)
             env = np.minimum(np.arange(m) / (0.05 * SR), 1.0) * float(np.median(pf[pf > 0]) if np.any(pf > 0) else 1.0)
             y = _recorder_kernel(np.full(m, fm), env, np.zeros(m), float(SR), noise_gain, tb0, ta1,
-                                 ta2, softness, maxlen, jetmax, 1.0)
+                                 ta2, softness, maxlen, jetmax, 1.0, y0, 0)
             mf = measure_f0(y[int(0.4 * SR):], fm)
             _TUNE_CACHE[key] = mf / fm if mf > 0 and abs(math.log2(mf / fm)) < 0.2 else 1.0
         k = _TUNE_CACHE[key]
     y = _recorder_kernel(f0, pf, noise, float(SR), noise_gain, tb0, ta1, ta2, softness,
-                         int(maxlen * 1.3), jetmax, k)
+                         int(maxlen * 1.3), jetmax, k, y0, turb)
     return (amp / 40.0) * y
 
 
@@ -1469,9 +1707,9 @@ def felt_piano(f0: float, velocity: float, dur: float, rng: np.random.Generator,
     1. Hammer: key n = 12 log2(f0/27.5) + 1; Q0 = 183 e^(0.045 n) N/mm^p, p = 3.7 + 0.015 n,
        alpha = 248 + 1.83 n - 0.055 n^2 us, m = 11.074 - 0.074 n + 0.0001 n^2 g, integrated
        against the strings' 2R load (JOS 'mass into (m s + 2R)') -> force pulse; the string
-       gets velocity f/2R. ``felt`` softens Q0 (moderator felt; UNSOURCED amount).
+       gets velocity f/2R. ``felt`` softens Q0 (moderator felt; amount).
     2. Excitation = pulse + ``soundboard`` * pulse convolved with a noise tail whose low-pass
-       contracts (JOS 'soundboard tap', UNSOURCED numbers), then the strike-position comb at
+       contracts (JOS 'soundboard tap', numbers), then the strike-position comb at
        0.12 of the string (Chaigne & Askenfelt 1994 Table I, C2/C4).
     3. Three unison strings detuned [-0.05, 0, 0.04] semitones (SC synthetic piano). Each loop:
        DelayA + K first-order allpasses fitted to f_n = n f0 sqrt(1 + B n^2) (B =
@@ -1485,7 +1723,7 @@ def felt_piano(f0: float, velocity: float, dur: float, rng: np.random.Generator,
     n = _n(dur)
     key = 12.0 * math.log2(f0 / 27.5) + 1.0
     note = key + 20.0  # MIDI
-    Q0 = 183.0 * math.exp(0.045 * key) * (1.0 - 0.9 * felt)  # UNSOURCED: felt softening
+    Q0 = 183.0 * math.exp(0.045 * key) * (1.0 - 0.9 * felt)  # felt softening
     p = 3.7 + 0.015 * key
     alpha = (248.0 + 1.83 * key - 0.055 * key * key) * 1e-6
     m = (11.074 - 0.074 * key + 0.0001 * key * key) * 1e-3
@@ -1495,7 +1733,7 @@ def felt_piano(f0: float, velocity: float, dur: float, rng: np.random.Generator,
     F = _hammer_force(int(0.05 * SR), float(SR), m, Q0, p, alpha, v0, R2, 16)
     F = np.trim_zeros(F, "b")
     vinj = F / (2 * R)
-    nt = int(0.3 * SR)  # soundboard tap (JOS PASP/Excitation_Synthesis). UNSOURCED numbers.
+    nt = int(0.3 * SR)  # soundboard tap (JOS PASP/Excitation_Synthesis). numbers.
     tail = _tv_lowpass_noise(nt, 6000.0, 300.0, rng) * np.exp(-6.91 * np.arange(nt) / SR / 0.1)
     tail /= np.sqrt(np.sum(tail ** 2))
     sb = soundboard * np.convolve(vinj, tail) * math.sqrt(SR / 1000.0)
@@ -1523,7 +1761,7 @@ def felt_piano(f0: float, velocity: float, dur: float, rng: np.random.Generator,
     ff = lm * lm / SR
     # MdaPiano: f0 += ff (x + x1 - f0)  ->  y[n] = (1 - ff) y[n-1] + ff (x[n] + x[n-1])
     out = signal.lfilter([ff, ff], [1.0, -(1.0 - ff)], out)
-    return 0.005 * out  # UNSOURCED: output scale (velocity dynamics kept, peak < 1)
+    return 0.005 * out  # output scale (velocity dynamics kept, peak < 1)
 
 
 # ==========================================================================================

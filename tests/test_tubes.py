@@ -6,6 +6,7 @@ import math
 import time
 
 import numpy as np
+import pytest
 from scipy.optimize import brentq
 
 from genny import fx as FX
@@ -403,3 +404,58 @@ if __name__ == "__main__":
         if name.startswith("test_") and callable(fn):
             fn()
             print("ok", name)
+
+
+def test_end_wall_correction_and_causse_impedance():
+    # Lefebvre 2010 eqs 1.3.10-1.3.11 (Dalmont & Nederveen 2001; Causse, Kergomard & Lurton 1984)
+    assert math.isclose(T.end_correction(1.0), 0.6133) and math.isclose(T.end_correction(0.0), 0.8216)
+    z = T.causse_zr(0.01)
+    assert math.isclose(z.imag, 0.6113 * 0.01, rel_tol=1e-3) and math.isclose(z.real, 0.01 ** 2 / 4, rel_tol=1e-2)
+    L, a = 0.3, 0.02
+
+    def f1(**kw):
+        t = T.WebsterTube(L, 1.0, radius_m=a, right="unflanged", **kw)
+        u = np.zeros(4 * t.sr)
+        u[0] = 1.0
+        Y = np.abs(np.fft.rfft(t.run(u)["u_out"]))
+        f = np.fft.rfftfreq(u.size, 1.0 / t.sr)
+        i = np.argmax(Y * (f > 100) * (f < 500))
+        d = 0.5 * (Y[i - 1] - Y[i + 1]) / (Y[i - 1] - 2 * Y[i] + Y[i + 1])
+        return f[i] + d * (f[1] - f[0]), t.delta
+    thin, d0 = f1()
+    thick, d1 = f1(end_wall=3.0)
+    assert d0 == T.UNFLANGED and math.isclose(d1, T.end_correction(1 / 3))
+    assert math.isclose(thin / thick, (L + d1 * a) / (L + d0 * a), rel_tol=2e-3), (thin, thick)
+
+
+def test_event_function_raised_cosines():
+    ms = 6.866e-3
+    n01, npk, n02 = 5 * ms, 30 * ms, 55 * ms
+    assert T.event(np.array([0.0, n01, npk, n02, 0.4]), n01, npk, n02).tolist() == pytest.approx([0, 0, 1, 0, 0], abs=1e-12)
+    assert float(T.event(0.5 * (n01 + npk), n01, npk, n02)) == pytest.approx(0.5)
+    assert float(T.event(npk + 0.25 * (n02 - npk), n01, npk, n02, mu=1.1)) == pytest.approx(1.1 * 0.5 * (1 + math.cos(math.pi / 4)))
+    two = T.events(np.array([npk, 0.3]), [(n01, npk, n02, 1.1), (0.2, 0.3, 0.4, 1.0)])
+    assert two.tolist() == pytest.approx([1.0, 1.0])
+
+
+def test_rosenberg_source_opens_40_closes_16_percent():
+    sr, f0 = 48000, 100.0
+    u = T.glottal_pulses(f0, sr // 10, source="rosenberg", sr=sr)
+    per = u[:sr // 100]
+    assert np.argmax(per) / len(per) == pytest.approx(0.40, abs=0.01)
+    assert np.mean(per > 1e-9) == pytest.approx(0.56, abs=0.01)
+
+
+@pytest.mark.parametrize("note", [36, 72])
+def test_mesh_vowel_first_harmonic_in_tune(note):
+    sr = 48000
+    f = 440.0 * 2 ** ((note - 69) / 12)
+    y = np.asarray(I.render_note("mesh_vowel", f, 0.6, sr, 0.9), dtype=float)
+    y = y.mean(axis=1) if y.ndim == 2 else y
+    seg = y[int(0.1 * sr):int(0.5 * sr)]
+    n = 16 * len(seg)
+    spec = np.abs(np.fft.rfft(seg * np.hanning(len(seg)), n))
+    fr = np.fft.rfftfreq(n, 1 / sr)
+    band = (fr > f * 0.94) & (fr < f * 1.06)
+    peak = fr[band][np.argmax(spec[band])]
+    assert abs(1200 * math.log2(peak / f)) < 10

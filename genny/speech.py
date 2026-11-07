@@ -31,13 +31,17 @@ VOWELISH = {VOW, DIPH}
 
 F4, F5 = 3400.0, 4200.0
 FNP = 270.0  # nasal pole (cancelled by the nasal zero outside nasals)
+H_B1 = 300.0  # first-formant bandwidth of [h] (open glottis)
+SONORANT_ONSET_DB = -10.0  # voicing of a prevocalic liquid / glide re the vowel
+NASAL_F1_RISE = 100.0  # nasalized vowel: F1 up, nasal zero at the mean of the new F1 and FNP
+OQ_MALE, OQ_FEMALE = 0.50, 0.60  # open quotient of modal voicing
+FLUTTER, FLUTTER_HZ = 25.0, (12.7, 7.1, 4.7)  # slow F0 wander: (FL/50)(F0/100) sum of sines, FL in %
 
 # name: kind, formants (F1,F2,F3) [, f2 end target for diphthongs], dur (inherent, min) ms, voiced, place
 PH: dict[str, dict] = {
-    # English vowels: men's means of Hillenbrand et al. 1995 (vowdata.dat, 45 talkers), F1-F3 at 20 % of the
-    # vowel as f and at 50 % as f2 (vowel-inherent change). The 80 % values are pulled by the /d/ coda of
-    # the hVd words, which genny's locus coarticulation already adds; the diphthongs EY and OW glide
-    # 20 % -> 80 %. AX, IX, AXR (no data) and AY, OY, AW (not in the set) keep Peterson & Barney / Klatt.
+    # English vowels: men's means, F1-F3 at 20 % of the vowel as f and at 50 % as f2 (vowel-inherent
+    # change); the diphthongs EY and OW glide 20 % -> 80 %. AY, OY, AW: onset and offglide targets of a
+    # formant-synthesis table.
     "IY": dict(k=VOW, f=(346, 2312, 3010), f2=(340, 2338, 2994), dur=(155, 55)),
     "IH": dict(k=VOW, f=(434, 2032, 2683), f2=(459, 1941, 2641), dur=(135, 40)),
     "EH": dict(k=VOW, f=(584, 1817, 2603), f2=(592, 1774, 2602), dur=(150, 70)),
@@ -52,9 +56,9 @@ PH: dict[str, dict] = {
     "ER": dict(k=VOW, f=(485, 1371, 1720), f2=(460, 1406, 1704), dur=(180, 80)),
     "AXR": dict(k=VOW, f=(490, 1350, 1690), dur=(120, 60)),
     "EY": dict(k=DIPH, f=(479, 2089, 2699), f2=(400, 2229, 2742), dur=(190, 100)),
-    "AY": dict(k=DIPH, f=(700, 1220, 2600), f2=(400, 1950, 2600), dur=(250, 150)),
-    "OY": dict(k=DIPH, f=(550, 960, 2400), f2=(380, 1850, 2500), dur=(280, 150)),
-    "AW": dict(k=DIPH, f=(720, 1240, 2500), f2=(450, 1000, 2350), dur=(260, 100)),
+    "AY": dict(k=DIPH, f=(660, 1200, 2550), f2=(400, 1880, 2500), dur=(250, 150)),
+    "OY": dict(k=DIPH, f=(550, 960, 2400), f2=(360, 1820, 2450), dur=(280, 150)),
+    "AW": dict(k=DIPH, f=(640, 1230, 2550), f2=(420, 940, 2350), dur=(260, 100)),
     "OW": dict(k=DIPH, f=(511, 936, 2455), f2=(435, 898, 2448), dur=(220, 80)),
     # Spanish pure vowels (short, monophthongal)
     "A": dict(k=VOW, f=(700, 1300, 2550), dur=(150, 70)),
@@ -88,10 +92,10 @@ PH: dict[str, dict] = {
     "N": dict(k=NAS, v=True, place="alv", dur=(60, 50), fnz=1500),
     "NG": dict(k=NAS, v=True, place="vel", dur=(95, 60), fnz=2200),
     # liquids / glides
-    "L": dict(k=LIQ, f=(330, 1050, 2800), dur=(80, 40)),
-    "R": dict(k=LIQ, f=(330, 1060, 1400), dur=(80, 30)),
-    "W": dict(k=GLI, f=(290, 650, 2150), dur=(80, 60)),
-    "Y": dict(k=GLI, f=(260, 2070, 3020), dur=(80, 40)),
+    "L": dict(k=LIQ, f=(310, 1050, 2880), b=(50, 100, 280), dur=(80, 40)),
+    "R": dict(k=LIQ, f=(310, 1060, 1380), b=(70, 100, 120), dur=(80, 30)),
+    "W": dict(k=GLI, f=(290, 610, 2150), b=(50, 80, 60), dur=(80, 60)),
+    "Y": dict(k=GLI, f=(260, 2070, 3020), b=(40, 250, 500), dur=(80, 40)),
     # taps / trills (American flap, Spanish r / rr)
     "DX": dict(k=TAP, v=True, place="alv", dur=(28, 22)),
     "RR": dict(k=TRILL, v=True, place="alv", dur=(95, 75)),
@@ -102,6 +106,8 @@ PHONEMES = list(PH)
 LOCUS = {"lab": (220, 850, 2200), "labd": (250, 1100, 2300), "dent": (260, 1400, 2650),
          "alv": (240, 1700, 2650), "post": (270, 1900, 2500), "glot": (500, 1500, 2500)}
 COART = {STOP: 0.45, FRIC: 0.4, AFFR: 0.3, NAS: 0.35, TAP: 0.5, TRILL: 0.4}
+# locus="place": F2 onset slope of the labial stops, floor of the velar F2 onset
+COART_LABIAL, VELAR_FLOOR = 0.95, 750.0
 
 # frication spectra: list of (centre Hz, bandwidth Hz, gain) + flat bypass gain
 FRIC_SPEC = {
@@ -126,8 +132,8 @@ FRIC_DB = {"S": -14, "Z": -21, "SH": -12, "ZH": -19, "F": -25, "V": -30, "TH": -
 BURST_DB = {"lab": -17, "alv": -9, "vel": -9}
 
 VOICES = {
-    "male": dict(pitch=115.0, formant_shift=1.0, breath=0.08, oq=0.62, tilt=5000.0, jitter=0.004, shimmer=0.035, bw=1.0),
-    "female": dict(pitch=205.0, formant_shift=1.16, breath=0.18, oq=0.70, tilt=3600.0, jitter=0.004, shimmer=0.03, bw=1.15),
+    "male": dict(pitch=115.0, formant_shift=1.0, breath=0.08, oq=OQ_MALE, tilt=5000.0, jitter=0.004, shimmer=0.035, bw=1.0),
+    "female": dict(pitch=205.0, formant_shift=1.16, breath=0.18, oq=OQ_FEMALE, tilt=3600.0, jitter=0.004, shimmer=0.03, bw=1.15),
     "child": dict(pitch=280.0, formant_shift=1.28, breath=0.14, oq=0.68, tilt=4200.0, jitter=0.005, shimmer=0.03, bw=1.25),
     "robot": dict(pitch=100.0, formant_shift=1.0, breath=0.0, oq=0.5, tilt=7000.0, jitter=0.0, shimmer=0.0, bw=0.9,
                   flat=True, ring=0.35),
@@ -154,13 +160,16 @@ VOICES = {
     # alien: small tract, high, warbling ring modulation
     "alien": dict(pitch=240.0, formant_shift=1.4, breath=0.05, oq=0.6, tilt=5000.0, jitter=0.0, shimmer=0.0, bw=1.0,
                   ring=0.45, ring_hz=180.0, wobble=0.6),
+    # heliox 70/30: formants x 1.40 (485 / 345.5 m/s, Brittan-Powell et al. 1997, Table I), f0 unchanged: source and
+    # filter uncoupled. Pure helium would be about 2.9 (textbook, not reread)
+    "helium": dict(pitch=115.0, formant_shift=1.40, breath=0.08, oq=OQ_MALE, tilt=5000.0, jitter=0.004, shimmer=0.035, bw=1.0),
     # ghost: breathy whisper that swims (tremolo + chorus)
     "ghost": dict(pitch=150.0, formant_shift=1.08, breath=0.0, oq=0.62, tilt=3200.0, jitter=0.0, shimmer=0.0, bw=1.35,
                   whisper=True, tremolo=(4.5, 0.5), chorus=0.8),
 }
 
 PARAMS = {
-    "voice": ("male", "male|female|child|robot|whisper|synth|android|bad_robot|evil_robot|monster|giant|alien|ghost preset (sets the defaults below)"),
+    "voice": ("male", "male|female|child|robot|whisper|synth|android|bad_robot|evil_robot|monster|giant|alien|ghost|helium preset (sets the defaults below)"),
     "pitch": (None, "base F0 in Hz or a note name; default from voice (male 115, female 205, child 280, robot 100, evil_robot 62, monster 58, alien 240)"),
     "rate": (1.0, "speaking speed multiplier (1.3 = 30% faster, 0.8 = slower)"),
     "formant_shift": (None, "scale all formants = vocal-tract size / timbre (0.85 giant .. 1.3 child); default from voice"),
@@ -171,9 +180,92 @@ PARAMS = {
     "lang": ("en", "en|es (Spanish: letter names, numbers, regular spelling rules)"),
     "gap": (0.0, "extra silence between words in seconds (spelling / countdown style)"),
     "seed": (0, "noise/jitter seed (tiny natural variations between takes)"),
+    "effort": (0.6, "vocal effort 0.3 soft .. 0.6 as voiced .. 0.9 loud: rougher when soft; when loud higher F0 and flatter spectrum, not louder (the output is peak-normalised). Conversation only spans 8.9 dB (Lienard & Di Benedetto 1999)"),
+    "skew": (None, "glottal pulse asymmetry alpha_m = Tp/(Oq T0), 0.5..0.95 (0.66 if unset); typically 0.6-0.8"),
+    "source": (None, "glottal source: rosenberg (default) | klglott88 | saw"),
+    "tilt_db": (None, "spectral tilt in dB down at 3 kHz (Klatt TL); default from voice"),
+    "h1h2": (None, "target H1-H2 in dB: sets the open quotient, Oq = ln((H + 6)/0.27)/5.5, at most 0.74"),
+    "locus": ("class", "class | place: labial stops follow the vowel's F2 almost fully (slope 0.95) and velar onsets may fall to 750 Hz before back vowels"),
+    "trajectory": ("linear", "linear | gesture: formants and F0 approach their targets as critically damped filters, in place of ramps"),
+    "diplophonia": (0.0, "0..1 double pulsing (creaky ends of utterances): every other glottal pulse is delayed by up to the closed phase and weakened, 0.5 = half the delay at -6 dB"),
+    "nasal_vowels": (False, "nasalize the half of a vowel next to M N NG: F1 +100 Hz and a nasal zero between F1 and the 270 Hz nasal pole (weaker F1)"),
 }
 SPEECH_DESC = ("Formant speech synthesizer: letters, numbers, short words/phrases (English; Spanish with lang=es). "
                "Text in /slashes/ or the layer key 'phonemes' is raw ARPAbet.")
+
+# Brockmann et al., JSLHR 51:1152 (2008), Table 2, soft / medium / loud, (women, men): SPL dB at 10 cm, F0 Hz, jitter %,
+# shimmer dB. Only the ratios to medium are used. Effort 0.3 / 0.6 / 0.9 for the three levels (as `choir`),
+# women's row above FEMALE_F0 Hz.
+EFFORT_X = (0.3, 0.6, 0.9)
+EFFORT_SPL = ((63.8, 72.5, 96.8), (68.8, 79.2, 98.8))
+EFFORT_F0 = ((217.0, 211.0, 301.0), (125.0, 127.0, 178.0))
+EFFORT_JITTER = ((0.78, 0.36, 0.22), (0.94, 0.31, 0.21))
+EFFORT_SHIMMER = ((1.40, 0.50, 0.12), (1.00, 0.28, 0.13))
+FEMALE_F0 = 165.0
+# A3 - A1 moves 2.8 dB over 8.9 dB of AX, 0.31 dB/dB (Lienard & Di Benedetto 1999, JASA 106:411, p. 415-416; 0.20 by
+# regression); little change below 0.5 kHz.
+EFFORT_TILT = 0.31
+EFFORT_SHELF_HZ = 1800.0
+# Birkholz 2011, p. 12-13: order 6, critically damped, tau 7 ms /l/, 15 ms /b d g r/, 25 ms /m n/ (t10, t50, t90 =
+# 3.15, 5.67, 9.27 tau). VTL 2.4 manual sec. 2.1: order 5, tau 10 ms by default, also for F0 in semitones re 1 Hz.
+GESTURE_TAU = 0.010
+VOICED_VOT = {"lab": 0.006, "alv": 0.008, "vel": 0.012}
+
+
+def _gesture_tau(ph: str) -> float:
+    k = PH[ph]["k"]
+    if ph == "L":
+        return 0.007
+    if ph == "R" or k == STOP:
+        return 0.015
+    return 0.025 if k == NAS else GESTURE_TAU
+
+
+def target_approach(x, tau, order: int, fs: float) -> np.ndarray:
+    """Critically damped approach to the targets ``x``: ``order`` equal poles exp(-1/(tau fs)), ``tau`` scalar or per
+    sample. Targets are read ``order`` tau ahead, the mean delay of the cascade, so a gesture stays centred on them."""
+    x = np.asarray(x, float)
+    t = np.broadcast_to(np.asarray(tau, float), x.shape)
+    u = np.interp(np.arange(x.size) + order * t * fs, np.arange(x.size), x)
+    a = np.exp(-1.0 / (t * fs))
+    for _ in range(order):
+        y, s = np.empty(x.size), u[0]
+        for i in range(x.size):
+            s = a[i] * s + (1.0 - a[i]) * u[i]
+            y[i] = s
+        u = y
+    return u
+
+
+def glottal_pulse(t: np.ndarray, oq: float, skew: float = 0.66, source: str | None = None):
+    """(flow derivative, flow, closure jump J) at phase ``t`` in 0..1. Rosenberg C by default (cosine rise, quarter-cosine
+    fall). KLGLOTT88 (Doval, d'Alessandro & Henrich 2006, annex A1.1): Ug = a t^2 - b t^3 peaking at 2/3 of the open
+    phase, closure E = 27 AV / (4 Oq T0); here AV = T0 = 1."""
+    dflow, flow = np.zeros_like(t), np.zeros_like(t)
+    if source == "klglott88":
+        m = t < oq
+        x = t[m] / oq
+        J = 27.0 / (4.0 * oq)
+        dflow[m] = J * (2.0 * x - 3.0 * x * x)
+        flow[m] = 6.75 * x * x * (1.0 - x)
+        return dflow, flow, J
+    tp = oq * skew
+    tn = oq - tp
+    J = np.pi / (2 * tn)
+    m1 = t < tp
+    m2 = (t >= tp) & (t < oq)
+    dflow[m1] = (np.pi / (2 * tp)) * np.sin(np.pi * t[m1] / tp)
+    flow[m1] = 0.5 * (1 - np.cos(np.pi * t[m1] / tp))
+    dflow[m2] = -J * np.sin(0.5 * np.pi * (t[m2] - tp) / tn)
+    flow[m2] = np.cos(0.5 * np.pi * (t[m2] - tp) / tn)
+    return dflow, flow, J
+
+
+def oq_for_h1h2(h: float) -> float:
+    """Inverse of Fant's H1-H2 = -6 + 0.27 exp(5.5 Oq) dB (Doval et al. 2006, eq. 19), bounded to Oq <= 0.74: above
+    that KLGLOTT88 has two Oq for one H1-H2 (p. 1041)."""
+    return float(np.clip(np.log(max(float(h) + 6.0, 1e-3) / 0.27) / 5.5, 0.3, 0.74))
+
 
 # ----------------------------------------------------------------------------------------------
 # Dictionaries
@@ -669,7 +761,7 @@ def _durations(segs, rate):
         sg["burst_amp"] = 1.0
         if nxt is not None and PH[nxt["ph"]]["k"] in SONORANT | {TAP, TRILL}:
             if info["v"]:
-                vot = 0.008 if sg.get("lang") != "es" else 0.004
+                vot = VOICED_VOT[info["place"]] if sg.get("lang") != "es" else 0.004
                 asp = 0.0
             elif sg.get("lang") == "es" or (prv is not None and prv["ph"] == "S" and prv.get("word") == sg.get("word")):
                 vot, asp = 0.014, 0.5
@@ -744,7 +836,7 @@ def _vowel_target(p):
     return a, z
 
 
-def _targets(segs):
+def _targets(segs, locus="class"):
     out = []
     for i, sg in enumerate(segs):
         p = sg["ph"]
@@ -761,24 +853,24 @@ def _targets(segs):
             f = list(info["f"]) + [F4, F5]
             if p == "L" and sg.get("wend") and not sg.get("wstart"):
                 f[1] = 900  # dark final l
-            out.append((f + _bw(f, k),) * 2)
+            out.append((f + list(info["b"]) + _bw(f, k)[3:],) * 2)
             continue
         vt = _nearest_vowel(segs, i)
         if k == ASP:
             f = list(vt) if vt else [500, 1500, 2500, F4, F5]
-            b = [250, 200, 250, 300, 400]
+            b = [H_B1 - 150.0, 200, 250, 300, 400]
             out.append((f + b,) * 2)
             continue
         place = info["place"]
         if place == "vel":
             vf2 = vt[1] if vt else 1500
-            f2 = float(np.clip(vf2 + 150, 1350, 2400))
+            f2 = float(np.clip(vf2 + 150, VELAR_FLOOR if locus == "place" else 1350, 2400))
             f = [250, f2, max(f2 + 450, 2200), F4, F5]
         else:
             loc = LOCUS[place]
             f = [loc[0], loc[1], loc[2], F4, F5]
             if vt is not None:
-                kk = COART.get(k, 0.4)
+                kk = COART_LABIAL if (locus == "place" and k == STOP and place == "lab") else COART.get(k, 0.4)
                 f[1] = loc[1] + kk * (vt[1] - loc[1])
                 f[2] = loc[2] + kk * 0.6 * (vt[2] - loc[2])
         if k == NAS:
@@ -828,7 +920,7 @@ class _Tracks:
 def _build_tracks(segs, vs, lang):
     T = _Tracks()
     n = len(segs)
-    tgt = _targets(segs)
+    tgt = _targets(segs, vs.get("locus", "class"))
     fshift = vs["formant_shift"]
     # --- formant tracks with coarticulated transitions
     kinds = [None if s["ph"] == "_" else PH[s["ph"]]["k"] for s in segs]
@@ -884,13 +976,25 @@ def _build_tracks(segs, vs, lang):
         r = min(0.006, d / 4)
         fnz = info.get("fnz", FNP) * fshift if k == NAS else FNP * fshift
         rz = min(0.008, d / 3)
-        T.add("FNZ", s + rz, fnz)
-        T.add("FNZ", e - rz, fnz)
+        nas = (not prv_pause and kinds[i - 1] == NAS, not nxt_pause and kinds[i + 1] == NAS)
+        if vs.get("nasal_vowels") and k in VOWELISH and any(nas):
+            m = s + 0.5 * d
+            T.add("FNZ", m, fnz)
+            T.add("F1N", m, 0.0)
+            for side, (t, f1) in zip(nas, ((s, tgt[i][0][0]), (e, tgt[i][1][0]))):
+                T.add("FNZ", t, 0.5 * (f1 + NASAL_F1_RISE + FNP) * fshift if side else fnz)
+                T.add("F1N", t, NASAL_F1_RISE * fshift if side else 0.0)
+        else:
+            T.add("FNZ", s + rz, fnz)
+            T.add("FNZ", e - rz, fnz)
         if k in SONORANT or k in (NAS, TAP, TRILL):
             if k in VOWELISH:
                 av = 1.0 if sg["st"] > 0 else 0.78
             else:
                 av = {NAS: 0.8, LIQ: 0.85, GLI: 0.88, TAP: 0.85, TRILL: 0.85}[k]
+                if k in (LIQ, GLI) and not nxt_pause and kinds[i + 1] in VOWELISH \
+                        and (prv_pause or kinds[i - 1] not in VOWELISH):
+                    av = (1.0 if segs[i + 1]["st"] > 0 else 0.78) * 10 ** (SONORANT_ONSET_DB / 20)
             head = min(sg.get("head", 0.0), 0.6 * d)
             if head > 0:
                 asp = sg.get("head_asp", 0.0)
@@ -1201,6 +1305,35 @@ def _resolve(params: dict) -> dict:
         vs["formant_shift"] = float(p["formant_shift"])
     if p["breath"] is not None:
         vs["breath"] = float(p["breath"])
+    if p["skew"] is not None:
+        vs["skew"] = float(np.clip(p["skew"], 0.5, 0.95))
+    if p["source"] is not None:
+        src = str(p["source"]).lower()
+        if src not in ("rosenberg", "klglott88", "saw"):
+            raise ValueError("source must be rosenberg|klglott88|saw")
+        vs["source"] = src
+    if p["tilt_db"] is not None:                      # Doval et al. 2006 / Klatt TL, same conversion as choir
+        vs["tilt"] = 3000.0 / np.sqrt(10 ** (max(float(p["tilt_db"]), 0.3) / 10.0) - 1.0)
+    if p["h1h2"] is not None:
+        vs["oq"] = oq_for_h1h2(p["h1h2"])
+    effort = float(np.clip(p["effort"], 0.0, 1.2))
+    if effort != 0.6:
+        g = 0 if vs["pitch"] >= FEMALE_F0 else 1
+        ratio = lambda row: float(np.exp(np.interp(effort, EFFORT_X, np.log(np.array(row[g]) / row[g][1]))))
+        vs["pitch"] *= ratio(EFFORT_F0)
+        vs["jitter"] *= ratio(EFFORT_JITTER)
+        vs["shimmer"] *= ratio(EFFORT_SHIMMER)
+        vs["effort_db"] = float(np.interp(effort, EFFORT_X, np.array(EFFORT_SPL[g]) - EFFORT_SPL[g][1]))
+    p["trajectory"] = str(p["trajectory"]).lower()
+    if p["trajectory"] not in ("linear", "gesture"):
+        raise ValueError("trajectory must be linear|gesture")
+    vs["gesture"] = p["trajectory"] == "gesture"
+    p["locus"] = str(p["locus"]).lower()
+    if p["locus"] not in ("class", "place"):
+        raise ValueError("locus must be class|place")
+    vs["locus"] = p["locus"]
+    vs["nasal_vowels"] = str(p["nasal_vowels"]).lower() in ("1", "true", "yes", "on")
+    vs["diplophonia"] = float(np.clip(p["diplophonia"], 0.0, 1.0))
     p["intonation"] = str(p["intonation"]).lower()
     if p["intonation"] not in ("auto", "statement", "question", "exclaim", "flat"):
         raise ValueError("intonation must be auto|statement|question|exclaim|flat")
@@ -1289,11 +1422,15 @@ def _synth(segs, T: _Tracks, vs: dict, sr: int, vibrato: float, seed: int) -> np
         return np.interp(ts, tc, ctl)
 
     # ---- source
-    f0c = _smooth(T.curve("F0", tc, vs["pitch"]), 0.045 * sr / blk)
+    fsc = sr / blk
+    if vs["gesture"]:
+        f0c = 2.0 ** (target_approach(12.0 * np.log2(T.curve("F0", tc, vs["pitch"])), GESTURE_TAU, 5, fsc) / 12.0)
+    else:
+        f0c = _smooth(T.curve("F0", tc, vs["pitch"]), 0.045 * sr / blk)
     f0 = up(f0c)
     if vs["jitter"] > 0:           # per-cycle period scatter, Praat local jitter = vs["jitter"]
         f0 = cycle_jitter(f0, vs["jitter"], rng, sr)
-        f0 = f0 * (1 + 0.004 * (np.sin(2 * np.pi * 4.7 * ts) + np.sin(2 * np.pi * 7.1 * ts + 1.0)))
+        f0 = f0 + FLUTTER / 50 * f0 / 100 * sum(np.sin(2 * np.pi * fh * ts) for fh in FLUTTER_HZ)
     if vs.get("quantize"):
         f0 = 440.0 * 2 ** (np.round(12 * np.log2(np.maximum(f0, 1) / 440.0)) / 12)
     if not vibrato and vs.get("wobble"):
@@ -1310,20 +1447,17 @@ def _synth(segs, T: _Tracks, vs: dict, sr: int, vibrato: float, seed: int) -> np
     ph = np.cumsum(f0 / sr)
     t = ph % 1.0
     oq = vs["oq"]
-    tp = oq * 0.66
-    tn = oq - tp
-    J = np.pi / (2 * tn)
-    dflow = np.zeros(n)
-    flow = np.zeros(n)
-    m1 = t < tp
-    m2 = (t >= tp) & (t < oq)
-    dflow[m1] = (np.pi / (2 * tp)) * np.sin(np.pi * t[m1] / tp)
-    flow[m1] = 0.5 * (1 - np.cos(np.pi * t[m1] / tp))
-    dflow[m2] = -J * np.sin(0.5 * np.pi * (t[m2] - tp) / tn)
-    flow[m2] = np.cos(0.5 * np.pi * (t[m2] - tp) / tn)
+    di = vs.get("diplophonia", 0.0)
+    if di > 0:                     # alternate pulses: delay DI (1 - Oq) T0 (into the closed phase), gain 1 - DI
+        odd = (np.floor(ph).astype(np.int64) % 2) == 1
+        t = np.where(odd, (t - di * (1.0 - oq)) % 1.0, t)
+    dflow, flow, J = glottal_pulse(t, oq, vs.get("skew", 0.66), vs.get("source"))
     dt = np.maximum(f0 / sr, 1e-6)
-    dflow += (J / 2) * _polyblep((t - oq) % 1.0, dt)  # band-limit the glottal closure
+    # Closure spread over 0.2 ms either way, not 1 sample: a real fold takes time to close, and in a dull vowel (the L of "level") the one-sample edge fires detect_clicks each period.
+    dflow += (J / 2) * _polyblep((t - oq) % 1.0, np.maximum(dt, 2e-4 * f0))
     src = dflow / J
+    if di > 0:
+        src = np.where(odd, (1.0 - di) * src, src)
     if vs.get("source") == "saw":
         src = -((2 * t - 1) - _polyblep(t, dt))  # buzzy vocoder carrier
     if vs.get("sub"):
@@ -1355,7 +1489,15 @@ def _synth(segs, T: _Tracks, vs: dict, sr: int, vibrato: float, seed: int) -> np
 
     # ---- cascade (nasal pole/zero + F5..F1)
     F = [T.curve(f"FM{j}", tc, d) for j, d in enumerate([500, 1500, 2500, F4, F5, 60, 90, 150, 250, 320])]
-    F = [_smooth(f, 0.008 * sr / blk) for f in F]
+    F[0] = F[0] + T.curve("F1N", tc, 0.0)
+    if vs["gesture"]:
+        tau = np.full(nb, GESTURE_TAU)
+        for sg in segs:
+            if sg["ph"] != "_":
+                tau[(tc >= sg["s"]) & (tc < sg["e"])] = _gesture_tau(sg["ph"])
+        F = [target_approach(f, tau, 6, fsc) for f in F]
+    else:
+        F = [_smooth(f, 0.008 * sr / blk) for f in F]
     B1add = T.curve("B1ADD", tc, 0.0)
     bwk = vs["bw"]
     y = exc
@@ -1378,6 +1520,8 @@ def _synth(segs, T: _Tracks, vs: dict, sr: int, vibrato: float, seed: int) -> np
     # restore the air above ~3 kHz that the unity-gain cascade removes (higher-pole correction)
     from . import filters as FL
     y = FL.highshelf(y, 3000 * vs["formant_shift"], sr, gain_db=vs.get("air", 12.0))
+    if vs.get("effort_db"):
+        y = FL.highshelf(y, EFFORT_SHELF_HZ, sr, gain_db=EFFORT_TILT * vs["effort_db"])
     voiced_out = y
 
     # reference level: RMS inside stressed vowels

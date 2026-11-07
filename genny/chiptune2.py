@@ -182,7 +182,7 @@ def render_sn(lanes, dur, sr, region="ntsc", variant="sega"):
     seg = np.array(rows, np.int64).reshape(-1, 5)
     x = _sn_core(int(dur * clk / 2) + 1, 2, seg, np.array(off, np.int64), SN_VOL, taps, width).astype(np.float64)
     y = _to_sr(x - x[0], clk / 2.0, sr)
-    y = lfilter(*butter(1, 20.0, "high", fs=sr), y)        # UNSOURCED: the output is AC-coupled; 20 Hz is genny's choice
+    y = lfilter(*butter(1, 20.0, "high", fs=sr), y)
     return y[:samples(dur, sr)] * SN_GAIN
 
 
@@ -433,7 +433,7 @@ def _opnb_layer(layer: dict, sr: int, q: float) -> np.ndarray:
             params = {k: p[k] for k in ("level", "noise", "noise_period", "shape", "env_hz")}
             # the SSG section is a YM2149 on a quarter of the master clock (2 MHz here): ymfm_opn.h gives the YM2610's SSG rate
             # as clock / 32, and a YM2149 runs at its own clock / 8
-            parts.append((I.render_note("psg", hz, max(t1 - t0, 0.01), sr, vel, clock=OPNB_CLOCK / 4.0, bright=1.0, **params) * 0.5, t0))
+            parts.append((I.render_note("psg", hz, max(t1 - t0, 0.01), sr, vel, clock=OPNB_CLOCK / 4.0, bright=1.0, chip="ym2149", **params) * 0.5, t0))
     if parts:
         s = mix(parts, sr)
         n = min(s.shape[0], y.shape[0])
@@ -596,7 +596,7 @@ SID_MODES = {"off": 0, "lp": 1, "bp": 2, "hp": 4, "notch": 5, "lp+bp": 3, "bp+hp
 SID_RELEASE_S = (0.006, 0.024, 0.048, 0.072, 0.114, 0.168, 0.204, 0.240, 0.300, 0.750, 1.5, 2.4, 3.0, 9.0, 15.0, 24.0)
 
 
-def render_sid(lanes, dur, sr, region="pal", cutoff=1024, res=0, mode="off", routed=(1, 2, 3)):
+def render_sid(lanes, dur, sr, region="pal", cutoff=1024, res=0, mode="off", routed=(1, 2, 3), fc_max=12500.0):
     """`dur` seconds of a SID. lanes: voice name -> notes (t0, t1, hz, vel, patch). `cutoff` 0..2047 or a list of
     values, one per 1/60 s (the last one held): a filter sweep."""
     clk = SID_CLOCK[region]
@@ -631,7 +631,7 @@ def render_sid(lanes, dur, sr, region="pal", cutoff=1024, res=0, mode="off", rou
             rows.append((c1, rows[-1][1], rows[-1][2], wave, 0, *adsr, fl))
         off.append(len(rows))
     seg = np.array(rows, np.int64).reshape(-1, 10)
-    cut = np.atleast_1d(np.asarray(cutoff, np.float64)).clip(0, 2047)
+    cut = (np.atleast_1d(np.asarray(cutoff, np.float64)).clip(0, 2047) + 1.0) * float(fc_max) / 12500.0 - 1.0   # chips differ by lot
     mask = sum(1 << (int(v) - 1) for v in routed) if SID_MODES[mode] else 0
     dec = 16
     x = _sid_core(int(dur * clk / dec) + 1, dec, seg, np.array(off, np.int64), SID_RATE, SID_Q, cut, frame, int(min(max(res, 0), 15)),
@@ -651,7 +651,7 @@ def _sid_layer(layer: dict, sr: int, q: float) -> np.ndarray:
         raise SpecError(f"chip layer: sid filter mode must be one of {sorted(SID_MODES)}")
     tail = float(layer.get("tail", 0.5))
     return render_sid(lanes, end + tail, sr, region=str(layer.get("region", "pal")).lower(), cutoff=flt.get("cutoff", 1024),
-                      res=int(flt.get("res", 0)), mode=mode, routed=flt.get("voices", (1, 2, 3)))
+                      res=int(flt.get("res", 0)), mode=mode, routed=flt.get("voices", (1, 2, 3)), fc_max=float(flt.get("fc_max", 12500.0)))
 
 
 CT.SYSTEM_LAYERS["sid"] = _sid_layer
@@ -665,14 +665,15 @@ CT.SYSTEMS["sid"] = SID_NAMES
             a=(0, "attack 0..15: 2 ms .. 8 s"), d=(9, "decay 0..15: 6 ms .. 24 s"), s=(0, "sustain level 0..15"), r=(4, "release 0..15: 6 ms .. 24 s"),
             cutoff=(None, "filter cutoff register 0..2047 (linear to 12.5 kHz), or a list one per 1/60 s for a sweep; null = filter off"),
             res=(8, "filter resonance 0..15"), filter=("lp", "lp | bp | hp | notch | lp+bp | bp+hp"),
+            fc_max=(12500.0, "cutoff in Hz at register 2047: every chip lot filtered differently, so lower it for a darker chip"),
             arp=(None, _H["arp"]), pitch=(None, _H["pitch"]), vib=(0.0, _H["vib"]), vib_hz=(6.0, _H["vib_hz"]), vib_delay=(0.15, _H["vib_delay"]),
             mode=CT._MODE, bright=CT._BRIGHT)
 def sid(freq, dur, sr=DEFAULT_SR, vel=1.0, wave="pulse", pw=0.5, a=0, d=9, s=0, r=4, cutoff=None, res=8, filter="lp", arp=None, pitch=None,
-        vib=0.0, vib_hz=6.0, vib_delay=0.15, mode="retro_stylized", bright=0.5):
+        vib=0.0, vib_hz=6.0, vib_delay=0.15, mode="retro_stylized", bright=0.5, fc_max=12500.0):
     tail = min(SID_RELEASE_S[int(min(max(r, 0), 15))] + 0.02, 1.5)
     p = dict(SID_PATCH, wave=wave, pw=pw, a=a, d=d, s=s, r=r, arp=arp, pitch=pitch, vib=vib, vib_hz=vib_hz, vib_delay=vib_delay)
     y = render_sid({"voice1": [(0.0, dur, float(freq), 1.0, p)]}, dur + tail, sr, cutoff=1024 if cutoff is None else cutoff, res=res,
-                   mode="off" if cutoff is None else str(filter).lower(), routed=(1,))
+                   mode="off" if cutoff is None else str(filter).lower(), routed=(1,), fc_max=fc_max)
     y = F.dc_block(y, sr)
     if str(mode) != "hardware_accurate":
         if str(wave).lower() != "noise":
@@ -829,7 +830,7 @@ def render_pokey(lanes, dur, sr, poly9=False):
     x = _pokey_core(int(dur * POKEY_CLOCK / 16) + 1, 16, seg, np.array(off, np.int64), POKEY_P4, POKEY_P5, POKEY_P9, POKEY_P17,
                     1 if poly9 else 0).astype(np.float64)
     y = _to_sr(x - x[0], POKEY_CLOCK / 16.0, sr)
-    y = lfilter(*butter(1, 20.0, "high", fs=sr), y)        # UNSOURCED: AC-coupled output; the 20 Hz corner is genny's choice
+    y = lfilter(*butter(1, 20.0, "high", fs=sr), y)
     return y[:samples(dur, sr)] * POKEY_GAIN
 
 
@@ -867,3 +868,409 @@ def pokey(freq, dur, sr=DEFAULT_SR, vel=1.0, dist="pure", clock="auto", volume=1
             if fc < sr * 0.45:
                 y = F.lowpass(F.lowpass(y, fc, sr, 0.707), fc, sr, 0.707)
     return _fade(y.copy(), sr, 1.0, rel * 1000.0) * (0.5 + 0.5 * vel)
+
+
+# ============================================================================ Atari 2600 TIA
+TIA_CLOCK = {"ntsc": 3579545.0 / 114.0, "pal": 3546894.0 / 114.0}   # audio clock: two ticks per 228-colour-clock scanline
+TIA_NAMES = ("ch1", "ch2")
+TIA_BIT4 = np.array([1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0], np.int64)
+TIA_BIT5 = np.array([0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1], np.int64)
+TIA_DIV31 = np.zeros(31, np.int64)
+TIA_DIV31[[0, 18]] = 1
+# AUDC -> divider ticks in one period of the output pattern (0 = constant output, silent)
+TIA_CYCLE = (0, 15, 465, 465, 2, 2, 31, 31, 511, 31, 31, 0, 2, 2, 31, 31)
+TIA_WAVES = {"saw": 1, "engine": 3, "square": 4, "bass": 6, "pitfall": 7, "noise": 8, "lead": 12, "low": 14, "buzz": 15}
+TIA_PATCH = {"volume": 15, "vol": None, "wave": "square", "arp": None, "pitch": None, "vib": 0.0, "vib_hz": 6.0, "vib_delay": 0.15,
+             "gate": 1.0}
+TIA_GAIN = 1.6
+
+
+def tia_audc(wave) -> int:
+    w = int(wave) if isinstance(wave, (int, float)) else TIA_WAVES.get(str(wave).lower())
+    if w is None or not 0 <= w <= 15:
+        raise SpecError(f"tia: wave must be AUDC 0..15 or one of {sorted(TIA_WAVES)}")
+    return w
+
+
+def tia_audf(hz: float, audc: int, region: str = "ntsc") -> int:
+    """5-bit AUDF: the audio clock is divided by AUDF + 1 (times 3 for AUDC 12-15), then by the pattern length."""
+    div = TIA_CYCLE[audc] * (3 if audc & 0x0C == 0x0C else 1)
+    return int(min(max(round(TIA_CLOCK[region] / (max(div, 1) * max(hz, 1e-3))) - 1, 0), 31))
+
+
+def tia_hz(hz: float, audc: int = 4, region: str = "ntsc") -> float:
+    """The pitch the chip actually plays for a written note (0 for the silent AUDC 0 and 11)."""
+    div = TIA_CYCLE[audc] * (3 if audc & 0x0C == 0x0C else 1)
+    return TIA_CLOCK[region] / (div * (tia_audf(hz, audc, region) + 1)) if div else 0.0
+
+
+@nb.njit(cache=True)
+def _tia_core(n_out, seg, off, b4, b5, b9, d31):
+    """Two channels, one step per audio clock. Rows: (tick, AUDF, AUDV, AUDC, reset)."""
+    out = np.empty(n_out, np.float32)
+    ptr = off[:2].copy()
+    audf = np.zeros(2, np.int64)
+    vol = np.zeros(2, np.int64)
+    audc = np.zeros(2, np.int64)
+    cnt = np.ones(2, np.int64)
+    bit = np.zeros(2, np.int64)
+    p4 = np.zeros(2, np.int64)
+    p5 = np.zeros(2, np.int64)
+    p9 = np.zeros(2, np.int64)
+    for i in range(n_out):
+        acc = 0.0
+        for c in range(2):
+            while ptr[c] < off[c + 1] and seg[ptr[c], 0] <= i:
+                r = ptr[c]
+                audf[c], vol[c], audc[c] = seg[r, 1], seg[r, 2], seg[r, 3]
+                ptr[c] += 1
+            a = audc[c]
+            if a == 0 or a == 11:
+                bit[c] = 1
+            else:
+                cnt[c] -= 1
+                if cnt[c] <= 0:
+                    cnt[c] = (audf[c] + 1) * (3 if (a & 0x0C) == 0x0C else 1)
+                    p5[c] = (p5[c] + 1) % 31
+                    if (a & 2) == 0 or ((a & 1) == 0 and d31[p5[c]]) or ((a & 1) == 1 and b5[p5[c]]):
+                        if a & 4:
+                            bit[c] ^= 1
+                        elif a & 8:
+                            if a == 8:
+                                p9[c] = (p9[c] + 1) % 511
+                                bit[c] = b9[p9[c]]
+                            else:
+                                bit[c] = b5[p5[c]]
+                        else:
+                            p4[c] = (p4[c] + 1) % 15
+                            bit[c] = b4[p4[c]]
+            acc += vol[c] * bit[c] / 30.0
+        out[i] = acc
+    return out
+
+
+def render_tia(lanes, dur, sr, region="ntsc"):
+    """`dur` seconds of a TIA. lanes: ch1 / ch2 -> notes (t0, t1, hz, vel, patch); the patch's `wave` is the AUDC value."""
+    if region not in TIA_CLOCK:
+        raise SpecError(f"tia: region must be one of {sorted(TIA_CLOCK)}")
+    clk = TIA_CLOCK[region]
+    rows, off = [], [0]
+    for name in TIA_NAMES:
+        notes = sorted(lanes.get(name, []), key=lambda n: n[0])
+        for i, (t0, t1, hz, vel, p) in enumerate(notes):
+            if i + 1 < len(notes):
+                t1 = min(t1, notes[i + 1][0])
+            c0, c1 = int(round(t0 * clk)), int(round(t1 * clk))
+            if c1 <= c0:
+                continue
+            a = tia_audc(p["wave"])
+            driver_rows(c0, c1, clk, hz, vel, p, lambda f, a=a: tia_audf(f, a, region), rows, aux=a)
+        off.append(len(rows))
+    seg = np.array(rows, np.int64).reshape(-1, 5)
+    x = _tia_core(int(dur * clk) + 1, seg, np.array(off, np.int64), TIA_BIT4, TIA_BIT5, POKEY_P9, TIA_DIV31).astype(np.float64)
+    y = _to_sr(x - x[0], clk, sr)
+    y = lfilter(*butter(1, 20.0, "high", fs=sr), y)
+    return y[:samples(dur, sr)] * TIA_GAIN
+
+
+def _tia_layer(layer: dict, sr: int, q: float) -> np.ndarray:
+    lanes, end = lanes_of(layer, "tia", TIA_NAMES, TIA_PATCH, q)
+    return render_tia(lanes, end, sr, region=str(layer.get("region", "ntsc")).lower())
+
+
+CT.SYSTEM_LAYERS["tia"] = _tia_layer
+CT.SYSTEMS["tia"] = TIA_NAMES
+
+
+@instrument("tia", "Atari 2600 (VCS) TIA channel: a 5-bit divider of a ~31 kHz clock feeding a toggle or 4/5/9-bit polynomial counters. "
+            "Each wave has its own coarse, out-of-tune note grid.",
+            family="retro", span=("C2", "C6"),
+            wave=("square", "saw (AUDC 1) | engine (3) | square (4) | bass (6) | pitfall (7) | noise (8) | lead (12) | low (14) | buzz (15), "
+                            "or the AUDC number 0..15"),
+            region=("ntsc", "ntsc | pal: the PAL clock is 0.9 % lower, so every note is about 16 cents flatter"),
+            volume=(15, "AUDV 0..15, linear"), vol=(None, _H["vol"]), arp=(None, _H["arp"]), pitch=(None, _H["pitch"]),
+            vib=(0.0, _H["vib"]), vib_hz=(6.0, _H["vib_hz"]), vib_delay=(0.15, _H["vib_delay"]), mode=CT._MODE, bright=CT._BRIGHT)
+def tia(freq, dur, sr=DEFAULT_SR, vel=1.0, wave="square", region="ntsc", volume=15, vol=None, arp=None, pitch=None, vib=0.0,
+        vib_hz=6.0, vib_delay=0.15, mode="retro_stylized", bright=0.5):
+    rel = 0.01
+    a = tia_audc(wave)
+    region = str(region).lower()
+    p = dict(TIA_PATCH, wave=a, volume=volume, vol=vol, arp=arp, pitch=pitch, vib=vib, vib_hz=vib_hz, vib_delay=vib_delay)
+    exact = str(mode) == "hardware_accurate"
+    tonal = TIA_CYCLE[a] in (2, 15, 31)
+    r = freq / tia_hz(freq, a, region) if (tonal and not exact) else 1.0   # rendered r times longer, then sped up by r
+    y = render_tia({"ch1": [(0.0, dur * r, float(freq), 1.0, p)]}, (dur + rel) * r, sr * 2, region=region)
+    if r != 1.0:                                           # the 5-bit divider is very coarse: play back at the written pitch
+        y = _to_sr(y, sr * 2 * r, sr * 2)
+    y = F.dc_block(_to_sr(y, sr * 2, sr)[:samples(dur + rel, sr)], sr)
+    if not exact:
+        if tonal:
+            y = _soften(y, freq, sr, harm=6, lo=2200, hi=3800, bright=bright)
+        else:
+            fc = 3000.0 * 2.0 ** ((bright - 0.5) * 4.0)
+            if fc < sr * 0.45:
+                y = F.lowpass(F.lowpass(y, fc, sr, 0.707), fc, sr, 0.707)
+    return _fade(y.copy(), sr, 1.0, rel * 1000.0) * (0.5 + 0.5 * vel)
+
+
+# ============================================================================ STK's four-operator FM (TX81Z tables)
+# voice: (algorithm, pitch factor, twozero gain, LFO Hz, modDepth, ops); op = (ratio, gain index, (attack, decay, sustain, release)), a negative ratio is fixed Hz.
+STK_FM_GAINS = 0.933033 ** (99.0 - np.arange(100))
+STK_FM_SUS = 0.707101 ** (15.0 - np.arange(16))
+_S = STK_FM_SUS
+_STK_FM = {
+    "heavy_metal": (3, 1.0, 2.0, 5.5, 0.0, ((1.0, 92, (0.001, 0.001, 1.0, 0.01)), (4 * 0.999, 76, (0.001, 0.010, 1.0, 0.50)), (3 * 1.001, 91, (0.010, 0.005, 1.0, 0.20)), (0.5 * 1.002, 68, (0.030, 0.010, 0.2, 0.20)))),
+    "perc_flute": (4, 1.0, 0.0, 6.0, 0.005, ((1.5, 99, (0.05, 0.05, _S[14], 0.05)), (3 * 0.995, 71, (0.02, 0.50, _S[13], 0.5)), (2.99 * 1.005, 93, (0.02, 0.30, _S[11], 0.05)), (6 * 0.997, 85, (0.02, 0.05, _S[13], 0.01)))),
+    "b3": (8, 1.0, 0.1, 6.0, 0.0, ((0.999, 95, (0.005, 0.003, 1.0, 0.01)), (1.997, 95, (0.005, 0.003, 1.0, 0.01)), (3.006, 99, (0.005, 0.003, 1.0, 0.01)), (6.009, 95, (0.005, 0.001, 0.4, 0.03)))),
+    "rhodey": (5, 2.0, 1.0, 6.0, 0.0, ((1.0, 99, (0.001, 1.5, 0.0, 0.04)), (0.5, 90, (0.001, 1.5, 0.0, 0.04)), (1.0, 99, (0.001, 1.0, 0.0, 0.04)), (15.0, 67, (0.001, 0.25, 0.0, 0.04)))),
+    "wurley": (5, 1.0, 2.0, 8.0, 0.0, ((1.0, 99, (0.001, 1.5, 0.0, 0.04)), (4.0, 82, (0.001, 1.5, 0.0, 0.04)), (-510.0, 82, (0.001, 0.25, 0.0, 0.04)), (-510.0, 68, (0.001, 0.15, 0.0, 0.04)))),
+    "tube_bell": (5, 1.0, 0.5, 2.0, 0.0, ((0.995, 94, (0.005, 4.0, 0.0, 0.04)), (1.414 * 0.995, 76, (0.005, 4.0, 0.0, 0.04)), (1.005, 99, (0.001, 2.0, 0.0, 0.04)), (1.414, 71, (0.004, 4.0, 0.0, 0.04)))),
+}
+
+
+def _stk_adsr(n, off, sr, a, d, s, r):
+    """STK's linear ADSR, key off at sample `off`."""
+    t = np.arange(n) / sr
+    e = np.interp(t, [0.0, a, a + d], [0.0, 1.0, s])
+    if off < n:
+        e[off:] = e[off] * np.clip(1.0 - (t[off:] - t[off]) / max(r, 1e-4), 0.0, 1.0)
+    return e
+
+
+@nb.njit(cache=True)
+def _fm4_core(inc, gains, env, vib, algo, c1, c2, tz):
+    """Sines on ops 0-2, on op 3 fwavblnk's half-rectified double sine, phase offsets in cycles. Op 3 is fed back through 1 - z^-2, scaled as it enters the mix."""
+    n = env.shape[1]
+    out = np.empty(n)
+    ph = np.zeros(4)
+    x1 = 0.0
+    x2 = 0.0
+    fb = 0.0
+    tau = 2.0 * np.pi
+    for i in range(n):
+        p3 = (ph[3] + fb) % 1.0
+        o3 = gains[3] * env[3, i] * (abs(np.sin(2.0 * tau * p3)) if p3 < 0.5 else 0.0)
+        if algo == 3:
+            o3 *= 1.0 - 0.5 * c2
+        elif algo == 8:
+            o3 *= 2.0 * c1
+        fb = tz * (o3 - x2)
+        x2 = x1
+        x1 = o3
+        if algo == 3:                                   # op2 -> op1; op3 and op1 -> op0
+            o2 = gains[2] * env[2, i] * np.sin(tau * ph[2])
+            o1 = gains[1] * env[1, i] * np.sin(tau * (ph[1] + o2))
+            out[i] = 0.5 * gains[0] * env[0, i] * np.sin(tau * (ph[0] + c1 * (o3 + 0.5 * c2 * o1)))
+        elif algo == 4:                                 # op3 -> op2; op2 and op1 -> op0
+            o2 = gains[2] * env[2, i] * np.sin(tau * (ph[2] + o3))
+            o1 = gains[1] * env[1, i] * np.sin(tau * ph[1])
+            out[i] = 0.5 * gains[0] * env[0, i] * np.sin(tau * (ph[0] + c1 * ((1.0 - 0.5 * c2) * o2 + 0.5 * c2 * o1)))
+        elif algo == 5:                                 # op1 -> op0, op3 -> op2, two carriers
+            o1 = gains[1] * env[1, i] * np.sin(tau * ph[1])
+            o0 = gains[0] * env[0, i] * np.sin(tau * (ph[0] + c1 * o1))
+            o2 = gains[2] * env[2, i] * np.sin(tau * (ph[2] + o3))
+            out[i] = (1.0 - 0.5 * c2) * o0 + 0.5 * c2 * o2
+        else:                                           # 8: additive
+            o0 = gains[0] * env[0, i] * np.sin(tau * ph[0])
+            o1 = gains[1] * env[1, i] * np.sin(tau * ph[1])
+            o2 = gains[2] * env[2, i] * np.sin(tau * ph[2])
+            out[i] = 0.125 * (o3 + c2 * 2.0 * o2 + o1 + o0)
+        for k in range(4):
+            ph[k] = (ph[k] + inc[k] * vib[i]) % 1.0
+    return out
+
+
+TX81Z_DAC_LP, TX81Z_DAC_HP = 4400.0, 9.2
+
+
+def tx81z_dac(x, sr=DEFAULT_SR):
+    """The TX81Z output stage: one-pole bilinear lowpass at 4.4 kHz then highpass at 9.2 Hz, designed at `sr`."""
+    b, a = butter(1, min(TX81Z_DAC_LP, 0.45 * sr), "low", fs=sr)
+    x = lfilter(b, a, x)
+    b, a = butter(1, TX81Z_DAC_HP, "high", fs=sr)
+    return lfilter(b, a, x)
+
+
+@instrument("stk_fm", "Four-operator FM on TX81Z tables with STK's patches: Rhodes, Wurlitzer, tube bell, Hammond, heavy metal, percussive flute.",
+            family="keys", span=("C2", "C5"), voice=("rhodey", "rhodey|wurley|tube_bell|b3|heavy_metal|perc_flute"),
+            control1=(1.0, "0..2 modulation index (STK's control 1: CC 2 sets it to 2 x CC/128)"), control2=(1.0, "0..2 balance between the two chains (STK's control 2, CC 4)"),
+            mod=(None, "STK's modDepth: vibrato (x0.2 of it on heavy_metal and perc_flute, x0.1 on b3) or tremolo on rhodey, wurley and tube_bell; default the patch's (0, perc_flute 0.005)"),
+            dac=(0, "1 = the TX81Z output filters (one-pole lowpass 4.4 kHz, highpass 9.2 Hz)"))
+def stk_fm(freq, dur, sr=DEFAULT_SR, vel=1.0, voice="rhodey", control1=1.0, control2=1.0, mod=None, dac=0):
+    if voice not in _STK_FM:
+        raise SpecError(f"unknown stk_fm voice {voice!r}; use one of {sorted(_STK_FM)}")
+    algo, base, tz, rate, depth, ops = _STK_FM[voice]
+    rel = max(o[2][3] for o in ops)
+    n, off = samples(dur + rel, sr), samples(dur, sr)
+    env = np.stack([_stk_adsr(n, off, sr, *o[2]) for o in ops])
+    inc = np.array([(-o[0] if o[0] < 0 else float(freq) * base * o[0]) / sr for o in ops])
+    gains = STK_FM_GAINS[[o[1] for o in ops]] * (0.5 if voice == "perc_flute" else 1.0)
+    d = depth if mod is None else float(mod)
+    t = np.arange(n) / sr
+    lfo = np.sin(2.0 * np.pi * rate * t)
+    vib = np.ones(n) if algo == 5 else 1.0 + {3: 0.2, 4: 0.2, 8: 0.1}[algo] * d * lfo
+    x = _fm4_core(inc, gains, env, vib, algo, float(np.clip(control1, 0.0, 2.0)), float(np.clip(control2, 0.0, 2.0)), tz)
+    if algo == 5:
+        x *= 1.0 + d * lfo
+    if dac:
+        x = tx81z_dac(x, sr)
+    return _fade(x / (np.max(np.abs(x)) + 1e-12), sr, 0.5, 2.0) * (0.45 * (0.5 + 0.5 * vel))
+
+
+_CHOWNING = {"clarinet": (3.0, 2.0, 4.0, 2.0), "woodwind": (3.0, 1.0, 0.0, 2.0), "bassoon": (5.0, 1.0, 0.0, 1.5), "brass": (1.0, 1.0, 0.0, 5.0),
+             "bell": (1.0, 1.4, 0.0, 10.0), "drum": (1.0, 1.4, 0.0, 2.0), "wood_drum": (1.0, 55.0 / 80.0, 0.0, 25.0)}
+_CHOWNING_PERC = {"bell": 15.0, "drum": 0.2, "wood_drum": 0.2}
+
+
+@instrument("chowning", "Chowning's 1973 FM tones: the carrier and modulator ratio sets the harmonics, the index follows the amplitude.",
+            family="winds", span=("C3", "A4"), voice=("clarinet", "clarinet|woodwind|bassoon|brass|bell|drum|wood_drum|soprano"), attack=(0.08, "s"), release=(0.1, "s"))
+def chowning(freq, dur, sr=DEFAULT_SR, vel=1.0, voice="clarinet", attack=0.08, release=0.1):
+    """Ratios to the note; bell, drum and wood_drum ring for their own time and ignore attack and release.
+    soprano: a second carrier on the harmonic nearest 2100 Hz shares the modulator (sung formant)."""
+    if voice == "soprano":
+        return _soprano(freq, dur, sr, vel, attack, release)
+    if voice not in _CHOWNING:
+        raise SpecError(f"unknown chowning voice {voice!r}; use one of {sorted(_CHOWNING)}")
+    c, m, i0, i1 = _CHOWNING[voice]
+    if voice in _CHOWNING_PERC:
+        p3 = _CHOWNING_PERC[voice]
+        t = np.arange(samples(max(dur, p3), sr)) / sr
+        if voice == "bell":
+            amp = np.exp(-3.0 * t / p3)
+        else:
+            amp = np.interp(t / p3, [0.0, 0.25, 0.4, 0.5, 0.65, 1.0], [0.8, 1.0, 0.5, 0.15, 0.05, 0.0])
+        ind = np.clip(1.0 - t / 0.025, 0.0, 1.0) if voice == "wood_drum" else amp
+        y = amp * np.sin(2.0 * np.pi * c * freq * t + (i0 + (i1 - i0) * ind) * np.sin(2.0 * np.pi * m * freq * t))
+        return _fade(y, sr, 0.5, 2.0) * (0.5 * (0.5 + 0.5 * vel))
+    a, r = max(float(attack), 0.001), max(float(release), 0.001)
+    n = samples(dur + r, sr)
+    t = np.arange(n) / sr
+    if voice == "brass":
+        amp = np.interp(t, [0.0, dur / 6, dur / 3, 5 * dur / 6, dur], [0.0, 1.0, 0.75, 0.62, 0.0])
+    else:
+        amp = np.interp(t, [0.0, a, max(dur, a + 1e-3), dur + r], [0.0, 1.0, 0.85, 0.0])
+    y = amp * np.sin(2.0 * np.pi * c * freq * t + (i0 + (i1 - i0) * amp) * np.sin(2.0 * np.pi * m * freq * t))
+    return _fade(y, sr, 0.5, 2.0) * (0.5 * (0.5 + 0.5 * vel))
+
+
+SOPRANO_FORMANT_HZ, SOPRANO_AMP2 = 2100.0, 0.5
+SOPRANO_INDEX = (1.0, 3.0)
+SOPRANO_FORMANT_INDEX = (0.5, 1.5)
+SOPRANO_INDEX_SCALE = 0.2
+SOPRANO_DETUNE_HZ = 0.5
+
+
+def _soprano(freq, dur, sr, vel, attack, release):
+    a, r = max(float(attack), 0.001), max(float(release), 0.001)
+    n = samples(dur + r, sr)
+    t = np.arange(n) / sr
+    amp = np.interp(t, [0.0, a, max(dur, a + 1e-3), dur + r], [0.0, 1.0, 0.85, 0.0])
+    h2 = max(1, int(round(SOPRANO_FORMANT_HZ / freq)))
+    i1 = SOPRANO_INDEX[0] + (SOPRANO_INDEX[1] - SOPRANO_INDEX[0]) * amp
+    i2 = SOPRANO_FORMANT_INDEX[0] + (SOPRANO_FORMANT_INDEX[1] - SOPRANO_FORMANT_INDEX[0]) * amp
+    vib = 1.0 + 0.01 * np.sin(2.0 * np.pi * 5.5 * t) * np.clip(t / 0.3, 0.0, 1.0)
+    pc = 2.0 * np.pi * np.cumsum(freq * vib) / sr
+    m = np.sin(pc + 2.0 * np.pi * SOPRANO_DETUNE_HZ * t)
+    y = np.sin(pc + i1 * m) + SOPRANO_AMP2 * amp * np.sin(h2 * pc + i2 * SOPRANO_INDEX_SCALE * h2 * m)
+    return _fade(amp * y / (1.0 + SOPRANO_AMP2), sr, 0.5, 2.0) * (0.5 * (0.5 + 0.5 * vel))
+
+
+FMVOICE_VOWELS = {"ah": (730.0, 1090.0, 2440.0), "eh": (530.0, 1840.0, 2480.0), "ee": (270.0, 2290.0, 3010.0),
+                  "oh": (570.0, 840.0, 2410.0), "oo": (300.0, 870.0, 2240.0)}
+FMVOICE_MODS = (1.0, 1.1, 1.1)
+FMVOICE_MOD_GAIN = 80
+
+
+@instrument("stk_fmvoice", "STK FMVoices: three carriers on the harmonics nearest the vowel's formants, one shared modulator at the note.",
+            family="voice", span=("C2", "C5"), vowel=("ah", "ah|eh|ee|oh|oo"), tilt=(0.9, "0..1 spectral tilt: carrier gains amp, amp^2, amp^3"),
+            vib=(0.005, "vibrato depth (6 Hz)"))
+def stk_fmvoice(freq, dur, sr=DEFAULT_SR, vel=1.0, vowel="ah", tilt=0.9, vib=0.005):
+    if vowel not in FMVOICE_VOWELS:
+        raise SpecError(f"unknown stk_fmvoice vowel {vowel!r}; use one of {sorted(FMVOICE_VOWELS)}")
+    rel = 0.05
+    n, off = samples(dur + rel, sr), samples(dur, sr)
+    t = np.arange(n) / sr
+    env = _stk_adsr(n, off, sr, 0.05, 0.05, STK_FM_SUS[15], rel)
+    pc = 2.0 * np.pi * np.cumsum(float(freq) * (1.0 + vib * np.sin(2.0 * np.pi * 6.0 * t))) / sr
+    mod = STK_FM_GAINS[FMVOICE_MOD_GAIN] * env * np.sin(pc)
+    amp = float(np.clip(tilt, 0.0, 1.0))
+    y = np.zeros(n)
+    for i, f in enumerate(FMVOICE_VOWELS[vowel]):
+        k = max(1, int(f / float(freq) + 0.5))
+        y += amp ** (i + 1) * np.sin(k * pc + 2.0 * np.pi * FMVOICE_MODS[i] * mod)
+    y *= env
+    return _fade(y / (np.max(np.abs(y)) + 1e-12), sr, 0.5, 2.0) * (0.45 * (0.5 + 0.5 * vel))
+
+
+_JAW = {"bashkir": ((705.0, 1301.0, 2165.0), (200.0, 300.0, 400.0), (1.0, 0.9, 0.75)), "khomus": ((702.0, 1365.0, 2115.0), (200.0, 300.0, 400.0), (1.0, 0.9, 0.7))}
+
+
+@instrument("jaw_harp", "Jaw harp (kubyz, khomus): a buzzing reed under three mouth formants that the player's mouth moves in a loop.",
+            family="plucked", span=("C2", "C4"), kind=("bashkir", "bashkir|khomus"), path=("circle", "circle|sine|line|figure8|triangle: the walk in the F1-F2 plane"), rate=(2.0, "Hz of the walk"),
+            depth=(0.25, "0..1 how far the mouth moves"), shift=(0.1, "formants rise by this x velocity"))
+def jaw_harp(freq, dur, sr=DEFAULT_SR, vel=1.0, kind="bashkir", path="circle", rate=2.0, depth=0.25, shift=0.1):
+    """SuperDuper DSP: 16 harmonics with golden phases (0.137, step 0.6180339885), sum x 0.25, tanh; formants as tabled, attack 2 ms. Khomus's bandwidths are not given: Bashkir's are used.
+"""
+    from . import matter as Ma
+    n = Ma._n(dur + 0.05)
+    t = np.arange(n) / Ma.SR
+    ph = 2.0 * np.pi * freq * t
+    buzz = sum(np.sin(k * ph + 2.0 * np.pi * (0.137 + 0.6180339885 * k)) / k for k in range(1, 17) if k * freq < 0.45 * Ma.SR)
+    buzz = np.tanh(0.25 * buzz * 4.0)
+    F0, BW, G = _JAW[kind]
+    w = 2.0 * np.pi * float(rate) * t
+    if path == "triangle":
+        c = np.radians([90.0, 210.0, 330.0, 450.0])
+        u = (t * float(rate)) % 1.0 * 3.0
+        a, b = np.interp(u, (0, 1, 2, 3), np.cos(c)), np.interp(u, (0, 1, 2, 3), np.sin(c))
+    elif path == "figure8":
+        a, b = np.sin(w), np.sin(2.0 * w)
+    else:
+        a, b = {"circle": (np.cos(w), np.sin(w)), "sine": (np.sin(w), 0.0 * w), "line": (2.0 * np.abs((t * float(rate)) % 1.0 - 0.5) * 2.0 - 1.0, 0.0 * w)}[path]
+    up = 1.0 + float(vel) * float(shift)
+    d = float(np.clip(depth, 0.0, 1.0))
+    y = Ma._tvbp(buzz, F0[0] * up * (1.0 + d * a), F0[0] / BW[0]) * G[0] + Ma._tvbp(buzz, F0[1] * up * (1.0 + d * b), F0[1] / BW[1]) * G[1] + Ma._bp(buzz, F0[2] * up, F0[2] / BW[2]) * G[2]
+    y = y * np.minimum(t / 0.002, 1.0) * np.clip((dur + 0.05 - t) / 0.05, 0.0, 1.0)
+    return Ma._fin(y, sr, 0.55 * (0.5 + 0.5 * vel))
+
+
+@nb.njit(cache=True)
+def _glitch_saw_core(n, inc1, inc2, incc, lo, hi, hold):
+    y = np.empty(n)
+    p = 0.0
+    c = 0.0
+    state = 0
+    cnt = 0
+    for i in range(n):
+        c += incc
+        if c >= 1.0:
+            c -= 1.0
+        want = 1 if c > hi else (0 if c < lo else state)
+        if want != state:
+            cnt += 1
+            if cnt >= hold:
+                state = want
+                cnt = 0
+                p = 0.0
+        else:
+            cnt = 0
+        p += inc2 if state else inc1
+        if p >= 1.0:
+            p -= 1.0
+        y[i] = 2.0 * p - 1.0
+    return y
+
+
+@instrument("glitch_saw", "Glitch saw: a sawtooth whose phase is reset each time a Schmitt trigger on a comparator ramp switches; the two states run at two pitches.",
+            family="synth", span=("C2", "C6"), freq2=(1.0, "pitch ratio of the second saw (state high)"), comparator=(2.0, "comparator ramp frequency / note"),
+            hysteresis=(10, "samples the comparator must stay past a threshold before the trigger switches"),
+            lowlim=(0.5, "comparator level that switches the trigger high"), uplim=(0.3, "comparator level that switches it back low"),
+            bright=(0.5, "0..1"))
+def glitch_saw(freq, dur, sr=DEFAULT_SR, vel=1.0, freq2=1.0, comparator=2.0, hysteresis=10, lowlim=0.5, uplim=0.3, bright=0.5):
+    n = samples(dur + 0.03, sr)
+    hi, lo = max(float(lowlim), float(uplim)), min(float(lowlim), float(uplim))
+    y = _glitch_saw_core(n, freq / sr, freq * float(freq2) / sr, freq * float(comparator) / sr, lo, hi, max(1, int(hysteresis)))
+    y = _soften(y, freq, sr, bright=float(bright))
+    t = np.arange(n) / sr
+    y = y * np.minimum(t / 0.003, 1.0) * np.clip((dur + 0.03 - t) / 0.03, 0.0, 1.0)
+    return 0.5 * (0.5 + 0.5 * float(vel)) * y

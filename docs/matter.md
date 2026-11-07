@@ -14,7 +14,7 @@ rate (rendered at 48 kHz, resampled at the output), is mono, DC-free and starts 
 | Liquid | Bubble nearing the surface ("bloop") | `bubbles`, `drip`, `babble` | `Δω = 72.95·ω_d·exp(−1.24(φ/φ₀−1))·Δφ` per sample, `φ₀` = −8…−25 mm; rise speed `(2/3)√(g·r)` | Harmonic Fluids eq. 6; Farnell |
 | Liquid | Drop into a pool | `drip`, `drops` | 4–5 bubbles per drop, 500 Hz–4 kHz; drop timing is a relaxation oscillator (near-periodic) | Harmonic Fluids Table 1 |
 | Liquid | Object into water | `splash` | 127 bubbles concentrated in the event, 300 Hz–6 kHz; crown droplets return after `t = 2√(2h/g)` | Harmonic Fluids Table 1 |
-| Liquid | Filling a vessel | `pour` | Cup: quarter wave `f = c / (4(L_air + 0.61a))`, odd harmonics. Bottle: Helmholtz `f = (c/2π)·√(A/(V·L′))`. Both rise as `L_air` falls. 1580 bubbles/s | Farnell Practical 14 |
+| Liquid | Filling a vessel | `pour` | Cup: quarter wave `f = c / (4(L_air + 0.6133a))`, odd harmonics. Bottle: Helmholtz `f = (c/2π)·√(A/(V·L′))`. Both rise as `L_air` falls. 1580 bubbles/s | Farnell Practical 14 |
 | Liquid | Brook over a step | `babble` | 3100 bubbles/s, 300 Hz–5 kHz, two-band radii, chirping | Harmonic Fluids Table 1 |
 | Liquid | Large wobbling bubbles | `gurgle`, `drain` | Shape modes `f_n² = (n−1)(n+1)(n+2)σ/(4π²ρr³)` radiating at `2f_n` | Moss, Sounding Liquids |
 | Liquid | Breaking waves | `surf` | Bubble rate follows the crest (`Γ = u²κ`), radii `p(r) ∝ r^−α`, α 1.5–3.3 | Moss |
@@ -23,7 +23,7 @@ rate (rendered at 48 kHz, resampled at the output), is mono, DC-free and starts 
 | Liquid → gas | Water on a hot surface | `sizzle` | Poisson micro-explosions, log-normal sizes | unsourced model |
 | Gas out of liquid | Carbonation | `fizz` | Poisson rate `r(t) = r₀·2^(−t/t½)`; each bubble by the Minnaert and damping laws | rate unsourced |
 | Gas | Jet from a hole | `steam`, `air_leak`, `spray` | Strouhal peak `f_p = St·U/D`, `St = 0.2`; power `∝ U⁸` (`∝ U⁶` near solid edges) | Selfridge (St); power law unsourced in the findings |
-| Gas | Jet locking to a cavity | `kettle` | Edge tone `f_e = St·U/gap` pulled onto the cavity mode when within 30 % | unsourced model |
+| Gas | Jet locking to a cavity | `kettle` | Below orifice Re 2000 a Helmholtz note `f = (c/2π)·√(A/(V·l))`; above, a hole tone `f = St·U/φ` (St 0.50 / 0.39 / 0.43 by plate gap), levels from the measured whistle | pof whistle measurements |
 | Gas | Flapping neck | `balloon` | Relaxation oscillator; Helmholtz cavity rising as volume falls | Farnell (mechanism) |
 | Gas | Wind on objects | `gust` | Wires: tone `∝ U/d`, amplitude `∝ U²`. Openings howl only inside a speed window. Leaves lag by seconds | Farnell Practical 18 |
 | Plasma (flame) | Combustion roar | `flame`, `fire`, `match` | `p(t) = dI/dt` (I = flux through the flame front); above 180 Hz power `∝ f^−α`, α 2.5–3.5, modulated by `|p|` | Animating Fire with Sound |
@@ -42,21 +42,21 @@ Handy numbers: bubble radius 10 mm rings at 330 Hz for 325 ms; 5 mm at 660 Hz fo
 
 | sfx | Parameters (default) | Physical meaning |
 |---|---|---|
-| `drip` | `size` (0.4), `bubbles` (4.7), `secondary` (0.5), `click` (0.15), `seed` | `size` 0..1 sets the mean bubble radius 0.9–4.5 mm (3.6 kHz–730 Hz). `secondary` is the chance of smaller rebound drops. `click` is the level of the impact itself, which is quiet in reality. |
+| `drip` | `size` (0.4), `bubbles` (4.7), `secondary` (0.5), `click` (0.15), `harmonic` (0), `crater` (0), `seed` | `size` 0..1 sets the mean bubble radius 0.9–4.5 mm (3.6 kHz–730 Hz). `secondary` is the chance of smaller rebound drops. `click` is the level of the impact itself, which is quiet in reality. `harmonic` 0..1 adds the first bubble's 2 f0 component (an air disc trapped under the drop); `crater` 0..1 a faint tone of the crater closing, f = speed / rim length. `impact` parabolic (default, a quiet pulse) or franz: noise between U/R and c/R lasting R/U, energy E = 4πKM³ (∝ R³U⁵: big fast drops click much louder; `impact_energy`, `impact_band`). |
 | `drops` | `dur` (4), `rate` (2), `rate_end` (-1), `jitter` (0.15), `size` (0.4), `seed` | `rate` drops per second (0.05–40). `rate_end` ramps it. `jitter` 0 = dripping tap, 1 = random. |
-| `splash` | `size` (0.5), `dur` (1.5), `droplets` (6), `seed` | `size` sets the cavity bubble (6–20 mm) and bubble count; `droplets` fall back 0.2–0.6 s later. |
-| `pour` | `dur` (4), `flow` (1), `fill_start` (0.05), `fill_end` (0.9), `height` (0.15 m), `radius` (0.035 m), `neck` (0), `neck_len` (0.05 m), `material` (glass), `resonance` (0.6), `seed` | `flow` 1 = 1580 bubbles/s. Fill levels are fractions of `height`. `neck` 0 = open cup; a neck radius makes it a bottle (much lower pitch). `material` glass, metal, ceramic, plastic, paper sets how sharp the air resonance is. `resonance` is how clearly the rising pitch reads. |
+| `splash` | `size` (0.5), `dur` (1.5), `droplets` (6), `entrain` (exp), `seed` | `size` sets the cavity bubble (6–20 mm) and bubble count; `droplets` fall back 0.2–0.6 s later. `entrain` exp: bubble rate decays from the impact; stochastic: an entrainment kernel over the rejection time. |
+| `pour` | `dur` (4), `flow` (1), `fill_start` (0.05), `fill_end` (0.9), `height` (0.15 m), `radius` (0.035 m), `neck` (0), `neck_len` (0.05 m), `material` (glass), `resonance` (0.6), `temperature` (20 °C), `collective` (0), `seed` | `flow` 1 = 1580 bubbles/s. Fill levels are fractions of `height`. `neck` 0 = open cup; a neck radius makes it a bottle (much lower pitch). `material` glass, metal, ceramic, plastic, paper sets how sharp the air resonance is. `resonance` is how clearly the rising pitch reads. `temperature` 0..95 °C: hot water puts vapour in the air space (higher pitch) and in the bubbles (larger). `collective` 0..1 is the low collective mode of the bubbles active together. |
 | `babble` | `dur` (4), `flow` (1), `size` (1), `turbulence` (0.5), `seed` | `flow` 1 = 3100 bubbles/s. `size` scales every radius: larger sounds like deeper, slower water. |
-| `bubbles` | `dur` (2), `rate` (12), `size` (2 mm), `spread` (0.4), `cluster` (0.5), `underwater` (0), `rise` (1), `seed` | `size` is the mean radius in mm. `underwater` 1 = deep, muffled, steady pitch. `rise` multiplies the rise speed, so the chirp. |
-| `boil` | `dur` (4), `intensity` (0.8), `ramp` (0), `size` (0.5), `seed` | `intensity` 0.2 simmer, 0.6 loudest rumble, 1 rolling boil. `ramp` 1 heats from cold to `intensity` over the take. |
+| `bubbles` | `dur` (2), `rate` (12), `size` (2 mm), `spread` (0.4), `cluster` (0.5), `underwater` (0), `rise` (1), `flow_lpm` (0), `forcing` (window), `amp_law` (moss), `transfer` (10 dB), `surface` (0), `vessel` (0 m), `seed` | `size` is the mean radius in mm. `underwater` 1 = deep, muffled, steady pitch. `rise` multiplies the rise speed, so the chirp. `flow_lpm` > 0 sets the rate from a gas flow in L/min (flow / bubble volume). `forcing` window, pinch (neck collapse at release) or merge (two bubbles coalescing): how each bubble starts. `amp_law` moss (amplitude ∝ radius), pinch (compression at pinch-off ∝ 1 mm / radius, held to 0.01-0.5: level nearly flat across sizes; also `excitation_amp(law="pinch")`) or xue (surface-tension release, ∝ r⁻³: small bubbles louder). `transfer` ± dB spread of each bubble's path to the ear. `surface` 1: bubbles near the free surface radiate as dipoles (image source) and fade. `vessel` the container radius in m (rigid wall: lower bubbles); 0 = open water. |
+| `boil` | `dur` (4), `intensity` (0.8), `ramp` (0), `size` (0.5), `burst` (0.5), `seed` | `intensity` 0.2 simmer, 0.6 loudest rumble, 1 rolling boil. `ramp` 1 heats from cold to `intensity` over the take. `burst` (0..1) is the level of the cap-film bursts at the surface, each a rising Helmholtz chirp as the film retracts at the Taylor-Culick speed. |
 | `sizzle` | `dur` (3), `intensity` (0.7), `spit` (6), `decay` (0), `hiss` (0.4), `bright` (0.5), `seed` | `intensity` density of micro-explosions. `spit` larger pops per second. `decay` seconds to boil away. |
-| `fizz` | `dur` (3), `rate` (900), `half_life` (1.5), `size` (0.7 mm), `bright` (0.35), `seed` | Bubble rate halves every `half_life` seconds. Smaller `size` is higher and shorter. |
+| `fizz` | `dur` (3), `rate` (900), `half_life` (1.5), `size` (0.7 mm), `bright` (0.35), `pops` (0), `seed` | Bubble rate halves every `half_life` seconds. Smaller `size` is higher and shorter. `pops` 0..1 is the level of the cap bursts as bubbles break the surface (rising Helmholtz chirps, mostly above hearing). |
 | `gurgle` | `dur` (2.5), `rate` (3.5), `size` (0.5), `seed` | Glugs per second; `size` 0..1 = 6–20 mm bubbles (550–165 Hz). |
 | `drain` | `dur` (4), `size` (0.5), `seed` | Basin size lowers the suction pitch. |
-| `surf` | `dur` (12), `distance` (120 m), `period_min` (8), `period_max` (13), `bubble_rate` (3000), `seed` | Under 10 s renders one wave. |
-| `cave_drips` | `dur` (6), `sources` (5), `wet` (0.6), `seed` | Dripping points and cave reverb level. |
+| `surf` | `dur` (12), `distance` (120 m), `period_min` (8), `period_max` (13), `bubble_rate` (3000), `sizes` (breaking), `plume` (0 m), `puffs` (0), `active` (0), `seed` | Under 10 s renders one wave. `sizes` breaking (0.3-20 mm) or plume (surf-zone plume 0.1-5 mm: brighter). `plume` m of bubble plume between the bubbles and the surface (dulls the highs). `puffs` air injections per second at a full crest (0 = continuous; under about 20/s the bursts are heard). `active` 1: bubbles only during the active window after each crest. |
+| `cave_drips` | `dur` (6), `sources` (5), `wet` (0.6), `regime` (fast), `drop_ml` (0), `seed` | Dripping points and cave reverb level. `drop_ml` > 0 (a cave drip: 0.1433 ml) adds an impact click lasting the contact time at terminal speed; 0 = as before. |
 | `waterfall` | `dur` (4), `height` (6 m), `distance` (8 m), `seed` | Height adds rumble; distance removes bubble detail and top end. |
-| `underwater_ambience` | `dur` (6), `depth` (5 m), `bubbles` (4), `seed` | Deeper is darker. `bubbles` per second, 0 for none. |
+| `underwater_ambience` | `dur` (6), `depth` (5 m), `bubbles` (4), `surf` (0), `tide` (0), `wind` (0), `ships` (0), `biophony` (0), `seed` | Deeper is darker. `bubbles` per second, 0 for none. Shallow-water noise bands, each 0..1: `surf` breaking surf heard underwater (20 Hz-5 kHz, peak near 850 Hz), `tide` tidal flow 40-110 Hz, `wind` wind-driven sea noise 50 Hz-20 kHz at −17 dB/decade, `ships` distant shipping below 100 Hz with a blade-rate line, `biophony` snapping shrimp 1.5-6 kHz. |
 
 ## Gases
 
@@ -65,7 +65,7 @@ Handy numbers: bubble radius 10 mm rings at 330 Hz for 325 ms; 5 mm at 660 Hz fo
 | `steam` | `dur` (2.5), `pressure` (0.6), `orifice` (4 mm), `wet` (0.4), `tone` (9000), `seed` | `pressure` 0..1 = exit speed 40–343 m/s. Hiss pitch is `0.2·U/D`: doubling the hole halves it. `wet` adds sputter. |
 | `air_leak` | `dur` (2), `pressure` (0.5), `orifice` (2 mm), `burst` (0), `whistle` (0), `tone` (10000), `seed` | `burst` > 0 turns it into a pneumatic release whose pressure decays with that time constant. `whistle` adds a narrow tone at the Strouhal frequency. |
 | `spray` | `dur` (0.8), `pressure` (0.7), `nozzle` (0.5 mm), `can` (900), `tone` (9000), `seed` | Aerosol can with valve ticks and a hollow can resonance. |
-| `kettle` | `dur` (5), `tone` (1800), `onset` (2.5), `breath` (0.4), `rumble` (0.3), `seed` | `tone` is the whistle cavity; `onset` the seconds for steam pressure to build. |
+| `kettle` | `dur` (5), `onset` (2.5), `flow` (3000), `gap` (10.2), `cavity` (25), `breath` (0.4), `rumble` (0.3), `seed` | `onset` the seconds for the steam flow to build. `flow` is the orifice Reynolds number at full boil (1000-3400; below 2000 only the Helmholtz note); `gap` the plate spacing in mm (5-20; 5 × the 3 mm orifice and over: no vortex tone); `cavity` the whistle diameter in mm (6-40), which sets the Helmholtz note. |
 | `balloon` | `dur` (2), `size` (0.5), `flutter` (0.7), `seed` | `flutter` 0 = hiss, 1 = raspberry. |
 | `gust` | `dur` (4), `through` (gap), `strength` (0.5), `tone` (1), `seed` | `through` gap, wire, leaves, canyon, doorway. Howls sound only for wind speeds about 0.25–0.6: a stronger gust howls on the way up and down and goes quiet at its peak. `tone` scales the wire pitch. |
 
@@ -73,7 +73,7 @@ Handy numbers: bubble radius 10 mm rings at 330 Hz for 325 ms; 5 mm at 660 Hz fo
 
 | sfx | Parameters (default) | Physical meaning |
 |---|---|---|
-| `flame` | `kind` (campfire), `dur` (3), `rate` (1), `seed` | `kind`: candle (silent until a draught), torch (ruffles with each swing, `rate` swings/s), campfire, bonfire, gas_burner (steady, α 2.5), blowtorch (strong jet), fireball (one thump and roar), flamethrower (on, hold, burn-off). |
+| `flame` | `kind` (campfire), `dur` (3), `rate` (1), `length` (0 m), `seed` | `kind`: candle (silent until a draught), torch (ruffles with each swing, `rate` swings/s), campfire, bonfire, gas_burner (steady, α 2.5), blowtorch (strong jet), fireball (one thump and roar), flamethrower (on, hold, burn-off). `length` > 0: a combustion-noise spectrum peaking at 10 / `length` Hz (200 Hz for 0.05 m), falling as f^−2.5 above, so a small flame roars higher than a big fire; 0 = the kind's own roar. Python: `combustion_peak(length, speed=10, st=1)`, `combustion_spectrum(f, f_peak, beta=2.5)`, `combustion_roar(..., peak=, beta=)`. |
 | `fire` | `dur` (4), `size` (0.4), `crackle` (12), `wet` (0.2), `wind` (0.2), `seed` | `size` 0..1 = 1–4 independent flame fronts and more roar. `crackle` per second. `wet` wood hisses more and pops lower. `wind` ruffles the flame: a steady flame is quiet, a ruffled one roars. |
 | `match` | `dur` (1.6), `strike` (0.12), `rough` (0.6), `seed` | Scrape, flare, small flame. |
 | `spark` | `size` (0.3), `tone` (1), `seed` | `size` 0 = static tick, 1 = heavy contactor. `tone` < 1 sounds bigger or enclosed. |
@@ -90,6 +90,35 @@ Handy numbers: bubble radius 10 mm rings at 330 Hz for 325 ms; 5 mm at 660 Hz fo
 | `ice_crack` | `dur` (1.5), `thickness` (0.05 m), `distance` (60 m), `cracks` (3), `brittle` (0.6), `seed` | Thin ice gives a high laser-like "pew", thick ice a low boom. Farther cracks chirp longer. `brittle` is the air-borne snap that follows. |
 | `ice_cubes` | `dur` (1.5), `cubes` (3), `glass` (1), `liquid` (0.6), `energy` (0.7), `seed` | `glass` scales the glass pitch. `liquid` lowers and damps it. `energy` is how hard it is swirled. |
 | `freeze` | `dur` (4), `rate` (8), `creak` (0.5), `pings` (2), `seed` | Ticks accelerate to `rate` per second; `creak` is stick-slip groaning; `pings` are distant ice chirps. |
+
+## Added since 1.2.1
+
+- Bubbles take thermal damping after Xue (2023) and the water depth; `drip` and `drops` put the first bubble 9-65 ms
+  after the impact. `rain` has a drops layer, `surf` brings its first wave within the first second, `rain_water`
+  is rain on water drop by drop. These sound different from 1.2.1.
+- `cave_drips regime` fast | medium | slow (a drip every 1.6-9 s, 9-90 s, 90-900 s per source).
+- `fire` `whine` (gas whistling through sap), `woof` (air drawn in under 80 Hz), `clatter` (burnt pieces falling),
+  `detail=medium` (hiss, roar and crackle only, a fire from afar).
+- `lightning` `model` 1 (the tortuous channel of N-waves), `precursor`; `strokes` 1..3. `thunder` `strokes`, `walk`
+  farnell | ribner, `fineberg` (afterimage and deepener layers; 2 = also Fineberg's 0.6 s delay and compressor); its
+  default changed.
+- `ice_crack` `temp` (ice temperature -50..0 C), `salt` (sea ice), `c_axis`: the loss depends on them; the default
+  changed.
+- Foley around liquids: `clink liquid` (fill height lowers the pitch: `glass_fill_ratio(h)` = 1/√(1 + α·hⁿ),
+  α = 3.65 from an empty 897 Hz and a full 416 Hz glass, n = 5.5; shared with `ice_cubes`), `rain_on surface=eau rate=` (drop by drop,
+  in mm/h). More viscous sounds (`mud`, `slime`, `blood`...) are in the `viscous` module.
+- Bubble physics options (all off by default): `bubbles flow_lpm forcing amp_law transfer surface vessel`, `pour
+  temperature collective`, `drip harmonic crater`, `splash entrain=stochastic`, `fizz pops`, `surf sizes plume puffs
+  active`, `underwater_ambience surf tide wind ships biophony`, `cave_drips drop_ml` (see the tables above).
+- Python helpers in `genny.matter`: `excitation_amp` (source amplitude by radius, Moss or Xue), `image_gain` (a bubble
+  under the free surface as a dipole), `bubble_cloud(dist="plume")`, `plume_frequency` (lowest collective mode of a
+  plume), `coupled_frequencies` (natural frequencies of bubbles close together), `collective_shift`,
+  `bubble_capacitance` and `capacitance_pitch` (pitch near a surface or wall), `entrain_weight`, `forcing`,
+  `merge_time`, `forced_bubble`, `terminal_speed` (raindrop: 9.65 − 10.3 exp(−0.6 D)), `crater_freq`,
+  `vapour_fraction`, `air_speed_ratio` and `vapour_bubble_scale` (hot liquid), `surf_spectrum_db`, `sea_noise_bands`.
+  In `genny.physical.particles`: `plume_radii` (broken power law a^−2.5 / a^−4.5 at 1.3 mm), `plume_skin_depth`,
+  `micro_bubbles`, `bubble_field(plume=, micro=)`, `bubble_pop`. In `genny.physical.ambience`: `surf(sizes, plume,
+  puffs, active)`, `puff_gate`, `active_window`, `cave_drips(drop_ml)`.
 
 ## Recipes
 
@@ -117,7 +146,7 @@ Kettle from cold to whistle:
 ```json
 {"out": "kettle.wav", "layers": [
   {"type": "sfx", "kind": "boil", "params": {"dur": 8, "ramp": 1, "intensity": 0.9, "size": 0.2}, "gain": 0.6},
-  {"type": "sfx", "kind": "kettle", "params": {"dur": 4, "onset": 2.5, "tone": 2000}, "at": 5}]}
+  {"type": "sfx", "kind": "kettle", "params": {"dur": 4, "onset": 2.5, "flow": 3000}, "at": 5}]}
 ```
 
 Campfire in the rain, with a far strike:
@@ -150,7 +179,7 @@ bubble counts and frequency ranges per scene; the vessel resonance formulas; the
 hiss, snap, spark formant, hum, wind and thunder recipes.
 
 Assumptions, marked `# UNSOURCED` in the code: the flame flux `I(t)` (the paper takes it from a
-fluid simulation; here it is smooth noise shaped per flame kind), the jet power law, the kettle,
+fluid simulation; here it is smooth noise shaped per flame kind), the jet power law, the
 balloon, drain, sizzle and boil-rumble models, every ice constant, bubble start depths and the
 per-bubble gain spread.
 

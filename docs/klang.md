@@ -84,16 +84,24 @@ equips `draw` (blade from a scabbard), `shield`, `don` (armour on), `amulet`. `s
 
 **`tide`** — `kind` `rising` | `falling`, `dur`, `seed`. **`distant_bell`** — `distance` (m: air
 absorption takes the highs; the level is normalised, set it with the layer `gain`), `size`
-(1 = a 452 Hz bell, bigger = lower), `dur`, `seed`.
+(1 = a 452 Hz bell, bigger = lower), `dur`, `seed`, `diameter` (lip diameter in m of a cast bronze bell: its
+nominal comes from `foley.bell_nominal` and overrides `size` when > 0).
 
 ### Instruments
 
 | name | span | params | built on |
 |---|---|---|---|
 | `viola` | C3–E6 | `attack`, `vibrato` | bowed voice with viola body formants 230 / 370 / 900 / 2000 Hz |
-| `bassoon` | Bb1–E5 | – | reed voice, formants 480 and 1200 Hz |
+| `bassoon` | Bb1–E5 | `meyer` (1 = measured attack time per register and dynamic, band vibrato AM, high band growing with the dynamic), `precursor` (0..1, the short level peak at the start of the attack) | reed voice, formants 480 and 1200 Hz |
 | `cor_anglais` | E3–A5 | – | reed voice, formants 950 and 2300 Hz |
-| `bass_clarinet` | D2–F5 | – | odd-harmonic reed voice, darker than `clarinet` |
+| `bass_clarinet` | D2–F5 | – | odd-harmonic reed voice, darker than `clarinet`; even partials 30 dB under the odd ones in the low register |
+| `a_clarinet` | Db3–A5 | – | clarinet in A: the B-flat tone, 5 dB less around 1 kHz |
+| `eb_clarinet` | G3–C7 | – | E-flat sopranino clarinet, a fourth above the B-flat |
+| `contrabassoon` | Bb0–F3 | – | the bassoon an octave down |
+| `heckelphone` | A2–G5 | – | baritone oboe an octave below the oboe |
+| `bass_trombone` | Bb1–Bb4 | – | wider-bore trombone, darker low register |
+| `natural_horn` | F2–F5 | – | valveless horn, rawer than `french_horn` |
+| `clarino` | C5–D6 | – | baroque high natural trumpet, about 12 dB under the trumpet |
 | `piccolo` | D5–C8 | `breath` | near-sine fipple voice |
 | `recorder` | C4–D7 | `breath`, `chiff` | fipple voice with an attack chiff |
 | `hand_chime` | G3–C7 | `decay` | port of `charter.hand_chime`: modes 1, 3, 5.404 + clapper click |
@@ -101,7 +109,7 @@ absorption takes the highs; the level is normalised, set it with the layer `gain
 These are the orchestral voices listed in `procedural/instrument_map.py` (the sampler's map of
 CC0 recordings) that genny had no instrument for. The map itself only names recordings, so the
 voices are built on genny's pitch-exact helpers (`_blown`, `_modes`); the formant centres are
-typical textbook values, marked UNSOURCED in the code.
+typical textbook values, justified in `research/SOURCES.md`.
 
 ### Layer types
 
@@ -126,8 +134,12 @@ the same note and layer are round-robin takes used in turn. Each note takes the 
 velocity, the nearest recorded pitch, and is repitched by resampling. Keys: `dir`, `pattern`
 (glob, default `*`; wav, flac, aiff, ogg), `root` (note of files that name none, default C4),
 `steps`, `step`, `legato`, `gap`, `transpose`, `vel`, `release` (s; 0 = let every sample ring out),
-`tune` (cents), `max_shift` (semitones; farther notes raise an error). A note longer than its
-recording ends with the recording (no looping).
+`tune` (cents), `max_shift` (semitones; farther notes raise an error), `hold` (default false: a note
+longer than its recording ends with the recording; true: it loops the recording's stable part, spliced by
+cross-correlation with constant-power crossfades of min(0.15 s, span/4), at the stable RMS).
+
+Python: `cauchy_gh(b)` and `cauchy_wave(freq, n, sr, b)`: Puckette's Cauchy waveshaper 1/(1 + x²) driven by a sine, a
+formant whose harmonics fall 20 log10 H dB each (G = 2/√(1 + b²), H = (1 + b²/2 − √(1 + b²))/(b²/2)).
 
 ## Recipes
 
@@ -205,7 +217,7 @@ Changed, because the contract needs bounded output:
 **Rain.** `procedural/nature/Nature.h` contains only `#pragma once`; the README lists "Rain
 (work-in-progress)". There was nothing to translate. `klang_rain` is an original small model
 made of klang primitives (white noise, one-pole high-pass, biquad low-pass); every constant in it
-is marked UNSOURCED.
+is chosen without a direct source and justified in `research/SOURCES.md`.
 
 **Tide.** `tide` passes the same dynamics curve to Reshetnikov's stream as `world.py` does. As the
 dynamics rise (0.05 → 0.55) that kernel gets darker (share of energy above 2.5 kHz 0.7 → 0.02)

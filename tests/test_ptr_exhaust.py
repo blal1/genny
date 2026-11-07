@@ -17,5 +17,6 @@ def test_learned_loops_are_stable_and_the_exhausts_differ():
     for y in ys:
         assert np.all(np.isfinite(y)) and np.max(np.abs(y)) > 0.01
     spec = [np.abs(np.fft.rfft(y))[:4000] for y in ys]
+    spec = [20 * np.log10(s + 1e-6 * s.max()) for s in spec]     # in dB: the pulse falls ~10 dB a harmonic, linear sees f0 only
     spec = [s / np.linalg.norm(s) for s in spec]
     assert max(float(spec[i] @ spec[j]) for i in range(3) for j in range(i + 1, 3)) < 0.98

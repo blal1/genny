@@ -175,18 +175,30 @@ def cmd_list(args):
 
 
 def cmd_info(args):
-    from .analysis import describe
+    from .analysis import describe, count_overs
     out = []
     for f in args.files:
         y, sr = read_wav(f)
         d = describe(y, sr)
         d["file"] = str(f)
+        if args.json:
+            d["overs"] = count_overs(np.abs(y).max(axis=1) if y.ndim == 2 else y, level=32767 / 32768)
         out.append(d)
         if not args.json:
             print(f"{f}: {d['seconds']:.3f}s {'stereo' if d['channels'] == 2 else 'mono'} {sr}Hz peak={d['peak_db']:.1f}dB rms={d['rms_db']:.1f}dB "
                   f"loud={d['loudness']:.1f} ear={d['ear']:.1f} sharp={d['sharpness']:.2f} above5k={100 * d['above_5k']:.1f}% crest={d['crest_db']:.1f}dB tp={d['true_peak_db']:.1f}dBTP lat={d['log_attack']:.2f} flux={d['flux']:.1e}")
     if args.json:
         print(json.dumps(out, indent=2))
+    if args.check is not None:
+        from .analysis import wav_check
+        failed = 0
+        for f in args.files:
+            y, sr = read_wav(f)
+            bad = wav_check(y, sr, args.check or None)
+            failed += bool(bad)
+            print(f"{'FAIL' if bad else 'ok'} {f}" + (": " + "; ".join(bad) if bad else ""))
+        if failed:
+            sys.exit(1)
 
 
 def cmd_identify(args):
@@ -237,7 +249,7 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("-o", "--out", default=default_out, help="output .wav path")
         sp.add_argument("--fx", action="append", metavar="NAME[:k=v,k=v]", help="effect to apply after the sound (repeatable, in order)")
         sp.add_argument("--sr", type=int, default=DEFAULT_SR, help="sample rate (default 44100)")
-        sp.add_argument("--normalize", type=float, default=-1.0, help="peak dB target (default -1)")
+        sp.add_argument("--normalize", type=lambda s: None if s == "none" else float(s), default=-1.0, help="peak dB target (default -1), or none to keep the level")
         sp.add_argument("--no-trim", action="store_true", help="keep silent tail")
 
     s = sub.add_parser("synth", help="play one or more notes (a chord) with an instrument")
@@ -308,6 +320,10 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("info", help="print duration, peak/rms, loudness and brightness (sharpness, energy above 5 kHz) of wav files")
     s.add_argument("files", nargs="+")
     s.add_argument("--json", action="store_true")
+    from .analysis import QC_DURATION
+    s.add_argument("--check", nargs="?", const="", default=None, choices=[""] + sorted(QC_DURATION), metavar="CATEGORY",
+                   help="game-sfx quality check (peak, silence, DC, clicks at the ends; length of CATEGORY: "
+                        + ", ".join(sorted(QC_DURATION)) + "); exit code 1 if a file fails")
     s.set_defaults(fn=cmd_info)
 
     s = sub.add_parser("identify", help="name the machine in a steady recording (transformer, gearbox, bearing fault, engine) and the sfx params that reproduce it")

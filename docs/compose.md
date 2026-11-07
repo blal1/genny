@@ -52,18 +52,45 @@ All the common layer keys (`at`, `gain`, `fx`, `repeat` / `every`, `bpm`) work o
 | `range` | by role | `"C4-C6"`; melody C4–C6, bass E1–G3, chords and pad C3–C5, counter G3–G5 |
 | `seed` | 0 | the take |
 | `swing` | style's | delays every other grid step by this fraction of a step (as in `pattern`); `swing_grid` picks the step |
-| `humanize` | 0 | 0..1, or `{"time": ms, "vel": 0..1}`: onset deviations that are half 1/f, half white (long-range drift over phrases, hit-to-hit anticorrelation, as measured on real drummers), 1 → 0.98 % of a beat (6 ms at 96 bpm); 1/f velocity spread (1 → 13 %). Notes of a chord move together |
+| `humanize` | 0 | 0..1, or `{"time": ms, "vel": 0..1}`: onset deviations that are half 1/f, half white (long-range drift over phrases, hit-to-hit anticorrelation, as measured on real drummers), 1 → 0.98 % of a beat (6 ms at 96 bpm); 1/f velocity spread (1 → 13 %). Notes of a chord move together. `{"model": "arma"}`: timing deviations from the ARIMA(4,0,1) fitted to a drummer's 16th-note hi-hat |
 | `drift` | 0 | tempo drift ±fraction (0.04 = ±4 %) in slow ~20 s waves; the total length does not change |
+| `drift_trend` | 0 | monotone tempo change: the end is (1 + p) × faster (negative = slower, > -1); length kept |
+| `swing` | | also `"auto"`: the swing ratio measured on jazz drummers for this tempo |
+| `ritard` | — | final ritardando over that many beats (default one bar), or `{"beats", "v_end", "q"}` (q 3, v_end 0.3); `{"beats", "model": "kth"}` uses Friberg's 1991 final-ritard curve instead |
+| `offset_ms` | 0 | this part plays that many ms late; `arrangement` `melody_lead` (true = 20 ms, or a number) delays every part but the lead; `melody_lead` `"jazz"` (or true with a `jazz*` style) makes the soloist play the beats late by 107.2 − 0.306 × bpm ms, the off-beats on time |
+| `sync` | — | with `humanize`: onsets that correct each other like a player keeping time (`{"alpha", "beta"}`) |
+| `expression` | — | scales every timing deviation from the score: 0 deadpan, 1 as performed |
+| `off` | — | `{"time": beats, "steps": semitones, "vel"}` (defaults 0.25, 0, 0.8): adds a shifted, transposed copy of every event |
+| `echo` | — | `{"n", "time": beats, "decay"}` (defaults 2, 0.5, 0.5): adds n delayed repeats, each `decay` times softer |
+| `min_ioi` | 0 | ms: per drum (or for the pitched part), drops onsets closer than that to the last kept one |
+| `phase` | — | Reich phasing: each repetition of `cycle` beats lands `shift` beats later (`{"cycle", "shift"}` or a cycle) |
+| `high_loud`, `high_sharp`, `double_duration`, `duration_contrast`, `faster_uphill`, `repetition`, `inegales`, `leap_duration`, `melodic_charge`, `chromatic_charge`, `leap_articulation`, `harmonic_charge`, `phrase_arch` | 0 | KTH performance rules, each a strength k (0 = off). `leap_duration` (Friberg's thesis erratum): before an upward leap the note shortens by 4.2 √ΔN·k ms and the landing note lengthens by as much; before a downward leap the note lengthens by 2.4 √ΔN·k ms and the landing note shortens by 4.2 √ΔN·k ms (ΔN in semitones); `melodic_charge` also smooths the level of a neighbouring step (0.75 / 0.55 of the charged note); `leap_articulation` puts a micropause after a leap of 3 semitones or more; `harmonic_charge` swells and stretches toward chords far from the key; `phrase_arch` slows and softens each phrase's ends around a peak at `phrase_turn` (0.7 of the phrase); `duration_contrast` only touches notes of 30-600 ms |
+| `melodic_intonation`, `harmonic_intonation` | 0 | KTH intonation, strength k (0 = off). `melodic_intonation` tunes the top voice by its interval to the chord root (cents: 0 −7 3 −4 4 2 10 1 −6 4 −4 9, leading notes up instead); `harmonic_intonation` tunes every note toward just intonation (0 5 4 16 −14 −2 −10 2 14 −16 18 −12 cents) |
+| `phrase_lengthen` | 0 | k: the last 3 notes of each phrase lengthen, up to +20 %·k on the last |
+| `feel` | — | `soloist`: plays the beats late (off-beats on time) by `downbeat_delay_ms`, default `ellis_delay(bpm)` (40 ms at 90 bpm → 63 ms at 210); `bass`: +10 ms; `ride`: off-beat eighths placed at r/(1+r) of the beat, r = `ride_ratio(bpm)` (2.4 at 132 bpm, straight at 300, held within 1..3.5) |
+| `emotion` | — | `angry`, `happy`, `sad`, `tender`: a palette of KTH rules plus tempo (×1.15 or ×0.85), level (±3 dB) and articulation (0.75 or 1.0); explicit keys override the palette |
+| `nma` | — | negative mean asynchrony: `true` / `"musician"` (hits 30 ms early), `"novice"` (50 ms), or ms |
+| `ensemble` | false | true: per-note jitter N(0, σ), σ = `ensemble_sigma_ms(ioi)` (3 % of the IOI, held within 30-50 ms) |
+| `accent_dip` | — | drums: the hit just before an accent drops 2 dB (`true`, or dB) |
+| `rmd`, `rmd_unit` | —, 0.5 | Repp's power law on the beat lengths (`"auto"` from the tempo); long notes are cut in `rmd_unit` beats first |
+| `accent` | — | drums: accent level as a ratio of a normal hit (ghosts keep theirs) |
+
+Notes may carry cents: `C4+12c`. A section at intensity 0 is silent.
 
 Per role:
 
 - **melody** `mode`: `walk` (default: constrained random walk — mostly steps, chord tones on beats 1 and 3,
   an arch per phrase, each phrase ends on a chord tone and rests, the piece ends on the root),
-  `markov` (order 1–2 chain learnt from `motif`), `voss` (1/f pitch sequence), `collatz` (hailstone numbers
+  `markov` (order 1–2 chain learnt from `motif`), `voss` (1/f pitch sequence; `gamma` sets 1/f^γ: 0 white, 1 pink, 2 brown), `collatz` (hailstone numbers
   folded into the range; `start`), `motif` (a motif developed phrase by phrase; `develop`:
   `state|transpose|invert|retrograde|augment|diminish`), `call_response`.
   `motif`: `"D4 F4 G4"`, scale steps `[0, 2, 3]`, or `[[step, beats], ...]`. `phrase` (bars, 2),
   `contour` `arch|rise|fall|flat`, `snap` (chord tones on strong beats), `p_near`, `p_chord`, `gate`.
+  Also: `markov` takes `order` 0–4; `montecarlo` (`min_step`, `max_step`), `ca` (elementary cellular automaton:
+  `rule` 90, `cells`, `init`), `lsystem` (`grammar`), `koenig` (`select`, `weights`, `group`), `tendency` (masks
+  `mask_lo`, `mask_hi`), `logistic` (`r` 3.9, `x0`), `row` (a twelve-tone `row` and its matrix), `ga` (rhythm
+  evolved by a genetic algorithm toward `fit`, a list of `[divisor, multiple, sounding]` durations, beats =
+  multiple / divisor; the best rhythm of each of the `generations` (25) is played in turn).
 - **bass** `pattern`: `root_fifth`, `walking` (root on beat 1, approach tone on the last beat; `approach` =
   probability that it is chromatic), `octave`, `eighths`, `sixteenths`, `offbeat`, `long`, `tumbao`
   (anticipates the next chord), `syncopated` (funk: Euclidean mask + ghost notes), `acid` (303 line with
@@ -187,7 +214,7 @@ or drum has one.
 | mood | shape | default voice |
 |---|---|---|
 | `victory` | up the major triad to a held octave chord | `brass` |
-| `defeat` | minor line stepping down to the tonic | `piano` |
+| `defeat` | minor line stepping down, then a falling minor third to the tonic | `piano` |
 | `mystery` | wandering whole tones, unresolved augmented chord | `vibraphone` |
 | `danger` | root against the flat second, tritone cluster, low | `brass` |
 | `pickup` | quick rising pentatonic figure, high | `marimba` |
@@ -215,12 +242,22 @@ one gain, so a quiet state stays quiet. The layer's own audio is a demo: the sta
 transition stinger laid over its boundary. Switching states at run time is the game engine's job; a
 WAV renderer can only hand over the pieces.
 
+Per state, also: `oneshot` (plays once instead of looping; `next` names the state that follows), `condition`
+(written to `graph.json` for the engine), `xfade_in` / `xfade_out` (seconds). `tails` on the layer writes each
+loop's ring-out as `<state>__tail.wav`; `first: true` also writes `<state>__first.wav`, the loop's first pass without
+its tail folded onto the start (the engine plays it on entering the state, then the loop; `graph.json` names it under
+`"first"`); a transition's `quantize` is free (`"bar"` by default, `"beat"` to escalate quickly); `graph.json` gives bar `markers` in samples. A transition can carry any
+`layer` instead of a mood stinger; stingers are in the key of the state they lead to. Moods `alarm` and `settle`
+are chromatic clusters (rising, falling). A transition's `level` (dB, or `[from, to]`) is written to `graph.json` as
+`level_db` `{"from", "to", "curve": "linear_db"}`, and its `pause` (beats, `true` = 1) as `pause_s` in seconds.
+
 ## Scales and tunings
 
 Added to `genny list scales`: `harmonic_minor`, `melodic_minor`, `locrian`, `hijaz`, `in`, `hirajoshi`,
 `pelog`, `slendro` (12-TET approximations), `octatonic`, `octatonic_hw`, `bebop`, `bebop_major`.
 Ratio scales (usable in `scale` here, not 12-TET): `ptolemy` (syntonic diatonic 1, 9/8, 5/4, 4/3, 3/2, 5/3,
-15/8), `seven_eleven` or `"7-11"` (harmonics 6:7:8:9:11), `slendro_equal` (five equal steps).
+15/8), `seven_eleven` or `"7-11"` (harmonics 6:7:8:9:11), `slendro_equal` (five equal steps), `ikeda_18`
+(18 equal steps), `pythagorean` (twelve stacked fifths). `euclid` takes a Xenakis `sieve` in place of `k`.
 Custom: a list starting with 0 is semitones (`[0, 2, 3.5, 7]`), a list starting with 1 or holding
 `"a/b"` strings is frequency ratios (`[1, "9/8", "5/4", "3/2"]`), or `{"cents": [...]}`.
 `"tuning": "just"` plays any 12-TET scale in 5-limit just intonation. Chords are always built from the
@@ -254,6 +291,12 @@ A noise loop where every recirculated sample keeps its sign with probability `bl
 | `stretch` | 1 | ≥ 1: longer, more "snare" |
 | `tone` | 6000 | Hz lowpass |
 | `seed` | 0 | the sign sequence |
+
+Python: `ks_drum_raw(n, p, blend, stretch, seed, loop="avg"|"121"|"siegel", copies=k)`: `121` averages three
+samples (Y[t−p−1] + 2Y[t−p] + Y[t−p+1])/4 (pitch fs/p), `siegel` (Y[t−p] + Y[t−1])/2 (softer, nylon-like); `copies` k fills the table with k copies of one noise burst
+(k times higher, same decay). Also
+`ellis_delay(bpm)`, `ride_ratio(bpm)`, `ensemble_sigma_ms(ioi_ms)`, `gamma_noise(n, gamma, rng)`, `arma_hihat(n, rng)` and `poisson_grains(dur, density, rng, grain=(0.06, 0.12))`
+(a stochastic grain cloud with exponential inter-onset times).
 
 ## Recipes
 

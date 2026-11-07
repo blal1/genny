@@ -71,3 +71,38 @@ def test_roughness_of_the_calibration_tone():
     t = np.arange(0, 0.6, 1 / 48000)
     x = 0.5 * (1 + np.sin(2 * np.pi * 70 * t)) * np.sin(2 * np.pi * 1000 * t)
     assert abs(C.roughness(x, 48000) - 1.0) < 0.15                  # 1 asper by definition
+
+
+def test_texture_snr_sees_c2_phase():
+    from genny import cyber
+    x = np.random.default_rng(1).standard_normal(4 * 48000)
+    x = np.cumsum(x) * 0.01 + x * np.exp(-((np.arange(x.size) % 4800) / 500.0))   # one-sided events: C2 has a phase
+    s = cyber.texture_stats(x, 48000)
+    flipped = dict(s, c2=np.conj(s["c2"]))
+    assert C.stats_snr(s, flipped)["c2"] < C.stats_snr(s, s)["c2"] - 40
+
+
+def test_target_snr_stops_early():
+    from genny import cyber
+    s = cyber.texture_stats(np.random.default_rng(2).standard_normal(48000 * 2), 48000)
+    calls = []
+    real = cyber.stats_snr
+    cyber.stats_snr = lambda a, b: calls.append(1) or real(a, b)
+    try:
+        cyber.texture_synth(s, 1.0, iters=5, target_snr=-1000.0)
+    finally:
+        cyber.stats_snr = real
+    assert len(calls) == 1
+
+
+def test_ir_params_read_back_a_known_decay_and_direct_ratio():
+    sr = 16000
+    t = np.arange(int(2.0 * sr)) / sr
+    rng = np.random.default_rng(0)
+    tail = rng.standard_normal(len(t)) * np.exp(-3 * math.log(10) * t / 0.8)     # T60 0.8 s in energy
+    ir = 0.05 * tail
+    ir[0] = 1.0
+    p = C.ir_params(ir, sr)
+    assert p["t30"] == pytest.approx(0.8, rel=0.05) and p["t20"] == pytest.approx(0.8, rel=0.05)
+    rest = float((ir[41:] ** 2).sum())
+    assert p["drr"] == pytest.approx(10 * math.log10(float((ir[:41] ** 2).sum()) / rest), abs=0.01)

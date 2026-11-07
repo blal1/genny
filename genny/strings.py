@@ -6,6 +6,7 @@ reduced-order model, not a finite-element string solver.
 """
 from __future__ import annotations
 from dataclasses import dataclass
+import functools
 import math
 import numba
 import numpy as np
@@ -240,10 +241,12 @@ class WoundStringPhysicalProperties:
         return cls(L,cr,wr,core_material,winding_material,f)
 
 
+GLIDE_COUPLE_POLE = 0.97
+
 
 @numba.njit(cache=True)
 def _string_kernel(exc, n, dx, dy, maxd, pc, damp_gain,
-                   xdc, xhf, xs, ydc, yhf, ys, xa, ya, la1, la2, dc_r, glide=0.0):
+                   xdc, xhf, xs, ydc, yhf, ys, xa, ya, la1, la2, dc_r, glide=0.0, couple=0.0):
     """The whole `DispersiveString.step` loop for a fresh string with a fixed length and no bridge
     input: two polarisation delay lines (integer delay + Thiran allpass), dispersion allpasses,
     loss filters, longitudinal resonator, output DC blocker. Same arithmetic as the class, compiled.
@@ -253,7 +256,9 @@ def _string_kernel(exc, n, dx, dy, maxd, pc, damp_gain,
     its twice-frequency cross terms average out), smoothed by a leaky integrator with a one-loop time
     constant (eqs 11-13), and shortens both delays by the relative speed rise (eq. 18). ``glide`` is that
     rise at the first full loop (the paper fits its scale to recordings; genny's waves carry no units),
-    so the pitch starts sharp by 1200 log2(1 + glide) cents and falls as the note decays."""
+    so the pitch starts sharp by 1200 log2(1 + glide) cents and falls as the note decays. ``couple`` 0..1
+    shortens that time constant (pole from exp(-1/loop) to GLIDE_COUPLE_POLE): the elongation then follows the
+    twice-frequency terms, which couples the harmonics and refills those the pluck point left out."""
     size = maxd + 8
     bx = np.zeros(size); by = np.zeros(size)
     out = np.zeros(n)
@@ -267,7 +272,7 @@ def _string_kernel(exc, n, dx, dy, maxd, pc, damp_gain,
     w = 0
     esum = 0.0; esm = 0.0; kap = 0.0
     nl = max(2, int(dx))
-    ap_ = -math.exp(-1.0 / nl)                          # eq. 13: tau = one loop
+    ap_ = -((1.0 - couple) * math.exp(-1.0 / nl) + couple * GLIDE_COUPLE_POLE)
     ref = nl + len(exc)
     for i in range(n):
         if glide > 0.0:
@@ -442,7 +447,8 @@ class DispersiveString:
     def energy_proxy(self) -> float:
         return float(self.x_in*self.x_in + self.y_in*self.y_in + 0.1*(self._ly1*self._ly1+self._ly2*self._ly2))
 
-    def _run(self, exc: np.ndarray, n: int, position: float, damper: float = 0.0, glide: float = 0.0) -> np.ndarray:
+    def _run(self, exc: np.ndarray, n: int, position: float, damper: float = 0.0, glide: float = 0.0,
+             couple: float = 0.0) -> np.ndarray:
         """Render `n` samples of a fresh string driven by `exc` (compiled). The excitation first goes
         through the pluck-position comb: a string released at a fraction `position` of its length
         has no partials with a node there (JOS, extended Karplus-Strong)."""
@@ -459,16 +465,18 @@ class DispersiveString:
                               xl.dc_gain, xl.hf_gain, xl.smoothing, yl.dc_gain, yl.hf_gain, yl.smoothing,
                               np.array([f.coefficient for f in self.x_disp.filters]),
                               np.array([f.coefficient for f in self.y_disp.filters]),
-                              self._la1, self._la2, self._dc_r, float(max(glide, 0.0)))
+                              self._la1, self._la2, self._dc_r, float(max(glide, 0.0)),
+                              float(np.clip(couple, 0.0, 1.0)))
 
     def render_pluck(self, dur: float, *, velocity: float = 0.8, position: float = 0.2,
-                     bridge_velocity: float = 0.0, glide_cents: float = 0.0) -> np.ndarray:
-        """glide_cents: tension-modulation pitch excess at the start of the note (see _string_kernel)."""
+                     bridge_velocity: float = 0.0, glide_cents: float = 0.0, glide_couple: float = 0.0) -> np.ndarray:
+        """glide_cents: tension-modulation pitch excess at the start of the note; glide_couple 0..1: how much that
+        modulation couples the harmonics (see _string_kernel)."""
         n=max(1,int(round(float(dur)*self.sr)))
         width=max(2,int(round(0.0025*self.sr)))
         exc=float(velocity)*np.sin(np.pi*np.arange(width)/max(1,width-1))
         if bridge_velocity == 0.0:
-            y=self._run(exc,n,position,glide=2.0**(max(float(glide_cents),0.0)/1200.0)-1.0)
+            y=self._run(exc,n,position,glide=2.0**(max(float(glide_cents),0.0)/1200.0)-1.0,couple=glide_couple)
         else:
             y=np.zeros(n,float)
             for i in range(n):
@@ -480,6 +488,9 @@ class DispersiveString:
 # ============================================================================
 # v0.20: local string interactions (pick/finger/fret/buzz/mute/slide/harmonics)
 # ============================================================================
+
+FLESH_STICK_S, FLESH_SLIP_S = 0.020, 0.0008
+
 
 @dataclass(frozen=True)
 class StringExciter:
@@ -500,6 +511,15 @@ class StringExciter:
         if self.kind.lower()=="finger": ms=max(ms,2.2)
         # a nail releases in 0.25-1 ms, shorter the harder the stroke (min(ms, 1) pinned every guitar note to 1 ms)
         elif self.kind.lower()=="nail": ms=0.25+0.75*(1.0-h)
+        if self.kind.lower()=="flesh":
+            # the fingertip sticks and loads the string: force ramps over FLESH_STICK_S while the pad's hardening spring
+            # S(xi) = xi1 xi / (xi2 - xi) gives the displacement xi ~ u / (1 + u) of a linear force ramp u = t / T, then
+            # the string slips off in FLESH_SLIP_S
+            nr=max(2,int(round(FLESH_STICK_S*sr))); ns=max(2,int(round(FLESH_SLIP_S*sr)))
+            u=np.arange(nr,dtype=float)/nr
+            p=np.concatenate([2.0*u/(1.0+u),np.cos(0.5*np.pi*np.arange(1,ns+1)/ns)])
+            pos=float(np.clip(self.position,.01,.99))
+            return p*float(velocity)*float(np.sign(self.direction) or 1.0)*(0.62+0.38*math.sin(math.pi*pos))
         n=max(2,int(round(ms*1e-3*sr)))
         x=np.arange(n,dtype=float)/max(1,n-1)
         # Smooth displacement release with finite slope at both ends.
@@ -1062,3 +1082,245 @@ class StringPerformance:
             'max_frequency_hz': float(np.max(freqs)),
         }
         return out
+
+
+@numba.njit(cache=True)
+def _admittance_reflect_kernel(vp, b1, b2, a1, a2, Yr, Yi, Y0):
+    n, K = vp.shape
+    R = b1.shape[0]
+    M = np.linalg.inv(Yi + Y0)
+    A = Yi - Y0
+    vm = np.zeros((n, K))
+    y1 = np.zeros((R, K))
+    y2 = np.zeros((R, K))
+    d1 = np.zeros(K)
+    for i in range(n):
+        u = A @ vp[i]
+        for r in range(R):
+            u += Yr[r] @ y1[r]
+        vm[i] = M @ u
+        d = vp[i] - vm[i]
+        for r in range(R):
+            for k in range(K):
+                y = b1[r] * d[k] + b2[r] * d1[k] - a1[r] * y1[r, k] - a2[r] * y2[r, k]
+                y2[r, k] = y1[r, k]
+                y1[r, k] = y
+        d1[:] = d
+    return vm
+
+
+def admittance_reflect(v_plus, poles, Yr, Y0):
+    """Velocity waves reflected by a passive K x K bridge admittance Y(z) = sum_r Yr H_r(z), H_r = (1 - z^-2) /
+    ((1 - p_r z^-1)(1 - conj(p_r) z^-1)), each Yr positive semidefinite: v- = (Y + Y0)^-1 (Y - Y0) v+, computed without a
+    delay-free loop by splitting Y = Yi + z^-1 Yp. ``v_plus`` (n, K) incident waves, ``poles`` (R,) complex, ``Yr`` (R, K, K),
+    ``Y0`` (K, K) the string's characteristic admittance."""
+    p = np.asarray(poles, complex)
+    a1, a2 = -2.0 * p.real, np.abs(p) ** 2
+    Yr = np.ascontiguousarray(np.asarray(Yr, float))
+    w, V = np.linalg.eigh(Yr)
+    Yr = np.ascontiguousarray(np.einsum("rij,rj,rkj->rik", V, np.clip(w, 0.0, None), V))
+    vp = np.ascontiguousarray(np.asarray(v_plus, float).reshape(len(v_plus), -1))
+    return _admittance_reflect_kernel(vp, -a1, -1.0 - a2, a1, a2, Yr, Yr.sum(axis=0), np.ascontiguousarray(np.asarray(Y0, float)))
+
+
+def pluck_scattering(M: float, R: float, K: float, Z0: float, sr: float):
+    """Finger (or plectrum) on the string as a mass-damper-spring load E(s) = M s^2 + R s + K between two string segments of
+    wave impedance Z0: Q(s) = (2 Z0 s - E(s)) / (2 Z0 s + E(s)), bilinear-transformed so |Q| <= 1 at every frequency
+    whatever M, R, K >= 0. Scattering S = [[1 + Q, Q - 1], [Q - 1, 1 + Q]] / 2 (det S = Q); a force F0 enters both rails
+    through (1 + Q) / (4 Z0). Returns (b, a) of Q(z)."""
+    c = 2.0 * float(sr)
+    num = np.array([-M, 2.0 * Z0 - R, -K])               # s^2, s, 1
+    den = np.array([M, 2.0 * Z0 + R, K])
+    def bil(p):
+        return np.array([p[0] * c * c + p[1] * c + p[2], -2 * p[0] * c * c + 2 * p[2], p[0] * c * c - p[1] * c + p[2]])
+    b, a = bil(num), bil(den)
+    return b / a[0], a / a[0]
+
+
+# ---------------------------------------------------------------- string loss and nonlinearity laws (V4)
+def loss_fir(f0: float, tau, sr: int, ntaps: int | None = None, fk=None) -> np.ndarray:
+    """Linear-phase FIR loop filter whose magnitude at the partials ``fk`` (default k f0) is the per-period loss
+    exp(-1 / (f0 tau_k)): least squares (firls) weighted by 1 / (1 - g)^4, so the error is even in decay time
+    rather than in gain; 17 taps for the lowest strings (f0 < 200 Hz), 9 above."""
+    from scipy.signal import firls
+    tau = np.atleast_1d(np.asarray(tau, float))
+    fk = np.arange(1, tau.size + 1) * f0 if fk is None else np.asarray(fk, float)
+    n = int(ntaps or (17 if f0 < 200.0 else 9))
+    n += 1 - n % 2
+    g = np.exp(-1.0 / (f0 * tau))
+    nyq = 0.5 * sr
+    fr = np.concatenate([[0.0], fk[fk < nyq * 0.98], [nyq]])
+    gr = np.concatenate([[g[0]], g[fk < nyq * 0.98], [g[fk < nyq * 0.98][-1] if np.any(fk < nyq * 0.98) else g[-1]]])
+    bands = np.repeat(fr, 2)[1:-1]
+    des = np.repeat(gr, 2)[1:-1]
+    w = 1.0 / np.maximum(1.0 - 0.5 * (gr[:-1] + gr[1:]), 1e-6) ** 4
+    return firls(n, bands, des, weight=w / w.max(), fs=sr)
+
+
+PIANO_LOSS = (4.4e-3, -4e-2, 1.0e-6, 1e-5)     # b1 = a f0 + b (1/s), b2 = c f0 + d (m^2/s)
+
+
+def piano_loss_coeffs(f0: float) -> tuple[float, float]:
+    """(b1, b2) of a piano string at f0 (Disklavier C6, mf): b1 = 4.4e-3 f0 - 4e-2, b2 = 1.0e-6 f0 + 1e-5."""
+    a, b, c, d = PIANO_LOSS
+    return max(a * f0 + b, 0.05), c * f0 + d
+
+
+def piano_decay_rate(f, f0: float, B: float, L: float) -> np.ndarray:
+    """Amplitude decay rate (1/s, positive) at f of the damped stiff string:
+    -sigma = b1 + b2 pi^2 / (2 B L^2) (-1 + sqrt(1 + 4 B (w/w0)^2)); B -> 0 gives b1 + b2 (w/c)^2."""
+    b1, b2 = piano_loss_coeffs(f0)
+    r = np.asarray(f, float) / f0
+    B = max(float(B), 1e-12)
+    return b1 + b2 * math.pi ** 2 / (2.0 * B * L * L) * (-1.0 + np.sqrt(1.0 + 4.0 * B * r * r))
+
+
+def loop_filter_closed_form(f, f0: float, b1: float, b2: float, B: float, L: float):
+    """Waveguide loop filter F(w) that a damped stiff string implies: D = pi / w0 (one period over two),
+    xi = -1 + sqrt(1 + 4 B w^2 / w0^2), |F| = exp(-D [b1 + b2 pi^2 xi / (2 B L^2)]), arg F = w D - pi sqrt(xi / (2B)).
+    Returns (|F|, arg F)."""
+    w = 2 * math.pi * np.asarray(f, float)
+    w0 = 2 * math.pi * f0
+    D = math.pi / w0
+    B = max(float(B), 1e-12)
+    xi = -1.0 + np.sqrt(1.0 + 4.0 * B * w * w / (w0 * w0))
+    return np.exp(-D * (b1 + b2 * math.pi ** 2 * xi / (2.0 * B * L * L))), w * D - math.pi * np.sqrt(xi / (2.0 * B))
+
+
+def loop_filter_from_partials(freqs, alphas):
+    """Inverse problem: partial frequencies f_n (Hz) and amplitude decay rates alpha_n (1/s) of a string give the
+    loop delay D = 2 pi / (w2 - w1), |F(w_n)| = exp(-alpha_n D) and arg F(w_n) = w_n D - 2 pi n. Returns (D, |F|, arg F)."""
+    f = np.asarray(freqs, float)
+    a = np.asarray(alphas, float)
+    w = 2 * math.pi * f
+    D = 2 * math.pi / (w[1] - w[0])
+    n = np.arange(1, f.size + 1)
+    return D, np.exp(-a * D), w * D - 2 * math.pi * n
+
+
+NL_CL, NL_CT = 0.25, 10.0
+
+
+def nonlinear_regime(ES: float, T0: float, slope: float = 1e-2) -> dict:
+    """Which geometric nonlinearities a string needs at a slope |y'| (1e-2 = a fortissimo hammer): longitudinal force
+    ~ Cl ES y'^2, nonlinear transverse ~ Ct ES y'^3, each against the linear transverse T0 y' (dB); a term counts above
+    -20 dB. Also f_xi0 / f0 = sqrt(ES / T0) (3-5 nylon, 10-20 metal)."""
+    lin = T0 * slope
+    fl = NL_CL * ES * slope ** 2
+    ft = NL_CT * ES * slope ** 3
+    l_db, t_db = 20 * math.log10(fl / lin), 20 * math.log10(ft / lin)
+    return {"long_db": l_db, "trans_db": t_db, "longitudinal": l_db > -20.0, "transverse": t_db > -20.0,
+            "ratio": math.sqrt(ES / T0)}
+
+
+def stepped_string_partials(segments, T: float, EI: float, n_modes: int = 12, N: int = 600) -> np.ndarray:
+    """Partial frequencies (Hz) of a stiff string made of segments [(length m, mu kg/m), ...] (bare core, winding,
+    bare core...), pinned ends: -T u'' + EI u'''' = w^2 mu(x) u by finite differences."""
+    from scipy.linalg import eigh
+    Ltot = sum(a for a, _ in segments)
+    h = Ltot / (N + 1)
+    x = (np.arange(N) + 1) * h
+    edges = np.cumsum([a for a, _ in segments])
+    mu = np.array([segments[min(int(np.searchsorted(edges, xi)), len(segments) - 1)][1] for xi in x])
+    D2 = (np.diag(-2.0 * np.ones(N)) + np.diag(np.ones(N - 1), 1) + np.diag(np.ones(N - 1), -1)) / h ** 2
+    D4 = D2 @ D2
+    D4[0, 0] += 1.0 / h ** 4
+    D4[-1, -1] += 1.0 / h ** 4                                       # pinned ends: u'' = 0 (odd extension)
+    K = -T * D2 + EI * D4
+    w2 = eigh(K, np.diag(mu), eigvals_only=True, subset_by_index=[0, n_modes - 1])
+    return np.sqrt(np.maximum(w2, 0.0)) / (2 * math.pi)
+
+
+def fit_B(fn) -> float:
+    """B of f_n = n f1' sqrt(1 + B n^2) fitted to partials (least squares on (f_n / n)^2 = f0^2 + f0^2 B n^2)."""
+    fn = np.asarray(fn, float)
+    n = np.arange(1, fn.size + 1)
+    A = np.vstack([np.ones(fn.size), n * n]).T
+    c, k = np.linalg.lstsq(A, (fn / n) ** 2, rcond=None)[0]
+    return float(k / c)
+
+
+def wound_bare_ends_B(f0: float, core_d: float, bare_m: float, wound_m: float, mu_core: float, mu_wound: float,
+                      E: float = 2.0e11, n_modes: int = 12) -> float:
+    """Inharmonicity B of a wound string whose core runs bare over ``bare_m`` at each end of the ``wound_m`` winding:
+    tension set for f0, stiffness of the core alone, partials of the stepped string fitted to n sqrt(1 + B n^2)."""
+    EI = E * math.pi * core_d ** 4 / 64.0
+    seg = [(bare_m, mu_core), (wound_m, mu_wound), (bare_m, mu_core)]
+    T = 1.0
+    for _ in range(3):
+        f1 = stepped_string_partials(seg, T, EI, 2)[0]
+        T *= (f0 / f1) ** 2
+    return fit_B(stepped_string_partials(seg, T, EI, n_modes))
+
+
+@numba.njit(cache=True)
+def _whirl(n, sr, w, s0, a0, b0, va0, vb0, kk2L, alpha2):
+    """Two planes of modal amplitudes a_k, b_k sharing the Kirchhoff tension G = 1 + alpha^2 / 2 |u_x|^2,
+    |u_x|^2 = sum (k pi / L)^2 L / 2 (a_k^2 + b_k^2); symplectic Euler. Returns the bridge-end slope sums (x, y)."""
+    m = len(w)
+    a = a0.copy(); b = b0.copy(); va = va0.copy(); vb = vb0.copy()
+    dt = 1.0 / sr
+    ox = np.zeros(n); oy = np.zeros(n)
+    for i in range(n):
+        e = 0.0
+        for k in range(m):
+            e += kk2L[k] * (a[k] * a[k] + b[k] * b[k])
+        G = 1.0 + 0.5 * alpha2 * e
+        sx = 0.0; sy = 0.0
+        for k in range(m):
+            va[k] += dt * (-w[k] * w[k] * G * a[k] - 2.0 * s0 * va[k])
+            vb[k] += dt * (-w[k] * w[k] * G * b[k] - 2.0 * s0 * vb[k])
+            a[k] += dt * va[k]
+            b[k] += dt * vb[k]
+            sx += (k + 1) * a[k]
+            sy += (k + 1) * b[k]
+        ox[i] = sx; oy[i] = sy
+    return ox, oy
+
+
+def whirling_string(freq: float, dur: float, sr: int, amp: float = 0.01, ellipse: float = 0.3, alpha: float = 30.0,
+                    t60: float = 3.0, pos: float = 0.2, modes: int = 20):
+    """Non-planar (whirling) Kirchhoff-Carrier string: u_tt = gamma^2 G u_xx - 2 sigma0 u_t with
+    G = 1 + alpha^2 / 2 |u_x|^2 over both transverse planes, so a pluck with an out-of-plane velocity (``ellipse``,
+    0 = planar) precesses. Unit length; ``amp`` initial displacement at ``pos``. Returns (x plane, y plane)."""
+    k = np.arange(1, modes + 1, dtype=float)
+    k = k[k * freq < 0.2 * sr]                        # symplectic Euler: w dt < 2 even with G > 1
+    w = 2 * math.pi * freq * k
+    shape = np.sin(k * math.pi * pos) / (k * k * pos * (1 - pos) * math.pi ** 2) * 2.0
+    a0 = amp * shape
+    b0 = np.zeros_like(a0)
+    vb0 = float(ellipse) * w * a0
+    kk2L = (k * math.pi) ** 2 * 0.5
+    n = int(dur * sr)
+    x, y = _whirl(n, float(sr), w, 6.91 / t60, a0, b0, np.zeros_like(a0), vb0, kk2L, float(alpha) ** 2)
+    return x, y
+
+
+def octave_stretch_cents(midi_lo: float, midi_hi: float, m: int, n: int) -> float:
+    """Cents the upper key sits above a pure octave when its n-th partial is tuned beatless to the lower key's m-th:
+    600 log2[(1 + m^2 B_lo) / (1 + n^2 B_hi)] + 1200 log2(m / 2n) (0 for m = 2n), Steinway D inharmonicity."""
+    from .physical.piano_data import steinway_B
+    Bl, Bh = float(steinway_B(midi_lo)), float(steinway_B(midi_hi))
+    return 600.0 * math.log2((1.0 + m * m * Bl) / (1.0 + n * n * Bh)) + 1200.0 * math.log2(m / (2.0 * n))
+
+
+OCTAVE_MATCH = ((12, (10, 5)), (20, (8, 4)), (28, (6, 3)), (40, (4, 2)), (78, (2, 1)), (88, (4, 2)))
+
+
+def _octave_mn(key: float) -> tuple[int, int]:
+    return next(v for top, v in OCTAVE_MATCH if key <= top) if key <= 88 else (4, 2)
+
+
+@functools.lru_cache(maxsize=128)
+def matched_tuning_cents(midi: int) -> float:
+    """Tuning curve (cents from equal temperament, A4 = 0) built octave by octave from A4, each octave tuned with
+    the m:n partial match of its lower key's register (keys 1-12 10:5, 13-20 8:4, 21-28 6:3, 29-40 4:2, 41-78 2:1,
+    79-88 4:2); the octaves next to A4 spread evenly over their semitones."""
+    k = int(round(midi)) - 20
+    if 37 <= k <= 61:
+        if k >= 49:
+            return octave_stretch_cents(69, 81, *_octave_mn(49)) * (k - 49) / 12.0
+        return -octave_stretch_cents(57, 69, *_octave_mn(37)) * (49 - k) / 12.0
+    if k > 61:
+        return matched_tuning_cents(midi - 12) + octave_stretch_cents(midi - 12, midi, *_octave_mn(k - 12))
+    return matched_tuning_cents(midi + 12) - octave_stretch_cents(midi, midi + 12, *_octave_mn(k))

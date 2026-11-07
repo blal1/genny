@@ -5,17 +5,27 @@ Use these names in JSON specs (`"inst"`, `"kind"`, fx `"type"`, layer `"type"`) 
 
 | section | count |
 |---|---|
-| Instruments | 144 |
-| Drums | 50 |
-| Sound effects | 242 |
-| Effects | 98 |
+| Instruments | 195 |
+| Drums | 61 |
+| Sound effects | 551 |
+| Effects | 159 |
 | Extra layer types | 14 |
 
-## Instruments (144)
+## Instruments (195)
 
 Usage: `{"type": "seq", "inst": "<name>", "steps": "C4:1 E4:1", "params": {...}}`
 
-Index by module: **acoustic**: `harp`, `guitar`, `strings`, `flute`, `wurli`, `clav`, `rhodes`, `harpsichord`, `celesta`, `toy_piano`, `church_organ`, `accordion`, `xylophone`, `glockenspiel`, `handpan`, `tubular_bell`, `gamelan`, `singing_bowl`, `timpani`, `steel_guitar`, `electric_guitar`, `muted_guitar`, `dist_guitar`, `banjo`, `mandolin`, `koto`, `sitar`, `pizzicato`, `upright_bass`, `finger_bass`, `slap_bass`, `violin`, `cello`, `clarinet`, `oboe`, `sax`, `trumpet`, `french_horn`, `trombone`, `tuba`, `harmonica`, `pan_flute`, `whistle`, `ocarina`, `didgeridoo`; **chiptune**: `nes_pulse`, `nes_triangle`, `nes_noise`, `gb_pulse`, `gb_wave`, `gb_noise`, `ym2612`; **chiptune2**: `sn_tone`, `sn_noise`, `ym2151`, `sid`, `pokey`; **choir**: `voice`, `vocal_choir`, `hum`, `throat_singing`, `falsetto`, `boys_choir`, `chant`; **compose**: `ks_string`; **creatures**: `whistling`; **fdstring**: `fd_string`, `fd_piano`, `prepared_piano`, `slack_string`, `string_bridge_plate`, `fd_bar`, `bowed_string_fd`; **foley**: `church_bell`, `handbell`, `china_bell`, `glass_harmonica`, `bowed_bowl`, `hurdy_gurdy`, `wind_chime`; **friction**: `cristal`, `rubbed_glass`, `bowed_bar`, `bowed_sheet`, `rod_bank`, `whistling_blades`, `tuning_fork`, `coil_spring`; **instruments**: `piano`, `felt_piano`, `epiano`, `organ`, `pluck`, `bass`, `sub`, `wobble`, `lead`, `pad`, `brass`, `choir`, `pwm`, `bell`, `glass`, `marimba`, `kalimba`, `vibraphone`, `music_box`, `steel_drum`, `chip`, `chiptri`, `board`, `sine`, `square`, `saw`, `synth`, `piano_wg`; **klang**: `viola`, `bassoon`, `cor_anglais`, `bass_clarinet`, `piccolo`, `recorder`, `hand_chime`; **retro**: `sfxr_voice`, `zzfx_voice`, `psg`; **reverbs**: `feedback_guitar`; **synths**: `soft_lead`, `square_lead`, `synth_pluck`, `theremin`, `warm_pad`, `glass_pad`, `string_machine`, `acid`, `reese`, `fm_bass`, `bass808`; **tubes**: `reed_tube`, `reed_cone`, `vowel_tube`, `piston_pipe`, `pvc_pipe`, `bottle`
+Index by module: **acoustic**: `harp`, `guitar`, `strings`, `flute`, `wurli`, `clav`, `rhodes`, `harpsichord`, `clavichord`, `celesta`, `toy_piano`, `church_organ`, `accordion`, `xylophone`, `glockenspiel`, `handpan`, `tubular_bell`, `gamelan`, `singing_bowl`, `timpani`, `steel_guitar`, `electric_guitar`, `muted_guitar`, `dist_guitar`, `banjo`, `mandolin`, `koto`, `sitar`, `pizzicato`, `upright_bass`, `finger_bass`, `slap_bass`, `violin`, `cello`, `clarinet`, `oboe`, `sax`, `trumpet`, `french_horn`, `trombone`, `tuba`, `harmonica`, `pan_flute`, `whistle`, `ocarina`, `didgeridoo`, `double_bass`, `kantele`, `string_scrape`, `guitar_chord`, `tanpura`, `tromba_marina`, `bowed_psaltery`, `zanza`, `baschet`, `resonator_guitar`, `whirl_string`; **chiptune**: `nes_pulse`, `nes_triangle`, `nes_noise`, `gb_pulse`, `gb_wave`, `gb_noise`, `ym2612`; **chiptune2**: `sn_tone`, `sn_noise`, `ym2151`, `sid`, `pokey`, `tia`, `stk_fm`, `chowning`, `stk_fmvoice`, `jaw_harp`, `glitch_saw`; **choir**: `voice`, `vocal_choir`, `hum`, `throat_singing`, `falsetto`, `boys_choir`, `chant`; **compose**: `ks_string`; **creatures**: `whistling`; **fdstring**: `fd_string`, `fd_piano`, `prepared_piano`, `slack_string`, `string_bridge_plate`, `fd_bar`, `bowed_string_fd`, `interceptor_string`; **foley**: `church_bell`, `handbell`, `china_bell`, `glass_harmonica`, `bowed_bowl`, `hurdy_gurdy`, `wind_chime`; **friction**: `cristal`, `rubbed_glass`, `bowed_bar`, `daxophone`, `bowed_sheet`, `rod_bank`, `musical_saw`, `whistling_blades`, `nail_violin`, `marloye_harp`, `tuning_fork`, `coil_spring`; **instruments**: `piano`, `felt_piano`, `epiano`, `organ`, `pluck`, `bass`, `sub`, `wobble`, `lead`, `pad`, `brass`, `choir`, `pwm`, `bell`, `glass`, `marimba`, `kalimba`, `vibraphone`, `music_box`, `steel_drum`, `chip`, `chiptri`, `board`, `sine`, `square`, `saw`, `synth`, `piano_wg`; **instruments_extra**: `ukulele`, `zither`, `shamisen`, `bagpipes`, `shofar`, `traditional_horn`, `mellotron`, `slide_whistle`, `calliope`, `waterphone`, `berimbau`, `talking_drum`, `flexatone`, `risset_arpeggio`, `gendyn`; **klang**: `viola`, `bassoon`, `cor_anglais`, `bass_clarinet`, `a_clarinet`, `eb_clarinet`, `contrabassoon`, `heckelphone`, `bass_trombone`, `natural_horn`, `clarino`, `piccolo`, `recorder`, `hand_chime`; **retro**: `sfxr_voice`, `zzfx_voice`, `psg`, `psg3`, `soft_sync`; **reverbs**: `feedback_guitar`; **synths**: `soft_lead`, `square_lead`, `synth_pluck`, `theremin`, `warm_pad`, `glass_pad`, `string_machine`, `acid`, `reese`, `fm_bass`, `bass808`, `packet_pad`, `padsynth`; **tubes**: `reed_tube`, `reed_cone`, `vowel_tube`, `piston_pipe`, `pvc_pipe`, `bottle`, `mesh_vowel`, `box_bar`
+
+### `a_clarinet` — wind, range Db3-A5
+
+Clarinet in A: the B-flat clarinet's tone a little darker, 5 dB less around 1 kHz.  *(module `klang`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `accordion` — keys, range C3-C6
 
@@ -38,7 +48,20 @@ Acid bass line (303): saw or square through a squelchy resonant filter; high `ve
 | `cutoff` | `350` | Hz at rest |
 | `env` | `2000` | Hz the filter jumps by |
 | `decay` | `0.2` | s filter decay |
-| `res` | `0.7` | 0..1 resonance |
+| `res` | `0.7` | 0..1 resonance (phase_sync: 0..4, above 1 saturates) |
+| `model` | `'svf'` | svf / diode: the TB-303 diode ladder / phase_sync: no filter, a sine at the cutoff restarted and faded on every cycle rides on a 9-harmonic saw (Farnell's fake 303) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `bagpipes` — wind, range G4-A5
+
+Bagpipes: conical double-reed chanter over three cylinder-reed drones on A (two tenors, one bass).  *(module `instruments_extra`)*
+
+| param | default | meaning |
+|---|---|---|
+| `drones` | `1.0` | 0..1 level of the drones |
+| `chanter_a` | `481.0` | Hz of the chanter's A, which the drones sit on (476-486 today, 441 in 1885) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -50,6 +73,19 @@ Banjo: twangy string over a drum head, quick decay (bluegrass, country, folk).  
 | param | default | meaning |
 |---|---|---|
 | `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `baschet` — plucked, range G2-G5
+
+Baschet string sculpture (Katsuraphone): a string over a cylinder bridge, its two halves bent in opposite directions, radiated by a sheet of metal.  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bend` | `30.0` | cents each half is bent, one up one down |
+| `sheet` | `0.5` | 0..1 metal sheet radiator |
+| `screw` | `0.0` | 0..1 buzzing screw on the string (odd harmonics) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -90,12 +126,24 @@ Bass clarinet: hollow, dark odd-harmonic reed an octave below the clarinet.  *(m
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
+### `bass_trombone` — brass, range Bb1-Bb4
+
+Bass trombone: a wider-bore trombone, darker and heavier in the low register.  *(module `klang`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `bassoon` — wind, range Bb1-E5
 
 Bassoon: dry, woody double reed; comic in the bass, plaintive in the tenor.  *(module `klang`)*
 
 | param | default | meaning |
 |---|---|---|
+| `meyer` | `0` | 1 = measured attack time per register and dynamic, vibrato amplitude modulation per band and high band that grows with the dynamic |
+| `precursor` | `0.0` | 0..1: the short level peak at the start of the attack |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -109,6 +157,19 @@ FM bell / chime (notifications, magic). The clang is capped by pitch, so high no
 | `decay` | `2.0` | seconds |
 | `ratio` | `3.5` | modulator ratio; 2=softer, 5.04=glassy |
 | `bright` | `1.0` | 0.4 soft chime .. 2 hard metallic strike |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `berimbau` — plucked, range A2-C5
+
+Berimbau: steel string on a bow struck with a stick, heard through an open gourd the player closes against the body (wah); a stone on the string bends the pitch up.  *(module `instruments_extra`)*
+
+| param | default | meaning |
+|---|---|---|
+| `gourd` | `0.8` | 0 closed against the body .. 1 open |
+| `wah` | `0.0` | Hz the gourd is moved at (0 = held; swings between closed and `gourd`) |
+| `press` | `0.0` | semitones the stone raises the string (Annexos l.14215) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
@@ -145,7 +206,7 @@ Bowed free bar (vibraphone / Baschet blade played with a bow): Bilbao bow on bar
 
 | param | default | meaning |
 |---|---|---|
-| `material` | `'aluminium'` | aluminium (measured Baschet blade partials) / steel / glass / wood |
+| `material` | `'aluminium'` | aluminium (measured Baschet blade partials) / aluminium_b (second measured blade, no partial near 2.7) / iron (Gamelinus blade) / steel / glass / wood / comb (a rubbed bar locking onto a harmonic series n f, the bow point choosing f) |
 | `force` | `1.0` | bow force, relative (0.2-2.5): more = faster attack, harder tone |
 | `position` | `0.03` | bow point from the bar end as a fraction of length (0-0.15) |
 | `speed` | `0.2` | bow speed, m/s (0.05-0.5): sets loudness |
@@ -166,6 +227,16 @@ Tibetan singing bowl rubbed with a wooden puja (banded waveguide: twelve modes i
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
+### `bowed_psaltery` — bowed, range C4-C7
+
+Bowed psaltery: triangular box of metal strings bowed one by one; no vibrato, airy and glassy.  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `bowed_sheet` — bowed, range C2-C5
 
 Bowed steel sheet (steel-cello-like): Bilbao bow on plate modes, radiated by the sheet itself.  *(module `friction`)*
@@ -178,6 +249,8 @@ Bowed steel sheet (steel-cello-like): Bilbao bow on plate modes, radiated by the
 | `ring` | `0.5` | 0 dry bowed tone .. 1 mostly the sheet's own ringing modes |
 | `bright` | `1.0` | 0.5 mellow .. 2 bright |
 | `seed` | `0` | int: sheet modes |
+| `glide` | `0.0` | semitones the bowed sheet starts away from the note and slides onto it (-12..12) |
+| `glide_time` | `0.3` | s the slide takes (0.02-3) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
@@ -195,6 +268,18 @@ Bowed stiff string (finite difference, implicit friction solve) with a bow that 
 | `decay` | `2.5` | seconds of free ring at the note |
 | `pickup` | `0.3` | readout point 0..1 |
 | `bright` | `1.0` | 0.5 mellow .. 2 open |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `box_bar` — mallet, range C3-C6
+
+Metal bar over a stopped box resonator: in tune the box takes the bar's energy (loud, short); `detune` the box and the bar rings on, quieter.  *(module `tubes`)*
+
+| param | default | meaning |
+|---|---|---|
+| `detune` | `20.0` | cents between box and bar |
+| `decay` | `4.0` | s, T60 of the bare bar |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
@@ -221,6 +306,21 @@ Synth brass section with an opening filter (fanfares, stabs).  *(module `instrum
 |---|---|---|
 | `attack` | `0.06` | s |
 | `bright` | `1.0` | 0.5 mellow .. 2 blaring |
+| `follow` | `0` | 1 = the cutoff follows the amplitude envelope, f (1.5 + 10 bright vel env), with a pitch scoop |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `calliope` — keys, range C4-C6
+
+Calliope: steam whistles, each a short stopped pipe blown hard, with hiss and an unsteady pressure.  *(module `instruments_extra`)*
+
+| param | default | meaning |
+|---|---|---|
+| `steam` | `0.25` | 0..1 hiss of the steam in the pipe |
+| `waver` | `0.06` | semitones of pressure waver |
+| `diameter` | `0.05` | whistle diameter, m |
+| `seed` | `0` | noise |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
@@ -243,6 +343,10 @@ Shared-core wound bowed cello with a pitch-stable body radiation anchor.  *(modu
 | `attack` | `0.1` | s |
 | `vibrato` | `1.0` | 0 = none .. 2 = wide |
 | `model` | `'waveguide'` | waveguide / elastoplastic (Matusiak & Chatziioannou 2024: their measured cello G string and fitted bristle friction; the bow accelerates from rest, so the attack is a real Helmholtz transient; attack and vibrato ignored) |
+| `sordino` | `0` | 1 = mute (Meyer: less than on a violin, -4 dB here) |
+| `lifted` | `0` | 1 = bow lifted at note-off |
+| `open_string` | `0` | with lifted: an open string, about 10 s |
+| `body_am` | `0` | 1 = each partial's level follows the body resonances at its instantaneous frequency: the vibrato turns into amplitude modulation, as on a real instrument |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -264,7 +368,7 @@ Gregorian chant: unison men (tenors, baritones, basses), straight tone, soft ons
 
 ### `china_bell` — mallet, range C3-C5
 
-Chinese temple bell (Farnell's chinatown bell): six inharmonic partials with very long quartic decays.  *(module `foley`)*
+Chinese temple bell: six inharmonic partials with very long quartic decays.  *(module `foley`)*
 
 | param | default | meaning |
 |---|---|---|
@@ -306,17 +410,33 @@ Vowel-formant synth choir ("aah").  *(module `instruments`)*
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
+### `chowning` — winds, range C3-A4
+
+Chowning's 1973 FM tones: the carrier and modulator ratio sets the harmonics, the index follows the amplitude.  *(module `chiptune2`)*
+
+| param | default | meaning |
+|---|---|---|
+| `voice` | `'clarinet'` | clarinet/woodwind/bassoon/brass/bell/drum/wood_drum/soprano |
+| `attack` | `0.08` | s |
+| `release` | `0.1` | s |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `church_bell` — mallet, range C3-C5
 
 Cast bell from a finite-element model (50 modes with split doublets): church, English, French, German, Russian or standard profile. The written note is the hum, the lowest and longest partial; the strike note is heard about an octave above.  *(module `foley`)*
 
 | param | default | meaning |
 |---|---|---|
-| `type` | `'church'` | church/english/french/german/russian/standard |
+| `type` | `'church'` | church/english/french/german/russian/standard/measured/hibbert/old_english/medieval/big_ben/petersglocke/ariutti |
+| `octave_nominal` | `1240.0` | hibbert: cents 1140..1280; low = old and thick, high = thin; moves every upper partial (2066 bells) |
 | `position` | `0.0` | 0 lip .. 1 crown: where the clapper strikes (7 measured points) |
 | `decay` | `8.0` | s T60 of the hum |
 | `bright` | `1.0` | 0.4 soft clapper, distant .. 2.5 hard and close |
-| `tune` | `'hum'` | hum/prime: which partial plays the written note |
+| `tune` | `'hum'` | hum/prime: which partial plays the written note; also nominal, and strike (the note heard) for the hibbert types; second: the higher note big_ben and petersglocke also give |
+| `diameter` | `0.0` | m at the lip; > 0 sets the nominal from the size (above ~0.9 m, nominal under ~900 Hz) and replaces the note; the hibbert types only |
+| `swing` | `0.0` | degrees each side the bell swings (0..90): Doppler and the mouth turning to and away, 2 s period |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
@@ -328,6 +448,7 @@ Pipe organ: principal ranks at several octaves that speak slowly with a little c
 |---|---|---|
 | `sub` | `0.35` | 16-foot sub-octave rank 0..1 |
 | `mixture` | `0.5` | upper ranks 0..1 |
+| `chiff` | `'classic'` | classic / grey: onset noise around 2-4 x f0, 30 ms, 20 dB under the steady tone |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -340,6 +461,21 @@ Physical clarinet: nonlinear reed coupled to a bore waveguide.  *(module `acoust
 |---|---|---|
 | `model` | `'waveguide'` | waveguide / impedance (Guillemain 2005 digital impedance, measured reed and mouthpiece: the tone thickens and brightens with velocity) |
 | `embouchure` | `0.5` | impedance only: 0 loose .. 1 tight lip on the reed |
+| `reed` | `'guillemain'` | impedance only: guillemain / typical / squeak / van_walstijn |
+| `stiffening` | `0` | impedance with reed=van_walstijn: 1 = stiffness rises with pressure (van Walstijn & Avanzini 2007) |
+| `lip_force` | `0.0` | impedance only: N of lip force, lowers the closing pressure (Almeida 2013: 0.6 N = 20 mbar) |
+| `meyer` | `0` | waveguide: 1 = attack by register and velocity, dynamic timbre above 3 kHz (Meyer 2009) |
+| `precursor` | `0.0` | waveguide: 0..1 the burst of high energy before the tone settles |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `clarino` — brass, range C5-D6
+
+Clarino: the baroque natural trumpet high in its harmonic series, sweet, 10-15 dB under a modern trumpet.  *(module `klang`)*
+
+| param | default | meaning |
+|---|---|---|
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -353,6 +489,22 @@ Clavinet: short, funky, nasal struck string (funk, disco, reggae skank).  *(modu
 | `decay` | `0.9` | seconds |
 | `bright` | `1.0` | 0.5 muted .. 1.5 biting |
 | `release_drop` | `1.0` | 0..1 the brief 3-semitone drop when the key is let go and the yarn damps the string |
+| `model` | `'ks'` | ks / dwg: waveguide with ripple loss, per-key dispersion, tangent pulse and knock |
+| `pickup` | `'A'` | pickup selector: A upper (centre), B lower (bridge), C both out of phase (thin), D both in phase (full) |
+| `magnetic` | `0` | 1 = the measured magnetic pickup law instead of the flux polynomial (with flux) or none |
+| `tone` | `''` | tone rockers pressed, any of S M T B: Soft and Medium darken, Treble peaks near 1.6 kHz, Brilliant cuts the bass ('' = none, the old sound) |
+| `beat` | `0.0` | dB of beating on partials 1-3 below E4, 0.5-2 Hz per partial (0 = off, up to 15) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `clavichord` — keys, range C2-D6
+
+Clavichord (Valimaki, Laurson & Erkut 2003): two strings of a course coupled one way, a sharp tangent knock, quiet and short; `bebung` is the player's vibrato through the key.  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bebung` | `0.0` | 0..1 pressure vibrato, 1 = 2 Hz wide at 7 Hz |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
@@ -368,6 +520,19 @@ Baschet coil spring, struck or scraped: a dispersive train of chirped echoes aro
 | `decay` | `4.0` | ring time, s (0.3-12); real springs ring > 8 s |
 | `hardness` | `0.5` | 0 soft mallet (dark) .. 1 hard stick (laser-like chirp) |
 | `seed` | `0` | int: scrape grains |
+| `wire` | `0.1` | wire radius, mm (0.05-2) |
+| `coil` | `2.5` | helix radius, mm (1-30) |
+| `turns` | `112` | number of turns (10-2000): with wire and coil sets the echo round trip 4 L R / (r c) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `contrabassoon` — wind, range Bb0-F3
+
+Contrabassoon: the bassoon an octave down, a buzzing, reedy floor under the orchestra.  *(module `klang`)*
+
+| param | default | meaning |
+|---|---|---|
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -393,6 +558,21 @@ Cristal Baschet: wet finger on a glass rod driving a clamped steel shaft by stic
 | `radiator` | `'sheet'` | sheet (ringing, saturates) / cone (dry, clean) / balloon (dry, mid-heavy) |
 | `bright` | `1.0` | 0.5 mellow .. 2 bright: friction harmonics and lowpass |
 | `wetness` | `1.0` | 0 too slippery .. 1 well-wetted finger (the paper's friction law) |
+| `bend` | `0.0` | semitones (-2..2) the note glides to over its duration while the rod keeps singing (a hand pressing the N-shaped weight, a pedal moving the node) |
+| `modes` | `1` | 1: the playing mode only / 4: also the resonator's modes 1, 4 and 8 (low thumps, a close mode beating) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `daxophone` — bowed, range C3-C6
+
+Daxophone: a bowed wooden tongue clamped at one end, its pitch set by the wooden dax pressed on it; the bow point against the dax colours it (the 'vocal' quality).  *(module `friction`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bow` | `0.8` | bow point from the dax toward the free tip, 0..1 of the free length: nearer the dax the tone toggles up |
+| `force` | `1.0` | bow force, relative (0.2-2.5) |
+| `speed` | `0.2` | bow speed, m/s (0.05-0.5) |
+| `bright` | `1.0` | 0.5 mellow .. 2 bright |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
@@ -415,6 +595,31 @@ Overdriven electric guitar for riffs and leads; sustains while held (for crunchy
 |---|---|---|
 | `drive` | `6.0` | 1 = edge of breakup .. 15 = fuzz |
 | `tone` | `3000` | cabinet tone Hz |
+| `loop` | `0` | 1 = the drive inside the string loop at twice the rate (cubic clip), not after the string |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `double_bass` — bowed, range E1-G3
+
+Double bass, bowed: the deep end of the section, slow to speak.  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `attack` | `0.4` | s (Meyer: beyond 400 ms on a soft attack) |
+| `vibrato` | `1.0` | 0 = none .. 2 = wide |
+| `lifted` | `0` | 1 = bow lifted at note-off |
+| `open_string` | `0` | with lifted: an open string, about 10 s |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `eb_clarinet` — wind, range G3-C7
+
+E-flat (sopranino) clarinet: small, bright and piercing, a fourth above the B-flat.  *(module `klang`)*
+
+| param | default | meaning |
+|---|---|---|
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -428,6 +633,16 @@ Clean electric guitar: round single-coil tone with long sustain (add `distortion
 | `tone` | `2800` | pickup tone Hz |
 | `pickup` | `'linear'` | linear / single / humbucker / rail (measured magnetic nonlinearity, Novak 2018) |
 | `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible) |
+| `pickup_pos` | `0.0` | pickup comb: its place from the bridge as a part of the open string, Strat 0.063 bridge, 0.151 middle, 0.25 neck; 0 = off |
+| `circuit` | `0` | 1 = the pickup's RLC resonance (2 H, 10 kOhm, 50 pF, 1 MOhm: 16 kHz) instead of the `tone` filter |
+| `pickup_pos2` | `0.0` | second pickup (same units as pickup_pos), mixed with the first; 0 = one pickup |
+| `mix` | `'in'` | in / out: the two pickups in phase (Strat positions 2 and 4) or out of phase (thin, nasal) |
+| `stiff` | `0` | 1 = the pickup comb of a stiff string (notches move with the string's inharmonicity) |
+| `amp` | `'none'` | none / bassman: the amp's passive tone stack (treble, middle, bass) |
+| `treble` | `0.5` | tone stack treble 0..1 |
+| `middle` | `0.5` | tone stack middle 0..1 |
+| `bass` | `0.5` | tone stack bass 0..1 |
+| `horizontal` | `0` | 1 = the pickup also reads the horizontal plane (rectified: second harmonic), with `pickup` single/humbucker/rail |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -455,7 +670,7 @@ Male falsetto / head voice: breathy, flute-like, almost no upper partials.  *(mo
 | `singers` | `1` | number of singers |
 | `vibrato` | `-1.0` | vibrato extent, +- cents peak (-1 = the style's own: classical solo 60, choir 30; 0 = straight tone) |
 | `breath` | `-1.0` | breathiness 0..1; -1 = style |
-| `style` | `'classical'` | classical/cathedral/gregorian/gospel/pop/children/epic/throat/bulgarian |
+| `style` | `'classical'` | classical/cathedral/gregorian/gospel/pop/children/epic/throat/bulgarian/belt |
 | `seed` | `0` | take |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
@@ -467,15 +682,18 @@ Finite-difference bar struck by a mallet: wood/metal/glass, free (marimba, xylop
 
 | param | default | meaning |
 |---|---|---|
-| `material` | `'wood'` | wood / metal / glass / plastic (sets the ring time) |
+| `material` | `'wood'` | wood / metal / glass / plastic / rosewood (E and viscosity of a measured xylophone bar) (sets the ring time) |
 | `boundary` | `'free'` | free (partials 1 : 2.76 : 5.40) / clamped_free (1 : 6.27 : 17.5) / clamped / supported (1 : 4 : 9) |
 | `mallet` | `0.5` | mallet hardness 0 (soft yarn, contact about 2.7 ms at A4) .. 1 (hard, 0.45 ms, clicky) |
-| `tuning` | `'none'` | undercut arch for free bars: none / xylophone (2nd partial at 3x) / marimba (4x) |
+| `tuning` | `'none'` | undercut arch for free bars: none / xylophone (2nd partial at 3x) / marimba (2nd and 3rd at 4x and 10x) |
 | `position` | `0.5` | strike point 0..1 |
 | `pickup` | `0.42` | readout point 0..1 |
 | `decay` | `1.0` | ring-time scale |
 | `quality` | `1` | grid size 0 (20 points) / 1 (32) / 2 (48): finer = truer upper partials, slower |
 | `bright` | `1.0` | 0.5 mellow .. 2 open |
+| `glide` | `0.0` | cents the note starts sharp when hit hard (amplitude stiffening), settling as it decays |
+| `scan` | `0.0` | Hz: the readout sweeps +-0.3 of the bar around `pickup` (a moving microphone; 0 = fixed) |
+| `scheme` | `'explicit'` | explicit / implicit (theta = 1/4: unconditionally stable, 4x lower internal rate) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
@@ -494,6 +712,12 @@ Felt hammer two-way coupled to 1-3 detuned stiff strings (finite difference): ve
 | `decay` | `6.0` | seconds of ring at the note |
 | `t60_hi` | `1.0` | seconds of ring at max(4 kHz, 3x the note) |
 | `bright` | `1.0` | 0.5 mellow .. 2 open |
+| `stretch` | `0.0` | octave stretch of a concert tuning, 0 = equal temperament, 1 = measured (A1 +5, A7 +20 cents) |
+| `tuning` | `'klouche'` | curve scaled by `stretch`: klouche (measured Steinway D) / matched (octaves matched on the m:n partials of each register, from the string's B) / railsback (Railsback 1938, -17..+40) |
+| `restrike` | `''` | seconds after the onset at which the hammer strikes again the still-moving string, e.g. "0.032,0.4" |
+| `scheme` | `'explicit'` | explicit / theta4 (stiffness weighted theta = 1/12: fourth order, less numerical dispersion) / stable (theta = 1/4: stiffness unconditionally stable, finer grid) / bensa (r = 1/4 on the tension too) |
+| `hammer_model` | `'semi'` | semi (semi-implicit felt law) / conservative (energy-conserving felt, no backoff) |
+| `hammer_width` | `0.0` | felt contact width as a fraction of the string (0 = one grid point; about 0.016 for a real felt at C4): the touch is spread over the grid, softening the top |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
@@ -510,6 +734,8 @@ Finite-difference stiff string (Bilbao): plucked, struck or bowed, with two-poin
 | `t60_hi` | `0.6` | seconds of ring at max(4 kHz, 3x the note): lower = duller, faster-fading top |
 | `pickup` | `0.3` | readout point 0..1 (a second one sits 0.43 further along) |
 | `bright` | `1.0` | 0.5 mellow .. 2 open (scales the output ceiling, about 6 partials inside 1.6..4.2 kHz) |
+| `bead` | `0.0` | mass fixed on the string (a bead, a weight, a capo) as a fraction of the string's mass: detunes the partials unevenly, 0 = none |
+| `bead_pos` | `0.5` | where the bead sits, 0..1 |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
@@ -526,6 +752,7 @@ Overdriven electric guitar standing in front of its amplifier: the note sustains
 | `tone` | `2400.0` | speaker cabinet low-pass in Hz |
 | `asym` | `0.15` | clipper asymmetry 0..0.6 (even harmonics, tube-like) |
 | `seed` | `0` | pluck noise seed (int) |
+| `aperture` | `0.0` | pickup sensing width in m or single/humbucker (0.015, 0.04), 0 = a point pickup: softens the highest harmonics |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -549,6 +776,21 @@ Electric bass guitar, fingerstyle: round, even, sustaining (rock, pop, soul, reg
 |---|---|---|
 | `tone` | `1700` | pickup tone Hz |
 | `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible) |
+| `pickup_pos` | `0.0` | pickup comb: its place from the bridge as a part of the open string; 0 = off |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `flexatone` — percussion, range C4-C6
+
+Flexatone: shaken frame, two wooden balls on springs strike a thin steel plate in turn; the thumb bends the plate and the pitch slides.  *(module `instruments_extra`)*
+
+| param | default | meaning |
+|---|---|---|
+| `rate` | `11.0` | strikes per second |
+| `squeeze` | `0.0` | 0..1 thumb on the plate |
+| `curve` | `'hold'` | hold / rise / fall / wave: the thumb's gesture over the note |
+| `seed` | `0` | timing of the shake |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -561,6 +803,12 @@ Concert flute, jet-driven (STK Flute: jet delay, cubic jet, bore waveguide), blo
 |---|---|---|
 | `breath` | `0.15` | turbulence on the jet: 0 = none .. 0.4 (STK's noise gain; 0.15 is its default) |
 | `vibrato` | `0.0` | 0 = steady .. 1 = STK's breath vibrato (5.9 Hz) |
+| `flutter` | `0.0` | 0..1 Flatterzunge: tongue strokes at 25 Hz, 15 dB of AM (Meyer 2009) |
+| `noise_peaks` | `0.0` | 0..1 the noise peaks of overblown notes: f0/2 and odd multiples E5-D6, f0/3 and multiples not of 3 from Eb6 (Meyer 2009) |
+| `precursor` | `0.0` | 0..1 the preliminary tone three octaves up, +10 dB for 50 ms (Meyer 2009) |
+| `meyer` | `0` | 1 = attack by register and velocity, 120 ms release, dynamic timbre above 3 kHz (Meyer 2009) |
+| `expert` | `0` | 1 = blown like an expert: jet speed up 1.35x per octave (pressure ~ f^0.866) |
+| `novice` | `0` | 1 = blown like a beginner: jet Reynolds number 3000 at C4, x1.6 per octave up to 7000; past the laminar 2500 the breath noise grows as Re / 2500 |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -572,6 +820,10 @@ FM bass (DX-style): tight, rubbery, punchy attack (house, city pop, funk, 80s an
 | param | default | meaning |
 |---|---|---|
 | `bite` | `1.0` | 0.3 round .. 2 hard |
+| `ratio` | `1.0` | modulator : carrier (1 round, 2 hollow and reedy, 3 nasal, 0.5 sub growl, 1.333 metallic) |
+| `model` | `'classic'` | classic / mex (one carrier, one modulator, index and level both falling as the square of a ramp lasting 0.8 s x index^2: the longer the brighter) |
+| `index` | `0.6` | mex: modulation index in cycles at the attack (0.2 soft .. 0.8 hard), also the note length |
+| `fb` | `0.0` | classic: self-feedback of both operators in radians (0 = none, 1 = gritty, 1.5 = near noise) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -583,6 +835,9 @@ French horn with dark body radiation (model=physical: lip-reed waveguide).  *(mo
 | param | default | meaning |
 |---|---|---|
 | `model` | `'formant'` | formant (default) / physical (lip-reed waveguide) |
+| `lip_q` | `0.0` | physical only: lip Q, 2..16; human lips 1.2-1.8 (Newton 2008), artificial 6-12 (Cullen 2000); 0 = 5.2, the voiced default. Measured: at Q 8+ a loud note above C5 grows a slow modulation |
+| `meyer` | `0` | 1 = attack by register and velocity, release where measured, spectral ceiling rising with vel, dynamic timbre above 3 kHz and the vibrato's band AM (Meyer 2009) |
+| `precursor` | `0.0` | 0..1 the preliminary peak of a brass attack (Meyer 2009: trumpet 5 ms at 10-15 ms) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -642,7 +897,7 @@ Game Boy wave channel: 32 four-bit samples of wave RAM read at the note's rate (
 
 | param | default | meaning |
 |---|---|---|
-| `wave` | `'triangle'` | 32 values 0..15, 32 hex digits, or triangle / saw / square / pulse25 / sine / organ / bass |
+| `wave` | `'triangle'` | 32 values 0..15, 32 hex digits, {"spectrum": [harmonic amplitudes]}, or triangle / saw / square / pulse25 / sine / organ / bass |
 | `level` | `1` | Game Boy wave: output level 1 = 100 %, 2 = 50 %, 3 = 25 % |
 | `arp` | `None` | driver table: semitone offsets, one per 1/60 s, cycling (a chord on one channel: [0, 4, 7]) |
 | `pitch` | `None` | driver table: semitone offsets, one per 1/60 s, the last one held (a drum: [12, 7, 3, 0]) |
@@ -651,6 +906,20 @@ Game Boy wave channel: 32 four-bit samples of wave RAM read at the note's rate (
 | `vib_delay` | `0.15` | seconds before the vibrato starts |
 | `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
 | `bright` | `1.0` | retro_stylized: 0 = dull .. 0.5 = default .. 1 = unfiltered |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `gendyn` — synth, range C2-C5
+
+Xenakis' dynamic stochastic synthesis: a waveform of breakpoints whose amplitudes and spacings drift by second-order random walks between reflecting walls; with `wander` the pitch drifts too.  *(module `instruments_extra`)*
+
+| param | default | meaning |
+|---|---|---|
+| `points` | `12` | breakpoints per cycle |
+| `amp_step` | `0.5` | largest amplitude step per cycle (0..1) |
+| `wander` | `0.0` | segment lengths walk within +- this share: the pitch wanders |
+| `seed` | `0` | walk |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
@@ -689,6 +958,21 @@ Glass pad: airy additive shimmer, each partial drifting on its own (new age, ice
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
+### `glitch_saw` — synth, range C2-C6
+
+Glitch saw: a sawtooth whose phase is reset each time a Schmitt trigger on a comparator ramp switches; the two states run at two pitches.  *(module `chiptune2`)*
+
+| param | default | meaning |
+|---|---|---|
+| `freq2` | `1.0` | pitch ratio of the second saw (state high) |
+| `comparator` | `2.0` | comparator ramp frequency / note |
+| `hysteresis` | `10` | samples the comparator must stay past a threshold before the trigger switches |
+| `lowlim` | `0.5` | comparator level that switches the trigger high |
+| `uplim` | `0.3` | comparator level that switches it back low |
+| `bright` | `0.5` | 0..1 |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `glockenspiel` — mallet, range G5-C8
 
 Physical bright struck-metal bell/bar model.  *(module `acoustic`)*
@@ -708,6 +992,25 @@ Nylon-string classical guitar: warm, woody body.  *(module `acoustic`)*
 | `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible) |
 | `body` | `0` | which guitar: 0 the nominal body, any other number a different instrument (real spread of mode pitch and Q) |
 | `body_size` | `0.5` | 0 small box .. 0.5 as built .. 1 big box (warps every body mode) |
+| `radiation` | `0` | 1 = body modes weighted by their radiation efficiency, body radiating as a sphere (high-pass 250 Hz) |
+| `air_q` | `0.0` | Q of the air (Helmholtz) mode: 0 = 52 as measured on the body alone; 19-22 a whole played guitar |
+| `pluck` | `'nail'` | nail / finger (flesh: sticks about 20 ms, wide contact) / pick |
+| `rattle` | `0.0` | 0..1 a screw or paper clip touching the string (prepared buzz); see also `cloth` |
+| `cloth` | `0.0` | 0..1 cloth on the rattling stop: softer clicks |
+| `glide_mm` | `0.0` | pluck amplitude in mm at full velocity; sets the tension glide from the string (EA/T0 766): 2 mm about 7 cents, 4 mm about 28 (replaces `glide`) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `guitar_chord` — plucked, range E2-E5
+
+Guitar whose strings share one bridge: the plucked note sets the open strings ringing in sympathy, or strum a chord shape whose strings feed each other.  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `chord` | `'none'` | none (one note, the open strings ring along) / maj / min / power: strummed shape on the root |
+| `strum` | `0.015` | s between strings |
+| `coupling` | `1.0` | x the bridge coupling (0 = independent strings) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -725,7 +1028,7 @@ Hand chime: a clapper-struck tuned tube, strong fundamental with its twelfth; so
 
 ### `handbell` — mallet, range G4-G6
 
-Small bright handbell (Farnell's bell partial groups): hammer clang that settles to a pure tone, with a second bell a hair sharp for the beat.  *(module `foley`)*
+Small bright handbell (bell partial groups): hammer clang that settles to a pure tone, with a second bell a hair sharp for the beat.  *(module `foley`)*
 
 | param | default | meaning |
 |---|---|---|
@@ -755,13 +1058,14 @@ Harmonica (blues harp): reedy, bends into notes, hand-cupped wah (blues, country
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
-### `harp` — plucked, range C2-C7
+### `harp` — plucked, range Cb1-C7
 
 Concert harp: nylon string plucked with the fingertip near the middle, long ring.  *(module `acoustic`)*
 
 | param | default | meaning |
 |---|---|---|
 | `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible) |
+| `position` | `0.38` | pluck point along the string: 0.5 = middle (odd partials, full), 0.33 = no third partial, bright; small = presso la tavola |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -774,6 +1078,21 @@ Harpsichord (Valimaki et al. 2004): quill-plucked strings with ripple loss filte
 |---|---|---|
 | `octave` | `0.3` | level of the 4-foot octave rank (0 = 8-foot only) |
 | `soundboard` | `0.35` | ringing soundboard and undamped strings behind the bridge 0..1 |
+| `stops` | `1` | 8-foot ranks: 1, or 2 (a second string a little apart, +2-3 dB) |
+| `lid` | `1.0` | 0..1 lid resonance at 120 Hz |
+| `pluck` | `0.0` | plucking point / string length: nearer the nut (smaller) = thinner and softer (quill model); 0 = by register, 12 % in the bass to 50 % in the treble |
+| `phantom` | `0.0` | 0..1 longitudinal resonances driven by the square of the string's motion (bright, metallic onset) |
+| `ripple_partial` | `0` | partial (>= 2) whose loss the ripple filter aims at: rrate 1/k (r >= 0) or 1/(2k) (r < 0); 0 = the measured 197 Hz key's 1/12 on every key |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `heckelphone` — wind, range A2-G5
+
+Heckelphone: a baritone oboe an octave below the oboe, thick and reedy.  *(module `klang`)*
+
+| param | default | meaning |
+|---|---|---|
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -789,7 +1108,7 @@ Closed-mouth humming (mm): nasal murmur, soft and dark; solo or a section.  *(mo
 | `consonant` | `'m'` | m (lips closed)/n (tongue, a little brighter) |
 | `vibrato` | `-1.0` | vibrato extent, +- cents peak (-1 = the style's own: classical solo 60, choir 30; 0 = straight tone) |
 | `breath` | `-1.0` | breathiness 0..1; -1 = style |
-| `style` | `'classical'` | classical/cathedral/gregorian/gospel/pop/children/epic/throat/bulgarian |
+| `style` | `'classical'` | classical/cathedral/gregorian/gospel/pop/children/epic/throat/bulgarian/belt |
 | `seed` | `0` | take |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
@@ -809,12 +1128,53 @@ Hurdy-gurdy: a string bowed by a rosined wheel over a buzzing bridge (the trompe
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
+### `interceptor_string` — strings, range E1-C5
+
+Plucked string with an interceptor: a screw set near the string that it buzzes against (gap sets how much), or two screws on wooden arms knocking each other every cycle (`tuba`), with a cloth that softens the contact.  *(module `fdstring`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'screw'` | screw (fixed stop near the string: sitar-like buzz) / tuba (a light arm carrying a screw, thrown against its partner every vibration: a brassy, rattling drone) |
+| `gap` | `0.6` | distance of the stop as a fraction of the pluck amplitude: small = more buzz; under ~0.5 the stop locks the low notes off pitch (-80 cents at E1) |
+| `cloth` | `0.0` | 0 bare metal .. 1 cloth over the contact: softer, darker touch |
+| `position` | `0.85` | where the interceptor sits along the string, 0..1 |
+| `decay` | `4.0` | seconds of ring at the note |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `jaw_harp` — plucked, range C2-C4
+
+Jaw harp (kubyz, khomus): a buzzing reed under three mouth formants that the player's mouth moves in a loop.  *(module `chiptune2`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'bashkir'` | bashkir/khomus |
+| `path` | `'circle'` | circle/sine/line/figure8/triangle: the walk in the F1-F2 plane |
+| `rate` | `2.0` | Hz of the walk |
+| `depth` | `0.25` | 0..1 how far the mouth moves |
+| `shift` | `0.1` | formants rise by this x velocity |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `kalimba` — mallet, range C3-C7
 
 Thumb piano: soft metal tine over a wooden box.  *(module `instruments`)*
 
 | param | default | meaning |
 |---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `kantele` — plucked, range D3-D5
+
+Kantele (Finnish zither): steel strings knotted to a tuning bar; the knot's tension modulation adds a second harmonic that swells after the pluck.  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `knot` | `1.0` | 0..2 x the second-order nonlinearity of the knotted termination |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -879,6 +1239,46 @@ Wooden mallet on a rosewood bar with resonator: round, woody, short.  *(module `
 | param | default | meaning |
 |---|---|---|
 | `decay` | `0.6` | seconds |
+| `resonator` | `1.0` | 0..2 level of the stopped tube under the bar |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `marloye_harp` — bowed, range C4-C7
+
+Marloye harp: wooden or metal rods standing in a soundbox, rubbed lengthwise with rosined fingers; the rods sing their longitudinal modes (odd harmonics 1 : 3 : 5 : 7).  *(module `friction`)*
+
+| param | default | meaning |
+|---|---|---|
+| `force` | `1.0` | finger pressure, relative (0.2-2.5) |
+| `speed` | `0.15` | finger speed, m/s (0.05-0.5) |
+| `material` | `'steel'` | steel / wood (damper, softer) |
+| `bright` | `1.0` | 0.5 mellow .. 2 bright |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `mellotron` — keys, range G2-F5
+
+Mellotron: a few bowed players read from tape, with flutter and a head that runs out of tape.  *(module `instruments_extra`)*
+
+| param | default | meaning |
+|---|---|---|
+| `flutter` | `0.2` | tape speed wobble, percent |
+| `wow` | `0.1` | slow drift, percent |
+| `tape_s` | `8.0` | seconds of tape behind each key; the note stops there |
+| `seed` | `0` | flutter and hiss |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `mesh_vowel` — voice, range C2-C5
+
+Sung vowel through a 2-D waveguide mesh of the vocal tract (as wide as the measured tract): the cross modes add the upper formant detail a 1-D tube lacks.  *(module `tubes`)*
+
+| param | default | meaning |
+|---|---|---|
+| `vowel` | `'a'` | a e i o u |
+| `vibrato` | `0.4` | 0..1 |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -893,9 +1293,49 @@ Tiny music-box comb tine: sweet and delicate, made to be played high.  *(module 
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
+### `musical_saw` — bowed, range C4-C6
+
+Bowed flexible steel blade (musical saw, Baschet flexible disc): bending it sets the pitch, so it slides and sings with a wide vibrato; nearly harmonic when bowed.  *(module `friction`)*
+
+| param | default | meaning |
+|---|---|---|
+| `glide` | `-2.0` | semitones the note starts away from its pitch and bends onto it (-12..12) |
+| `glide_time` | `0.25` | s the bend takes (0.02-3) |
+| `vibrato` | `0.25` | vibrato depth, semitones (0-1): the player's knee shaking the blade |
+| `rate` | `5.5` | vibrato rate, Hz (3-8) |
+| `force` | `1.0` | bow force, relative (0.2-2.5) |
+| `speed` | `0.2` | bow speed, m/s (0.05-0.5) |
+| `radiator` | `'cone'` | cone / sheet / none |
+| `bright` | `1.0` | 0.5 mellow .. 2 bright |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `muted_guitar` — plucked, range E2-E5
 
 Palm-muted electric guitar: short woody chug (funk scratch, reggae skank, rock eighths).  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `nail_violin` — bowed, range C4-C7
+
+Nail violin: iron nails clamped in a wooden soundbox and bowed; each nail rings its cantilever modes (1 : 6.27 : 17.5), the box colours it.  *(module `friction`)*
+
+| param | default | meaning |
+|---|---|---|
+| `force` | `1.0` | bow force, relative (0.2-2.5) |
+| `speed` | `0.2` | bow speed, m/s (0.05-0.5) |
+| `bow` | `0.9` | bow point along the nail from the board, 0..1 of its length |
+| `bright` | `1.0` | 0.5 mellow .. 2 bright |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `natural_horn` — brass, range F2-F5
+
+Natural (valveless) horn: the horn's round tone, a little rawer, as in baroque and hunting calls.  *(module `klang`)*
 
 | param | default | meaning |
 |---|---|---|
@@ -966,6 +1406,9 @@ Oboe: reedy, nasal, plaintive (pastoral, baroque, Middle-Eastern flavoured lines
 
 | param | default | meaning |
 |---|---|---|
+| `meyer` | `0` | 1 = attack by register and velocity, dynamic timbre above 3 kHz (Meyer 2009) |
+| `even` | `0.0` | dB on the even harmonics (negative = hollower, clarinet-like) |
+| `precursor` | `0.0` | 0..1 the burst of high energy before the tone settles |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -989,6 +1432,22 @@ Drawbar organ with rotary wobble; the top drawbars fold back an octave on high n
 |---|---|---|
 | `rotary` | `0.3` | 0..1 |
 | `upper` | `1.0` | level of the upper drawbars: 0 = flute stops only .. 1.5 = full |
+| `registration` | `''` | nine drawbar digits 0-8 (16', 5 1/3', 8', 4', 2 2/3', 2', 1 3/5', 1 1/3', 1'), e.g. 888000000 jazz, 888888888 full; 3 dB per step; empty = the default voicing |
+| `key_click` | `0.0` | 0..1 key-contact click: 1 ms of noise at 0.1 x the note level |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `packet_pad` — pad, range C2-C6
+
+Chebyshev packet pad: a five-harmonic saw whose upper harmonics close with `cutoff`, plus a windowed resonance packet restarted every cycle (rjlib s_spad).  *(module `synths`)*
+
+| param | default | meaning |
+|---|---|---|
+| `cutoff` | `0.5` | 0 fundamental only .. 0.5 full saw; also sets the packet pitch |
+| `res` | `0.3` | 0..1 packet resonance level |
+| `attack` | `0.3` | s |
+| `release` | `0.8` | s |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -1002,6 +1461,21 @@ Warm slow-attack synth pad (stereo when chorused).  *(module `instruments`)*
 | `attack` | `0.4` | s |
 | `release` | `0.8` | s |
 | `cutoff` | `2000` | Hz |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `padsynth` — pad, range C2-C6
+
+PADsynth: every harmonic widened into a band of random phases, one huge loop with a natural chorus (Nasca, ZynAddSubFX).  *(module `synths`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bw` | `40.0` | cents: width of the first harmonic, the higher ones widen in proportion |
+| `tilt` | `1.0` | harmonic roll-off k^-tilt |
+| `attack` | `0.5` | s |
+| `release` | `1.2` | s |
+| `seed` | `0` | a different rendition |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -1020,12 +1494,16 @@ Pan flute: a stopped pipe blown across its end. Odd harmonics, a breath that sit
 
 ### `piano` — keys, range A0-C8
 
-Concert grand (Steinway D strings and hammers): modal strings with measured damping, hereditary felt hammer, beating unisons with two-stage decay, phantom partials, modal soundboard (Bank 2010).  *(module `instruments`)*
+Concert grand (Steinway D strings and hammers): modal strings with measured damping, hereditary felt hammer, beating unisons with two-stage decay, phantom partials, modal soundboard.  *(module `instruments`)*
 
 | param | default | meaning |
 |---|---|---|
 | `decay` | `2.5` | ring: 2.5 as measured, higher rings longer |
 | `bright` | `1.0` | felt hardness: 0.5 mellow .. 2 bright |
+| `unison` | `0.0` | trichord tuning factor e_p (0..1, 0.999 = +-0.87 cent); 0 = tuners' spread |
+| `pedal` | `0` | 1 = sustain pedal down: the note is not damped and every other string rings in sympathy |
+| `soft` | `0` | 1 = una corda (left pedal): the hammer misses one string, softer and rounder |
+| `lid` | `'open'` | open / half / closed: a closed lid takes the top off (above 2 kHz) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
@@ -1065,13 +1543,15 @@ Baschet 'windless organ pipe': a membrane piston drives a quarter-wave pipe - de
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
-### `pizzicato` — plucked, range G2-E6
+### `pizzicato` — plucked, range E1-E6
 
 Pizzicato strings: short, woody finger-plucked violin/cello notes (playful, sneaky, classical).  *(module `acoustic`)*
 
 | param | default | meaning |
 |---|---|---|
 | `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible) |
+| `size` | `'violin'` | violin / viola / cello / bass: the instrument plucked (ring and body) |
+| `vibrato` | `0.0` | 0..1 finger vibrato: lively, and half the ring (Meyer 2009, 3.3.1) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -1136,6 +1616,26 @@ AY-3-8910 sound chip voice: square from a 12-bit clock divider, 16-step log DAC,
 | `env_hz` | `8.0` | envelope ramps per second (quantised to the 16-bit period EP = clock/(256*env_hz)); audio rates give buzz-bass |
 | `bright` | `0.5` | 0 = dull .. 0.5 = default .. 1 = raw unfiltered |
 | `seed` | `0` | noise LFSR start state |
+| `dac` | `'log'` | log (datasheet, 3 dB a step) / ay8910 / ym2149 (MAME's resistor tables) / westcott (levels measured on an AY, 2001) / mosfet (the AY output transistor into 1 kOhm) |
+| `mixer` | `'sum'` | sum = tone and noise channels added by `noise` / and = one channel through the register-7 gate: noise 0 tone only, 1 noise only, between both gated (tone AND noise) |
+| `chip` | `'ay8910'` | envelope: ay8910 = 16 steps on `dac` / ym2149 = 32 finer steps on the YM's own envelope resistor table |
+| `duty` | `None` | AY8930 expanded-mode pulse width 0..8: 3.125, 6.25, 12.5, 25, 50, 75, 87.5, 93.75, 96.875 %; null = the plain square |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `psg3` — retro, range C2-C6
+
+Three AY/YM channels tied to one load resistor, as on machines that wire them together: the mix is not a sum, loud channels squash each other and intermodulate.  *(module `retro`)*
+
+| param | default | meaning |
+|---|---|---|
+| `third` | `4` | semitones, second channel |
+| `fifth` | `7` | semitones, third channel |
+| `level` | `15` | 0..15 |
+| `chip` | `'ay8910'` | ay8910 / ym2149 |
+| `load` | `1000.0` | Ohm |
+| `clock` | `1773450.0` | Hz |
+| `bright` | `0.5` | 0..1 |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
@@ -1194,12 +1694,15 @@ Sax/oboe-like conical bore blown by the same dynamic reed: full harmonic series,
 | `hole` | `0.0` | 0..1 openness of a tonehole at 80 % of the bore: bends the note up (about a semitone at 0.5); fully open the cylinder may flip register. 0 keeps the note in tune |
 | `bright` | `1.0` | 0.25..4 output lowpass scale |
 | `seed` | `0` | noise seed |
+| `reed` | `'default'` | reed preset: default (textbook), played (clarinet reed measured in play), sax (tenor sax reed + lip) |
+| `contact` | `0.0` | s, Hunt-Crossley damping of the reed on the lay (0 = elastic contact) |
+| `mouthpiece` | `0.0` | 0..1 share of the saxophone mouthpiece equivalent volume added at the reed (pitch kept) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `reed_tube` — wind, range D3-G5
 
-Clarinet-like cylinder blown by a dynamic beating reed (Webster tube + Bilbao reed): hollow, odd harmonics.  *(module `tubes`)*
+Clarinet-like cylinder blown by a dynamic beating reed (Webster tube + beating reed): hollow, odd harmonics.  *(module `tubes`)*
 
 | param | default | meaning |
 |---|---|---|
@@ -1213,6 +1716,9 @@ Clarinet-like cylinder blown by a dynamic beating reed (Webster tube + Bilbao re
 | `hole` | `0.0` | 0..1 openness of a tonehole at 80 % of the bore: bends the note up (about a semitone at 0.5); fully open the cylinder may flip register. 0 keeps the note in tune |
 | `bright` | `1.0` | 0.25..4 output lowpass scale |
 | `seed` | `0` | noise seed |
+| `reed` | `'default'` | reed preset: default (textbook), played (clarinet reed measured in play), sax (tenor sax reed + lip) |
+| `contact` | `0.0` | s, Hunt-Crossley damping of the reed on the lay (0 = elastic contact) |
+| `mouthpiece` | `0.0` | 0..1 share of the saxophone mouthpiece equivalent volume added at the reed (pitch kept) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
@@ -1224,19 +1730,47 @@ Reese bass: detuned saws beating against each other under a dark filter (drum an
 |---|---|---|
 | `cutoff` | `600` | Hz |
 | `detune` | `0.18` | semitones |
+| `drift` | `0.0` | cents rms of slow analog pitch wander (0 = none; 3-8 audible) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
-### `rhodes` — keys, range E1-E6
+### `resonator_guitar` — plucked, range G2-G5
+
+Resonator guitar (dobro): steel strings on an aluminium cone whose low modes sag in pitch when played hard; open G tuning G B D G B D, metallic and loud.  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `rhodes` — keys, range E1-E7
 
 Rhodes tine piano: a struck cantilever tine read by a magnetic pickup whose field shapes the tone (bell attack, bark when played hard).  *(module `acoustic`)*
 
 | param | default | meaning |
 |---|---|---|
 | `voicing` | `0.35` | 0..1 tine offset from the pickup axis: 0 = centred (2nd harmonic leads, hollow), 1 = far off (round, fundamental) |
-| `bell` | `1.0` | 0..2 level of the short inharmonic tine overtones in the attack |
+| `bell` | `1.0` | 0..2 x the tine overtones the hammer excites at its strike point (short, inharmonic) |
 | `decay` | `1.0` | x the measured sustain (Q of a 1974 Mark I) |
+| `sustain` | `0.0` | 0..1 electromagnetic sustain while the key is held: 1 = the coil cancels the tine's losses |
+| `onset` | `'hammer'` | hammer / swell: swell = the coil alone builds the note up, no hammer, no bell |
+| `tremolo` | `0.0` | 0..1 depth of the amp's tremolo (about 5 Hz) |
+| `tonebar` | `'fork'` | fork / 2dof: tine and aluminium tonebar as two masses coupled through the clamp |
+| `tonebar_cents` | `0.0` | with 2dof: the tonebar's mistuning against the tine (the fork turns asymmetric) |
+| `tuning_mass` | `0.0` | tuning spring at the tine tip, as a fraction of the tine's effective mass: lowers the tine by 1/sqrt(1 + m) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `risset_arpeggio` — synth, range C2-C4
+
+Risset's arpeggio: nine copies of one harmonic tone a few hundredths of a hertz apart; their beating walks an arpeggio up the harmonics. Hold long notes.  *(module `instruments_extra`)*
+
+| param | default | meaning |
+|---|---|---|
+| `delta` | `0.03` | Hz between neighbouring copies: the arpeggio's speed |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -1247,10 +1781,12 @@ Baschet percussion: struck clamped rod whose vibration crosses a shared collecto
 
 | param | default | meaning |
 |---|---|---|
-| `rod` | `'kit'` | kit (measured Kit Barres partials, beating pairs) / clamped (1 : 6.27 : 17.55) / weighted (re-harmonised 1 : 6 : 18) / mushroom (end weight: short, one clear tone) |
+| `rod` | `'kit'` | kit (measured Kit Barres partials, beating pairs) / clamped (1 : 6.27 : 17.55) / weighted (re-harmonised 1 : 6 : 18) / mushroom (end weight: short, one clear tone) / square (square tube 1 : 2.67 : 5.04 : 8, very long) / piano (Baschet piano rod, octave and major sixth) / bronto (Brontosaure bar) / sad (SAD bundle bar O) / fixed (bolted blade: dry, short, vague pitch) / paired (centre-clamped blade: the other half answers (180/160)^2 higher) |
+| `strike` | `'normal'` | normal / tangential (grazing hit along the rod: only the fundamental, a pure whistle) |
 | `hardness` | `0.5` | 0 soft heavy rubber .. 1 hard wood: contact time 4 ms .. 0.3 ms |
 | `decay` | `3.0` | ring time of the struck rod, s (0.1-12) |
 | `sympathetic` | `0.35` | 0-1: how much the other seven rods of the set ring along through the collector |
+| `collector` | `4.0` | collector mass / rod mass (0.5-20): under 3 the node at the clamp does not form, the rod rings shorter and blurred |
 | `radiator` | `'sheet'` | sheet / cone / balloon / metal / none |
 | `seed` | `0` | int: sheet modes |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
@@ -1289,6 +1825,9 @@ Saxophone (alto/tenor): breathy, husky, scoops into notes (jazz, soul, noir, 80s
 |---|---|---|
 | `breath` | `0.1` | air noise 0..1 |
 | `growl` | `0.0` | 0..1 rasp |
+| `model` | `'formant'` | formant / stk: Scavone's conical-bore waveguide (STK Saxofony) |
+| `position` | `0.2` | stk: where the reed sits on the bore, 0..0.5 |
+| `lattice` | `''` | formant: soprano / tenor, the tone-hole lattice cutoff sets the spectral corner ('' = the alto voice) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -1320,6 +1859,28 @@ Raw sfxr oscillator as a pitched voice: square/saw/sine + duty, vibrato, resonan
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
+### `shamisen` — plucked, range D3-D6
+
+Shamisen: banjo-like string over a skin with a large plectrum; the low string alone buzzes on its altered nut (sawari).  *(module `instruments_extra`)*
+
+| param | default | meaning |
+|---|---|---|
+| `sawari` | `0.6` | 0..1 buzz of the low string (Annexos l.14410: a less firm contact at the nut) |
+| `skin` | `0.5` | 0..1 slap of the plectrum on the skin |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `shofar` — brass, range G3-G5
+
+Shofar: lip-reed through a short irregular horn, raw and nasal.  *(module `instruments_extra`)*
+
+| param | default | meaning |
+|---|---|---|
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `sid` — retro, range C1-C7
 
 MOS 8580 SID voice (Commodore 64): triangle, sawtooth, variable pulse or noise, the chip's ADSR and its resonant filter.  *(module `chiptune2`)*
@@ -1335,6 +1896,7 @@ MOS 8580 SID voice (Commodore 64): triangle, sawtooth, variable pulse or noise, 
 | `cutoff` | `None` | filter cutoff register 0..2047 (linear to 12.5 kHz), or a list one per 1/60 s for a sweep; null = filter off |
 | `res` | `8` | filter resonance 0..15 |
 | `filter` | `'lp'` | lp / bp / hp / notch / lp+bp / bp+hp |
+| `fc_max` | `12500.0` | cutoff in Hz at register 2047: every chip lot filtered differently, so lower it for a darker chip |
 | `arp` | `None` | driver table: semitone offsets, one per 1/60 s, cycling (a chord on one channel: [0, 4, 7]) |
 | `pitch` | `None` | driver table: semitone offsets, one per 1/60 s, the last one held (a drum: [12, 7, 3, 0]) |
 | `vib` | `0.0` | vibrato depth in semitones, applied to the timer once per 1/60 s |
@@ -1403,6 +1965,20 @@ Slapped electric bass: percussive pop on top of a scooped, punchy low end (funk,
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
+### `slide_whistle` — wind, range C5-C7
+
+Slide whistle: stopped pipe whose piston travels at a steady speed, so the pitch follows 1/L; odd harmonics and a little air.  *(module `instruments_extra`)*
+
+| param | default | meaning |
+|---|---|---|
+| `sweep` | `0.0` | semitones the note starts away from the written pitch (+ above, - below) |
+| `slide` | `0.0` | seconds of piston travel; 0 = the whole note |
+| `breath` | `0.15` | 0..1 air noise in the pipe's mode |
+| `seed` | `0` | noise |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `sn_noise` — retro, range C2-C8
 
 SN76489 noise channel: white noise from its shift register, or the looped register as a thin bass.  *(module `chiptune2`)*
@@ -1446,7 +2022,20 @@ Soft triangle lead with delayed vibrato: a clear melody voice that never bites (
 |---|---|---|
 | `vibrato` | `0.15` | semitones |
 | `cutoff` | `2400` | Hz |
+| `drift` | `0.0` | cents rms of slow analog pitch wander (0 = none; 3-8 audible) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `soft_sync` — synth, range C2-C6
+
+Oscillator soft sync: a saw that a master only restarts when it is near its own zero, so the tone is nearer the slave than hard sync's and less harsh.  *(module `retro`)*
+
+| param | default | meaning |
+|---|---|---|
+| `ratio` | `1.7` | slave pitch / note |
+| `window` | `0.35` | 0..0.5 of a cycle around zero; 0.5 = hard sync. Must hold the slave phase at each master wrap or the pitch falls: ratio 1.7 needs > 0.3 |
+| `bright` | `0.5` | 0..1 |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
@@ -1468,6 +2057,7 @@ Rounded square lead whose filter closes after the attack (classic game melody, s
 |---|---|---|
 | `vibrato` | `0.1` | semitones |
 | `width` | `0.5` | pulse width 0.1..0.5 |
+| `drift` | `0.0` | cents rms of slow analog pitch wander (0 = none; 3-8 audible) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -1491,6 +2081,37 @@ Steel-string acoustic guitar: bright strum and fingerpicking (folk, country, pop
 | `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible) |
 | `body` | `0` | which guitar: 0 the nominal body, any other number a different instrument (real spread of mode pitch and Q) |
 | `body_size` | `0.5` | 0 small box .. 0.5 as built .. 1 big box (warps every body mode) |
+| `worn` | `0` | 1 = played-in strings: measured losses of old steel strings, duller and shorter |
+| `radiation` | `0` | 1 = body modes weighted by their radiation efficiency, body radiating as a sphere (high-pass 250 Hz) |
+| `air_q` | `0.0` | Q of the air (Helmholtz) mode: 0 = 52 as measured on the body alone; 19-22 a whole played guitar |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `stk_fm` — keys, range C2-C5
+
+Four-operator FM on TX81Z tables with STK's patches: Rhodes, Wurlitzer, tube bell, Hammond, heavy metal, percussive flute.  *(module `chiptune2`)*
+
+| param | default | meaning |
+|---|---|---|
+| `voice` | `'rhodey'` | rhodey/wurley/tube_bell/b3/heavy_metal/perc_flute |
+| `control1` | `1.0` | 0..2 modulation index (STK's control 1: CC 2 sets it to 2 x CC/128) |
+| `control2` | `1.0` | 0..2 balance between the two chains (STK's control 2, CC 4) |
+| `mod` | `None` | STK's modDepth: vibrato (x0.2 of it on heavy_metal and perc_flute, x0.1 on b3) or tremolo on rhodey, wurley and tube_bell; default the patch's (0, perc_flute 0.005) |
+| `dac` | `0` | 1 = the TX81Z output filters (one-pole lowpass 4.4 kHz, highpass 9.2 Hz) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `stk_fmvoice` — voice, range C2-C5
+
+STK FMVoices: three carriers on the harmonics nearest the vowel's formants, one shared modulator at the note.  *(module `chiptune2`)*
+
+| param | default | meaning |
+|---|---|---|
+| `vowel` | `'ah'` | ah/eh/ee/oh/oo |
+| `tilt` | `0.9` | 0..1 spectral tilt: carrier gains amp, amp^2, amp^3 |
+| `vib` | `0.005` | vibrato depth (6 Hz) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -1518,6 +2139,18 @@ Plucked string driving a plate through a bridge mass on (nonlinear) springs (van
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
+### `string_scrape` — plucked, range E2-E4
+
+Finger or pick sliding along a wound string: a 'picket fence' of clicks, one per winding turn, pitched at speed / winding pitch (the guitar fret-hand squeak).  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `0.4` | m/s of the slide (0.1 slow squeak .. 1.5 fast zip) |
+| `pitch_mm` | `0.4` | winding pitch mm (wire diameter) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `strings` — bowed, range C2-C6
 
 String section: individual bowed players with their own vibrato, a few cents and a few milliseconds apart, centred on the written pitch. Short notes are bowed short.  *(module `acoustic`)*
@@ -1529,6 +2162,8 @@ String section: individual bowed players with their own vibrato, a few cents and
 | `players` | `6` | 2..12 players |
 | `scatter` | `0.0` | cents: standard deviation of the players' mean pitch (Ternstrom: 0-5 preferred, 14 tolerable); above 0 the section beats slowly |
 | `vibrato` | `0.12` | 0 = none .. 2 = wide; each player has their own, so more than about 0.2 makes the section's level heave |
+| `level` | `'matched'` | matched = about the same whatever `players` / section = +3 dB per doubling of the desks (Meyer 2009), same level at 6 players |
+| `sordino` | `0` | 1 = muted section (about -6 dB, softer top) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -1576,6 +2211,32 @@ Synth pluck: saw + pulse through a fast-closing filter (trance and synthwave arp
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
+### `talking_drum` — percussion, range G2-G4
+
+Talking drum: hourglass drum whose two heads share their cords; the arm squeezes the cords and the pitch slides, f = f0 sqrt(1 + k squeeze).  *(module `instruments_extra`)*
+
+| param | default | meaning |
+|---|---|---|
+| `squeeze` | `0.0` | 0 relaxed .. 1 full arm on the cords (an octave) |
+| `curve` | `'hold'` | hold / rise / fall / wave: the arm's gesture over the note |
+| `ring` | `0.35` | seconds of ring |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `tanpura` — plucked, range C2-C4
+
+Tanpura: four long strings droning Pa Sa Sa Sa (low) over a jawari bridge, plucked in turn; the thread under the strings makes them buzz and bloom (Indian classical drone).  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `jawari` | `0.6` | 0..1 bridge buzz |
+| `cycle` | `2.4` | s for one round of the four strings |
+| `first` | `'pa'` | pa / ma / ni: the first string (Pa = fifth below Sa, Ma = fourth, Ni = major seventh) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `theremin` — synth, range C3-C7
 
 Theremin: eerie sliding sine with wide vibrato (sci-fi, spooky, retro B-movie).  *(module `synths`)*
@@ -1602,13 +2263,36 @@ Overtone / throat singing: pressed low drone with a narrow formant locked on one
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
-### `timpani` — mallet, range C2-C4
+### `tia` — retro, range C2-C6
 
-Physical kettle drum: circular membrane plus cavity coupling.  *(module `acoustic`)*
+Atari 2600 (VCS) TIA channel: a 5-bit divider of a ~31 kHz clock feeding a toggle or 4/5/9-bit polynomial counters. Each wave has its own coarse, out-of-tune note grid.  *(module `chiptune2`)*
 
 | param | default | meaning |
 |---|---|---|
-| `decay` | `1.6` | seconds |
+| `wave` | `'square'` | saw (AUDC 1) / engine (3) / square (4) / bass (6) / pitfall (7) / noise (8) / lead (12) / low (14) / buzz (15), or the AUDC number 0..15 |
+| `region` | `'ntsc'` | ntsc / pal: the PAL clock is 0.9 % lower, so every note is about 16 cents flatter |
+| `volume` | `15` | AUDV 0..15, linear |
+| `vol` | `None` | driver table: a list of volumes 0..15, one per 1/60 s, the last one held (a plucked note: [15, 11, 8, 6, 4, 3]) |
+| `arp` | `None` | driver table: semitone offsets, one per 1/60 s, cycling (a chord on one channel: [0, 4, 7]) |
+| `pitch` | `None` | driver table: semitone offsets, one per 1/60 s, the last one held (a drum: [12, 7, 3, 0]) |
+| `vib` | `0.0` | vibrato depth in semitones, applied to the timer once per 1/60 s |
+| `vib_hz` | `6.0` | vibrato rate |
+| `vib_delay` | `0.15` | seconds before the vibrato starts |
+| `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
+| `bright` | `0.5` | retro_stylized: 0 = dull .. 0.5 = default .. 1 = unfiltered |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `timpani` — mallet, range C2-C4
+
+Physical kettle drum: the measured modes and decay times of a real kettledrum.  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `decay` | `1.6` | seconds; scales every measured T60 by decay / 1.6 |
+| `model` | `'measured'` | measured: ten modes and T60s of a 3710 N/m kettledrum / premier: Premier 2500 / membrane: older reduced membrane |
+| `strike` | `0.75` | measured, premier: where the mallet lands, 0 centre .. 1 rim |
+| `damp` | `0.0` | measured, premier: 0 free .. 1 held by the hand (principal 0.7 s low, 0.2 s high) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -1623,13 +2307,38 @@ Toy piano: plastic hammers on metal rods; plinky, childlike, a little out of tru
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
+### `traditional_horn` — brass, range C3-C5
+
+Natural horns on the lip-reed waveguide: conch shell, alphorn or war horn.  *(module `instruments_extra`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'alphorn'` | conch / alphorn / war_horn |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `tromba_marina` — bowed, range C2-C5
+
+Tromba marina: one long bowed string over a bridge whose loose foot drums on the soundboard every period, a brassy trumpet-like buzz.  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `gap` | `1.0` | x the 20 micron rest gap of the foot (smaller = more buzz) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `trombone` — brass, range E2-C5
 
 Trombone with broad low-mid radiation (model=physical: lip-reed waveguide).  *(module `acoustic`)*
 
 | param | default | meaning |
 |---|---|---|
-| `model` | `'formant'` | formant (default) / physical (lip-reed waveguide) |
+| `model` | `'formant'` | formant (default) / physical (lip-reed waveguide) / lip (one-mass lip on the trombone's bore modes) |
+| `lip_q` | `0.0` | physical only: lip Q, 2..16; human lips 1.2-1.8 (Newton 2008), artificial 6-12 (Cullen 2000); 0 = 5.2, the voiced default. Measured: at Q 8+ a loud note above C5 grows a slow modulation |
+| `meyer` | `0` | 1 = attack by register and velocity, release where measured, spectral ceiling rising with vel, dynamic timbre above 3 kHz and the vibrato's band AM (Meyer 2009) |
+| `precursor` | `0.0` | 0..1 the preliminary peak of a brass attack (Meyer 2009: trumpet 5 ms at 10-15 ms) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -1641,7 +2350,11 @@ Trumpet: formant voice, or the lip-reed waveguide with model=physical.  *(module
 | param | default | meaning |
 |---|---|---|
 | `mute` | `0.0` | 0 = open .. 1 = harmon mute |
-| `model` | `'formant'` | formant (default) / physical (lip-reed waveguide) |
+| `model` | `'formant'` | formant (default) / physical (lip-reed waveguide) / lip2d (2D lip on the measured trumpet bore) |
+| `lip_q` | `0.0` | physical only: lip Q, 2..16; human lips 1.2-1.8 (Newton 2008), artificial 6-12 (Cullen 2000); 0 = 5.2, the voiced default. Measured: at Q 8+ a loud note above C5 grows a slow modulation |
+| `meyer` | `0` | 1 = attack by register and velocity, release where measured, spectral ceiling rising with vel, dynamic timbre above 3 kHz and the vibrato's band AM (Meyer 2009) |
+| `precursor` | `0.0` | 0..1 the preliminary peak of a brass attack (Meyer 2009: trumpet 5 ms at 10-15 ms) |
+| `bell_up` | `0.0` | 0..1 bell raised: over 10 dB more above 2 kHz, less at 400-1200 Hz (Meyer 2009) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -1653,13 +2366,15 @@ Tuba with low body and breath transient (model=physical: lip-reed waveguide).  *
 | param | default | meaning |
 |---|---|---|
 | `model` | `'formant'` | formant (default) / physical (lip-reed waveguide) |
+| `lip_q` | `0.0` | physical only: lip Q, 2..16; human lips 1.2-1.8 (Newton 2008), artificial 6-12 (Cullen 2000); 0 = 5.2, the voiced default. Measured: at Q 8+ a loud note above C5 grows a slow modulation |
+| `meyer` | `0` | 1 = attack by register and velocity, release where measured, spectral ceiling rising with vel, dynamic timbre above 3 kHz and the vibrato's band AM (Meyer 2009) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
 ### `tubular_bell` — mallet, range C3-C6
 
-Physical additive/modal tubular bell with long inharmonic decay.  *(module `acoustic`)*
+Orchestral chime: free-free tube modes (2n+1)^2; modes 4, 5, 6 (81:121:169) carry the note an octave below mode 4.  *(module `acoustic`)*
 
 | param | default | meaning |
 |---|---|---|
@@ -1683,6 +2398,17 @@ Aluminium tuning fork struck by a felt hammer, radiating through a balloon or co
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
+### `ukulele` — plucked, range C4-C6
+
+Ukulele: nylon strings on a small box, re-entrant GCEA; the note is stopped on the nearest open string.  *(module `instruments_extra`)*
+
+| param | default | meaning |
+|---|---|---|
+| `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `upright_bass` — bass, range E1-G3
 
 Upright (double) bass, plucked: deep woody thump with a short singing tail (jazz walking lines, rockabilly, folk).  *(module `acoustic`)*
@@ -1701,6 +2427,7 @@ Vibraphone: soft mallets on metal bars with motor tremolo.  *(module `instrument
 | param | default | meaning |
 |---|---|---|
 | `motor` | `4.5` | tremolo Hz (0 = motor off) |
+| `resonator` | `1.0` | 0..2 level of the stopped tube under the bar |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -1725,6 +2452,11 @@ Hybrid physical bowed violin: bow/string waveguide anchored to the requested pla
 |---|---|---|
 | `attack` | `0.07` | s |
 | `vibrato` | `1.0` | 0 = none .. 2 = wide |
+| `sordino` | `0` | 1 = mute on the bridge (about -6 dB, softer top; Meyer 2009, 3.3.1) |
+| `lifted` | `0` | 1 = bow lifted at note-off: the note rings on, partial by partial |
+| `open_string` | `0` | with lifted: an open string, 2-3 s |
+| `model` | `'waveguide'` | waveguide / commuted (body response relaunched every period: a real wooden attack, light) / elastoplastic (bristle friction on a violin A string, a real Helmholtz attack; attack and vibrato ignored) |
+| `direction` | `0.0` | 0 facing the violin .. 1 beside it: the body's directivity heard through the vibrato (partial 5 swings 20 dB) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -1741,7 +2473,7 @@ Choir section of individual singers (own tract, pitch, vibrato, timing each): so
 | `spread` | `1.0` | how different the singers are: scales pitch scatter and timing spread (0 = tight, 2 = loose) |
 | `vibrato` | `-1.0` | vibrato extent, +- cents peak (-1 = the style's own: classical solo 60, choir 30; 0 = straight tone) |
 | `breath` | `-1.0` | breathiness 0..1; -1 = style |
-| `style` | `'classical'` | classical/cathedral/gregorian/gospel/pop/children/epic/throat/bulgarian |
+| `style` | `'classical'` | classical/cathedral/gregorian/gospel/pop/children/epic/throat/bulgarian/belt |
 | `lang` | `'la'` | la/en/es |
 | `bright` | `1.0` | 0.5 dark .. 2 bright |
 | `seed` | `0` | which choir / take |
@@ -1762,7 +2494,7 @@ Solo singer: LF glottal source through a five-formant vocal tract; sings a vowel
 | `effort` | `1.0` | vocal effort x velocity: 0.5 soft/dark .. 1.4 pressed/bright (changes the source spectrum) |
 | `ring` | `-1.0` | singer's formant 0 (untrained) .. 1 (operatic) .. 1.5; -1 = style |
 | `mode` | `'sing'` | sing/whisper/shout/falsetto |
-| `style` | `'classical'` | classical/cathedral/gregorian/gospel/pop/children/epic/throat/bulgarian |
+| `style` | `'classical'` | classical/cathedral/gregorian/gospel/pop/children/epic/throat/bulgarian/belt |
 | `lang` | `'la'` | how a syllable is read: la (Latin vowels)/en/es |
 | `bright` | `1.0` | 0.5 dark .. 2 bright (shelf above 3 kHz) |
 | `seed` | `0` | which singer / take |
@@ -1775,15 +2507,19 @@ Sung vowel: glottal pulse train through a Webster vocal tract (a e i o u), glidi
 
 | param | default | meaning |
 |---|---|---|
-| `vowel` | `'a'` | i ih eh ae ah aa ao uh ow uw (Story 2005 MRI vowels; a e o u = aa eh ow uw), tract shape at the start |
-| `vowel2` | `''` | vowel to glide to, along Story's modes; '' = hold the first |
+| `vowel` | `'a'` | i ih eh ae ah aa ao uh ow uw (MRI vowels; a e o u = aa eh ow uw), tract shape at the start |
+| `vowel2` | `''` | vowel to glide to, along the tract modes; '' = hold the first |
 | `morph` | `1.0` | 0..1 how far the tract travels toward vowel2 during the note |
 | `consonant` | `''` | p t k m n ng f th s sh (b d g v z...: their place): start from that constriction over the vowel and release into it |
 | `breath` | `0.08` | 0..1 aspiration noise at the glottis |
 | `vibrato` | `0.4` | 0..2 pitch vibrato depth (1 = +-3 %, 5 Hz, comes in after 0.3 s) |
 | `size` | `1.0` | tract length scale: 1 = 17 cm adult, 0.8 small/bright, 1.4 giant (formants scale as 1/size) |
 | `tense` | `0.2` | 0..0.8 glottal closed fraction: 0 soft/breathy pulse, 0.6 pressed and buzzy |
+| `source` | `'bilbao'` | glottal flow: bilbao (squared sine, shaped by tense) / rosenberg (Rosenberg C pulse) |
 | `seed` | `0` | noise seed |
+| `glide` | `'smooth'` | vowel2 path: smooth (cubic) / minjerk (minimum-jerk, the speech-motor profile) |
+| `model` | `'webster'` | webster / kl: the Kelly-Lochbaum tract with subglottal system and nasal branch |
+| `nasal` | `0.0` | velum opening cm^2 (0..2; > 0 uses model kl) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -1797,6 +2533,32 @@ Warm analog pad: dark, slow, breathing filter (ambient beds, ballads, lo-fi).  *
 | `attack` | `0.6` | s |
 | `release` | `1.2` | s |
 | `cutoff` | `900` | Hz at rest; opens ~1.6x mid-note |
+| `drift` | `0.0` | cents rms of slow analog pitch wander per oscillator (0 = none; 3-8 audible) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `waterphone` — bowed, range F3-F6
+
+Waterphone: unequal rods welded around a thin metal vessel holding water, bowed or struck; moving the water sweeps the formants.  *(module `instruments_extra`)*
+
+| param | default | meaning |
+|---|---|---|
+| `slosh` | `0.5` | 0..1 how much the water moves the vessel's formants |
+| `action` | `'bowed'` | bowed / struck |
+| `neighbours` | `0.25` | 0..1 the other rods ringing along |
+| `bright` | `1.0` | 0.5 mellow .. 2 bright |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `whirl_string` — plucked, range E1-E4
+
+Loose string plucked out of plane: its two planes share one tension (Kirchhoff-Carrier), so the orbit precesses and the pitch glides as the swing shrinks.  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `ellipse` | `0.3` | 0 = planar pluck .. 1 = circular orbit |
+| `slack` | `1.0` | 0..2 x the tension modulation (alpha) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -1835,6 +2597,7 @@ Baschet whistling blades: iron blades struck on the narrow edge, two high partia
 | `second` | `0.2` | level of the second partial (0-1); the real blades are nearer 0.5-1, which blurs the pitch |
 | `spin` | `0.0` | rotation of the blade rack, turns/s (0-8): directivity tremolo 'waa-waa' |
 | `hardness` | `0.7` | 0 soft .. 1 hard stick |
+| `sumtone` | `0.0` | 0..1 the ear's sum tone: the two partials also heard at their sum (3000 + 3100 -> about 6100 Hz) |
 | `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
@@ -1845,8 +2608,11 @@ One tube of a metal wind chime: a struck free-hanging bar with its inharmonic ov
 
 | param | default | meaning |
 |---|---|---|
-| `decay` | `3.0` | s T60 of the fundamental |
+| `decay` | `3.0` | s T60 of the fundamental (square tubes ring up to 20 s) |
 | `bright` | `1.0` | 0.4 soft striker .. 2.5 hard |
+| `tube` | `'bar'` | bar: free-bar overtones / square: measured square tubes 1 : 2.67 : 5.04 : 8 |
+| `law` | `'ratio'` | ratio: T60 = decay / overtone ratio / rayleigh: aluminium Rayleigh damping, T60 ~ 1/f^2 |
+| `dip` | `0.0` | 0..1 share of the tube dipped in water: added mass lowers it about 3.5 semitones when full, and damps it |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
@@ -1910,13 +2676,37 @@ Yamaha YM2612 (Mega Drive) FM channel: four operators, eight algorithms, the chi
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
+### `zanza` — mallet, range C3-C6
+
+Zanza (thumb piano, kit made of piano wire): steel tongues 100 to 43 mm over a cone, a buzzing rattle on each tongue (drone of the bottle caps).  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `buzz` | `0.5` | 0..1 rattle on the tongue |
+| `cone` | `0.44` | m, size of the cone resonator (0.44 = 135 Hz) |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
+### `zither` — plucked, range C3-C6
+
+Zither: koto's hard pick near the bridge on a course of steel strings over a box, the open strings ringing along.  *(module `instruments_extra`)*
+
+| param | default | meaning |
+|---|---|---|
+| `ring` | `0.15` | 0..1 level of the open strings that ring along |
+| `glide` | `0.0` | cents a hard pluck starts sharp and glides down as it rings |
+| `bright` | `0.5` | 0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB) |
+| `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
+| `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
+
 ### `zzfx_voice` — retro, range C2-C6
 
 A ZzFX sound played as a pitched voice: slot 2 (frequency) follows the note, randomness is off.  *(module `retro`)*
 
 | param | default | meaning |
 |---|---|---|
-| `p` | `None` | ZzFX array (up to 21 slots, null = default); frequency and randomness are overridden |
+| `p` | `None` | ZzFX array (up to 21 slots, null = default) or a ZzFXM instrument name (retro.ZZFXM_INSTRUMENTS: korgbass, house-snare, strings7...); frequency and randomness are overridden |
 | `hold` | `True` | true: the sustain slot follows the note length; false: the array's own envelope, cut at the note end (ZzFXM) |
 | `shape` | `None` | 0 sine, 1 triangle, 2 saw, 3 tan, 4 noise, 5 square; default: from p, else 0 |
 | `shape_curve` | `None` | waveform power / square duty x2; default: from p, else 1 |
@@ -1925,14 +2715,15 @@ A ZzFX sound played as a pitched voice: slot 2 (frequency) follows the note, ran
 | `sustain_volume` | `None` | level of the held part; default: from p, else 1 |
 | `release` | `None` | s; default: from p, else 0.1 |
 | `bright` | `0.5` | 0 = dull .. 0.5 = default .. 1 = raw unfiltered |
+| `engine` | `'zzfx'` | zzfx (ZzFX 1.3.2) / zzfxg (the generator embedded in the ZzFXM player: 99-sample minimum attack, sine modulation, no filter slot) |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |
 | `onset_lag` | `0.0` | ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech |
 
-## Drums (50)
+## Drums (61)
 
 Usage: `{"type": "drum", "kind": "<name>", "params": {...}}  or a "pattern" layer`
 
-Index by module: **compose**: `ks_drum`; **drums**: `kick`, `kick808`, `snare`, `clap`, `hihat`, `openhat`, `tom`, `rim`, `cowbell`, `crash`, `ride`, `shaker`, `tambourine`, `woodblock`, `taiko`, `zap_kick`; **foley**: `cabasa`, `sekere`, `maraca`, `bamboo_chimes`, `sandpaper`, `sleigh_bells`, `agogo`, `anvil`, `brake_drum`, `wind_chimes`; **percussion**: `conga`, `bongo`, `djembe`, `tabla`, `cajon`, `timbale`, `clave`, `guiro`, `triangle`, `gong`, `snap`, `brush`, `snare808`, `sleigh`; **plates**: `fd_drum`, `plate_crash`, `plate_ride`, `plate_china`, `plate_gong`, `tam_tam`, `steel_cymbal`, `steel_gong`, `thunder_sheet`
+Index by module: **compose**: `ks_drum`; **drums**: `kick808`, `clap`, `hihat`, `openhat`, `rim`, `cowbell`, `crash`, `ride`, `shaker`, `tambourine`, `woodblock`, `taiko`, `zap_kick`, `tom`, `kick`, `snare`, `hat808`, `tom808`, `conga808`; **foley**: `cabasa`, `sekere`, `maraca`, `bamboo_chimes`, `sandpaper`, `sleigh_bells`, `agogo`, `anvil`, `brake_drum`, `wind_chimes`; **percussion**: `conga`, `bongo`, `djembe`, `tabla`, `cajon`, `timbale`, `clave`, `guiro`, `triangle`, `bass_drum`, `snap`, `brush`, `snare808`, `sleigh`, `gong`, `water_tube`, `polar_shell`, `perrin_bell`; **plates**: `fd_drum`, `plate_crash`, `shell_crash`, `plate_ride`, `plate_china`, `plate_gong`, `tam_tam`, `steel_cymbal`, `steel_gong`, `thunder_sheet`, `vk_cymbal`, `vk_gong`, `bodhran`
 
 ### `agogo`
 
@@ -1962,6 +2753,28 @@ Bamboo wind chimes (PhISEM: sparse knocks on three tubes near 2.8 kHz), one stir
 |---|---|---|
 | `size` | `1.0` | instrument size (bigger = lower) |
 | `seed` | `0` | variation |
+
+### `bass_drum`
+
+Orchestral bass drum (gran cassa): a dull boom near 100 Hz from many inharmonic membrane modes, close pairs that beat (the 'breathing'), a pitch that sinks up to 140 cents in the first second after a hard hit, and lows that ring for many seconds. `mallet` felt (round, dark) or rute (split-reed switch: short, hard).  *(module `percussion`)*
+
+| param | default | meaning |
+|---|---|---|
+| `tune` | `50.0` | Hz of the (0,1) mode |
+| `pos` | `0.25` | strike point, 0 = centre (ring modes only, dull) .. 0.9 = near the rim (asymmetric modes, harsher) |
+| `mallet` | `'felt'` | felt / rute |
+| `dur` | `4.0` | s rendered (lows faded out) |
+
+### `bodhran`
+
+Bodhran (Irish frame drum): a slack goatskin head with no shell cavity, played with a tipper; `pos` moves the stroke from the centre (deep thud) to the rim (ringing overtones), `damp` is the left hand pressing the back of the skin (shorter, duller, a little higher).  *(module `plates`)*
+
+| param | default | meaning |
+|---|---|---|
+| `pos` | `0.3` | 0 centre .. 1 rim |
+| `damp` | `0.0` | 0 open .. 1 hand pressed hard |
+| `size` | `0.46` | head diameter m |
+| `tension` | `400.0` | N/m |
 
 ### `bongo`
 
@@ -2015,6 +2828,7 @@ Hand clap (multi-burst noise).  *(module `drums`)*
 | param | default | meaning |
 |---|---|---|
 | `decay` | `0.3` | s |
+| `model` | `'classic'` | classic (four bursts 11 ms apart, band 1.5 kHz) / rj (five bursts at 0, 10.5, 23, 31, 36 ms with 34 ms ramps then a long tail, envelope^8, resonator 1 kHz Q 1.5, high-pass 800 Hz; `decay` unused) |
 
 ### `clave`
 
@@ -2032,6 +2846,16 @@ Physical circular-membrane conga with position-dependent modes and contact slap.
 |---|---|---|
 | `tune` | `220` | Hz |
 | `slap` | `0.0` | 0=open tone .. 1=slap |
+
+### `conga808`
+
+TR-808 conga by blocks: trigger into the low/mid/high conga bridged-T (no noise).  *(module `drums`)*
+
+| param | default | meaning |
+|---|---|---|
+| `size` | `'mid'` | low / mid / high |
+| `knob` | `0.5` | tuning knob 0..1 |
+| `dur` | `0.5` | s |
 
 ### `cowbell`
 
@@ -2076,16 +2900,27 @@ Finite-difference drum head (2D wave equation, circular, air-loaded): strike pos
 | `contact` | `0` | 1 = power-law mallet contact instead of a force pulse (brightness follows vel) |
 | `scan` | `0.0` | Hz: moving-pickup rate (slow phasing), 0 = fixed pickup |
 | `quality` | `1.0` | 0.25..3 internal sample rate / grid size (cost ~ quality^3) |
+| `berger` | `0` | 1 = tension modulation: a hard hit starts sharp and its pitch settles as it rings |
+| `force` | `200.0` | N peak stick force at vel 1 (with berger: how far the pitch is pushed up) |
+| `detune` | `0.0` | 0..0.3 tension anisotropy: splits the modes into beating doublets (0.07 = a real head) |
+| `under` | `0.0` | 0..1 level of a second microphone under the drum (hears the head inverted, later, darker) |
+| `flip` | `0` | 1 = polarity of the under mic flipped back (the lows add up instead of partly cancelling) |
+| `snare` | `0` | 1 = snare wires under the head: energy-conserving collisions give the buzz (struck by force) |
+| `snare_gap` | `0.0` | m rest gap wires-head (negative = wires pressed in, tighter buzz) |
 
 ### `gong`
 
-Physical modal gong/tam-tam with inharmonic resonances.  *(module `percussion`)*
+Physical modal gong/tam-tam with inharmonic resonances; a hard stroke starts flat and its pitch rises up to 80 cents over the first seconds (less and faster when soft).  *(module `percussion`)*
 
 | param | default | meaning |
 |---|---|---|
 | `tune` | `90` | Hz |
 | `decay` | `6.0` | seconds |
 | `cascade` | `0.0` | 0..1 level of the 1:1:2 internal-resonance twins (Chaigne & Touze): a hard strike blooms a fifth-free subharmonic below the main groups a moment after the hit; soft strikes stay clean |
+| `glide` | `1.0` | 0..1 amount of the rising pitch glide (1 = the measured 80 cents at full velocity) |
+| `curvature` | `0.0` | m radius of curvature of the gong face (0 = flat): a domed gong lifts every mode by the shell stiffening, the low ones most |
+| `preset` | `''` | 'agung' = Balinese hanging gong: 4 Hz ombak on the fundamental, upper partials that fade and swell back (626 Hz returns at 3 s) |
+| `hardness` | `0.0` | 0..1 the fundamental as a hardening (cubic) mode: a hard stroke starts sharp and sinks to the nominal pitch as it dies |
 
 ### `guiro`
 
@@ -2095,6 +2930,16 @@ Spatial-profile physical scrape: ridge spacing is converted to sound by speed.  
 |---|---|---|
 | `dur` | `0.25` | seconds |
 | `ridges` | `28` | ridge count |
+
+### `hat808`
+
+TR-808 hi-hat: six detuned square oscillators through two high-passes, nothing else.  *(module `drums`)*
+
+| param | default | meaning |
+|---|---|---|
+| `open` | `0` | 1 = open hat |
+| `decay` | `0.0` | s to -60 dB; 0 = 0.08 closed, 0.5 open |
+| `detune` | `0.0` | semitones on the 540 and 800 Hz oscillators, the two set by trimmers on the real board |
 
 ### `hihat`
 
@@ -2114,6 +2959,7 @@ Physical kick: membrane, enclosed-air mode and beater compression.  *(module `dr
 | `tune` | `55` | Hz |
 | `decay` | `0.4` | s |
 | `punch` | `1.0` | beater hardness |
+| `model` | `'physical'` | physical / farnell (70 ms phase-synchronised swept cosine, techno click; ignores tune/decay/punch) |
 
 ### `kick808`
 
@@ -2121,8 +2967,11 @@ Long boomy 808 kick.  *(module `drums`)*
 
 | param | default | meaning |
 |---|---|---|
-| `tune` | `45` | Hz |
+| `tune` | `45.7` | Hz (the bass drum bridged-T resonator) |
 | `decay` | `1.2` | s |
+| `model` | `'classic'` | classic: swept sine / circuit: the trigger through the pulse shaper into the bridged-T and its decay feedback loop, retuned by the envelope generator during the attack, then the tone stage |
+| `knob` | `0.5` | circuit: decay knob 0..1 (VR6: how much of the ring the second op-amp feeds back) |
+| `tone` | `0.5` | circuit: tone knob 0..1 (the tone stage lowpass) |
 
 ### `ks_drum`
 
@@ -2153,6 +3002,15 @@ Physical open hi-hat / cymbal pair.  *(module `drums`)*
 |---|---|---|
 | `decay` | `0.4` | s |
 
+### `perrin_bell`
+
+Church bell from the measured modes of one real bell (63 modes up to 9.2 kHz, the split doublets included: slow beats on the partials); `tune` = hum note.  *(module `percussion`)*
+
+| param | default | meaning |
+|---|---|---|
+| `tune` | `292.72` | Hz of the hum |
+| `dur` | `8.0` | s |
+
 ### `plate_china`
 
 China cymbal: thin plate struck hard near the edge, trashy and short.  *(module `plates`)*
@@ -2177,7 +3035,7 @@ Crash cymbal from a von Karman nonlinear plate: the high-frequency wash builds u
 | `size` | `0.4` | diameter m (bigger = lower, denser, slower to build) |
 | `thickness` | `1.0` | mm (thinner = crashes at a lighter touch: nonlinearity ~ force/thickness^2) |
 | `force` | `400.0` | peak strike force N at vel 1 = crash intensity (low: clean ring; high: glide, then the wash of new partials building up after the hit) |
-| `decay` | `5.0` | T60 of the low modes, s |
+| `decay` | `6.9` | T60 of the low modes, s |
 | `dur` | `2.2` | rendered length s |
 | `bright` | `0.6` | 0..1 output lowpass 1.5 kHz .. 12 kHz |
 | `model` | `'vk'` | vk (von Karman: crash build-up) / vk_simple (the book's explicit scheme, can blow up when hit hard) / berger (pitch glide only, cheap) / linear |
@@ -2212,6 +3070,20 @@ Ride cymbal: heavier nonlinear plate, short stick contact, clear ping over a lig
 | `bright` | `0.6` | 0..1 output lowpass 1.5 kHz .. 12 kHz |
 | `model` | `'vk'` | vk (von Karman: crash build-up) / vk_simple (the book's explicit scheme, can blow up when hit hard) / berger (pitch glide only, cheap) / linear |
 | `quality` | `1.0` | 0.25..3 internal sample rate / grid size (cost ~ quality^2.5) |
+
+### `polar_shell`
+
+Cymbal or gong as a shallow spherical shell on a polar grid (circular free rim, clamped or free centre, von Karman nonlinearity): `q` curvature empties the bottom of the spectrum, a hard hit crashes.  *(module `percussion`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'cymbal'` | cymbal / flat / deep / gong |
+| `q` | `-1.0` | curvature (scaled; -1 = the kind's) |
+| `dur` | `2.0` | s |
+| `pos` | `-1.0` | strike radius 0..1 (-1 = the kind's) |
+| `fs` | `32000` | internal rate Hz |
+| `rings` | `16` | radial grid points |
+| `zone` | `''` | bell / bow / edge: strike zone of a tapered, domed cymbal (sets pos; the thin rim crashes sooner, the bell pings); empty = `pos` on a uniform shell |
 
 ### `ride`
 
@@ -2251,6 +3123,22 @@ Physical PhISEM maraca/shaker: stochastic particle collisions in a resonant shel
 |---|---|---|
 | `decay` | `0.12` | s |
 
+### `shell_crash`
+
+Crash cymbal as a shallow spherical shell: the curvature stiffens the low modes and strengthens the crash.  *(module `plates`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dome` | `1.3` | m radius of curvature (default: 15 mm rise on 40 cm) |
+| `size` | `0.4` | diameter m (bigger = lower, denser, slower to build) |
+| `thickness` | `1.0` | mm (thinner = crashes at a lighter touch: nonlinearity ~ force/thickness^2) |
+| `force` | `400.0` | peak strike force N at vel 1 = crash intensity (low: clean ring; high: glide, then the wash of new partials building up after the hit) |
+| `decay` | `6.9` | T60 of the low modes, s |
+| `dur` | `2.2` | rendered length s |
+| `bright` | `0.6` | 0..1 output lowpass 1.5 kHz .. 12 kHz |
+| `model` | `'vk'` | vk (von Karman: crash build-up) / vk_simple (the book's explicit scheme, can blow up when hit hard) / berger (pitch glide only, cheap) / linear |
+| `quality` | `1.0` | 0.25..3 internal sample rate / grid size (cost ~ quality^2.5) |
+
 ### `sleigh`
 
 Sleigh bells: a shake of many small bells (Christmas, winter levels).  *(module `percussion`)*
@@ -2278,9 +3166,11 @@ Physical snare: membrane/cavity plus acceleration-driven snare wires.  *(module 
 
 | param | default | meaning |
 |---|---|---|
-| `tune` | `180` | Hz |
-| `decay` | `0.25` | s |
+| `tune` | `200` | Hz |
+| `decay` | `1.0` | s, T60 of the strongest partials |
 | `snappy` | `0.7` | wire amount |
+| `under` | `0.0` | 0..1 level of a second mic under the drum (head seen from below: inverted, later, darker) |
+| `flip` | `0` | 1 = bottom mic polarity flipped back (full lows); 0 = raw, lows partly cancel |
 
 ### `snare808`
 
@@ -2288,7 +3178,7 @@ Physical snare: membrane/cavity plus acceleration-driven snare wires.  *(module 
 
 | param | default | meaning |
 |---|---|---|
-| `tune` | `180` | Hz |
+| `tune` | `249.6` | Hz (low bridged-T; the high one follows at its circuit ratio) |
 | `snappy` | `0.6` | noise amount |
 
 ### `steel_cymbal`
@@ -2335,15 +3225,15 @@ Physical large membrane/cavity taiko.  *(module `drums`)*
 
 ### `tam_tam`
 
-Tam-tam: large thin nonlinear plate, soft off-centre mallet; the shimmer swells for a second after the hit.  *(module `plates`)*
+Tam-tam: large thin nonlinear plate, soft off-centre mallet; the shimmer swells for a second after the hit and the lows ring on for a minute (the file fades out at `dur`).  *(module `plates`)*
 
 | param | default | meaning |
 |---|---|---|
 | `size` | `1.0` | diameter m (bigger = lower, denser, slower to build) |
 | `thickness` | `2.5` | mm (thinner = crashes at a lighter touch: nonlinearity ~ force/thickness^2) |
 | `force` | `2000.0` | peak strike force N at vel 1 = crash intensity (low: clean ring; high: glide, then the wash of new partials building up after the hit) |
-| `decay` | `12.0` | T60 of the low modes, s |
-| `dur` | `5.0` | rendered length s |
+| `decay` | `75.0` | T60 of the low modes, s |
+| `dur` | `8.0` | rendered length s |
 | `bright` | `0.6` | 0..1 output lowpass 1.5 kHz .. 12 kHz |
 | `model` | `'vk'` | vk (von Karman: crash build-up) / vk_simple (the book's explicit scheme, can blow up when hit hard) / berger (pitch glide only, cheap) / linear |
 | `quality` | `1.0` | 0.25..3 internal sample rate / grid size (cost ~ quality^2.5) |
@@ -2388,15 +3278,70 @@ Physical circular-membrane tom with air-cavity coupling.  *(module `drums`)*
 |---|---|---|
 | `tune` | `120` | Hz |
 | `decay` | `0.35` | s |
+| `under` | `0.0` | 0..1 level of a second mic under the drum (head seen from below: inverted, later, darker) |
+| `flip` | `0` | 1 = bottom mic polarity flipped back (full lows); 0 = raw, lows partly cancel |
+
+### `tom808`
+
+TR-808 tom by blocks: trigger into the low/mid/high tom bridged-T, plus a little pink noise.  *(module `drums`)*
+
+| param | default | meaning |
+|---|---|---|
+| `size` | `'mid'` | low / mid / high |
+| `knob` | `0.5` | tuning knob 0..1 (R1 500 -> 333 ohm: higher) |
+| `noise` | `0.3` | pink-noise level |
+| `dur` | `0.8` | s |
 
 ### `triangle`
 
-Triangle: a soft silvery ting; `open` 0 gives the damped, short stroke.  *(module `percussion`)*
+Triangle: a silvery ting whose partials ring for seconds (30 s at 400 Hz, halving per octave); `open` 0 gives the damped, short stroke; `axis` parallel = struck in its own plane: fewer, near-harmonic partials.  *(module `percussion`)*
 
 | param | default | meaning |
 |---|---|---|
 | `open` | `1.0` | 0 = damped .. 1 = ringing |
-| `tune` | `2100` | Hz |
+| `tune` | `2100` | Hz of the lowest high partial (the 400 Hz partial follows) |
+| `axis` | `'perpendicular'` | perpendicular (normal stroke) / parallel (in the plane: 400, 1600, 2000 Hz) |
+| `dur` | `4.0` | s rendered when open; the low partial rings far longer and is faded out |
+
+### `vk_cymbal`
+
+Modal von Karman cymbal: measured thickness profile (thick bell, thin edge), shallow-shell dome, free edge, power-law modal damping; the crash wash builds up from the strike.  *(module `plates`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'crash'` | crash / ride / splash / china |
+| `dome` | `-1.0` | rise of the cap in m (-1 = the kind's own; 0 = flat) |
+| `force` | `0.0` | peak strike force N at vel 1 (0 = the kind's own) |
+| `dur` | `2.5` | rendered length s |
+| `bright` | `0.6` | 0..1 output lowpass 1.5 kHz .. 12 kHz |
+| `modes` | `48` | transverse modes kept (more = brighter wash, slower; cost ~ modes^2) |
+| `scheme` | `'sav'` | sav (explicit, energy-stable) / conservative (energy-conserving, implicit in the Airy amplitudes) / linear |
+
+### `vk_gong`
+
+Modal von Karman gong: a flat opera gong glides down after the hit, a small curved gong glides up; tam_tam swells into a shimmer; rectangle = the supported test plate.  *(module `plates`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'opera'` | opera / curved / tam_tam / rectangle |
+| `dome` | `-1.0` | rise of the cap in m (-1 = the kind's own) |
+| `force` | `0.0` | peak strike force N at vel 1 (0 = the kind's own) |
+| `dur` | `2.5` | rendered length s |
+| `bright` | `0.6` | 0..1 output lowpass 1.5 kHz .. 12 kHz |
+| `modes` | `48` | transverse modes kept (more = brighter wash, slower; cost ~ modes^2) |
+| `scheme` | `'sav'` | sav (explicit, energy-stable) / conservative (energy-conserving, implicit in the Airy amplitudes) / linear |
+
+### `water_tube`
+
+Tubular bell lowered into water while it rings (Baschet water chime): the deeper it goes the lower the note, enough for microtones and glides, and the shorter it rings.  *(module `percussion`)*
+
+| param | default | meaning |
+|---|---|---|
+| `tune` | `440.0` | Hz of the dry note (mode 2 of the tube) |
+| `depth` | `0.0` | 0..1 of the length under water at the hit |
+| `depth_end` | `0.5` | 0..1 under water at the end (glide) |
+| `dur` | `3.0` | s |
+| `decay` | `3.0` | dry T60 of the note, s |
 
 ### `wind_chimes`
 
@@ -2408,6 +3353,10 @@ Metal wind chimes stirred: several tuned tubes struck at random, ringing over ea
 | `tubes` | `7` | strikes in the stir |
 | `spread` | `1.0` | s over which they are struck |
 | `decay` | `3.0` | s ring |
+| `tube` | `'bar'` | bar: free-bar overtones / square: measured square tubes 1 : 2.67 : 5.04 : 8 |
+| `law` | `'ratio'` | ratio: T60 = decay / overtone ratio / rayleigh: aluminium Rayleigh damping, T60 ~ 1/f^2 (10 s at 587 Hz) |
+| `scale` | `'pentatonic'` | pentatonic on `tune` / measured: the six tubes of a real aluminium chime set (586-1167 Hz) |
+| `strike` | `-1.0` | -1: fixed weights 1, 0.5, 0.25, 0.12 / 0..1: struck at this fraction of the length, amplitudes /phi_n/ of a free bar |
 | `seed` | `0` | variation |
 
 ### `woodblock`
@@ -2426,15 +3375,15 @@ Electronic laser-kick hybrid.  *(module `drums`)*
 |---|---|---|
 | `decay` | `0.3` | s |
 
-## Sound effects (242)
+## Sound effects (551)
 
 Usage: `{"type": "sfx", "kind": "<name>", "params": {...}}`
 
-Index by module: **contact**: `roll`, `scrape`, `impact`, `bounce`, `drop`, `interaction`, `smash`, `crumple`, `avalanche`, `rumble`, `modal_engine`; **creatures**: `heartbeat`, `roar`, `growl`, `bark`, `meow`, `purr`, `moo`, `howl`, `monster`, `animal`, `cricket`, `cicada`, `fly`, `mosquito`, `bee`, `night_insects`, `wings`, `birdsong`, `bird_call`, `dawn_chorus`, `frog`, `rattlesnake`, `hiss`, `breath`, `grunt`, `laugh`, `scream`, `cry`, `moan`, `cough`, `sneeze`, `snore`, `gulp`, `eat`, `handclap`, `applause`, `crowd_murmur`, `whistle_human`, `footsteps`; **cyber**: `transformer`, `gearbox`, `bearing`, `pipe_engine`, `turbo`, `tyre_squeal`, `pass_by`, `cyber_ui`; **dsp**: `noise_bed`; **fdstring**: `twang`; **foley**: `hit`, `clang`, `clink`, `thud`, `knock`, `shake`, `chain`, `keys`, `cloth`, `creak`, `zipper`, `velcro`, `paper`, `coin_spin`, `dice`, `cork_pop`, `boing`, `ratchet`, `drawer`, `book_drop`, `gunshot`, `reload`, `casing`, `sword`, `cavity_tone`, `edge_tone`, `aeolian_harp`, `clash`, `stab`, `slash`, `bow_shot`, `whip`, `shield_bash`, `clock`, `switch`, `button`, `keyboard_typing`, `mouse_click`, `camera_shutter`, `servo`, `printer`, `drill`, `saw`, `hammering`, `ratchet_wrench`, `piston`, `steam_engine`, `train`, `sonar`, `dtmf`, `phone_tone`, `phone_bell`, `siren_wail`, `car_horn`, `bike_bell`, `buzzer`, `shepard`, `transporter`, `robot_babble`, `red_alert`, `dark_drone`, `force_field`, `teleport`, `energy_blade`, `warp`, `charge_up`, `scanner`; **friction**: `stick_slip`, `squeak`, `brake_squeal`, `rub`; **klang**: `toy_boat`, `klang_car`, `harrier`, `bicycle`, `klang_rain`, `ui_tick`, `ui_chime`, `damage`, `sniff`, `strain`, `weight_shift`, `handle`, `tide`, `distant_bell`; **matter**: `fire`, `pour`, `drip`, `drops`, `splash`, `babble`, `bubbles`, `boil`, `sizzle`, `fizz`, `gurgle`, `drain`, `surf`, `cave_drips`, `waterfall`, `underwater_ambience`, `steam`, `air_leak`, `spray`, `kettle`, `balloon`, `gust`, `flame`, `match`, `spark`, `arc`, `mains_hum`, `tesla`, `neon`, `lightning`, `ice_crack`, `ice_cubes`, `freeze`; **pinball**: `solenoid`, `knocker`, `steel_ball`, `ball_roll`, `chirp`, `flipper`, `pop_bumper`, `slingshot`, `spinner`, `spring`; **plates**: `metal_plate`, `glass_pane`, `wood_panel`, `plate_bow`; **retro**: `sfxr`, `zzfx`; **sfx**: `beep`, `blip`, `click`, `pop`, `coin`, `powerup`, `powerdown`, `laser`, `zap`, `punch`, `explosion`, `jump`, `whoosh`, `swoosh`, `alarm`, `siren`, `error`, `success`, `proximity`, `radar`, `riser`, `sweep_up`, `sweep_down`, `bubble`, `glitch`, `static`, `wind`, `thunder`, `footstep`, `door`, `engine`, `magic`, `tone`, `noise`, `typewriter`, `countdown`, `vinyl`, `rain`, `stream`, `fan`, `propeller`, `jet_engine`, `helicopter`, `shatter`, `electric_motor`, `gears`; **tubes**: `pipe_blow`; **vehicle**: `car_engine`
+Index by module: **aero**: `sonic_boom`, `jet_cycle`, `jet_afterburner`, `turbofan`, `flyby_jet`, `prop_engine`, `airship`, `airframe`, `glider`, `space_rocket`, `rotorcraft`, `drone`, `cabin`; **arms**: `firearm`, `minigun`, `gun_mech`, `casing_ricochet`, `bullet_impact`, `ricochet`, `bullet_pass`; **contact**: `roll`, `scrape`, `impact`, `bounce`, `drop`, `interaction`, `smash`, `crumple`, `hail`, `avalanche`, `rumble`, `modal_engine`; **creatures**: `heartbeat`, `roar`, `growl`, `bark`, `meow`, `purr`, `moo`, `howl`, `monster`, `animal`, `cricket`, `body_fall`, `stridulation`, `cicada`, `fly`, `mosquito`, `bee`, `night_insects`, `wings`, `birdsong`, `bird_call`, `dawn_chorus`, `frog`, `rattlesnake`, `hiss`, `breath`, `grunt`, `laugh`, `scream`, `cry`, `moan`, `cough`, `sneeze`, `snore`, `gulp`, `eat`, `handclap`, `applause`, `dread_choir`, `crowd_murmur`, `whistle_human`, `footsteps`, `mammal`; **cyber**: `transformer`, `gearbox`, `bearing`, `pipe_engine`, `turbo`, `tyre_squeal`, `pass_by`, `traffic`, `induction_motor`, `machine_hum`, `cyber_ui`; **designed**: `cartoon`, `stinger_sfx`, `braam`, `morph`, `magic_kind`, `ui_slide`, `radio`, `rotary`, `geiger`, `modem`, `morse`, `alert_tone`, `can_roll`, `toy`, `turntable`, `crt`, `tinnitus`, `party_horn`, `cap_gun`, `mic_noise`, `mic_feedback`, `ice_ring`, `kazoo`, `rubber_duck`, `water_whistle`, `pendulum_feedback`, `rod_cage`, `creature`; **dsp**: `noise_bed`, `complex_osc`; **energy_arms**: `stun_gun`, `taser`, `cattle_prod`, `arc_weapon`, `energy_weapon`, `plasma`, `railgun`, `coilgun`, `gauss_rifle`, `laser_impact`, `photon_torpedo`; **engines**: `engine_layout`, `two_stroke`, `diesel_engine`, `forced_induction`, `engine_event`, `race_car`, `jalopy`; **fauna**: `bird_kind`, `chicken`, `farm_bird`, `pig`, `sheep`, `horse`, `donkey`, `farm_animal`, `wild_animal`, `primate`, `elephant`, `whale`, `rodent`, `reptile`, `slither`, `swarm`, `creature_steps`; **fdstring**: `twang`; **foley**: `hit`, `clang`, `clink`, `thud`, `knock`, `shake`, `chain`, `keys`, `cloth`, `creak`, `zipper`, `velcro`, `paper`, `coin_spin`, `dice`, `cork_pop`, `boing`, `ratchet`, `drawer`, `book_drop`, `gunshot`, `reload`, `casing`, `sword`, `cavity_tone`, `edge_tone`, `aeolian_harp`, `clash`, `stab`, `slash`, `bow_shot`, `whip`, `explosion_layers`, `shield_bash`, `body_hit`, `clock`, `switch`, `relay_chatter`, `button`, `keyboard_typing`, `mouse_click`, `camera_shutter`, `servo`, `printer`, `drill`, `saw`, `hammering`, `ratchet_wrench`, `piston`, `steam_engine`, `train`, `sonar`, `dtmf`, `pulse_dial`, `phone_tone`, `phone_bell`, `siren_wail`, `car_horn`, `bike_bell`, `buzzer`, `shepard`, `transporter`, `robot_babble`, `red_alert`, `dark_drone`, `force_field`, `teleport`, `shield_up`, `energy_blade`, `warp`, `charge_up`, `scanner`, `hummer`, `cuica`, `scifi_fm`, `noizer`, `overblow`; **friction**: `stick_slip`, `squeak`, `brake_squeal`, `rub`; **geo**: `rockfall`, `landslide`, `debris_flow`, `singing_dune`, `mud_pot`, `geyser`, `lava`, `glacier_calving`, `sand_storm`, `earthquake`, `tree_fall`, `snowfall`, `snow_avalanche`, `pd_footstep`, `snow_squeal`; **heavy_vehicles**: `motorcycle`, `scooter`, `truck`, `bus`, `tractor`, `mower`, `chainsaw`, `garden_machine`, `atv`, `wagon`, `tracks`, `hydraulic_pump`, `excavator`; **household**: `lock`, `door_family`, `lever`, `pulley`, `window`, `umbrella`, `office`, `rope`, `scissors`, `garden_tool`, `tool`, `coins`, `cards`, `board_game`, `furniture`, `bag`, `cart`, `leather`, `alarm_bell`, `smoke_alarm`, `alarm_clock`, `appliance_beep`, `ventilation`, `vacuum`, `hair_dryer`, `blender`, `shaver`, `appliance`, `toilet_flush`, `faucet`, `pipe_water`, `frying_pan`, `pepper_grinder`, `vacuum_hose`, `bowed_ceramic`, `filled_glass`, `flat_drop`, `roller_drop`; **human**: `burp`, `fart`, `kiss`, `spit`, `vomit`, `pee`, `yawn`, `gargle`, `hiccup`, `bodyfall`, `shout`, `baby`, `blow`, `cartoon_voice`, `finger_snap`, `skin`, `whisper_bed`, `crowd`, `beatbox`, `yodel`, `rap`; **klang**: `toy_boat`, `klang_car`, `harrier`, `bicycle`, `klang_rain`, `ui_tick`, `ui_chime`, `damage`, `sniff`, `strain`, `weight_shift`, `handle`, `tide`, `distant_bell`; **machines**: `power_tool`, `jackhammer`, `dental_drill`, `elevator`, `escalator`, `hvac`, `conveyor`, `hard_drive`, `gym`, `ride`, `slot_machine`, `pump`, `sewing_machine`, `medical`, `industrial`, `belt_squeal`, `savart_wheel`; **marine**: `ship`, `ship_engine`, `ship_horn`, `ship_bell`, `fog_signal`, `foghorn`, `outboard`, `jet_ski`, `sailboat`, `submarine`, `lap`; **matter**: `fire`, `pour`, `drip`, `drops`, `splash`, `babble`, `bubbles`, `boil`, `sizzle`, `fizz`, `gurgle`, `drain`, `surf`, `rain_water`, `cave_drips`, `waterfall`, `underwater_ambience`, `steam`, `air_leak`, `spray`, `kettle`, `balloon`, `gust`, `flame`, `match`, `spark`, `arc`, `mains_hum`, `tesla`, `neon`, `lightning`, `ice_crack`, `ice_cubes`, `freeze`; **melee**: `gouge`, `crossbow`, `arrow`, `sling`, `slingshot_weapon`, `catapult`, `siege_impact`, `melee`, `knife`, `armor`, `grab`, `spear`; **nature**: `firework`, `firecracker`, `lava_flow`, `geothermal`, `tornado`, `volcano`, `tsunami`, `singing_sand`, `collapse`, `crack`, `rain_on`, `fire_out`, `storm`, `foliage`, `earthquake_stage`, `dirt`, `tree`, `wind_kind`, `rapids`, `fountain`; **ordnance**: `blast`, `grenade`, `molotov`, `mine`, `launcher`, `missile`, `rocket_salvo`, `rocket_flyby`, `launcher_handling`, `mortar`, `howitzer`, `tank_gun`, `shell_incoming`, `shell_crack_overhead`, `aerial_bomb`, `flamethrower`, `torpedo`, `depth_charge`, `sea_mine`, `blast_noise`; **pinball**: `solenoid`, `knocker`, `steel_ball`, `ball_roll`, `chirp`, `flipper`, `pop_bumper`, `slingshot`, `spinner`, `spring`; **plates**: `metal_plate`, `glass_pane`, `wood_panel`, `plate_bow`; **rail**: `traction_drive`, `curve_squeal`, `rail`; **retro**: `sfxr`, `zzfx`, `bytebeat`; **road**: `ev_drive`, `ev`, `avas`, `hybrid_transition`, `tyre_roll`, `interior`, `air_system`, `car_door`, `air_horn`, `klaxon`, `backup_beeper`, `car_alarm`, `vehicle_mech`, `suspension`, `car_wind`; **scenes**: `scene`, `room_tone`; **sfx**: `beep`, `blip`, `click`, `pop`, `coin`, `powerup`, `powerdown`, `laser`, `zap`, `punch`, `explosion`, `jump`, `whoosh`, `swoosh`, `alarm`, `siren`, `error`, `success`, `proximity`, `radar`, `riser`, `sweep_up`, `sweep_down`, `bubble`, `glitch`, `static`, `wind`, `thunder`, `footstep`, `door`, `engine`, `magic`, `tone`, `noise`, `typewriter`, `countdown`, `vinyl`, `scratch`, `rain`, `stream`, `fan`, `propeller`, `jet_engine`, `helicopter`, `shatter`, `electric_motor`, `gears`, `fm_machine`; **sports**: `ball_bounce`, `pea_whistle`, `snow`, `ice_skate`, `skateboard`, `swim`, `sport`; **tubes**: `pipe_blow`, `wah_pipe`; **vehicle**: `car_engine`, `engine_knock`; **viscous**: `mud`, `gore`, `bone`, `slime`, `blood`, `chem`, `burn_flesh`
 
 ### `aeolian_harp`
 
-Strings singing in the wind: Aeolian tones that lock in to a string harmonic and sing (Selfridge ICSV24 2017).  *(module `foley`)*
+Strings singing in the wind: Aeolian tones that lock in to a string harmonic and sing.  *(module `foley`)*
 
 | param | default | meaning |
 |---|---|---|
@@ -2443,8 +3392,31 @@ Strings singing in the wind: Aeolian tones that lock in to a string harmonic and
 | `notes` | `'D3 A3 D4 F#4'` | the strings' fundamentals |
 | `diameter` | `0.5` | mm string diameter (thinner = higher shedding) |
 | `index` | `1.0` | FM index of the singing tone (more = richer sidebands) |
-| `damping` | `0.05` | mass-damping of the fundamental (Govardhan-Williamson alpha): lower sings louder and higher up |
+| `damping` | `0.05` | mass-damping of the fundamental (alpha): lower sings louder and higher up |
 | `dur` | `6.0` | s |
+| `seed` | `0` | variation |
+
+### `aerial_bomb`
+
+A falling bomb's whistle and a Mk 82 blast (89 kg Tritonal), the rumble scaled to its charge.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `distance` | `200.0` | m |
+| `whistle` | `True` | true = the fall first |
+| `charge` | `93.5` | kg TNT |
+| `seed` | `0` | variation |
+
+### `air_horn`
+
+Compressed-air horns: train_horn_k5la (311, 370, 415, 494, 622 Hz), train_horn_euro, truck_air_horn (150/180 Hz), air_horn_car (370/415 Hz), can, vuvuzela (235 Hz, partial 465), car_pairs (electric disc pairs).  *(module `road`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'truck_air_horn'` | train_horn_k5la / train_horn_euro / truck_air_horn / air_horn_car / can / vuvuzela / car_pairs |
+| `freqs` | `None` | override: Hz list, '285/330' |
+| `pair` | `0` | car_pairs: 0 335/400, 1 500/412, 2 430/355 |
+| `dur` | `1.2` | s |
 | `seed` | `0` | variation |
 
 ### `air_leak`
@@ -2461,6 +3433,39 @@ Compressed air through a small hole: steady leak, or a pneumatic burst that sags
 | `tone` | `10000.0` | Hz low-pass on the top end |
 | `seed` | `0` | variation |
 
+### `air_system`
+
+Truck and bus compressed air: bus_door (ram and stop), bus_kneel (long discharge), air_brake_apply, air_brake_release (psshh with membrane flutter), air_dryer_purge (short, violent), parking_brake_spring (discharge, then the spring lands).  *(module `road`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'air_brake_release'` | bus_door / bus_kneel / air_brake_apply / air_brake_release / air_dryer_purge / parking_brake_spring |
+| `seed` | `0` | variation |
+
+### `airframe`
+
+Airframe noise of a gliding aircraft: trailing-edge turbulence at U^5, plus flaps and landing gear.  *(module `aero`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `70.0` | m/s |
+| `delta` | `0.005` | m boundary-layer displacement thickness |
+| `flaps` | `0.0` | 0..1 |
+| `gear` | `0` | 1 = down |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
+### `airship`
+
+Airship: three small engines a little apart, so they beat, slow propellers, soft wind and creaking frame.  *(module `aero`)*
+
+| param | default | meaning |
+|---|---|---|
+| `rpm` | `2700.0` | engine rpm |
+| `spread` | `0.005` | rpm difference between engines |
+| `dur` | `5.0` | s |
+| `seed` | `0` | variation |
+
 ### `alarm`
 
 Alternating two-tone alarm / siren.  *(module `sfx`)*
@@ -2472,6 +3477,46 @@ Alternating two-tone alarm / siren.  *(module `sfx`)*
 | `rate` | `4.0` | Hz alternation |
 | `dur` | `1.0` | s |
 | `wave` | `'square'` | square/sine/saw |
+
+### `alarm_bell`
+
+School or fire bell: an electric hammer on a large gong, like a telephone ringer at 28.6 strikes per second.  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `size` | `0.5` | 0 small gong 2000 Hz .. 1 large 800 Hz |
+| `rate` | `28.6` | strikes per second |
+| `dur` | `2.0` | s |
+| `seed` | `0` | variation |
+
+### `alarm_clock`
+
+Alarm clocks: mecanique (hammer rattling between two bells on top), numerique (digital: 4 beeps at 8 per second, in groups).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'mecanique'` | mecanique / numerique |
+| `freq` | `3000.0` | numerique: Hz, 2000..4000 |
+| `groups` | `3` | rings or groups |
+| `seed` | `0` | variation |
+
+### `alert_tone`
+
+Four-phase alarm generator: happy_blips, affirmative, activate, invaders, information, message_alert, finished, error_code, wrong_buzzer, three_tone (723, 932, 1012 Hz). Or your own via f1..f4.  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `preset` | `'message_alert'` | happy_blips / affirmative / activate / invaders / information / message_alert / finished / error_code / wrong_buzzer / three_tone |
+| `ms` | `0.0` | own message: duration, ms (0 = use the preset) |
+| `scale` | `1.0` | own message: cycles of the four tones |
+| `f1` | `0.0` | Hz |
+| `f2` | `0.0` | Hz |
+| `f3` | `0.0` | Hz |
+| `f4` | `0.0` | Hz |
+| `timbre` | `1.0` | 0 even harmonics (an octave up, 11.7 dB softer) .. 1 odd |
+| `level` | `0.7` | peak: level is matched per preset |
+| `rough` | `0.0` | 0..1 depth of an amplitude modulation in the roughness band: alarms read as urgent |
+| `rough_hz` | `70.0` | modulation rate, 30..150 Hz |
 
 ### `animal`
 
@@ -2497,7 +3542,28 @@ Applause: every clapper has a rate, a hand resonance and a place; big crowds blu
 | `crowd` | `30` | number of people |
 | `enthusiasm` | `0.6` | 0 bored (2.5 claps/s each) .. 1 wild (4.2 claps/s) |
 | `dur` | `4.0` | s |
+| `sync` | `0.0` | 0 free clapping (Mode I) .. 1 rhythmic applause: clappers halve their rate, tighten it and pull into phase (Mode II, Kuramoto coupling) |
+| `clap_type` | `''` | empty = hand resonances spread log-normally / mix = each clapper one of the 8 hand configurations / one type (P1..A1-) for all |
 | `seed` | `0` | variation |
+
+### `appliance`
+
+Kitchen and utility appliances: micro_ondes (magnetron hum at twice the mains under a dominant fan, plate, end beeps), frigo (compressor at 50 Hz and its fan, on and off), lave_linge (water and load turning at 55 rpm), lave_vaisselle (pump, spray arms, water), seche_linge (load tumbling at 55 rpm, fan).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'micro_ondes'` | micro_ondes / frigo / lave_linge / lave_vaisselle / seche_linge |
+| `mains` | `50.0` | Hz: 50 / 60 |
+| `dur` | `6.0` | s |
+| `seed` | `0` | variation |
+
+### `appliance_beep`
+
+Piezo beeps of appliances, 2-4 kHz: micro_ondes (end of cycle), lave_linge, four, touche (a key press), telephone.  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'micro_ondes'` | micro_ondes / lave_linge / four / touche / telephone |
 
 ### `arc`
 
@@ -2509,6 +3575,55 @@ Electric arc: broadband buzz re-striking on every half cycle of the mains, sputt
 | `mains` | `50.0` | Hz mains frequency (50 or 60): the buzz is at twice this |
 | `stability` | `0.7` | 0..1 fraction of time the arc holds (1 = steady welding arc) |
 | `tone` | `1.0` | formant scale 0.5..1.5 |
+| `click` | `0.0` | 0..1 level of the chirp clicks driven at twice the mains (0 = none) |
+| `seed` | `0` | variation |
+
+### `arc_weapon`
+
+Arc projector: a continuous arc buzzing at twice the mains, 100 Hz at 50 Hz; a game weapon has no mains and can take 400 Hz.  *(module `energy_arms`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `2.0` | s |
+| `buzz` | `100.0` | Hz of the buzz: 100 on 50 Hz mains, 400 for a game weapon |
+| `tone` | `1.0` | formant scale 0.5..1.5 |
+| `seed` | `0` | variation |
+
+### `armor`
+
+Armour moved by the wearer: plates (micro-impacts of steel at each step), maille (a metal PhISEM shake), cuir (leather creak and rustle).  *(module `melee`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'plates'` | plates / maille / cuir |
+| `motion` | `'walk'` | walk / run / shift (one movement) |
+| `dur` | `2.0` | s |
+| `seed` | `0` | variation |
+
+### `arrow`
+
+An arrow by stage: vol (the shaft's tone alone, going away), impact (the point landing), carquois (drawn from the quiver).  *(module `melee`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'vol'` | vol / impact / carquois |
+| `speed` | `70.0` | m/s |
+| `shaft_d` | `0.008` | m |
+| `target` | `'wood'` | impact: wood/flesh/armour |
+| `dur` | `0.6` | vol: s |
+| `seed` | `0` | variation |
+
+### `atv`
+
+Quad bike: one or two cylinders with a motorcycle's body, and the dirt under it when moving.  *(module `heavy_vehicles`)*
+
+| param | default | meaning |
+|---|---|---|
+| `cylinders` | `1` | 1 single / 2 parallel twin 270 |
+| `rpm` | `4000.0` | crankshaft: idle 1000, limit 9000 |
+| `load` | `0.6` | 0..1 |
+| `speed` | `0.0` | km/h: > 0 adds tyres on dirt |
+| `dur` | `3.0` | s |
 | `seed` | `0` | variation |
 
 ### `avalanche`
@@ -2519,13 +3634,27 @@ Avalanche / rock slide rumble: enveloped noise ringing a cluster of random low m
 |---|---|---|
 | `dur` | `10.0` | s until all sound has ended |
 | `fmin` | `100.0` | Hz lowest rumbling frequency |
-| `fmax` | `150.0` | Hz highest (raise it for wind-like or eerie tones) |
+| `fmax` | `160.0` | Hz highest (raise it for wind-like or eerie tones) |
 | `damping` | `0.87` | 1/s decay rate of the modes |
 | `modes` | `25` | number of random modes |
-| `rise` | `0.0` | s to full level (0 = 12 % of dur) |
+| `rise` | `0.0` | s to full level (0 = 20 % of dur) |
 | `hold` | `0.0` | s when the fade starts (0 = 30 % of dur) |
 | `fade` | `0.0` | s when the slide itself has ended (0 = 60 % of dur) |
 | `seed` | `0` | which modes |
+
+### `avas`
+
+Pedestrian warning sound of an electric car: two bands, pitch and level tied to speed. rule=unece: +0.8 %/km/h, 50 dB(A) at 10 km/h, 56 at 20, 47 reversing. rule=fmvss: no glide, +3 dB at 11, 21, 31 km/h.  *(module `road`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `10.0` | km/h |
+| `speed_end` | `-1.0` | glide to this km/h (-1 = steady) |
+| `rule` | `'unece'` | unece / fmvss |
+| `reverse` | `0` | 1 = reversing |
+| `style` | `'pad'` | hum / chime / pad (timbre, free under the rules) |
+| `dur` | `2.0` | s |
+| `seed` | `0` | variation |
 
 ### `babble`
 
@@ -2537,6 +3666,53 @@ Babbling brook: thousands of chirping air bubbles a second over a small step.  *
 | `flow` | `1.0` | flow, 0.05..3 (1 = 3100 bubbles/s) |
 | `size` | `1.0` | bubble size scale, 0.4..2 (larger = deeper, slower water) |
 | `turbulence` | `0.5` | 0..1 slow surging of the bubble rate |
+| `seed` | `0` | variation |
+
+### `baby`
+
+Baby (the nonverbal engine, short tract): pleurs, rire, gazouillis. F0 x2, formants x1.6 of the adult preset.  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'pleurs'` | pleurs / rire / gazouillis |
+| `pitch` | `1.0` | f0 scale |
+| `seed` | `0` | variation |
+
+### `backup_beeper`
+
+Reversing alarm: a piezo tone with odd harmonics, gated. 1000 Hz is the usual pitch, 1250 Hz dominant in one survey, 700-2800 Hz the SAE J994 range.  *(module `road`)*
+
+| param | default | meaning |
+|---|---|---|
+| `freq` | `1000.0` | Hz, 700..2800 |
+| `rate` | `1.0` | beeps per second |
+| `duty` | `0.5` | on fraction |
+| `dur` | `3.0` | s |
+
+### `bag`
+
+Bags and luggage: sac_plastique (a plastic bag crumpled), papier (a paper bag), valise (suitcase: zip, latches, set down), roulettes (trolley case rolling over joints).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'sac_plastique'` | sac_plastique / papier / valise / roulettes |
+| `dur` | `1.5` | s, except valise |
+| `speed` | `0.9` | roulettes: m/s |
+| `seed` | `0` | variation |
+
+### `ball_bounce`
+
+Inflated ball bouncing to rest: a low thump (one cycle over the contact, -cos 2wt) and the ring of the air inside (ka = 2.082). Basket 82 + 997 Hz, 12 ms; tennis, foot, volley (breathing mode 150 Hz).  *(module `sports`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'basket'` | basket / tennis / foot / volley |
+| `height` | `1.0` | m of the drop |
+| `surface` | `'parquet'` | parquet / concrete / clay / turf |
+| `cavity` | `1.0` | level of the air and shell modes: 0 = thump alone, 1 = as computed |
+| `ring_cycles` | `1.0` | cycles to decay: 1 bouncing, more for a ball held away from the floor |
+| `radius` | `0.0` | m inside the ball, 0 = the kind's; .116 is a measured basketball |
+| `roll_speed` | `0.0` | m/s of rolling after the bounces, slowed by the rolling resistance |
 | `seed` | `0` | variation |
 
 ### `ball_roll`
@@ -2568,8 +3744,10 @@ Dog barks: short arched pulses bursts, 'wa-u' vowel path.  *(module `creatures`)
 |---|---|---|
 | `size` | `'medium'` | small/medium/large |
 | `count` | `2` | barks |
-| `aggression` | `0.6` | 0..1 |
+| `aggression` | `0.6` | 0..1: shorter gaps; with pitch 0 also a lower f0 (x1.12 at 0, x0.77 at 1) |
 | `pitch` | `0.0` | f0 peak in Hz, 0 = from size |
+| `mass` | `0.0` | dog mass in kg (2.5..50 measured), sets the tract length; 0 = from size |
+| `dominant` | `False` | spectral peak from aggression: 1267 Hz at 0 .. 626 Hz at 1 |
 | `seed` | `0` | variation |
 
 ### `bearing`
@@ -2581,12 +3759,31 @@ Rolling bearing on a spinning shaft, healthy or failing: rumble, dry squeal, the
 | `dur` | `3.0` | s |
 | `rpm` | `1750.0` | shaft |
 | `rpm_end` | `-1.0` | glide to this rpm (-1 = steady) |
-| `state` | `'healthy'` | healthy/worn/dry/outer/inner/ball/loose/misaligned |
+| `state` | `'healthy'` | healthy/worn/dry/outer/inner/ball/loose/misaligned/pitting/crack/spall/polished/cage |
 | `severity` | `0.6` | 0..1 how far gone |
 | `balls` | `9` | rolling elements |
 | `ball_mm` | `7.94` | ball diameter |
 | `pitch_mm` | `39.04` | pitch diameter |
-| `resonance` | `1000.0` | Hz main housing resonance (others at 0.7, 2 and 4.1 times it) |
+| `size` | `''` | designation, replaces balls, ball_mm, pitch_mm: 6004 / 6205 / 6203 / 6206 / 51104 (thrust: angle 90, the balls pass both races at the same rate) / 51104_alt (rollers set alternately: a defect meets every other one, BPF / 2); catalogue speed limits open / sealed: 6205 18000 / 8500 rpm |
+| `angle` | `0.0` | deg contact angle: 0 deep groove, 15-40 angular contact (catalogue suffix), 90 thrust |
+| `creep` | `0` | 1 = the ball rates run a constant 1 to 2 % slow (drawn from seed) |
+| `resonance` | `1000.0` | Hz main housing resonance (others at 0.7, 2 and 4.1 times it), up to 19000 for an accelerometer's view |
+| `load` | `0.0` | 0 = default load zone; 0..1 radial load: how much of the ring carries the balls (0.5 = half) |
+| `rotating` | `'inner'` | inner (shaft) / outer: the outer ring turns (planet gear, wheel hub): an inner-race defect stays in the load zone and ticks evenly, an outer-race defect swells once per turn |
+| `defect` | `0.0` | deg of race the defect spans: 0 = a point; wider = an entry and an exit shock, merging past the ball spacing |
+| `ring` | `1.0` | x on the housing ring time: 3-5 for a slow crane or turret bearing |
+| `mirror` | `0` | 1 = recorded through a 90 mm parabolic mirror: highs lifted as (pi D f / c)^2 |
+| `seed` | `0` | variation |
+
+### `beatbox`
+
+Beatbox: stops in a pattern. B = lip kick (speech P + `kick`), t = hat (T S), K = snare (K SH), - = rest.  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `pattern` | `'B t K t B B K t'` | tokens B t K -, one per eighth |
+| `bpm` | `100.0` | beats per minute |
+| `bars` | `1` | times through the pattern |
 | `seed` | `0` | variation |
 
 ### `bee`
@@ -2612,6 +3809,25 @@ Simple UI beep.  *(module `sfx`)*
 | `freq` | `880` | Hz or note name (110, '110hz' or 'A2') |
 | `dur` | `0.12` | s |
 | `wave` | `'sine'` | sine/square/triangle/saw/pulse |
+
+### `belt_squeal`
+
+A slipping belt: silent grip until the torque makes the whole wrapped arc slide (mu .5, half a turn: T1/T2 = 4.81, M/2RT0 = 0.656), then stick-slip squeal on the pulley's modes.  *(module `machines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `torque` | `25.0` | N m reached at the end of the rise |
+| `torque_start` | `0.0` | N m at the start |
+| `rise` | `0.5` | s of torque rise, then held |
+| `radius` | `0.06` | m pulley |
+| `preload` | `150.0` | N belt tension at rest |
+| `mu` | `0.5` | belt on pulley |
+| `wrap` | `3.141592653589793` | rad wrapped |
+| `speed` | `12.0` | m/s belt |
+| `pulley` | `2800.0` | Hz first pulley mode |
+| `oil` | `0.1` | Pa s of the film on the pulley: thicker = the squeal stops at lower sliding speeds |
+| `dur` | `2.0` | s |
+| `seed` | `0` | variation |
 
 ### `bicycle`
 
@@ -2644,13 +3860,27 @@ Physical syrinx: pressure-driven membrane valves into a trachea waveguide (Smyth
 
 | param | default | meaning |
 |---|---|---|
-| `freq` | `450.0` | membrane frequency Hz (tension), 150..900 |
+| `freq` | `450.0` | membrane frequency Hz (tension), 150..900; budgie up to 3000, about 2100 for its contact call |
 | `freq_end` | `0.0` | glide target Hz, 0 = none |
 | `pressure` | `3.0` | air-sac pressure kPa, 1.5..6 |
 | `attack` | `0.3` | fraction of dur over which pressure rises |
 | `two_voice` | `5.0` | Hz offset of the second valve (beating); 0 = one valve |
 | `species` | `'raven'` | trachea size: oil_bird/raven/budgie |
 | `dur` | `0.5` | s |
+| `source` | `'valve'` | valve (membrane valves, Smyth & Smith) / labial (two self-oscillating labia, bronchi joined to the trachea, phonation above 1 kPa) |
+| `coupling` | `0.5` | labial: back-pressure coupling of the two sources (0 = independent, they beat; larger = they lock when close) |
+| `latex` | `0.0` | membrane strain 0..0.5: if > 0 the frequency is that of a latex membrane across the trachea (artificial syrinx), freq ignored |
+| `membrane` | `'sweep'` | valve: sweep (sounds from about 1 kPa) / fletcher (a raven's thin membrane, sounds from 0.3 kPa; pressure may go down to 0.3) / raven (full raven set: valve shut at rest, constant damping, heavy mass law, 1 ml bronchus) |
+| `radiation` | `'lowpass'` | valve: lowpass (beak reflection corner 4 kHz) / piston (corner where k b = 2) / fletcher (piston, then a roll-off from 3 kHz) |
+
+### `bird_kind`
+
+Birds by group: rapaces (eagle scream), tropicaux (parrot squawks), echassiers (heron croak), marins (gull). Farnell's ring-modulated syrinx.  *(module `fauna`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'rapaces'` | rapaces / tropicaux / echassiers / marins |
+| `seed` | `0` | variation |
 
 ### `birdsong`
 
@@ -2665,7 +3895,42 @@ Bird song / call from a syllable grammar driving Farnell's FM syrinx (12 species
 | `tempo` | `1.0` | speed scale |
 | `two_voice` | `0.0` | 0..1 level of the second syrinx source |
 | `bright` | `1.0` | 0.3..2 top-end |
-| `source` | `'fm'` | fm (Farnell) / normal_form (Amador 2013 labial dynamics + trachea) |
+| `source` | `'fm'` | fm (Farnell) / normal_form (labial normal form + trachea) / laje (labia driven along one ellipse in pressure-tension per syllable) / gardner (flapping labia, tension follows the song) / suboscine / tyrant (fixed tension, pressure alone raises the pitch through a stiffening restitution) |
+| `seed` | `0` | variation |
+| `coupling` | `0.0` | 0..1 gardner/suboscine/tyrant: trachea pressure acting back on the labia (period doubling when strong) |
+| `gestures` | `0.0` | Hz: > 0 replaces the syllable envelopes by Wilson-Cowan air-sac pressure gestures at this rate (canary: 5 separate pulses .. 25 sustained) |
+| `tract` | `'bands'` | bands = the preset's two band-passes / gardner = a 3 cm trachea and a 1 cm beak (a canary's), whatever the species / oec = trachea, oropharyngeal-esophageal cavity (Helmholtz, ~5 kHz) and beak |
+
+### `blast`
+
+One explosive charge at a distance, in true proportions: the ground's pre-rumble, the shock, three harsh blasts, the fireball. Demolition is a bare crack, film kerosene nearly all fireball, fuel-air has a deep suck behind the shock.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'grenade'` | grenade/demolition/fuel_air/film |
+| `charge` | `1.0` | kg TNT |
+| `distance` | `50.0` | m |
+| `ground` | `True` | true = the ground wave ahead of the air (up to 5 c) |
+| `seed` | `0` | variation |
+
+### `blast_noise`
+
+Farnell's sinusoidal noise: an exploding-shell texture, from noise through a closing resonance, clipped, then used as phase.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `f` | `0.5` | 0..1 small and sharp (high) .. 1 short and thin; the length is (1-f) x 2.8 s |
+| `seed` | `0` | variation |
+
+### `blender`
+
+Kitchen blender: universal motor, gear lines, a dominant broadband roar, the contents thrown about; the motor drags under load.  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `1.0` | x nominal 20 000 rpm |
+| `load` | `0.5` | 0 empty .. 1 full: drop of speed, contents louder |
+| `dur` | `3.0` | s |
 | `seed` | `0` | variation |
 
 ### `blip`
@@ -2677,6 +3942,67 @@ Very short high blip (cursor move, tick).  *(module `sfx`)*
 | `freq` | `1400` | Hz or note name (110, '110hz' or 'A2') |
 | `dur` | `0.05` | s |
 
+### `blood`
+
+Blood: goutte (slow thick drops falling into a pool), flot (a stream pulsing with the heart).  *(module `viscous`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'goutte'` | goutte / flot |
+| `dur` | `4.0` | s |
+| `rate` | `-1.0` | goutte: drops a second; flot: pulses a second; -1 = the kind's |
+| `seed` | `0` | variation |
+
+### `blow`
+
+Blowing: bougie (short puff), ballon (puffs into a neck, the cavity falling as it fills), souffle (long steady breath).  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'bougie'` | bougie / ballon / souffle |
+| `size` | `1.0` | 0.7..1.5 body scale |
+| `seed` | `0` | variation |
+
+### `board_game`
+
+Board games: pion (a piece slid and set down), carte (a card flicked on the table), jeton (plastic chips stacked).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'pion'` | pion / carte / jeton |
+| `seed` | `0` | variation |
+
+### `body_fall`
+
+A creature collapsing: the body hits the ground three times, ever closer and softer, with a heavy thump, then a few pieces of its armour or bones clatter after it.  *(module `creatures`)*
+
+| param | default | meaning |
+|---|---|---|
+| `size` | `1.0` | creature size 0.2..8 (bigger = slower, lower, longer thump) |
+| `material` | `'flesh'` | flesh/stone/shell/metal/bone: the body |
+| `debris` | `''` | none / metal / bone / shell: pieces falling after the body |
+| `seed` | `0` | variation |
+
+### `body_hit`
+
+A blow landing on a creature's body: flesh, stone hide, chitin shell, metal plating or bone, scaled by the creature's size.  *(module `foley`)*
+
+| param | default | meaning |
+|---|---|---|
+| `material` | `'flesh'` | flesh/stone/shell/metal/bone |
+| `size` | `1.0` | creature size (bigger = lower; flesh also longer) |
+| `seed` | `0` | variation |
+
+### `bodyfall`
+
+A body falling: cloth, a long dull contact (`thud` 15 ms) on a ground of `footsteps`, a weak rebound, settling.  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `weight` | `1.0` | 0.5..2 |
+| `ground` | `'wood'` | snow/sand/wet_sand/ash/mud/shallow_water/leaves/grass/forest_floor/gravel/pebbles/salt/stone/concrete/cobblestone/wet_stone/marble/hard_floor/wood/metal_web/ice/crystal/bone/coral |
+| `seed` | `0` | variation |
+
 ### `boil`
 
 Boiling water: kettle rumble of collapsing vapour bubbles, then large bubbles bursting in a rolling boil.  *(module `matter`)*
@@ -2687,6 +4013,7 @@ Boiling water: kettle rumble of collapsing vapour bubbles, then large bubbles bu
 | `intensity` | `0.8` | 0..1: 0.2 simmer rumble, 0.6 onset, 1 rolling boil |
 | `ramp` | `0.0` | 1 = heat up from cold to `intensity` over the duration |
 | `size` | `0.5` | 0..1 vessel size (kettle .. cauldron): lower rumble, larger bubbles |
+| `burst` | `0.5` | 0..1 level of the cap-film bursts at the surface (rising Helmholtz chirps) |
 | `seed` | `0` | variation |
 
 ### `boing`
@@ -2695,10 +4022,20 @@ Twanged ruler / springy bar: clamped-bar modes with the pitch dropping in the at
 
 | param | default | meaning |
 |---|---|---|
-| `freq` | `426` | Hz or note name (the book's figure value) |
+| `freq` | `426` | Hz or note name  |
 | `decay` | `1.5` | s |
 | `bend` | `6.0` | Hz the pitch starts above the final pitch |
 | `bright` | `1.0` | 0.3 dull .. 3 all overtones |
+| `seed` | `0` | variation |
+
+### `bone`
+
+Bone breaking, brittle pulses close together on a short stiff body: craquement (a run of small cracks), fracture (one snap and its run), os casse humide (a fracture in wet flesh).  *(module `viscous`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'fracture'` | craquement / fracture / os_casse_humide |
+| `size` | `1.0` | bigger = lower |
 | `seed` | `0` | variation |
 
 ### `book_drop`
@@ -2717,15 +4054,18 @@ An object dropped on a surface bouncing to rest: geometric bounce train, each hi
 
 | param | default | meaning |
 |---|---|---|
-| `material` | `'steel'` | rubber/plastic/wood/glass/ceramic/metal/steel/aluminium/bronze/ice/stone/concrete: the bouncing object |
+| `material` | `'steel'` | rubber/plastic/plastic2/polycarbonate/polystyrene/mdf/wood/wood:<species> (spruce, maple, padauk, ebony...)/glass/ceramic/metal/steel/cast_iron/carbide/aluminium/bronze/copper/acrylic/ice/stone/concrete: the bouncing object |
 | `size` | `0.02` | m: diameter / length of the object; heavier = longer contacts, darker |
 | `shape` | `'ball'` | ball (rigid: only the surface rings) / bar / circ_plate (lid, coin) / rect_plate ... |
-| `surface` | `'wood'` | rubber/plastic/wood/glass/ceramic/metal/steel/aluminium/bronze/ice/stone/concrete: what it lands on (dominates the heard material) |
+| `surface` | `'wood'` | rubber/plastic/plastic2/polycarbonate/polystyrene/mdf/wood/wood:<species> (spruce, maple, padauk, ebony...)/glass/ceramic/metal/steel/cast_iron/carbide/aluminium/bronze/copper/acrylic/ice/stone/concrete: what it lands on (dominates the heard material) |
 | `surface_size` | `0.6` | m: size of the surface plate; bigger = lower |
 | `first_interval` | `0.3` | s between the first two impacts (= drop height: h = g t^2/8) |
-| `restitution` | `0.74` | ratio of successive intervals and speeds, 0.3 dead .. 0.9 lively (0.70-0.76 steel ball on wood) |
+| `restitution` | `0.74` | ratio of successive intervals and speeds, 0.3 dead .. 0.9 lively (0.70-0.76 steel ball on wood); 0 = the typical value of the material |
 | `irregularity` | `0.0` | 0..1 non-roundness: intervals and hits randomly shorter / weaker, strike point changes per bounce |
 | `velocity` | `0.0` | m/s first impact speed; 0 = from the interval, g t/(2 restitution) |
+| `yield_stress` | `0.0` | Pa: dynamic yield of the softer body (lead 1e8 .. hard steel 1e9), 0 = elastic: a hard hit dents and bounces less, e falling as v^-1/4 |
+| `restrike_jitter` | `0.0` | share of the mean modal power thrown on every mode at each later hit; 0.2 is the measured value |
+| `hit_spread` | `0.0` | 0..1 Lloyd's per-hit mode gains, wider the harder the hit |
 | `bright` | `0.5` | 0 dark .. 1 bright |
 | `seed` | `0` | variation |
 
@@ -2741,6 +4081,29 @@ Bow and arrow: the draw creaks, the string twangs, the shaft whistles away and t
 | `target` | `'wood'` | wood/flesh/armour |
 | `seed` | `0` | variation |
 
+### `bowed_ceramic`
+
+A ceramic bowl sung with a bow or a wet finger: friction locked on the modes of a porcelain ring, tapped first if asked.  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `freq` | `600.0` | Hz |
+| `dur` | `2.5` | s |
+| `pressure` | `0.6` | N |
+| `speed` | `0.12` | m/s |
+| `tap` | `0.0` | 0..1 a strike at the start |
+| `seed` | `0` | variation |
+
+### `braam`
+
+Trailer braam: brass chord pushed through distortion, over a sub-bass an octave down.  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `pitch` | `55.0` | Hz of the root |
+| `dur` | `3.5` | s |
+| `seed` | `0` | variation |
+
 ### `brake_squeal`
 
 Braking wheel: rubbing noise while it is fast, squeal as it slows through the stick-slip range.  *(module `friction`)*
@@ -2752,6 +4115,8 @@ Braking wheel: rubbing noise while it is fast, squeal as it slows through the st
 | `pitch` | `1900.0` | main disc resonance, Hz or note |
 | `dur` | `1.6` | s: time to stop |
 | `seed` | `0` | int |
+| `kind` | `'rub'` | rub (rubbing, squeal as it stops) / squeal_hf (5-10 nodal diameters, 5-15 kHz, locked with harmonics) / squeal_lf (1-4 nodal diameters, 1-4 kHz) / squeak (a short squeal) / groan (10-30 Hz stick-slip, low speed) / judder (whole multiples of the wheel rate) / wire_brush (squeal randomly modulated) / squelch (squeal amplitude-modulated) |
+| `hot_spots` | `0.0` | 0..1 thermo-elastic hot spots on the disc: the grip pulses about 10 times per disc turn |
 
 ### `breath`
 
@@ -2786,6 +4151,73 @@ Air bubbles in water with exact radius-dependent pitch and decay; heard from abo
 | `cluster` | `0.5` | 0..1 bubbles arrive in bursts |
 | `underwater` | `0.0` | 0 = heard at the surface (pitch rises as they surface); 1 = deep, muffled, steady pitch |
 | `rise` | `1.0` | rise-speed multiplier: faster = stronger 'bloop' chirp |
+| `flow_lpm` | `0.0` | gas flow in litres/min (> 0 sets the rate: flow / bubble volume) |
+| `forcing` | `'window'` | window / pinch (neck collapse at release) / merge (two bubbles coalescing): how each bubble starts |
+| `amp_law` | `'moss'` | moss (amplitude ~ radius) / pinch (compression at pinch-off grows as 1/radius up to 0.5: level nearly flat across sizes) / xue (surface-tension release, ~ radius^-3: small bubbles louder) |
+| `transfer` | `10.0` | dB: spread of the per-bubble transfer to the listener (+-) |
+| `surface` | `0` | 1 = bubbles near the free surface radiate as dipoles (image source) |
+| `vessel` | `0.0` | m: radius of the container (rigid wall); 0 = open water |
+| `seed` | `0` | variation |
+
+### `bullet_impact`
+
+A bullet striking metal, thin metal, concrete, wood, flesh, armour, water, dirt or glass, with its fragments. Bands and lengths are estimates: no published measurements.  *(module `arms`)*
+
+| param | default | meaning |
+|---|---|---|
+| `material` | `'metal'` | metal/metal_thin/concrete/wood/flesh/flesh_armor/water/dirt/glass |
+| `caliber` | `'556'` | 22lr/22lr_sub/9x19/9x19_sub/45acp/40sw/10mm/357/38spl/556/762x39/762x51/308/762x54/300blk/300blk_sub/50bmg/12_buck/12_slug/musket |
+| `distance` | `5.0` | m |
+| `debris` | `1.0` | 0..1 fragments, chips, drops |
+| `level` | `'relative'` | relative = amplitude in sqrt(muzzle energy), the .50 at 0.85 / peak = every file at 0.85 |
+| `seed` | `0` | variation |
+
+### `bullet_pass`
+
+A bullet passing near you: the supersonic crack alone (N-wave, ground reflection, wake); a subsonic round only whizzes; near Mach 1 you get both.  *(module `arms`)*
+
+| param | default | meaning |
+|---|---|---|
+| `caliber` | `'556'` | 22lr/22lr_sub/9x19/9x19_sub/45acp/40sw/10mm/357/38spl/556/762x39/762x51/308/762x54/300blk/300blk_sub/50bmg/12_buck/12_slug/musket |
+| `miss` | `3.0` | m from your head |
+| `speed` | `0.0` | m/s (0 = the calibre's own) |
+| `range` | `0.0` | m flown already: it slows down, so far away the crack gives way to a whizz |
+| `spin_tone` | `True` | true = the faint line at speed / rifling twist |
+| `render` | `'heard'` | heard = as a recording or the ear gets it: the blast's weight, a microphone overloaded at 150 dB, the place's reflections / pressure = the bare pressure at the ear, a click of a few ms |
+| `place` | `'street'` | render=heard: where it is heard, none / street / forest / canyon / arena / cave / hall ... (room presets) |
+| `seed` | `0` | variation |
+
+### `burn_flesh`
+
+Flesh burning: a sizzle with slow thick bubbles of fat under it.  *(module `viscous`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `3.0` | s |
+| `rate` | `6.0` | fat bubbles a second |
+| `seed` | `0` | variation |
+
+### `burp`
+
+Burp: low pulses of the opening oesophagus through the vocal tract (40-120 Hz).  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `size` | `1.0` | 0.7..2.1: bigger = lower, longer (f0 85/size, kept in 40-120 Hz) |
+| `seed` | `0` | variation |
+
+### `bus`
+
+City bus: a big six at a slow idle, the doors opening on their rams, the air brake's psshh; or rolling, with commercial-vehicle tyres.  *(module `heavy_vehicles`)*
+
+| param | default | meaning |
+|---|---|---|
+| `rpm` | `540.0` | crankshaft |
+| `load` | `0.2` | 0..1 |
+| `speed` | `0.0` | km/h: > 0 adds Harmonoise CV rolling |
+| `doors` | `1` | 1 = doors at 30 % |
+| `brake` | `1` | 1 = air brake release at 75 % |
+| `dur` | `6.0` | s |
 | `seed` | `0` | variation |
 
 ### `button`
@@ -2808,6 +4240,30 @@ Electromechanical buzzer (door entry, game-show wrong answer): an armature rattl
 | `dur` | `0.6` | s |
 | `freq` | `100` | Hz or note name (100 = 50 Hz mains, 120 = 60 Hz) |
 | `harsh` | `0.6` | 0..1 plate rattle |
+| `beat` | `0.0` | Hz between the two phasors: 0 = an armature locked to the mains; 0.4 = a transformer hum, whose fundamental cancels every 2.5 s |
+
+### `bytebeat`
+
+Bytebeat: music from one integer formula of the sample counter (seven of them, from Alejandro Olarte's SuperCollider examples).  *(module `retro`)*
+
+| param | default | meaning |
+|---|---|---|
+| `formula` | `0` | 0..6 |
+| `rate` | `8` | 1..10: the counter runs at the sample rate / this |
+| `dur` | `4.0` | s |
+| `level` | `0.7` | peak |
+| `soften` | `0.5` | 0..1 rounds the top |
+
+### `cabin`
+
+Inside an airliner: the engines through the fuselage wall, and the air-conditioning.  *(module `aero`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'jet'` | jet / turboprop |
+| `air` | `0.4` | 0..1 air-conditioning level |
+| `dur` | `4.0` | s |
+| `seed` | `0` | variation |
 
 ### `camera_shutter`
 
@@ -2817,6 +4273,45 @@ SLR camera shutter: mirror slap, shutter opening and closing after the exposure,
 |---|---|---|
 | `exposure` | `0.0167` | s the shutter stays open (1/60 = 0.0167) |
 | `wind` | `0.0` | s of motor wind afterwards (0 = none) |
+| `seed` | `0` | variation |
+
+### `can_roll`
+
+Empty can rolling: its four measured modes struck by a pattern repeated each turn. Stands in for `roll body=can`.  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `2.0` | turns per second |
+| `dur` | `2.0` | s |
+| `pattern` | `1` | 1 or 2: the two dent patterns of the can |
+| `bumps` | `0.0` | 0..1 ground bumps modulating the drive |
+| `seed` | `0` | variation (bumps) |
+
+### `cap_gun`
+
+Toy cap gun: a bare snap with no barrel, a little room after it.  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `seed` | `0` | variation |
+
+### `car_alarm`
+
+Car alarm: a piezo siren stepping through six figures, 1-3 kHz, 3-5 s each.  *(module `road`)*
+
+| param | default | meaning |
+|---|---|---|
+| `seq` | `'012345'` | figures in order, digits 0..5 |
+| `motif` | `4.0` | s per figure, 3..5 |
+
+### `car_door`
+
+Car doors: car_door_close (latch, panel, body), car_door_rear, car_door_cheap (tinny), car_door_open (handle, seal), trunk_slam, hood_slam, van_sliding_door.  *(module `road`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'car_door_close'` | car_door_close / car_door_rear / car_door_cheap / trunk_slam / hood_slam / car_door_open / van_sliding_door |
+| `quality` | `-1.0` | 0 tinny .. 1 solid (-1 = the kind's own) |
 | `seed` | `0` | variation |
 
 ### `car_engine`
@@ -2834,8 +4329,10 @@ Physically-modelled combustion engine loop (firing pulses, exhaust pipe, intake,
 | `bright` | `0.0` | 0..1 open muffler / sporty rasp (0 = road car heard from the cabin) |
 | `seed` | `7` | per-engine character |
 | `dur` | `3.0` | s |
-| `model` | `'classic'` | classic / ptr (Doerfler 2026 pulse-train-resonator: shaped exhaust pulses per cylinder bank, a Karplus-Strong manifold per bank and a shared tailpipe) |
+| `model` | `'classic'` | classic / ptr (pulse-train-resonator: shaped exhaust pulses per cylinder bank, a Karplus-Strong manifold per bank and a shared tailpipe) / pd003 (four 1 / (1 + x^2) pulses, two cross-fed delay paths and four 50 ms guides) |
+| `inharm` | `0.0` | ptr only: 0..1 a bump of detuned partials (up to 8 %), drawn from seed |
 | `exhaust` | `'auto'` | ptr only: the exhaust the PTR paper learned, inline4 / v8 (low, resonant) / v8_metal (mid-range, metallic); auto = inline4 below 6 cylinders, else v8 |
+| `noise` | `0.0` | ptr only: 0..1 combustion burst noise shaped by each pulse envelope, plus steady flow noise with throttle |
 
 ### `car_horn`
 
@@ -2848,6 +4345,60 @@ Car horn: two diaphragm horns a third apart.  *(module `foley`)*
 | `freq2` | `400` | Hz or note name of the high horn |
 | `bright` | `1.0` | 0.5 muffled .. 2 harsh |
 
+### `car_wind`
+
+Wind on a moving car: boundary-layer roar, the A-pillar vortex tone (f = 0.2 v / 6 mm) and, window open, the cabin booming at its Helmholtz note (17-35 Hz).  *(module `road`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `110.0` | km/h |
+| `sideslip` | `0.0` | rad of crosswind: the pillar tone grows with /beta/ |
+| `window` | `0.0` | 0..1 window opening |
+| `view` | `'cabin'` | cabin / outside |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
+### `cards`
+
+Playing cards: mele (overhand shuffle, cards falling at 30-50 per second), bridge (riffle, then the deck squared), donne (dealing: flick and landing), retourne (one card flipped).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `action` | `'mele'` | mele / bridge / donne / retourne |
+| `rate` | `40.0` | mele, bridge: cards per second, 30..50 |
+| `cards` | `52` | cards in the riffle |
+| `seed` | `0` | variation |
+
+### `cart`
+
+Wheeled carts: caddie (shopping trolley: wire basket rattling, a wheel squeaking), chariot (light plastic trolley), charrette (wooden cart: big wheels on stone, creaking).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'caddie'` | caddie / chariot / charrette |
+| `speed` | `1.0` | m/s |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
+### `cartoon`
+
+Cartoon effects: splat (wet landing), stretch (rubber pulled, pitch climbing), pop (cork), warble (wobbling slide), zip (fast rise), bonk (hollow knock and spring).  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'bonk'` | splat / stretch / pop / warble / zip / bonk |
+| `seed` | `0` | variation |
+
+### `cartoon_voice`
+
+Cartoon voice: speech played fast, pitch and tempo together. aigu x1.5, ecureuil x2, souris x2.5.  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'ecureuil'` | aigu / ecureuil / souris |
+| `text` | `'hello there'` | what it says |
+| `seed` | `0` | variation |
+
 ### `casing`
 
 Spent shell casings (or coins, small brass) bouncing on a hard floor.  *(module `foley`)*
@@ -2855,8 +4406,53 @@ Spent shell casings (or coins, small brass) bouncing on a hard floor.  *(module 
 | param | default | meaning |
 |---|---|---|
 | `count` | `1` | casings |
-| `size` | `1.0` | bigger = lower (1 = rifle brass at 4.5-5.5 kHz) |
+| `size` | `1.0` | bigger = lower (1 = rifle brass at 4.5-5.5 kHz); ignored with caliber |
 | `spread` | `0.25` | s over which they land |
+| `caliber` | `''` | empty = generic brass / 9mm/45acp/556/762/50bmg/12ga/20mm/105mm: modes of that case |
+| `floor` | `'concrete'` | with caliber: concrete/wood/metal/tile/dirt/grass |
+| `height` | `1.2` | m it falls, with caliber |
+| `roll` | `False` | true = it rolls away after the bounces (hard floors, with caliber) |
+| `ricochet` | `False` | true = the film / game case: a long ring, spinning, bounces speeding up into a rattle (`casing_ricochet`; 556 brass without caliber) |
+| `seed` | `0` | variation |
+
+### `casing_ricochet`
+
+The film and video-game spent case: a long brass ring bouncing on the floor, turning as it flies, the bounces speeding up into a final rattle.  *(module `arms`)*
+
+| param | default | meaning |
+|---|---|---|
+| `caliber` | `'556'` | 9mm/45acp/556/762/50bmg/12ga/20mm/105mm |
+| `floor` | `'concrete'` | concrete/wood/metal/tile/dirt/grass |
+| `height` | `1.2` | m it falls from (0.1-5) |
+| `count` | `1` | cases (1-64) |
+| `spread` | `0.25` | s between the cases, on average |
+| `ring` | `2.0` | how long the brass rings: 1 = Farnell's Q 800, T60 0.35 s at 5 kHz; 2 is a film choice |
+| `spin` | `40.0` | tumbling in rev/s as it leaves the floor; 0 = no turning |
+| `lively` | `0.45` | 0..1 of the gap between the floor's restitution and 1 given back (film choice; hard floors only) |
+| `seed` | `0` | variation |
+
+### `catapult`
+
+Siege engines: trebuchet (ropes under load, the latch, the arm's low tone, the counterweight's thud), mangonel (ropes and the arm on its crossbar), ballista (twisted cords and a bolt).  *(module `melee`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'trebuchet'` | trebuchet / mangonel / ballista |
+| `range` | `300.0` | m: the projectile's speed is sqrt(R g), 80-445 m |
+| `arm_speed` | `50.0` | m/s at the arm's tip |
+| `counterweight` | `10.0` | t, 2-30 |
+| `pitch` | `100.0` | ballista: cord Hz, 80-120 |
+| `seed` | `0` | variation |
+
+### `cattle_prod`
+
+Cattle prod: an arc more chopped than a stun gun's, bursts of fast irregular discharges over a mains-less buzz.  *(module `energy_arms`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `1.2` | s |
+| `rate` | `60.0` | discharges per second |
+| `chop` | `7.0` | bursts per second |
 | `seed` | `0` | variation |
 
 ### `cave_drips`
@@ -2868,11 +4464,13 @@ Several dripping sources in a reverberant cave.  *(module `matter`)*
 | `dur` | `6.0` | s |
 | `sources` | `5` | number of dripping points, 1..12 |
 | `wet` | `0.6` | 0..1 cave reverb level |
+| `regime` | `'fast'` | fast (a drip every 1.6-9 s per source) / medium (9-90 s) / slow (90-900 s): drip-rate classes of a cave |
+| `drop_ml` | `0.0` | drop volume in ml (a cave drip: 0.1433); > 0 = impact click lasting the contact time at terminal speed |
 | `seed` | `0` | variation |
 
 ### `cavity_tone`
 
-Wind over an opening (window gap, bottle mouth, wheel well, slot): Rossiter tones + the cavity's depth resonance (Selfridge DAFx-17).  *(module `foley`)*
+Wind over an opening (window gap, bottle mouth, wheel well, slot): Rossiter tones + the cavity's depth resonance.  *(module `foley`)*
 
 | param | default | meaning |
 |---|---|---|
@@ -2898,6 +4496,18 @@ A chain moved by a body: link contacts fired at a rate that follows the momentum
 | `settle` | `1` | 1 = come to rest with the three-bounce pattern |
 | `seed` | `0` | variation |
 
+### `chainsaw`
+
+Chainsaw: a two-stroke single firing once per turn, the chain's whirr rising with it; biting into wood drags the engine down.  *(module `heavy_vehicles`)*
+
+| param | default | meaning |
+|---|---|---|
+| `rpm` | `9400.0` | crankshaft: 9400 at full throttle, 2800 idle |
+| `load` | `1.0` | 0..1 |
+| `bite` | `0.0` | 0..1 into the wood, in the middle of the sound: 1 = 15 % off the speed |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
 ### `charge_up`
 
 Weapon / ability charging: a tone climbing with a tremolo that speeds up until it is ready.  *(module `foley`)*
@@ -2908,6 +4518,25 @@ Weapon / ability charging: a tone climbing with a tremolo that speeds up until i
 | `start` | `120.0` | Hz |
 | `end` | `1600.0` | Hz |
 | `ready` | `1` | 1 = end on a short ready blip |
+
+### `chem`
+
+Chemistry: acide (eating into a surface, a hiss with fine fizz that dies away), reaction (a bath that gathers pace and foams up).  *(module `viscous`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'acide'` | acide / reaction |
+| `dur` | `4.0` | s |
+| `seed` | `0` | variation |
+
+### `chicken`
+
+Chickens: caquet (buk-buk-buk-bukAAK), poule (low contented croon), poussin (rising peeps). The rooster is birdsong species=rooster.  *(module `fauna`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'caquet'` | caquet / poule / poussin |
+| `seed` | `0` | variation |
 
 ### `chirp`
 
@@ -2978,6 +4607,7 @@ Glass or small-metal clink: the measured bottle (34 strike points), a vase, or a
 | `size` | `1.25` | size (bigger = lower; 1.25 = a wine glass from the bottle table) |
 | `force` | `0.7` | 0..1 |
 | `position` | `0.5` | 0..1 strike point |
+| `liquid` | `0.0` | bottle / vase: fill height 0..1, water lowers the pitch |
 | `seed` | `0` | variation |
 
 ### `clock`
@@ -3005,6 +4635,20 @@ Cloth: rustle of a moving garment, a tear, or a flag/cape flapping.  *(module `f
 | `weight` | `0.5` | 0 silk .. 1 canvas/sacking: lower, rougher |
 | `seed` | `0` | variation |
 
+### `coilgun`
+
+Coilgun: one click per stage, a rising chirp at v / pitch that ends at 960-1600 Hz. fire has its coils and switch gaps heard; silent is a faint tick train, and a sonic crack when supersonic.  *(module `energy_arms`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'fire'` | fire/silent |
+| `speed` | `75.0` | m/s at the muzzle: 45 EMG-01A, 75 GR-1 |
+| `stages` | `45` | stages |
+| `pitch` | `46.66666666666667` | mm between stages |
+| `switch` | `'spark'` | spark/igbt/scr |
+| `miss` | `12.0` | m off the line for the N-wave, far field from 12 m |
+| `seed` | `0` | variation |
+
 ### `coin`
 
 Classic coin / pickup: two quick rising notes.  *(module `sfx`)*
@@ -3024,6 +4668,56 @@ A coin spinning down on a table: the wobble accelerates, then stops dead.  *(mod
 | `coin` | `'quarter'` | penny/nickel/dime/quarter |
 | `dur` | `1.8` | s until it lies flat |
 | `start` | `9.0` | wobble rate at the start, Hz |
+| `seed` | `0` | variation |
+
+### `coins`
+
+Coins: chute (one coin bounces and spins out), tas (a pile dumped and settling), comptage (coins counted down on a table, one by one).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'chute'` | chute / tas / comptage |
+| `count` | `8` | comptage: coins |
+| `rate` | `4.0` | comptage: coins per second |
+| `seed` | `0` | variation |
+
+### `collapse`
+
+A structure coming down: a train of falls, breaking, the mass settling, dust running after.  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `size` | `1.0` | 0.3..3 of the building part: lower, longer |
+| `material` | `'stone'` | stone/wood/ceramic/glass/concrete |
+| `seed` | `0` | variation |
+
+### `complex_osc`
+
+Two cross-modulated sines (West-Coast complex oscillator): each one modulates the other's frequency, phase and amplitude; folded or wrapped output.  *(module `dsp`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `2.0` | s |
+| `freq1` | `40.0` | Hz, main oscillator |
+| `freq2` | `0.5` | Hz, second oscillator |
+| `fm1` | `0.1` | frequency modulation of osc 1 by osc 2 (x 1..1000 Hz) |
+| `fm2` | `0.1` | the reverse |
+| `pm1` | `0.0` | phase modulation of osc 1 by osc 2 (x -pi..pi) |
+| `pm2` | `0.0` | the reverse |
+| `ring1` | `1.0` | amplitude (ring) modulation of osc 1 by osc 2 |
+| `ring2` | `1.0` | the reverse |
+| `out` | `'fold'` | fold (+-0.8) / wrap (+-0.9) |
+| `preset` | `'none'` | none / olarte (fm1 0.143219, fm2 0.2345, pm1 0.013, pm2 0.081, ring 0.1997) |
+
+### `conveyor`
+
+Conveyor belt: rollers on bearings, a belt splice crossing them, geared drive motor.  *(module `machines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `1.0` | m/s |
+| `joint` | `1.5` | m between belt splices |
+| `dur` | `4.0` | s |
 | `seed` | `0` | variation |
 
 ### `cork_pop`
@@ -3057,6 +4751,15 @@ Countdown tick: short low tone.  *(module `sfx`)*
 |---|---|---|
 | `freq` | `660` | Hz |
 
+### `crack`
+
+Something giving way: branche (green wood, bends then snaps), planche (a board, creak then break), os (short, dry), glace (lake ice, the falling pew).  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'branche'` | branche / planche / os / glace |
+| `seed` | `0` | variation |
+
 ### `creak`
 
 Stick-slip creak of wood, a door, a floorboard, rope, leather or iron under a force curve.  *(module `foley`)*
@@ -3068,6 +4771,34 @@ Stick-slip creak of wood, a door, a floorboard, rope, leather or iron under a fo
 | `level` | `0.8` | 0.3..1 peak force: more force = faster slips, higher creak (nothing slips below 0.3) |
 | `dur` | `1.2` | s |
 | `size` | `1.0` | object size (bigger = lower formants) |
+| `seed` | `0` | variation |
+| `width` | `0.0` | m: door leaf width (0 = off); with `height` the leaf rings in its own membrane modes |
+| `height` | `0.0` | m: door leaf height |
+| `wave_speed` | `340.0` | m/s of bending waves in the leaf (100-3300) |
+
+### `creature`
+
+Creature families from layers: dragon (roar, fire, wings), dino (huge low roar), zombie (wet groan), kraken (roar under gurgling water), elementaire (fire and a growl), fantome (airy gliding moan), insectoid (hiss, wings), blob (gurgle, bubbles).  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'dragon'` | dragon / dino / zombie / kraken / elementaire / fantome / insectoid / blob |
+| `dur` | `2.5` | s |
+| `seed` | `0` | variation |
+
+### `creature_steps`
+
+Heavy creature with claws (weight up to 20, slower and lower), or a galloping herd: troupeau, two animals in focus and the rest a texture.  *(module `fauna`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'creature'` | creature / troupeau |
+| `weight` | `6.0` | creature: 1..20 |
+| `claws` | `0.5` | creature: 0..1 |
+| `steps` | `6` | creature: footfalls |
+| `count` | `30` | troupeau: animals |
+| `dur` | `4.0` | troupeau: s |
+| `ground` | `'forest_floor'` | any ground of `footsteps` |
 | `seed` | `0` | variation |
 
 ### `cricket`
@@ -3083,6 +4814,32 @@ Cricket chirps; chirp rate follows temperature (Dolbear's law).  *(module `creat
 | `dur` | `3.0` | s |
 | `seed` | `0` | variation |
 
+### `crossbow`
+
+Crossbow: modern (short stiff string, trigger, ping, a 106 m/s bolt), arbalest (a 30 s windlass, then the release), reload (the windlass alone).  *(module `melee`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'modern'` | modern / arbalest / reload |
+| `speed` | `-1.0` | bolt m/s, -1 = the kind's (106 modern, 70 arbalest) |
+| `shaft_d` | `0.009` | bolt diameter m |
+| `pitch` | `-1.0` | string Hz, -1 = the kind's |
+| `crank` | `30.0` | s of windlass (2 bolts a minute) |
+| `distance` | `20.0` | m to the target (0 = none) |
+| `target` | `'wood'` | wood/flesh/armour |
+| `seed` | `0` | variation |
+
+### `crowd`
+
+Crowd reaction, N decorrelated voices: oh, ah (one reaction, about 1.3 s), huee (boos and whistles), ovation (cheers on applause), panique (screams, running), chants (unison shouting), enfants (playground), combat (shouts, grunts, blades, blows).  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'oh'` | oh / ah / huee / ovation / panique / chants / enfants / combat |
+| `voices` | `20` | people, 1..24 (chants: 12 at most) |
+| `dur` | `4.0` | s, for all but oh and ah |
+| `seed` | `0` | variation |
+
 ### `crowd_murmur`
 
 Crowd murmur / walla: many gated talking-pulse voices through drifting vowel formants.  *(module `creatures`)*
@@ -3093,6 +4850,17 @@ Crowd murmur / walla: many gated talking-pulse voices through drifting vowel for
 | `mood` | `0.5` | 0 hushed .. 1 lively (more talk, higher pitch) |
 | `distance` | `0.5` | 0 among them .. 1 far (duller) |
 | `dur` | `5.0` | s |
+| `seed` | `0` | variation |
+
+### `crt`
+
+TV and AV gear: allumage (relay, degauss hum dying away, line whine coming up), souffle_15_kHz (line whine), projecteur (film claw at 24 fps, motor), cassette (keys, motor, tape hiss). Needs sr above 32 kHz for the line whine.  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `state` | `'allumage'` | allumage / souffle_15_kHz / projecteur / cassette |
+| `system` | `'pal'` | pal 15625 Hz, 50 Hz mains / ntsc 15734 Hz, 60 Hz |
+| `dur` | `3.0` | souffle, projecteur, cassette: s |
 | `seed` | `0` | variation |
 
 ### `crumple`
@@ -3118,6 +4886,29 @@ Crying: long falling wail with slow jitter and amplitude modulation (Anikin's so
 | `voice` | `'female'` | female / male |
 | `syllables` | `0` | syllables in the bout, 0 = as the preset |
 | `pitch` | `1.0` | f0 scale |
+| `seed` | `0` | variation |
+
+### `cuica`
+
+Cuica, the friction drum: a wet cloth rubbing a stick fixed to the skin, stick-slip through the skin's modes; the other hand presses it and bends the note.  *(module `foley`)*
+
+| param | default | meaning |
+|---|---|---|
+| `freq` | `450.0` | Hz of the skin at rest |
+| `bend` | `0.6` | how far the press raises it, 0..1.5 |
+| `strokes` | `4` | rubs |
+| `rate` | `3.0` | rubs a second |
+| `seed` | `0` | variation |
+
+### `curve_squeal`
+
+Wheel squeal in a tight curve: lateral creep saturates the contact (brush model) and falling friction drives a wheel mode. Below about 200 m it sings, above it only rolls. Bands 630, 800, 1600, 2000, 4000 Hz at R 50 m; umbrella mode 412-850 Hz at R 100 m.  *(module `rail`)*
+
+| param | default | meaning |
+|---|---|---|
+| `radius` | `50.0` | m |
+| `speed` | `19.0` | km/h, 10..80 |
+| `dur` | `3.0` | s |
 | `seed` | `0` | variation |
 
 ### `cyber_ui`
@@ -3162,6 +4953,40 @@ Dawn chorus bed: several songbirds at different distances singing over each othe
 | `bright` | `1.0` | 0.3..2 |
 | `seed` | `0` | variation |
 
+### `debris_flow`
+
+Debris flow or lahar: successive muddy surges, a 20-50 Hz roar with boulders knocking inside and water over them.  *(module `geo`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `20.0` | s |
+| `surges` | `4` | waves; on a real volcano 4-5, about 10 minutes apart (Bosa et al. 2021): here squeezed into dur |
+| `seed` | `0` | variation |
+
+### `dental_drill`
+
+Air turbine handpiece: a thin whine at rpm / 60 (5 kHz at 300 000 rpm), the air, and the burr on enamel when load is set.  *(module `machines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `rpm` | `300000.0` | turbine rpm |
+| `load` | `0.0` | 0 free in the air .. 1 on the tooth, the speed sags |
+| `dur` | `2.0` | s |
+| `seed` | `0` | variation |
+
+### `depth_charge`
+
+A depth charge from inside a hull: the distant thump, its bubble pulses, the plates ringing, drops falling.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `charge` | `118.0` | kg TNT (Mk 9: 91 kg Torpex) |
+| `distance` | `50.0` | m |
+| `depth` | `75.0` | m |
+| `hull` | `0.5` | 0..1 hull rattling |
+| `sink` | `False` | true = the splash first, then the fall at 4.4 m/s (17 s to 75 m) |
+| `seed` | `0` | variation |
+
 ### `dice`
 
 Dice thrown on a table: each die bounces with shrinking intervals and rattles to rest.  *(module `foley`)*
@@ -3171,6 +4996,31 @@ Dice thrown on a table: each die bounces with shrinking intervals and rattles to
 | `count` | `2` | dice |
 | `surface` | `'wood'` | wood/felt |
 | `force` | `0.7` | 0..1 throw strength |
+| `seed` | `0` | variation |
+
+### `diesel_engine`
+
+Diesel: weak exhaust pulses under the combustion clatter, the premixed spike ringing the head panels and the block once per firing. Car or truck.  *(module `engines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'diesel_i4'` | diesel_i4 (car, 720-4200 rpm) / diesel_i6_truck (big bore, idle 600-750, rated 1800-2100 rpm) |
+| `rpm` | `-1.0` | crankshaft, or a curve: 1800 rpm on six cylinders = 90 Hz; -1 = 1000 (car), 750 (truck) |
+| `load` | `0.3` | 0 idle .. 1 full: fuel per stroke |
+| `clatter` | `1.0` | 0..2 level of the combustion knock |
+| `bore` | `0.0` | m: 0 = the preset; a bigger bore lowers the clatter |
+| `cylinders` | `0` | 0 = the preset, else even firing |
+| `pipe` | `0.0` | ms straight pipe before the muffler (the drone); 0 = the preset: 7 car, 12 truck |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
+### `dirt`
+
+Soil and sand: pelle (spade in, load thrown down), poignee (a handful dropped), coulee (a steady pour), poussiere (fine dust settling).  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'pelle'` | pelle / poignee / coulee / poussiere |
 | `seed` | `0` | variation |
 
 ### `distant_bell`
@@ -3183,6 +5033,16 @@ A tower bell heard from far away: one toll carried through the air and returned 
 | `size` | `1.25` | bell size: bigger = lower (1 = the 301 mm model bell at 452 Hz) |
 | `dur` | `2.0` | s |
 | `seed` | `0` | strike position and noise |
+| `diameter` | `0.0` | lip diameter in metres of a cast bronze bell: sets the nominal and overrides `size` (0 = use size) |
+
+### `donkey`
+
+Donkey bray: hee on the breath in, haw on the breath out, one source only (no second voice in a donkey).  *(module `fauna`)*
+
+| param | default | meaning |
+|---|---|---|
+| `cycles` | `3` | hee-haws |
+| `seed` | `0` | variation |
 
 ### `door`
 
@@ -3193,6 +5053,18 @@ Physical stick-slip/creak door interaction.  *(module `sfx`)*
 | `dur` | `1.0` | s |
 | `speed` | `0.5` | motion |
 | `material` | `'wood'` | wood/metal |
+| `seed` | `0` | variation |
+
+### `door_family`
+
+Doors: donjon (bolt and chain, long creak, heavy shut), garage (motor, chain, rolling panels), prison (barred door on a rail, clang, lock), coulissante, hi-tech (pneumatic), battante (swings back and forth), tournante (revolving, brushes passing).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'battante'` | donjon / garage / prison / coulissante / hi_tech / battante / tournante |
+| `material` | `''` | '' = the kind's own / wood / metal |
+| `weight` | `-1.0` | 0 light .. 1 heavy (-1 = the kind's own) |
+| `dur` | `4.0` | tournante: s |
 | `seed` | `0` | variation |
 
 ### `drain`
@@ -3217,6 +5089,17 @@ A wooden drawer sliding open or shut, ending on its stop.  *(module `foley`)*
 | `force` | `0.6` | 0..1: speed of the slide and weight of the stop |
 | `seed` | `0` | variation |
 
+### `dread_choir`
+
+Terror: a choir of wrong voices folded into one pressure, silence between (three Pink Trombone tracts + a bass FOF cluster).  *(module `creatures`)*
+
+| param | default | meaning |
+|---|---|---|
+| `size` | `2.5` | body scale: f0 = 110/size^0.6 Hz (floor 30), tract 0.2 m x size |
+| `dur` | `1.9` | s |
+| `gates` | `'0-0.75,1.1-1.85'` | voiced phrases a-b in seconds, comma separated |
+| `seed` | `0` | variation |
+
 ### `drill`
 
 Electric drill: motor spin-up, load-dependent speed, and the bit cutting.  *(module `foley`)*
@@ -3232,7 +5115,7 @@ Electric drill: motor spin-up, load-dependent speed, and the bit cutting.  *(mod
 
 ### `drip`
 
-One water drop into a pool: quiet impact, then 4-5 ringing air bubbles (Harmonic Fluids).  *(module `matter`)*
+One water drop into a pool: quiet impact, then 4-5 ringing air bubbles.  *(module `matter`)*
 
 | param | default | meaning |
 |---|---|---|
@@ -3240,6 +5123,23 @@ One water drop into a pool: quiet impact, then 4-5 ringing air bubbles (Harmonic
 | `bubbles` | `4.7` | mean bubbles per drop (measured: 4-5) |
 | `secondary` | `0.5` | 0..1 chance of smaller rebound drops |
 | `click` | `0.15` | 0..1 level of the impact pulse |
+| `harmonic` | `0.0` | 0..1 the first bubble's 2 f0 component (air disc trapped under the drop) |
+| `crater` | `0.0` | 0..1 faint tone of the crater closing, f = speed / rim length |
+| `impact` | `'parabolic'` | parabolic (a quiet pulse) / franz (noise between U/R and c/R lasting R/U, energy ~ R^3 U^5: big fast drops click much louder) |
+| `seed` | `0` | variation |
+
+### `drone`
+
+Multirotor drone: blade-rate comb of each rotor, slightly apart so they beat, the broad hump of the blades and two motor tones.  *(module `aero`)*
+
+| param | default | meaning |
+|---|---|---|
+| `n` | `4` | rotors: 4, 6, 8 |
+| `rpm` | `3840.0` | hover rpm |
+| `blades` | `2` | per rotor |
+| `detune` | `0.01` | rotor-to-rotor spread |
+| `maneuver` | `0` | 1 = per-rotor rpm changes |
+| `dur` | `3.0` | s |
 | `seed` | `0` | variation |
 
 ### `drop`
@@ -3248,12 +5148,12 @@ A ball dropped on a surface: bounces until it stays in contact, then rolls away 
 
 | param | default | meaning |
 |---|---|---|
-| `material` | `'steel'` | rubber/plastic/wood/glass/ceramic/metal/steel/aluminium/bronze/ice/stone/concrete: the ball |
+| `material` | `'steel'` | rubber/plastic/plastic2/polycarbonate/polystyrene/mdf/wood/wood:<species> (spruce, maple, padauk, ebony...)/glass/ceramic/metal/steel/cast_iron/carbide/aluminium/bronze/copper/acrylic/ice/stone/concrete: the ball |
 | `size` | `0.03` | m: ball diameter |
-| `surface` | `'wood'` | rubber/plastic/wood/glass/ceramic/metal/steel/aluminium/bronze/ice/stone/concrete: the floor / table |
+| `surface` | `'wood'` | rubber/plastic/plastic2/polycarbonate/polystyrene/mdf/wood/wood:<species> (spruce, maple, padauk, ebony...)/glass/ceramic/metal/steel/cast_iron/carbide/aluminium/bronze/copper/acrylic/ice/stone/concrete: the floor / table |
 | `surface_size` | `0.8` | m: size of the surface plate |
 | `height` | `0.25` | m drop height (sets impact speed and first bounce interval) |
-| `restitution` | `0.6` | bounce interval ratio 0.3..0.9 |
+| `restitution` | `0.6` | bounce interval ratio 0.3..0.9; 0 = the typical value of the ball material |
 | `roll` | `1.5` | s of rolling after the last bounce (0 = none) |
 | `roll_speed` | `0.4` | m/s rolling speed right after the bounces; slows to rest |
 | `roughness` | `0.5` | 0..1 surface roughness while rolling |
@@ -3281,9 +5181,30 @@ Telephone keypad tones (DTMF): each key is one row tone plus one column tone.  *
 | param | default | meaning |
 |---|---|---|
 | `digits` | `'5551234'` | keys to dial: 0-9 * # A-D (anything else is a pause of one tone + gap) |
-| `tone_ms` | `80.0` | ms per tone (the standard asks for >= 40) |
-| `gap_ms` | `80.0` | ms of silence between tones |
+| `tone_ms` | `80.0` | ms per tone (a real exchange asks for >= 50) |
+| `gap_ms` | `80.0` | ms of silence between tones (a real exchange asks for 45 to 3000) |
 | `twist` | `0.0` | dB the column (high) tone is above the row tone |
+
+### `earthquake`
+
+Earthquake heard: the ground reverberating at 40-70 Hz as body waves arrive, sharp detonations over the P wave, things rattling at the S wave.  *(module `geo`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `14.0` | s |
+| `distance` | `20.0` | km: the S wave comes distance x 0.119 s after P, the first thing heard (at most half the sound) |
+| `rattle` | `0.5` | 0..1 objects shaking |
+| `seed` | `0` | variation |
+
+### `earthquake_stage`
+
+An earthquake by stage: premices (the rumble arriving), secousse (full shaking, objects rattling, debris), repliques (separated aftershocks). `earthquake` is the single heard event.  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `stage` | `'secousse'` | premices / secousse / repliques |
+| `dur` | `12.0` | s |
+| `seed` | `0` | variation |
 
 ### `eat`
 
@@ -3298,7 +5219,7 @@ Eating: crunch (brittle bites, PhISEM 'Crunch'), chew (soft, closed mouth) or sl
 
 ### `edge_tone`
 
-Air jet on a sharp edge (whistle, recorder mouth, slot on a blade): stepped modes with hysteresis (Selfridge AES 2018).  *(module `foley`)*
+Air jet on a sharp edge (whistle, recorder mouth, slot on a blade): stepped modes with hysteresis.  *(module `foley`)*
 
 | param | default | meaning |
 |---|---|---|
@@ -3323,6 +5244,25 @@ Physical electric motor: rotor, commutation, imbalance, bearings and housing.  *
 | `startup` | `0.0` | s |
 | `seed` | `0` | variation |
 
+### `elephant`
+
+Elephant: barrissement (trumpet), rumble (20 Hz with its harmonics), combine (rumble grading into a roar, 20 to 470 Hz, over four octaves).  *(module `fauna`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'barrissement'` | barrissement / rumble / combine |
+| `seed` | `0` | variation |
+
+### `elevator`
+
+A lift: montee (motor up to speed, cabin hum), arret (slowing, brake landing), porte (servo door, rollers, stop), carillon (the floor bell).  *(module `machines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'montee'` | montee / arret / porte / carillon |
+| `dur` | `3.0` | s, montee and arret |
+| `seed` | `0` | variation |
+
 ### `energy_blade`
 
 Energy sword: a steady beating hum that swells and bends in pitch as the blade swings past.  *(module `foley`)*
@@ -3334,6 +5274,21 @@ Energy sword: a steady beating hum that swells and bends in pitch as the blade s
 | `swings` | `1` | swings |
 | `speed` | `25.0` | m/s peak blade speed: Doppler shift c / (c - v) |
 | `buzz` | `0.4` | 0..1 upper buzz |
+| `seed` | `0` | variation |
+
+### `energy_weapon`
+
+Sci-fi energy weapons: blaster (a tensioned cable struck: a dispersive chirp falling from the top), phaser (the crossed FM of the TOS phaser), beam (sustained beating hum), real (what a real laser does: silent beam, a 2-5 ms crack of air breakdown).  *(module `energy_arms`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'blaster'` | blaster/phaser/beam/real |
+| `power` | `'kill'` | phaser: stun (x.2) / kill (x.4) |
+| `noise` | `0.15` | phaser: hip 2000 noise in the sum |
+| `freq` | `100.0` | beam: Hz of the hum; blaster: the note |
+| `sweep` | `0.0` | beam: octaves over the duration |
+| `dispersion` | `1.0` | blaster: 0..1 |
+| `dur` | `-1.0` | s, -1 = the kind's: blaster .5, phaser 1, beam 3 |
 | `seed` | `0` | variation |
 
 ### `engine`
@@ -3348,6 +5303,51 @@ Four-stroke combustion engine using firing pulses, exhaust resonances and intake
 | `load` | `0.5` | 0..1 |
 | `rough` | `0.25` | 0..1 |
 
+### `engine_event`
+
+A moment in an engine's life: starting, failing to start, stalling, switching off, overrun, crackle, limiter, shifts, a free rev, knock, valve tick, rod knock, or a loop aligned on the engine cycle.  *(module `engines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'engine_start'` | dfco_overrun / exhaust_crackle / engine_start / engine_start_fail / engine_stall / engine_off / rev_limiter / downshift / upshift / free_rev / engine_knock / valve_tick / rod_knock / engine_bank / launch_control |
+| `layout` | `'inline_4'` | any engine_layout kind |
+| `rpm` | `-1.0` | the speed it happens at; -1 = the kind's own |
+| `load` | `0.5` | 0..1 |
+| `gear` | `3` | shifts: from this gear, 1..6 |
+| `speed` | `60.0` | shifts: km/h |
+| `limit` | `8000.0` | rev_limiter: cut here, back at limit - 120 |
+| `bore` | `0.086` | knock, tick, rod: m (86 mm = knock at 6.47 kHz) |
+| `severity` | `0.5` | knock, rod: 0..1 |
+| `cycles` | `0` | engine_bank: loop length in engine cycles (0 = 3.2 s of them) |
+| `dur` | `0.0` | s; 0 = the kind's own length |
+| `seed` | `0` | variation |
+
+### `engine_knock`
+
+What a worn or abused engine adds: combustion knock (ping), piston slap, or rod knock. Layer it over car_engine.  *(module `vehicle`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'knock'` | knock (cylinder gas resonance at a frequency set by the bore) / slap (piston rocking, block) / rod (crankcase thud) |
+| `rpm` | `2500.0` | crank speed |
+| `cylinders` | `4` | number |
+| `bore` | `86.0` | mm: knock is 1.841 c / (pi B), 6.47 kHz at 86 mm |
+| `severity` | `0.5` | 0..1 how often a cylinder knocks, and how hard |
+| `dur` | `1.5` | s |
+| `seed` | `0` | variation |
+
+### `engine_layout`
+
+A combustion engine by architecture: the true firing intervals, exhaust banks and runner lengths of a single, twins, boxers, inlines, Vs and a Wankel.  *(module `engines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'inline_4'` | engine_single / vtwin_45 / vtwin_90 / twin_180 / twin_270 / twin_360 / boxer_4 / boxer_6 / inline_4 / inline_4_crossplane / inline_5 / inline_6 / v6_60 / v6_90 / v8_crossplane / v8_flatplane / v10 / v12 / wankel |
+| `rpm` | `-1.0` | crankshaft, or a curve; -1 = the architecture's usual speed |
+| `load` | `0.5` | 0 coasting .. 1 full throttle |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
 ### `error`
 
 Harsh error buzz (two low tones).  *(module `sfx`)*
@@ -3357,9 +5357,63 @@ Harsh error buzz (two low tones).  *(module `sfx`)*
 | `freq` | `180` | Hz |
 | `dur` | `0.3` | s |
 
+### `escalator`
+
+Moving stairs: drive motor, the chain, a step passing the comb every 0.4 m (1.25 a second at 0.5 m/s).  *(module `machines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `0.5` | m/s |
+| `step` | `0.4` | m per step |
+| `dur` | `4.0` | s |
+| `seed` | `0` | variation |
+
+### `ev`
+
+Electric vehicles with their tyres: voiture_electrique (road car), trottinette (kick scooter hub motor), voiturette (golf cart, brushed motor).  *(module `road`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'voiture_electrique'` | voiture_electrique / trottinette / voiturette |
+| `speed` | `-1.0` | km/h (-1 = the kind's own) |
+| `load` | `0.5` | 0..1 |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
+### `ev_drive`
+
+Electric car drive heard alone: slot-order whine (orders 24, 48, 72, 96), reduction gear mesh, PWM carrier at 7.25-7.75 kHz with its sidebands.  *(module `road`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `60.0` | km/h |
+| `speed_end` | `-1.0` | glide to this km/h (-1 = steady) |
+| `load` | `0.6` | 0 coasting .. 1 full torque |
+| `regen` | `0.0` | 0..1 regenerative braking: torque back through the gears |
+| `poles` | `4` | pole pairs |
+| `slots` | `48` | stator slots |
+| `reduction` | `9.0` | gear ratio motor to wheel |
+| `wheel` | `0.33` | m wheel radius |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
+### `excavator`
+
+Excavator: idle (big diesel at working speed, the pump over it), tracks (slow crawl on its crawlers), scoop (a bucket bite, a swing, the load tipping out).  *(module `heavy_vehicles`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'idle'` | idle / tracks / scoop |
+| `rpm` | `1650.0` | diesel and pump shaft |
+| `speed` | `5.0` | tracks: km/h |
+| `pitch` | `0.17145` | tracks: m (171.45 or 215.9 mm) |
+| `load` | `0.5` | 0..1 |
+| `dur` | `4.0` | s |
+| `seed` | `0` | variation |
+
 ### `explosion`
 
-Physical blast: Friedlander shock sized by charge and distance (JRC / Kinney fits), low-frequency expansion, debris and distance propagation.  *(module `sfx`)*
+Physical blast: Friedlander shock sized by charge and distance, low-frequency expansion, debris and distance propagation.  *(module `sfx`)*
 
 | param | default | meaning |
 |---|---|---|
@@ -3368,8 +5422,21 @@ Physical blast: Friedlander shock sized by charge and distance (JRC / Kinney fit
 | `distance` | `8.0` | m |
 | `debris` | `0.45` | 0..1 |
 | `enclosure` | `0.15` | 0..1 |
+| `windows` | `0.0` | 0..1 level of the listener's windows shattering, only where the overpressure breaks glass (1 kPa) |
+| `explosive` | `'tnt'` | charge type, energy x its TNT equivalent: tnt c4 comp_b petn rdx hmx semtex nitroglycerin anfo black_powder tetryl picric_acid tatp tritonal torpex |
+| `burst` | `'air'` | air / surface (ground reflection, apparent yield x1.5) / rigid (x2) / crater (x1.4) |
 | `seed` | `0` | variation |
 | `boom` | `None` | legacy name for energy |
+
+### `explosion_layers`
+
+Explosion built in layers: a chirped shock thump, three harsh blasts, an 8 s rising fireball rumble, a delayed echo the pressure wave squeezes and a comb swept as the fireball rises.  *(module `foley`)*
+
+| param | default | meaning |
+|---|---|---|
+| `spread` | `0.3492063492063492` | 0..1 gaps between the blasts (0.1 spread + 5 ms to the first, up to 0.3 spread s each after) |
+| `fireball` | `8.0` | s the fireball rumble takes to die away |
+| `seed` | `0` | variation |
 
 ### `fan`
 
@@ -3381,6 +5448,66 @@ Physical rotor/fan using blade-passing frequency and tip-speed turbulence.  *(mo
 | `rpm` | `1800` | RPM |
 | `blades` | `5` | count |
 | `seed` | `0` | variation |
+
+### `farm_animal`
+
+Table of `animal` presets: ane, mouton, chevre (age in weeks: kid 573 Hz at 0, 467 Hz at 7), and table (the three in a row).  *(module `fauna`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'ane'` | ane / mouton / chevre / table |
+| `age` | `0.0` | chevre: weeks, 0..7 |
+| `seed` | `0` | variation |
+
+### `farm_bird`
+
+Farm birds: oie (goose honks), dindon (turkey gobble), canard (duck, birdsong species=duck).  *(module `fauna`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'oie'` | oie / dindon / canard |
+| `seed` | `0` | variation |
+
+### `fart`
+
+Fart: lip valve like `balloon` but lower, flutter 30-120 Hz. reel (sputtering, falling), whoopee (rubber cushion, rising).  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'reel'` | reel / whoopee |
+| `dur` | `0.0` | s, 0 = from kind |
+| `size` | `1.0` | 0.7..1.4: bigger = lower flutter |
+| `seed` | `0` | variation |
+
+### `faucet`
+
+Tap and shower: flow on a surface. evier (metal sink), baignoire (tub filling), douche (spray on tiles). Below 0.02 L/s, separate drops whose bubble rings near 5 kHz.  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `flow` | `0.2` | L/s |
+| `target` | `'evier'` | evier / baignoire / douche |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
+### `filled_glass`
+
+A drinking glass struck, its pitch falling as it fills: f0 / sqrt(1 + 2.33 fill^4), 10 semitones lower when full.  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `freq` | `1200.0` | Hz empty |
+| `fill` | `0.0` | 0 empty .. 1 full |
+| `force` | `0.6` | 0..1 |
+| `seed` | `0` | variation |
+
+### `finger_snap`
+
+Finger snap, the `snap` drum as a sound effect.  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `vel` | `1.0` | 0..1 |
 
 ### `fire`
 
@@ -3394,6 +5521,66 @@ Wood fire: combustion roar, Poisson crackles, hiss of outgassing; size, crackle 
 | `wet` | `0.2` | 0..1 damp wood: more hiss, louder and rarer low pops |
 | `wind` | `0.2` | 0..1 wind ruffling the flames (more roar, gusting) |
 | `seed` | `0` | variation |
+| `whine` | `0.0` | 0..1 pitched whistles of gas escaping through trapped sap |
+| `woof` | `0.0` | 0..1 low air induction under 80 Hz, puffing with the flames |
+| `clatter` | `0.0` | 0..1 burnt pieces settling and falling |
+| `detail` | `'full'` | full: every component; medium: hiss, roar and crackle only (a fire heard from afar) |
+
+### `fire_out`
+
+A fire put out by water: the fire falls, a sizzle and the rising whine of steam take over, then they die too.  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `5.0` | s |
+| `detail` | `1.0` | 0..1 level of the extinction details: steam whining out of the wood, water bubbling in the embers, cooling creaks, a steam shriek |
+| `seed` | `0` | variation |
+
+### `firearm`
+
+A named firearm in physical units: muzzle blast by calibre and direction, the bullet's own N-wave and where it reaches you, bolt cycling, burst rate, suppressor, subsonic rounds.  *(module `arms`)*
+
+| param | default | meaning |
+|---|---|---|
+| `weapon` | `'ar15'` | pistol_9mm/pistol_9mm_sub/pistol_45/pistol_40/pistol_10mm/pistol_22/machine_pistol/revolver_357/revolver_38/smg_mp5/smg_mp5sd/smg_uzi/smg_45/ar15/m4_short/ak47/battle_rifle/m1_garand/blackout/blackout_sub/sniper_308/sniper_50/sniper_22/shotgun_buck/shotgun_slug/shotgun_short/lmg_m249/gpmg_pkm/hmg_m2/minigun/flintlock/matchlock/percussion |
+| `distance` | `10.0` | m from the shooter |
+| `azimuth` | `30.0` | degrees off the line of fire: 0 you are shot at, 180 behind the shooter (10-30 dB quieter); no crack past 75 |
+| `miss` | `0.0` | m the bullet passes from you (0 = from distance and azimuth) |
+| `shots` | `1` | rounds (up to 2000) |
+| `rate` | `0.0` | rounds/s (0 = the weapon's own) |
+| `suppressor` | `0.0` | 0..1: 1 = -25 dB at the muzzle, mostly 160-1000 Hz; the crack stays |
+| `subsonic` | `False` | true = slowed to 310 m/s: no crack, a little quieter |
+| `action` | `0.6` | 0..1 bolt cycling (lost beyond 100 m) |
+| `crack` | `1.0` | 0..1 level of the N-wave against its true level |
+| `echo` | `0.0` | 0..1 street / treeline echoes; Farnell keeps them out of the sound, use `room` or a recipe |
+| `first_pop` | `3.0` | dB louder on a suppressed gun's first round, half that on the second |
+| `pov` | `False` | true = the shooter's ears: at the breech, the body ringing 300 ms, less blast, the mechanism up, no crack |
+| `ring` | `1.0` | pov only: how long the gun's body rings, Q = 10.62 x ring (5.8 = T60 300 ms at 230 Hz) |
+| `weight` | `0.0` | ms added to the blast wave (0-200): a longer shot sounds heavier; from outside it stops at 100, the rest is infrasound |
+| `level` | `'relative'` | relative = weapons keep their measured differences (a .22 is 30 dB under a .50; needs normalize off in a spec) / peak = every file at 0.9 |
+| `render` | `'heard'` | heard = as a recording or the ear gets it: the blast's weight, a microphone overloaded at 150 dB, the place's reflections / pressure = the bare pressure at the ear, a click of a few ms |
+| `place` | `'street'` | render=heard: where it is heard, none / street / forest / canyon / arena / cave / hall ... (room presets) |
+| `seed` | `0` | variation |
+
+### `firecracker`
+
+A string of firecrackers: small blasts one after another, 30-200 ms apart, fading strength at random.  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `count` | `20` | crackers |
+| `rate` | `12.0` | crackers a second on average; each gap stays within 30-200 ms |
+| `seed` | `0` | variation |
+
+### `firework`
+
+Aerial firework, launch, climb, burst, stars: mortier (size 4 shell, crackle), bouquet (star mine), pop (size 3, dry), sifflet (whistle falling 6 to 2 kHz as its tube burns empty). Levels measured at 102 m.  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'mortier'` | mortier / bouquet / pop / sifflet |
+| `distance` | `102.0` | m from the launch: launch and burst fall 6 dB per doubling of their own range, the burst arrives later |
+| `seed` | `0` | variation |
 
 ### `fizz`
 
@@ -3406,6 +5593,7 @@ Carbonation: tiny bubbles bursting at the surface, at a rate that dies away.  *(
 | `half_life` | `1.5` | s for the rate to halve (0 = steady) |
 | `size` | `0.7` | mean bubble radius in mm, 0.3..1.2 (0.7 mm = 4.7 kHz, 0.5 mm = 6.6 kHz) |
 | `bright` | `0.35` | 0..1 top end: low-pass 4..14 kHz |
+| `pops` | `0.0` | 0..1 level of the cap bursts as the bubbles break the surface (rising Helmholtz chirps, mostly above hearing) |
 | `seed` | `0` | variation |
 
 ### `flame`
@@ -3417,6 +5605,28 @@ A flame by kind: combustion roar from the changing flame surface, plus crackle, 
 | `kind` | `'campfire'` | candle/torch/campfire/bonfire/gas_burner/blowtorch/fireball/flamethrower |
 | `dur` | `3.0` | s |
 | `rate` | `1.0` | gesture rate: torch swings per second, candle draughts (x0.8 Hz) |
+| `length` | `0.0` | flame length m: 0 = the kind's own roar; > 0 = combustion-noise spectrum peaking at 10 / length Hz (0.05 m: 200 Hz), falling as f^-2.5 above |
+| `seed` | `0` | variation |
+
+### `flamethrower`
+
+An M2 flamethrower: a roaring jet (37 m/s through 8 mm, ~920 Hz), its igniter, the nitrogen emptying, the fire left behind.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'burst'` | burst/ignite/empty/tail |
+| `dur` | `7.0` | s (7 s is a full tank) |
+| `seed` | `0` | variation |
+
+### `flat_drop`
+
+Something landing flat on its face: livre, brique, caisse. The contact is a flat punch: its length depends on mass and face, not on speed.  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'livre'` | livre / brique / caisse |
+| `velocity` | `3.0` | m/s at landing: level only |
+| `floor` | `'wood'` | wood / concrete / stone |
 | `seed` | `0` | variation |
 
 ### `flipper`
@@ -3443,6 +5653,69 @@ Housefly buzz (Farnell harmonic table, common wing wobble).  *(module `creatures
 | `dur` | `2.0` | s |
 | `seed` | `0` | variation |
 
+### `flyby_jet`
+
+Jet passing: engine + Doppler + ground comb, the fan ahead of it and the jet roar behind.  *(module `aero`)*
+
+| param | default | meaning |
+|---|---|---|
+| `engine` | `'turbofan'` | turbofan / afterburner |
+| `speed` | `250.0` | m/s |
+| `closest` | `150.0` | m |
+| `rpm` | `0.0` | fan rpm (0 = CFM56-7B) |
+| `dur` | `8.0` | s |
+| `ground` | `0.35` | 0..1 reflection strength |
+| `seed` | `0` | variation |
+
+### `fm_machine`
+
+Auditory-icon machine: a sine whose frequency size + mod is modulated at modfreq, with a modulation depth that swings with the work cycle.  *(module `sfx`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `2.0` | s |
+| `size` | `180.0` | Hz: base frequency, smaller machine = higher |
+| `work` | `60.0` | Hz: depth of the work modulation |
+| `speed` | `1.5` | Hz: work cycles per second |
+| `modfreq` | `35.0` | Hz: rate of the mechanism |
+
+### `fog_signal`
+
+COLREG rule 35 sound signals in fog: underway one prolonged blast, stopped two, sailing one prolonged and two short, each at most 2 minutes apart; anchored: the bell for 5 s at most a minute apart.  *(module `marine`)*
+
+| param | default | meaning |
+|---|---|---|
+| `signal` | `'underway'` | underway / stopped / sail / anchored |
+| `length` | `250.0` | ship's length, m |
+| `repeats` | `1` | times the signal is given |
+| `interval` | `-1.0` | s between signals, -1 or more than the rule's 120 (bell 60) = the rule's |
+| `distance` | `1.0` | m to the listener |
+| `coast` | `0.0` | m to a coast that echoes it |
+| `seed` | `0` | variation |
+
+### `foghorn`
+
+Diaphone foghorn: an air siren, its rotor chopping the air at the note, and at the end the pressure falls and the note drops an octave in the grunt.  *(module `marine`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'diaphone'` | diaphone |
+| `freq` | `240.0` | Hz, 180-300 |
+| `dur` | `4.0` | s of the blast, grunt included |
+| `grunt` | `0.8` | s of the final fall |
+| `distance` | `1.0` | m to the listener |
+| `seed` | `0` | variation |
+
+### `foliage`
+
+Plants handled or walked through, no wind: herbe (fine hiss), feuilles (papery rustle), branches (twigs, creak), passage (someone pushing through).  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'feuilles'` | herbe / feuilles / branches / passage |
+| `dur` | `2.0` | s |
+| `seed` | `0` | variation |
+
 ### `footstep`
 
 Physically driven footstep; compatibility `tone` selects hard-floor resonance.  *(module `sfx`)*
@@ -3461,11 +5734,16 @@ Footstep sequence on any of the 24 grounds: every step re-synthesised from a GRF
 |---|---|---|
 | `ground` | `'wood'` | snow/sand/wet_sand/ash/mud/shallow_water/leaves/grass/forest_floor/gravel/pebbles/salt/stone/concrete/cobblestone/wet_stone/marble/hard_floor/wood/metal_web/ice/crystal/bone/coral |
 | `gait` | `'walk'` | walk/run/sneak/limp/stairs/trot/gallop (trot, gallop: four hooves) |
-| `pace` | `0.0` | footfalls per minute, 0 = gait default (walk 105, run 170, sneak 66, limp 84, stairs 96, trot 312, gallop 440) |
+| `pace` | `0.0` | footfalls per minute, 0 = gait default (walk 105, run 170, sneak 66, limp 84, stairs 96, trot 358, gallop 403) |
+| `mass` | `0.0` | kg, trot / gallop with pace 0: the preferred stride rate of an animal that heavy (0 = 500 kg horse) |
 | `steps` | `0` | number of footfalls, 0 = 8 (16 for trot / gallop) |
 | `weight` | `1.0` | body weight scale 0.4..3: heavier = lower, longer |
 | `shoe` | `'default'` | default/barefoot/boot/heel/hoof (trot / gallop use hoof unless set) |
 | `variation` | `0.5` | 0..1 timing and level irregularity (steps never repeat even at 0) |
+| `stop` | `0` | the last N footfalls slow down to a halt, like a runner stopping (0 = steady) |
+| `temperature` | `-8.0` | air temperature in C, snow only: squeak spectrum after Arabadzhi 1963 (-1.5 dull ~300 Hz, -15 bright up to 8 kHz), no squeak at 0 |
+| `walker` | `''` | '' / woman (120 steps/min, lighter, higher resonances) / man (75 steps/min, heavier, lower); sets pace and weight left at default |
+| `mood` | `'neutral'` | neutral/happy (faster, louder, regular)/sad (slow, soft, uneven)/angry (fast, loud, heavy, uneven)/tender (slow, soft, even) |
 | `seed` | `0` | variation |
 
 ### `force_field`
@@ -3477,6 +5755,32 @@ Energy barrier hum: a beating mains-like buzz with a slow comb shimmer.  *(modul
 | `dur` | `3.0` | s |
 | `freq` | `100` | Hz or note name |
 | `shimmer` | `0.5` | 0..1 moving comb / high band |
+| `seed` | `0` | variation |
+
+### `forced_induction`
+
+What a turbo or a blower adds to an engine: the spool, the blow-off valve, compressor surge flutter, the wastegate's pulsed leak, the whine of a Roots blower. One layer, to mix over an engine.  *(module `engines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'spool'` | spool / bov / flutter / wastegate / roots |
+| `rpm` | `3500.0` | engine crankshaft, or a curve |
+| `load` | `1.0` | 0..1 throttle while it is open |
+| `cylinders` | `4` | wastegate: sets the pulse rate |
+| `bov` | `'atmo'` | bov: atmo (vents out, loud) / recirc (back into the intake, quiet) |
+| `ratio` | `2.1` | roots: blower to crank |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
+### `fountain`
+
+A fountain: jets hissing up, then the water reaching the basin after its flight, 2 sqrt(2h/g), as a shower of bubbles.  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `jets` | `3` | number of jets |
+| `height` | `2.0` | m, 1..5: later and harder fall |
+| `dur` | `6.0` | s |
 | `seed` | `0` | variation |
 
 ### `freeze`
@@ -3503,6 +5807,69 @@ Frog calls (Farnell patches): accelerating croak, V-shaped 'brrp', resonant tril
 | `gap` | `0.5` | s between calls |
 | `seed` | `0` | variation |
 
+### `frying_pan`
+
+A frying pan as a percussion: struck iron, handle rattling. A little oil adds the sizzle.  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `size` | `1.0` | bigger = lower |
+| `force` | `0.8` | 0..1 |
+| `oil` | `0.0` | 0..1 sizzle |
+| `seed` | `0` | variation |
+
+### `furniture`
+
+Furniture: chaise_qui_racle (chair legs dragged on a floor, chattering), canape (someone sits: springs, fabric, a soft landing), armoire (heavy door creaking, then its thud).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'chaise_qui_racle'` | chaise_qui_racle / canape / armoire |
+| `seed` | `0` | variation |
+
+### `garden_machine`
+
+Two-stroke garden machines: souffleur (impeller and air jet), taille-haie (reciprocating blades chattering), debroussailleuse (spinning line).  *(module `heavy_vehicles`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'souffleur'` | souffleur / taille-haie / debroussailleuse |
+| `rpm` | `-1.0` | crankshaft; -1 = the machine's |
+| `load` | `0.8` | 0..1 |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
+### `garden_tool`
+
+Garden tools: rateau (tines through leaves and soil, in strokes), beche (spade cutting in, soil falling), secateur (pruner: the blades and a twig).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'rateau'` | rateau / beche / secateur |
+| `seed` | `0` | variation |
+
+### `gargle`
+
+Gargling: voice through liquid in the mouth, trilling and bubbling at 10-20 Hz.  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `rate` | `15.0` | Hz, 10..20 |
+| `dur` | `2.0` | s |
+| `seed` | `0` | variation |
+
+### `gauss_rifle`
+
+Gauss rifle: a coilgun of 5 stages that throws its slug supersonic, so the tick train is followed by a sonic crack.  *(module `energy_arms`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `400.0` | m/s: below 343 there is no crack |
+| `stages` | `5` | stages |
+| `switch` | `'igbt'` | spark/igbt/scr |
+| `miss` | `12.0` | m off the line |
+| `seed` | `0` | variation |
+
 ### `gearbox`
 
 Gear whine: the tooth-mesh tone (teeth x rpm / 60) with shaft-rate sidebands, housing ring and backlash rattle.  *(module `cyber`)*
@@ -3518,7 +5885,9 @@ Gear whine: the tooth-mesh tone (teeth x rpm / 60) with shaft-rate sidebands, ho
 | `wear` | `0.3` | 0 ground and quiet .. 1 worn: more mesh harmonics, a damaged tooth knocking once per turn |
 | `eccentricity` | `0.3` | 0..1 run-out of the shafts: strength of the sidebands (the 'singing' roughness) |
 | `backlash` | `0.3` | 0..1 clearance: rattle when the load is low |
-| `housing` | `1050.0` | Hz first casing resonance |
+| `housing` | `1050.0` | Hz first casing resonance (others at 1.42, 2.05, 2.9 times), or a list of peaks '935,1020,1140', or car |
+| `friction` | `0.0` | 0 = none; flank friction coefficient (about 0.1): a sawtooth at the mesh rate that changes sign at the pitch point, more upper harmonics under load |
+| `mount_mass` | `0.0` | kg added on the mounts (blocking masses on the dominant paths): the mesh order and everything above drop as a one-pole low-pass at Z / (2 pi m) |
 | `seed` | `0` | variation |
 
 ### `gears`
@@ -3532,6 +5901,47 @@ Physical gear train with tooth-mesh frequency, shaft sidebands and backlash impa
 | `driver_teeth` | `20` | count |
 | `driven_teeth` | `40` | count |
 | `backlash` | `0.15` | 0..1 |
+| `seed` | `0` | variation |
+
+### `geiger`
+
+Geiger counter: Poisson clicks of the tube.  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `rate` | `12.0` | clicks per second |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
+### `geothermal`
+
+Geothermal vents: fumerolle (steady steam jet), geyser (tremor, jet, fall), solfatare (hissing vents over sulphur-mud simmer), boue (mud pots).  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'fumerolle'` | fumerolle / geyser / solfatare / boue |
+| `dur` | `8.0` | s |
+| `seed` | `0` | variation |
+
+### `geyser`
+
+Geyser: a tremor of collapsing steam bubbles about 5 cm across, then the jet and its water raining back (Kedar et al. 1998).  *(module `geo`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `14.0` | s |
+| `rate` | `40.0` | bubbles a second in the tremor |
+| `erupt` | `0.4` | 0..1 when in dur it blows; 1 = tremor only |
+| `seed` | `0` | variation |
+
+### `glacier_calving`
+
+A glacier calving: deep crack and rumble of the iceberg, the huge splash, then the fizz of air bubbles leaving melting ice (Glowacki & Deane).  *(module `geo`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `14.0` | s |
+| `size` | `1.0` | 0.2..3 mass of the block: lower, longer |
 | `seed` | `0` | variation |
 
 ### `glass_pane`
@@ -3550,6 +5960,17 @@ Struck window pane held in its frame (supported glass plate): a dull ringing kno
 | `bright` | `0.5` | 0..1 output lowpass 1.5 kHz .. 12 kHz |
 | `quality` | `1.0` | 0.25..3 internal sample rate / grid size |
 
+### `glider`
+
+Glider: no engine, only airframe noise, wind over the wings and a faint canopy vent.  *(module `aero`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `30.0` | m/s |
+| `delta` | `0.005` | m displacement thickness |
+| `dur` | `4.0` | s |
+| `seed` | `0` | variation |
+
 ### `glitch`
 
 Digital glitch burst.  *(module `sfx`)*
@@ -3557,6 +5978,55 @@ Digital glitch burst.  *(module `sfx`)*
 | param | default | meaning |
 |---|---|---|
 | `dur` | `0.2` | s |
+
+### `gore`
+
+Wet flesh, on viscous_bubble and soft blows: splat (a mass hits, spatter falls back), squish (pressing out bubbles), ooze (slow, thick seep), deboitement (a joint pops out).  *(module `viscous`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'splat'` | splat / squish / ooze / deboitement |
+| `size` | `1.0` | size of the mass, bigger = lower |
+| `mu` | `8.0` | Pa s of the wet part |
+| `dur` | `-1.0` | s, -1 = the kind's |
+| `seed` | `0` | variation |
+
+### `gouge`
+
+A hard edge ploughing a softer surface. Tangential force Q = P cot alpha; three textures: rubbing (a plastic wave), wear (a prow that builds and shears off, in bursts), cutting (a continuous chip).  *(module `melee`)*
+
+| param | default | meaning |
+|---|---|---|
+| `alpha` | `30.0` | edge half-angle, degrees |
+| `normal` | `50.0` | N pressing |
+| `mu` | `0.1` | friction on the wedge face: above cot alpha the wedge sticks and the prow wears off |
+| `mode` | `'auto'` | auto / rubbing / wear / cutting |
+| `dur` | `0.8` | s |
+| `seed` | `0` | variation |
+
+### `grab`
+
+A hand grabbing: the cloth pulled (shirt) or the skin slapped first (arm).  *(module `melee`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'arm'` | shirt / arm |
+| `force` | `0.8` | 0..1 |
+| `seed` | `0` | variation |
+
+### `grenade`
+
+Hand and launched grenades: pin, spoon and fuse, then a blast sized by its charge; bouncing, stun, smoke, 40 mm launcher.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'frag'` | frag/throw_bounce/stun/smoke/gl_pop |
+| `distance` | `15.0` | m to the blast |
+| `fuse` | `0.0` | s from the spoon to the blast (0 = its own: frag 4.5, range 4-5.5; stun 1.5, range 1-2.3) |
+| `dur` | `6.0` | s of smoke (50-90 in reality) |
+| `detonate` | `False` | throw_bounce: true = the fuse and the blast after the bounces |
+| `tinnitus` | `0.0` | 0..1 stun: the ringing it leaves in your ears, a tone at 4-8 kHz |
+| `seed` | `0` | variation |
 
 ### `growl`
 
@@ -3591,19 +6061,37 @@ Swallow / gulp: the throat cavity closing and re-opening (two short pitch-swept 
 | `size` | `1.0` | body scale: bigger = lower |
 | `seed` | `0` | variation |
 
+### `gun_mech`
+
+Weapon handling: magazines, slides, bolts, pumps, levers, revolver cylinders, safeties, dry fire, jams, belts, or a whole reload (reload_*).  *(module `arms`)*
+
+| param | default | meaning |
+|---|---|---|
+| `action` | `'slide_rack'` | mag_out/mag_in/slide_rack/slide_lock/slide_release/charging_handle/bolt_open/bolt_close/pump/lever/revolver_open/revolver_close/revolver_spin/revolver_cock/round_insert/shell_insert/clip_strip/safety/selector/dry_fire/trigger/hammer_drop/jam/belt_feed/feed_cover_open/feed_cover_close/mag_drop/revolver_eject/extract/link_eject/belt_rattle/reload_pistol/reload_rifle/reload_shotgun/reload_revolver/reload_lmg/reload_bolt/bolt_cycle/jam_clear/reload_musket |
+| `weapon` | `'rifle'` | pistol/smg/rifle/shotgun/lmg/hmg/revolver/musket: the body it rings through |
+| `speed` | `1.0` | 0.5 slow and deliberate .. 2 fast: the clicks inside a cluster keep their gaps |
+| `floor` | `'concrete'` | concrete/wood/metal/tile/dirt/grass: where magazines and cases land |
+| `mag` | `'plastic'` | plastic/steel: the magazine of mag_drop |
+| `rounds` | `6` | links of link_eject, one per round |
+| `seed` | `0` | variation |
+
 ### `gunshot`
 
 Gunshot: detonation chirp, muzzle burst and gas through the weapon body, mechanical action, supersonic crack, distance and echoes.  *(module `foley`)*
 
 | param | default | meaning |
 |---|---|---|
-| `kind` | `'rifle'` | rifle/pistol/smg/shotgun/silenced/cannon |
+| `kind` | `'rifle'` | rifle/pistol/smg/shotgun/silenced/silenced_rifle/cannon |
 | `distance` | `10.0` | m to the shooter: 1/r, air absorption, and the blast lags the crack by d(1/c - 1/v) |
 | `shots` | `1` | rounds |
 | `rate` | `0.0` | rounds per second (0 = the weapon's own) |
 | `action` | `0.6` | 0..1 mechanical recycling (lost beyond 100 m) |
 | `crack` | `1.0` | 0..1 supersonic N-wave of the passing bullet (none for subsonic rounds) |
 | `echo` | `0.3` | 0..1 street / treeline echoes |
+| `ground` | `'none'` | blast reflected off the ground: none / hard / grass / snow / asphalt ... / flow resistivity in cgs (as `distance`) |
+| `height` | `1.6` | m of the muzzle and the ear above that ground |
+| `angle` | `None` | degrees between the line of fire and the listener: the crack is heard only inside the Mach cone, its miss distance = distance sin(angle) (default: 3 m off the path) |
+| `ear` | `'center'` | center / right / left: the shooter's ear; right = beside the ejection port, its gas +10 dB |
 | `seed` | `0` | variation |
 
 ### `gurgle`
@@ -3619,7 +6107,7 @@ Glugging: large wobbling air bubbles gulped at a rate (bottle emptying, drain, s
 
 ### `gust`
 
-A gust of wind through an opening, across wires or through leaves (Farnell's wind emitters).  *(module `matter`)*
+A gust of wind through an opening, across wires or through leaves.  *(module `matter`)*
 
 | param | default | meaning |
 |---|---|---|
@@ -3627,6 +6115,44 @@ A gust of wind through an opening, across wires or through leaves (Farnell's win
 | `through` | `'gap'` | gap/wire/leaves/canyon/doorway |
 | `strength` | `0.5` | 0..1 peak wind speed. Howls (gap, doorway, canyon) sound only between about 0.25 and 0.6 |
 | `tone` | `1.0` | pitch scale of the wire whistles (thinner wire = higher), 0.3..3 |
+| `seed` | `0` | variation |
+
+### `gym`
+
+Gym machines: tapis (treadmill motor, belt, feet), velo (flywheel and pedalling), poids (weight stack lifted, then landing).  *(module `machines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'tapis'` | tapis / velo / poids |
+| `rate` | `-1.0` | footfalls per minute, cadence rpm or reps per minute (-1 = the kind's own) |
+| `dur` | `5.0` | s |
+| `seed` | `0` | variation |
+
+### `hail`
+
+Hail on a surface: Poisson stones, exponential sizes, each a short force ramp (Lane 2006) ringing the body; the shower thins out over dur.  *(module `contact`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `6.0` | s |
+| `rate` | `80.0` | stones/s hitting the surface at the start |
+| `size` | `6.7` | mm median stone diameter (Kopp 2023: 6.7; 20-30 = severe) |
+| `decay` | `1.0` | 0 steady .. 1 the rate falls to zero by the end (measured showers are front-loaded) |
+| `hardness` | `1.0` | 0..1: 1 hard hail (contact 0.1 D/v), lower = graupel / slush, longer and darker |
+| `body` | `'rect_plate'` | string/bar/bar_clamped/bar_supported/rect_membrane/rect_plate/circ_membrane/circ_plate/circ_plate_free/l_membrane/ri_<object> (measured: ceramic_bowl, glass, wood_plate, iron_pan, plastic_bowl, steel_pot, polycarbonate_cup) or a modal table |
+| `material` | `'metal'` | rubber/plastic/plastic2/polycarbonate/polystyrene/mdf/wood/wood:<species> (spruce, maple, padauk, ebony...)/glass/ceramic/metal/steel/cast_iron/carbide/aluminium/bronze/copper/acrylic/ice/stone/concrete: tin roof, car (metal), conservatory (glass), deck (wood) |
+| `surface_size` | `1.2` | m |
+| `bright` | `0.6` | 0 dark .. 1 bright |
+| `seed` | `0` | variation |
+
+### `hair_dryer`
+
+Hair dryer: small fan and hot jet, 500-8000 Hz, mostly 630-6300 Hz. BPF = rpm x blades / 60. 40 % more speed = 7 dB more (6-8 dBA measured).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `1.0` | x nominal; 1.4 is the 40 % step |
+| `dur` | `3.0` | s |
 | `seed` | `0` | variation |
 
 ### `hammering`
@@ -3648,6 +6174,8 @@ One hand clap: a filtered noise burst; cupped hands are lower and hollower.  *(m
 | param | default | meaning |
 |---|---|---|
 | `cup` | `0.3` | 0 flat palms (bright ~1.4 kHz) .. 1 cupped (hollow ~0.5 kHz) |
+| `clap_type` | `''` | hand configurations P1 P2 P3 (palm to palm), A1 A2 A3 (palm to fingers), A1+ (cupped), A1- (flat): one resonator drawn around the measured f, B, G; empty = use `cup` |
+| `rise` | `'fast'` | fast (0.4 ms linear onset) / exp (exponential onset, 3.2 ms time constant, resonators Q 5.5) |
 | `seed` | `0` | variation |
 
 ### `handle`
@@ -3658,6 +6186,18 @@ Picking up or equipping an object: the hand's sleeve, the object leaving the gro
 |---|---|---|
 | `kind` | `'weapon'` | pick up: weapon / armor / tool / food / glass / trinket / bell;  equip: draw (blade from a scabbard) / shield / don (armour) / amulet |
 | `seed` | `0` | take |
+
+### `hard_drive`
+
+Hard disk: spindle at rpm / 60 (120 Hz at 7200 rpm), its bearing whine, and the head ticking 2 ms per seek. state idle | seek | spinup.  *(module `machines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `state` | `'seek'` | idle / seek / spinup |
+| `rpm` | `7200.0` | spindle |
+| `seeks` | `14.0` | head movements per second |
+| `dur` | `2.0` | s |
+| `seed` | `0` | variation |
 
 ### `harrier`
 
@@ -3696,6 +6236,22 @@ Physical rotor helicopter: main rotor, tail rotor, turbine and blade-vortex slap
 | `rpm` | `320` | main rotor RPM |
 | `blades` | `4` | main blade count |
 | `load` | `0.55` | 0..1 |
+| `rotors` | `1` | main rotors 1..8 (multirotor: neighbouring speeds beat) |
+| `spread` | `0.03` | 0..0.2 relative rpm spread of the rotors |
+| `fuselage` | `0.0` | 0..1 airframe modes 120-400 Hz driven by the rotor |
+| `box` | `0.0` | 0..1 main gearbox whine (mesh 250 Hz) |
+| `partials` | `0.0` | 0..1 turbine partials x1, x2.81, x9.41 of the shaft rate |
+| `seed` | `0` | variation |
+
+### `hiccup`
+
+Hiccup: a 50 ms voiced intake cut by the glottis slamming shut.  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `count` | `3` | hiccups |
+| `gap` | `1.4` | s between them |
+| `size` | `1.0` | 0.7..1.5 body scale |
 | `seed` | `0` | variation |
 
 ### `hiss`
@@ -3725,6 +6281,28 @@ Physically resonant impact on a measured object: contact duration is the hardnes
 | `size` | `1.0` | object size: 2 = twice as big, an octave lower |
 | `seed` | `0` | variation |
 
+### `horse`
+
+Horse calls: hennissement (two sources: cords near 399 Hz, laryngeal whistle near 1543 Hz, not harmonic), ebrouement (snort), soufflement (blow), nicker (low pulsed). Hooves: footsteps gait=gallop.  *(module `fauna`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'hennissement'` | hennissement / ebrouement / soufflement / nicker |
+| `f0` | `399.22` | hennissement: Hz of the cords |
+| `g0` | `1543.26` | hennissement: Hz of the whistle |
+| `valence` | `0.0` | hennissement: -1 distress (longer, starts higher) .. 1 glad |
+| `seed` | `0` | variation |
+
+### `howitzer`
+
+A 155 mm howitzer: muzzle blast rolling through a long barrel, the shell's crack ahead of it when it flies your way.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `distance` | `100.0` | m |
+| `azimuth` | `30.0` | degrees off the line of fire: crack up to 75 |
+| `seed` | `0` | variation |
+
 ### `howl`
 
 Wolf howl: long smooth rising then slowly falling tone, 'a-oo'.  *(module `creatures`)*
@@ -3733,6 +6311,56 @@ Wolf howl: long smooth rising then slowly falling tone, 'a-oo'.  *(module `creat
 |---|---|---|
 | `size` | `1.0` | body scale |
 | `pitch` | `420.0` | f0 plateau Hz at size 1 |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+| `biphonation` | `0.0` | 0..1: a second source at f0/0.59, locked to f0 and its jitter, cross-modulating the first (peaks at m f0 + n g0) |
+
+### `hummer`
+
+Hummer, the corrugated tube whirled overhead: spin faster and it jumps up the tube's harmonics, wavering as its ends swing.  *(module `foley`)*
+
+| param | default | meaning |
+|---|---|---|
+| `spin` | `1.5` | turns a second; may be a ramp from spin to spin2 |
+| `spin2` | `None` | turns a second at the end |
+| `length` | `0.8` | m |
+| `dur` | `5.0` | s |
+| `seed` | `0` | variation |
+
+### `hvac`
+
+Air conditioning: fan (blade passing, duct bed), cool (with the compressor hum at twice the mains), rattle (and a loose panel).  *(module `machines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `state` | `'cool'` | fan / cool / rattle / box_fan |
+| `rpm` | `1800.0` | fan rpm |
+| `blades` | `5` | fan blades |
+| `mains` | `50.0` | Hz |
+| `dur` | `4.0` | s |
+| `seed` | `0` | variation |
+
+### `hybrid_transition`
+
+Hybrid changing over: the electric drive runs, the combustion engine cranks for 0.3 s, catches at 1200 rpm and takes over.  *(module `road`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `40.0` | km/h |
+| `at` | `1.0` | s when the engine starts |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
+### `hydraulic_pump`
+
+Hydraulic whine of an axial-piston pump, a line and its harmonics at pistons x rpm / 60, rising with the pressure; arm: the pump under load as a ram travels, hits its stop and blows the relief valve.  *(module `heavy_vehicles`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'pump'` | pump / arm |
+| `rpm` | `2000.0` | shaft |
+| `pressure` | `150.0` | bar: 80-200 working |
+| `pistons` | `9` | odd |
 | `dur` | `3.0` | s |
 | `seed` | `0` | variation |
 
@@ -3747,7 +6375,11 @@ Lake ice cracking: the falling 'pew' of the dispersed plate wave, then the sharp
 | `distance` | `60.0` | m to the crack, 5..1000: farther = longer chirp |
 | `cracks` | `3` | number of cracks in the event, 1..20 |
 | `brittle` | `0.6` | 0..1 level of the air-borne snap |
+| `sing` | `0.5` | 0..1 level of the air-coupled tone that rises just before each snap (the skaters' 'laser') |
 | `seed` | `0` | variation |
+| `temp` | `99.0` | ice temperature in C, -50..0; 99 = loss fixed at its relaxation peak |
+| `salt` | `0` | 1 = sea or salted ice (NaCl relaxation, much lighter loss in the audible band when cold) |
+| `c_axis` | `0` | 1 = crystal c axes lying along the ice: relaxation peak / 5, longer ring |
 
 ### `ice_cubes`
 
@@ -3762,14 +6394,36 @@ Ice cubes clinking in a glass of drink.  *(module `matter`)*
 | `energy` | `0.7` | 0..1 how hard the glass is swirled |
 | `seed` | `0` | variation |
 
+### `ice_ring`
+
+A sheet of lake ice singing: one crack whose dispersed whistle rings, with a struck ice mode under it.  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `thickness` | `0.05` | m |
+| `distance` | `120.0` | m: the further, the longer the falling whistle |
+| `seed` | `0` | variation |
+
+### `ice_skate`
+
+Skate blade on ice: glide (a push every stroke) or stop (hockey stop, spray of chips). A scrape on an ice body; thin plate cracks optional.  *(module `sports`)*
+
+| param | default | meaning |
+|---|---|---|
+| `stroke` | `'glide'` | glide / stop |
+| `rate` | `1.2` | glide: strokes per second |
+| `dur` | `3.0` | s, glide |
+| `crack` | `0.0` | 0..1 level of a crack in the sheet |
+| `seed` | `0` | variation |
+
 ### `impact`
 
 One object struck by another: analytic modal body + Hunt-Crossley contact (harder / faster = shorter contact = brighter).  *(module `contact`)*
 
 | param | default | meaning |
 |---|---|---|
-| `material` | `'wood'` | rubber/plastic/wood/glass/ceramic/metal/steel/aluminium/bronze/ice/stone/concrete: ring time, pitch and contact hardness of the struck body |
-| `shape` | `'bar'` | string/bar/bar_clamped/bar_supported/rect_membrane/rect_plate/circ_membrane/circ_plate (or a modal table name such as sy_vase) |
+| `material` | `'wood'` | rubber/plastic/plastic2/polycarbonate/polystyrene/mdf/wood/wood:<species> (spruce, maple, padauk, ebony...)/glass/ceramic/metal/steel/cast_iron/carbide/aluminium/bronze/copper/acrylic/ice/stone/concrete: ring time, pitch and contact hardness of the struck body |
+| `shape` | `'bar'` | string/bar/bar_clamped/bar_supported/rect_membrane/rect_plate/circ_membrane/circ_plate/circ_plate_free/l_membrane/ri_<object> (measured: ceramic_bowl, glass, wood_plate, iron_pan, plastic_bowl, steel_pot, polycarbonate_cup) (or a modal table name such as sy_vase) |
 | `size` | `0.3` | m: length / diameter of the struck body; bigger = lower |
 | `position` | `0.28` | 0..1 strike point (bars: 0 end .. 0.5 middle; circles: 0 centre .. 1 rim); near an edge = brighter |
 | `position2` | `0.37` | 0..1 second coordinate of the strike point on rectangles |
@@ -3783,9 +6437,52 @@ One object struck by another: analytic modal body + Hunt-Crossley contact (harde
 | `modes` | `24` | number of modes |
 | `dur` | `0.0` | s, 0 = until it has rung out (max 4 s) |
 | `seed` | `0` | variation of the mode decays |
-| `law` | `'friction'` | mode decay law: friction (default) / rayleigh (Ren) / objectfolder (free objects, glass rings 2.8 s at 1 kHz) / power (Sterling, fitted to recordings); the last three exist for some materials only, and `damping` is added on top |
+| `law` | `'friction'` | mode decay law: friction (default) / rayleigh (Ren) / objectfolder (free objects, glass rings 2.8 s at 1 kHz; takes that table's density and E too) / power, sterling_rayleigh, caughey, hybrid (Sterling, fitted to recordings) / obrien / zheng; all but the first two exist for some materials only, and `damping` is added on top |
+| `thickness` | `0.0` | m: of the bar or plate; 0 = in proportion to size (a bar then goes 1/L, a fixed thickness 1/L^2) |
+| `tip` | `'ball'` | shape of the striker: ball (Hertz) / cone (contact grows faster, sharper at high speed) / flat (contact time independent of speed) |
+| `tip_size` | `0.0` | m: flat face radius; 0 = the striker's own radius |
+| `tip_angle` | `60.0` | degrees: cone semi-angle |
+| `mount` | `0.0` | 1/s: a free bar hung at its nodes 22.4 % from the ends, scale of the suspension loss: mode 1 keeps ringing, the others lose it |
+| `rest_force` | `0.0` | N: resting on a support, each mode damped by what it does at the contact point (ceramic, polystyrene, steel, mdf, wood) |
+| `ice_temp` | `1.0` | degrees C, for material ice below 0: decays from the proton relaxation of ice at that temperature, the lows ring longer in the cold |
+| `dilate` | `0.0` | 0 = off; the SG of a spectral dilation f -> SG f sqrt(1 + SR (f/f1)^2), metal 0.5, wood 0.85, glass 2.4 |
+| `dilate_r` | `0.0` | the SR of that dilation: metal 0.1, wood 0.05, glass 0.2 |
 | `material_angle` | `-1.0` | degrees on Aramaki's perceived-material disk, overriding the decays: 0 glass, 120 metal, 240 wood, in between = a continuous blend (-1 = off) |
 | `material_radius` | `1.0` | 0..1 distance from the disk centre (0 = the average of glass, metal and wood) |
+| `radiation` | `'sphere'` | sphere: every mode radiates as a pulsating body / modes: only each mode's net volume flow is a monopole, the rest a dipole, weaker by ka / sqrt 3 while the body is small against the wavelength |
+| `moisture` | `0.0` | 0..1 wood only: water content from 6 to 12 %, E/rho down 6 % and the loss up 24 % at 1 |
+| `azimuth` | `-1.0` | degrees: where the listener stands around the object; each mode's level follows its lobes (-1 = averaged over all directions) |
+| `rough` | `0.0` | 0..1 perceived roughness: every mode amplitude-modulated at a quarter of its critical band (the most dissonant rate), this the modulation index |
+| `freq_factor` | `1.0` | x on every mode frequency: 0.7 with a heavier striker reads as a bigger object, 4 as a small ceramic one |
+| `decay_factor` | `1.0` | x on every decay rate (the ring time divides by it): 50 turns a ringing metal into a wood-like knock |
+| `uneven` | `0.0` | 0..1 uneven decay, as real wood rings: a slow random swell on the tail and the highs dying sooner (0.5 for wood; metal decays smoothly) |
+| `accel` | `0.0` | 0..1 acceleration noise of the striker: the click of its velocity reversal over the Hertz contact time (a steel ball's modes are above hearing, this is what is heard of it) |
+
+### `induction_motor`
+
+Induction motor on the mains (pump, fan, lathe): magnetic hum at twice the mains, the rotor-slot whine, shaft orders; faults: broken rotor bar, eccentric rotor, worn bearing.  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `3.0` | s |
+| `mains` | `50.0` | Hz supply |
+| `poles` | `4` | 2 / 4 / 6 / 8 |
+| `load` | `0.6` | 0 idle .. 1 rated: the slip, 0.5 to 5 % |
+| `bars` | `28` | rotor bars (slot whine at bars x shaft rate) |
+| `fault` | `'none'` | none / broken_bar / eccentric / bearing |
+| `severity` | `0.5` | 0..1 how bad the fault is |
+| `seed` | `0` | variation |
+
+### `industrial`
+
+Heavy industry: presse (flywheel, one stamp per stroke), marteau-pilon (power hammer: the first blow dull as it makes the crater, the next ones clearer and elastic), usine (factory floor).  *(module `machines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'presse'` | presse / marteau_pilon / usine |
+| `rate` | `-1.0` | blows per second (-1 = the kind's own) |
+| `dur` | `5.0` | s |
+| `seed` | `0` | variation |
 
 ### `interaction`
 
@@ -3799,11 +6496,78 @@ Rubbing, scratching or rolling, and anything between: one impact-train model (Co
 | `speed` | `0.3` | m/s; number or list of breakpoints: brightness (low-pass) and the rolling wobble |
 | `roughness` | `0.5` | 0 smooth .. 1 rough surface (Conan's Table I) |
 | `ball` | `0.5` | 0.1..1 size of the rolling object: longer contacts, slower wobble |
-| `body` | `'rect_plate'` | string/bar/bar_clamped/bar_supported/rect_membrane/rect_plate/circ_membrane/circ_plate or a modal table (sy_vase, sy_sword1...) |
-| `material` | `'wood'` | rubber/plastic/wood/glass/ceramic/metal/steel/aluminium/bronze/ice/stone/concrete: the surface |
+| `body` | `'rect_plate'` | string/bar/bar_clamped/bar_supported/rect_membrane/rect_plate/circ_membrane/circ_plate/circ_plate_free/l_membrane/ri_<object> (measured: ceramic_bowl, glass, wood_plate, iron_pan, plastic_bowl, steel_pot, polycarbonate_cup) or a modal table (sy_vase, sy_sword1...) |
+| `material` | `'wood'` | rubber/plastic/plastic2/polycarbonate/polystyrene/mdf/wood/wood:<species> (spruce, maple, padauk, ebony...)/glass/ceramic/metal/steel/cast_iron/carbide/aluminium/bronze/copper/acrylic/ice/stone/concrete: the surface |
 | `size` | `0.4` | m: size of the surface |
 | `position` | `0.3` | 0..1 where it is touched |
+| `sharpness` | `1.0` | 1 raised cosine .. 4 narrower, clicking impacts |
+| `prefilter` | `0.0` | 0..1 reinforce the force near the body's modes (what a two-way contact does; 0 = off) |
+| `radius` | `0.0` | m: the rolling ball's radius; its wobble is then once per turn, v/(2 pi radius) (0 = Conan's 3 V/ball) |
+| `gamma` | `1` | 1 / 2: each mode rings as t exp(-t/tau) sin (a gammatone, softer onset) instead of exp(-t/tau) sin |
 | `bright` | `0.5` | 0 dark .. 1 bright |
+| `seed` | `0` | variation |
+
+### `interior`
+
+Heard from the cabin, driving: engine, tyres, floor vibration, all through the shell. kind car | ev | truck | bus.  *(module `road`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'car'` | car / ev / truck / bus |
+| `speed` | `90.0` | km/h |
+| `dur` | `4.0` | s |
+| `seed` | `0` | variation |
+
+### `jackhammer`
+
+Pneumatic breaker: a chisel struck 20-25 times a second with the exhaust puffing at the same rate.  *(module `machines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `rate` | `22.5` | blows per second, 20..25 (10..40 with model rod) |
+| `pressure` | `0.8` | 0..1 air |
+| `dur` | `2.0` | s |
+| `seed` | `0` | variation |
+| `model` | `'impact'` | impact (a struck steel bar and the exhaust) / rod (each blow a short Hann pulse down the tool: a longitudinal comb in the chisel and a bending cascade) |
+
+### `jalopy`
+
+A worn-out old car: uneven firing, misfires, backfires on the overrun and a rattling block.  *(module `engines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `rpm` | `900.0` | around this speed |
+| `rough` | `0.7` | 0..1 misfires and wander |
+| `backfire` | `0.5` | 0..0.99 chance of a pop per cycle as it falls |
+| `load` | `0.4` | 0..1 |
+| `dur` | `4.0` | s |
+| `seed` | `0` | variation |
+
+### `jet_afterburner`
+
+Military jet in reheat: mixing noise in two components, shock crackle and the flame, with the step when the afterburner lights.  *(module `aero`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `5.0` | s |
+| `velocity` | `1100.0` | m/s jet speed in reheat |
+| `diameter` | `1.0` | m nozzle: St 0.2 peak |
+| `dry` | `0.65` | dry jet speed as a fraction of velocity |
+| `ignite` | `0.3` | fraction of dur when the reheat lights; < 0 = always on |
+| `crackle_gain` | `0.5` | 0..1 |
+| `angle` | `30.0` | degrees from the jet axis downstream: low, directional roar near 30, hissier to the side |
+| `seed` | `0` | variation |
+
+### `jet_cycle`
+
+Jet start-up and shut-down: spark igniter in the combustor, the turbine's 14 partials sliding with the speed, exhaust from hiss to roar.  *(module `aero`)*
+
+| param | default | meaning |
+|---|---|---|
+| `phase` | `'cycle'` | start / stop / cycle |
+| `speed` | `0.8` | peak speed 0..1 (1000..50000 rpm scale in Farnell) |
+| `dur` | `14.0` | s |
+| `ignite` | `1` | 1 = igniter ticks in the start |
 | `seed` | `0` | variation |
 
 ### `jet_engine`
@@ -3817,6 +6581,19 @@ Reduced physical multi-spool jet/turbofan model.  *(module `sfx`)*
 | `throttle` | `0.7` | 0..1 |
 | `seed` | `0` | variation |
 
+### `jet_ski`
+
+Jet ski: 3-cylinder 4-stroke, 175 Hz at 7000 rpm; 3-blade impeller, 350 Hz; the jet of water. jump=1: out of the water the engine unloads and free-revs, the jet stops, the hull lands. listen=under: 100 Hz-10 kHz, levels as measured (122/137/149 dB).  *(module `marine`)*
+
+| param | default | meaning |
+|---|---|---|
+| `rpm` | `7000.0` | crankshaft |
+| `load` | `0.8` | 0..1 |
+| `jump` | `0` | 1 = a jump in the middle of the render |
+| `listen` | `'air'` | air / under |
+| `dur` | `4.0` | s |
+| `seed` | `0` | variation |
+
 ### `jump`
 
 Platformer jump (rising sweep).  *(module `sfx`)*
@@ -3827,15 +6604,27 @@ Platformer jump (rising sweep).  *(module `sfx`)*
 | `end` | `900` | Hz |
 | `dur` | `0.18` | s |
 
+### `kazoo`
+
+Kazoo: a hummed voice buzzing through a membrane.  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `freq` | `220.0` | Hz of the hum |
+| `dur` | `1.0` | s |
+| `seed` | `0` | variation |
+
 ### `kettle`
 
-Whistling kettle: steam jet whose edge tone locks onto the whistle cavity as pressure builds.  *(module `matter`)*
+Whistling kettle: hole tone of the two-plate whistle, a Helmholtz note at low steam flow, then a vortex tone rising with the flow.  *(module `matter`)*
 
 | param | default | meaning |
 |---|---|---|
 | `dur` | `5.0` | s |
-| `tone` | `1800.0` | Hz whistle cavity resonance, 600..4000 |
-| `onset` | `2.5` | s for the steam pressure to build |
+| `onset` | `2.5` | s for the steam flow to build |
+| `flow` | `3000.0` | orifice Reynolds number at full boil, 1000..3400 (below 2000: Helmholtz note only) |
+| `gap` | `10.2` | mm between the whistle's plates, 5..20 (5 x the 3 mm orifice and over: no vortex tone) |
+| `cavity` | `25.0` | mm whistle diameter, 6..40: the Helmholtz note |
 | `breath` | `0.4` | 0..1 steam noise in the whistle |
 | `rumble` | `0.3` | 0..1 boiling water underneath |
 | `seed` | `0` | variation |
@@ -3852,13 +6641,23 @@ Typing on a computer keyboard: plastic key clicks with bottom-out and release, h
 
 ### `keys`
 
-A bunch of keys jingling (Farnell tambourine jingles: four Q217 bands ring-modulated at 6.3 kHz).  *(module `foley`)*
+A bunch of keys jingling (tambourine jingles: four Q217 bands ring-modulated at 6.3 kHz).  *(module `foley`)*
 
 | param | default | meaning |
 |---|---|---|
 | `hits` | `3` | jingles |
 | `decay` | `40.0` | ms base decay of the brightest band |
 | `spread` | `10.0` | ms between the two contacts of one jingle / 3 |
+| `seed` | `0` | variation |
+
+### `kiss`
+
+Kiss: suction through the lips, then the seal breaking in 1-5 ms. bise, smack, double (both cheeks).  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'bise'` | bise / smack / double |
+| `seal` | `0.0` | seal rupture in ms, 1..5; 0 = from kind |
 | `seed` | `0` | variation |
 
 ### `klang_car`
@@ -3882,11 +6681,33 @@ Rain built from klang primitives (the procedural library's Rain is unwritten): P
 
 | param | default | meaning |
 |---|---|---|
-| `intensity` | `0.5` | 0 drizzle .. 1 downpour: 2 + 600 x intensity^2 audible drops per second, and the bed level |
+| `intensity` | `0.5` | 0 drizzle .. 1 downpour: 600 x intensity audible drops per second (200 per m2 over 3 m2), and the bed level |
 | `hiss` | `1.0` | level of the continuous bed (the countless far drops); 0 = only the individual drops |
 | `tone` | `1.0` | 0.5 darker (soft ground) .. 2 brighter (hard surface): scales drop pitch and bed cutoff |
 | `dur` | `4.0` | s |
 | `seed` | `1` | seed |
+
+### `klaxon`
+
+A-ooo-ga: a toothed wheel hits a rivet on a steel membrane, the wheel up to speed and down again, through a horn. kind electric (motor) | hand_crank.  *(module `road`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'electric'` | electric / hand_crank |
+| `crank` | `1.0` | 0..1 top speed: 100..500 impacts/s |
+| `teeth` | `8` | wheel teeth, for the shaft rate shown in the wheel run-out |
+| `dur` | `1.2` | s |
+| `seed` | `0` | variation |
+
+### `knife`
+
+A knife: degainer (out of its scabbard), couper (the edge drawn through, a continuous chip), trancher (a quick slash and draw), lancer (thrown, spinning, planted).  *(module `melee`)*
+
+| param | default | meaning |
+|---|---|---|
+| `action` | `'trancher'` | degainer / couper / trancher / lancer |
+| `target` | `'flesh'` | trancher: flesh/wood/armour |
+| `seed` | `0` | variation |
 
 ### `knock`
 
@@ -3911,6 +6732,29 @@ Pinball knocker (free game / replay): a big coil banging the inside of the woode
 | `rattle` | `0.5` | 0..1 backbox glass/parts rattle after the bang |
 | `seed` | `2` | variation |
 
+### `landslide`
+
+Landslide: a block cascade over a roaring slide of gravel that grows and dies.  *(module `geo`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `10.0` | s |
+| `blocks` | `60` | number of blocks |
+| `size` | `0.4` | m |
+| `seed` | `0` | variation |
+
+### `lap`
+
+Water lapping: a slow beat of small waves with bubbles. clapot against a hull, with its hollow modes; quai on stone, gurgling back; baignade around a swimmer, small splashes.  *(module `marine`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'clapot'` | clapot / quai / baignade |
+| `dur` | `8.0` | s |
+| `level` | `0.7` | peak |
+| `plume` | `0.0` | m: radius of the bubble plume each wave traps (0 = none; 0.1 = a 47 Hz thump, 0.75 = 6 Hz) |
+| `seed` | `0` | variation |
+
 ### `laser`
 
 Descending laser / pew.  *(module `sfx`)*
@@ -3921,6 +6765,15 @@ Descending laser / pew.  *(module `sfx`)*
 | `end` | `300` | Hz |
 | `dur` | `0.25` | s |
 | `wave` | `'saw'` | saw/square/sine |
+
+### `laser_impact`
+
+A beam hitting something: a spark, ionised noise, a falling whistle. Pure design: no physics behind it.  *(module `energy_arms`)*
+
+| param | default | meaning |
+|---|---|---|
+| `energy` | `0.5` | 0..1: size of the spark and length of the rest |
+| `seed` | `0` | variation |
 
 ### `laugh`
 
@@ -3933,15 +6786,103 @@ Laugh: a bout of short voiced syllables with breathy onsets (Anikin's soundgen m
 | `pitch` | `1.0` | f0 scale |
 | `seed` | `0` | variation |
 
+### `launcher`
+
+Shoulder rocket launchers: click, the tube closed then opening as the rocket leaves, back blast, gas clearing, a booster and the rocket (M72 LAW, RPG-7 with its second ignition, AT4). An empty tube only clicks.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'rpg'` | law/rpg/at4 |
+| `loaded` | `True` | false = an empty tube: the click, nothing else |
+| `burn` | `-1.0` | s of motor out of the tube (-1 = the real one: RPG 1.66, LAW and AT4 nothing to speak of) |
+| `speed` | `0.0` | m/s (0 = its own: LAW 200, 145 on A1-A3) |
+| `target` | `0.0` | m: the warhead goes off there, heard back at the launcher (0 = no; RPG self-destructs near 920) |
+| `seed` | `0` | variation |
+
+### `launcher_handling`
+
+Handling a launcher tube: shoulder knocks, latches, a rocket sliding home (M72 tube modes 300, 826, 3200 Hz); a loaded tube rings differently from an empty one.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `action` | `'load'` | load/drop/latch |
+| `loaded` | `True` | drop: true = with a rocket inside |
+| `seed` | `0` | variation |
+
+### `lava`
+
+Strombolian bursts: big gas slugs breaking a lava film in a conduit, a chest-felt thump, the crack of the film, spatter falling back.  *(module `geo`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `10.0` | s |
+| `bursts` | `3` | explosions |
+| `conduit` | `25.0` | m depth of the vent, 15..35 (Ripepe, Delle Donne & Ripepe): the thump's pitch |
+| `seed` | `0` | variation |
+
+### `lava_flow`
+
+A lava flow, not an eruption (that is `lava`): thermal cracks, slow bubbles, a low mass moving.  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `flow` | `0.5` | 0..1 cooling crust (0) .. fast fluid flow (1): more bubbles and rumble, fewer cracks |
+| `dur` | `8.0` | s |
+| `seed` | `0` | variation |
+
+### `leather`
+
+Leather: bag (a bag handled), belt (a belt pulled through and tightened), mouvement (a jacket moving), impact (slapped).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `action` | `'bag'` | bag / belt / mouvement / impact |
+| `seed` | `0` | variation |
+
+### `lever`
+
+A big lever pulled: bearing creak, optional pawl, the stop at the end.  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `size` | `0.5` | 0 small .. 1 large (bigger = longer, lower) |
+| `pawl` | `1` | 1 = ratchet teeth on the way |
+| `seed` | `0` | variation |
+
 ### `lightning`
 
-Lightning strike: close crack (electric snap), then Farnell's multi-layer thunder.  *(module `matter`)*
+Lightning strike: close crack (electric snap), then multi-layer thunder.  *(module `matter`)*
 
 | param | default | meaning |
 |---|---|---|
 | `dur` | `6.0` | s |
 | `distance` | `150.0` | m to the strike, 20..6000: close = sharp bang, far = rumble only |
 | `delay` | `0.0` | 1 = insert the true sound travel time (distance / 343 s) before it starts |
+| `seed` | `0` | variation |
+| `strokes` | `1` | 1..3 return strokes down the same channel, about 60 ms apart |
+| `model` | `0` | thunder: 0 layered patch, 1 the tortuous channel of N-waves |
+| `precursor` | `0.0` | 0..1 crackle of discharges in the 0.3 s before the strike |
+
+### `lock`
+
+Locks: cadenas (shackle snapping into a padlock), loquet (thumb latch falling), clef (key in, pins, turn, bolt), verrou (slide bolt), combinaison (dial clicks, then the shackle).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'clef'` | cadenas / loquet / clef / verrou / combinaison |
+| `seed` | `0` | variation |
+
+### `machine_hum`
+
+An auditory-icon machine: a hum whose pitch is the machine's size and whose wobble shows how hard and fast it works.  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `2.0` | s |
+| `size` | `120.0` | Hz: the hum (big machine = low) |
+| `work` | `0.5` | 0..1 how hard it works: wobble depth |
+| `speed` | `2.0` | Hz: how fast it runs: wobble rate |
+| `mod_freq` | `30.0` | Hz: the rattle of its parts |
 | `seed` | `0` | variation |
 
 ### `magic`
@@ -3953,6 +6894,15 @@ Sparkly magic shimmer (random high bell notes).  *(module `sfx`)*
 | `dur` | `0.8` | s |
 | `density` | `12` | notes |
 | `freq` | `'C6'` | base note or Hz |
+
+### `magic_kind`
+
+Spell families: ange (bright rising glitter), mal (dark drone and falling sweep), element (fire and a charge), sort (charge then release), poof (puff of smoke), shimmer (sparkle in a rising reverb).  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'sort'` | ange / mal / element / sort / poof / shimmer |
+| `seed` | `0` | variation |
 
 ### `mains_hum`
 
@@ -3967,6 +6917,20 @@ Mains / transformer hum: exact 50 or 60 Hz fundamental with a harmonic series an
 | `resonance` | `0.4` | 0..0.9 feedback of the casing comb tuned to one mains period |
 | `seed` | `0` | variation |
 
+### `mammal`
+
+Mammal call: glottal pulses with a ladder of nonlinear complexity (shimmer, subharmonics, sidebands, chaos) through a tube tract.  *(module `creatures`)*
+
+| param | default | meaning |
+|---|---|---|
+| `f0` | `120.0` | Hz of the cords |
+| `f0_end` | `0.0` | glide target Hz, 0 = none |
+| `dur` | `1.5` | s |
+| `complexity` | `3` | 1 limit cycle / 2 shimmer / 3 subharmonic / 4 inharmonic sidebands / 5 two modulators / 6 chaos |
+| `tract` | `0.38` | vocal tract length m (lion 0.38, wolf about 0.2, dog 0.1-0.2) |
+| `formants` | `0.8` | 0 dry source .. 1 all tract |
+| `seed` | `0` | variation |
+
 ### `match`
 
 Striking a match: scrape on the strip, flare of ignition, then a small flame.  *(module `matter`)*
@@ -3978,13 +6942,38 @@ Striking a match: scrape on the strip, flare of ignition, then a small flame.  *
 | `rough` | `0.6` | 0..1 grain of the striking strip |
 | `seed` | `0` | variation |
 
+### `medical`
+
+Hospital machines: EKG (one beep per heartbeat), respirateur (piston, breath in and out, 15 a minute), moniteur (three-pulse alarm), bip (one tone).  *(module `machines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'EKG'` | EKG / respirateur / moniteur / bip |
+| `freq` | `880.0` | Hz of the beep, 150..1000 |
+| `rate` | `-1.0` | beats or breaths per minute (-1 = the kind's own) |
+| `dur` | `5.0` | s |
+| `seed` | `0` | variation |
+
+### `melee`
+
+Hand weapons: baton_swing, baton_hit, baton_extend (telescopic, 3 clicks), axe_swing, axe_chop (fibres, then the axe pulled free), mace, sledgehammer, knife_slash, knife_throw (spinning, then planted), flail (chain and head).  *(module `melee`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'baton_swing'` | baton_swing / baton_hit / baton_extend / axe_swing / axe_chop / mace / sledgehammer / knife_slash / knife_throw / flail |
+| `target` | `'default'` | what the blow lands on: flesh/wood/armour, sledgehammer stone/metal; default = the kind's |
+| `force` | `0.8` | 0..1 |
+| `flat` | `0` | 1 = with the flat: alpha = 1, k = 2 E* a (axe_chop, knife_slash) |
+| `arc` | `1.0` | knife_slash, swings: scale of the swept angle |
+| `seed` | `0` | variation |
+
 ### `meow`
 
 Cat meow: ~500 Hz smooth cords (Farnell), vowel path i-ae-A-u through a short tract.  *(module `creatures`)*
 
 | param | default | meaning |
 |---|---|---|
-| `size` | `1.0` | body scale (0.6 kitten .. 2 big cat) |
+| `size` | `1.0` | body scale (0.6 kitten, about 1.4 kHz .. 2 big cat) |
 | `pitch` | `550.0` | f0 peak Hz at size 1 |
 | `dur` | `0.9` | s |
 | `seed` | `0` | variation |
@@ -4005,6 +6994,66 @@ Struck steel plate with free edges (Kirchhoff plate, finite differences): clang 
 | `vel` | `0.8` | strike strength 0..1 (harder = shorter contact, brighter) |
 | `bright` | `0.5` | 0..1 output lowpass 1.5 kHz .. 12 kHz |
 | `quality` | `1.0` | 0.25..3 internal sample rate / grid size |
+
+### `mic_feedback`
+
+PA howl: the mic bumped, then the feedback loop grabs one pitch and swells.  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `freq` | `2500.0` | Hz of the howl |
+| `dur` | `2.5` | s |
+| `seed` | `0` | variation |
+
+### `mic_noise`
+
+A live microphone handled: bump (a knock on the body) | souffle (breath or wind on the capsule).  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'bump'` | bump / souffle |
+| `dur` | `1.0` | souffle: s |
+| `seed` | `0` | variation |
+
+### `mine`
+
+Land mines: anti-tank (a big blast and falling earth), Claymore (clacker, a sheet of 700 balls cracking past if you are in front, then the blast), bounding (pop, jump, blast), arming click.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'at'` | at/claymore/bounding/arm |
+| `distance` | `30.0` | m |
+| `azimuth` | `0.0` | claymore: degrees off the direction it faces (cracks only inside its sheet) |
+| `seed` | `0` | variation |
+
+### `minigun`
+
+Rotary machine gun: the motor spins the barrels up, the fire merges into a tearing buzz, then it winds down (fire=false: the spin alone).  *(module `arms`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `3.0` | s of firing |
+| `rate` | `50.0` | rounds/s: 33-100 (M134, 2000-6000 rounds/min) |
+| `spin` | `0.4` | s to spin up |
+| `fire` | `True` | false = barrels turning, no rounds |
+| `distance` | `10.0` | m |
+| `azimuth` | `30.0` | degrees off the line of fire |
+| `level` | `'relative'` | relative/peak, as in firearm |
+| `render` | `'heard'` | heard = as a recording or the ear gets it: the blast's weight, a microphone overloaded at 150 dB, the place's reflections / pressure = the bare pressure at the ear, a click of a few ms |
+| `place` | `'street'` | render=heard: where it is heard, none / street / forest / canyon / arena / cave / hall ... (room presets) |
+| `seed` | `0` | variation |
+
+### `missile`
+
+Guided missiles: a soft eject, then the motor catches at a distance and accelerates away, the Doppler dragging it down until it is gone (Javelin, Stinger).  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'javelin'` | javelin/stinger |
+| `delay` | `0.3` | s between eject and ignition (not published) |
+| `distance` | `0.0` | m ahead of the launcher (0 = you fire it). A Stinger, supersonic, reaches you as a crack first, 157 ms ahead at 100 m |
+| `target` | `0.0` | m: Javelin's warhead (8.4 kg) goes off there |
+| `seed` | `0` | variation |
 
 ### `moan`
 
@@ -4035,6 +7084,29 @@ Four-stroke engine as a looped force (intake noise, silence, combustion 1/f burs
 | `damping` | `5.56` | 1/s external damping of the body |
 | `modes` | `13` | body modes (about 7 suffice) |
 | `bright` | `0.5` | 0 dark .. 1 bright (0.5 = velocity tap, the thesis's choice for engines) |
+| `misfire` | `0.0` | 0..0.1 probability per 128-sample block (at 44.1 kHz), converted per cycle: a misfiring cycle has no combustion stroke |
+| `pick` | `'lowest'` | lowest: the lowest body modes / rank: the most audible modes up to 8060 Hz (the thesis's rectplate span) |
+| `body` | `'plate'` | plate (the rectangular plate above) / car1 (a car engine body: 50 Hz and 100 n^2 Hz, n = 1..10) |
+| `valves` | `0.0` | 0..1 valve train clatter: each valve seating, and bouncing once past the valve-float rpm |
+| `seed` | `0` | variation |
+
+### `modem`
+
+Dial-up signals: poignee_de_main (ANS 2100 Hz, then Bell 103 FSK both ways at 300 bit/s), fax (CNG 1100 Hz, CED 2100 Hz, V.21 flags and frame).  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'poignee_de_main'` | poignee_de_main / fax |
+| `seed` | `0` | variation |
+
+### `molotov`
+
+A bottle breaks and the fuel catches.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `distance` | `8.0` | m |
+| `dur` | `3.0` | s of fire after the catch |
 | `seed` | `0` | variation |
 
 ### `monster`
@@ -4060,6 +7132,39 @@ Cow moo: closed-mouth 'mm' opening to 'oo', long tract, slight period roughness.
 | `dur` | `1.8` | s |
 | `seed` | `0` | variation |
 
+### `morph`
+
+One sound turning into another: a, the cross-synthesis of a's envelope on b, then b.  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `a` | `'roar'` | sfx name |
+| `b` | `'wind'` | sfx name |
+| `dur` | `2.0` | s |
+| `seed` | `0` | variation |
+
+### `morse`
+
+Morse from text: gated tone, or a telegraph sounder clacking on key down and up. Dit = 1200/wpm ms; 1:3:1:3:7.  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `text` | `'SOS'` | letters, digits, punctuation |
+| `wpm` | `20.0` | words per minute (PARIS) |
+| `freq` | `700.0` | Hz, tone only |
+| `mode` | `'tone'` | tone / sounder |
+| `seed` | `0` | variation |
+
+### `mortar`
+
+An 81 mm mortar: the round slides down the tube, the charge kicks it out; or its impact.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'fire'` | drop/fire/impact |
+| `distance` | `30.0` | m (impact) |
+| `seed` | `0` | variation |
+
 ### `mosquito`
 
 Mosquito whine: narrow wing pulses through a high band-pass.  *(module `creatures`)*
@@ -4074,6 +7179,24 @@ Mosquito whine: narrow wing pulses through a high band-pass.  *(module `creature
 | `dur` | `2.0` | s |
 | `seed` | `0` | variation |
 
+### `motorcycle`
+
+Motorcycle: cruiser (45 degree V-twin, 315/405 potato-potato), sport (high-revving inline four, or cross-plane), passby (propulsion only, Doppler and ground).  *(module `heavy_vehicles`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'cruiser'` | cruiser / sport / passby |
+| `rpm` | `-1.0` | crankshaft; -1 = idle 900 (cruiser), 12000 (sport); replaced by speed and gear if speed > 0 |
+| `speed` | `0.0` | km/h: 0 = standing; passby defaults to 80 |
+| `gear` | `3` | 1..6 of 3.34 .. 1.0, final 2.9 |
+| `load` | `0.6` | 0..1 |
+| `crossplane` | `0` | sport: 1 = fires 90-180-270-180 |
+| `distance` | `6.0` | passby: m |
+| `direction` | `'lr'` | passby: lr / rl |
+| `pan` | `1` | passby: 1 stereo, 0 mono |
+| `dur` | `4.0` | s |
+| `seed` | `0` | variation |
+
 ### `mouse_click`
 
 Computer mouse click: the microswitch going down and coming back up.  *(module `foley`)*
@@ -4082,6 +7205,50 @@ Computer mouse click: the microswitch going down and coming back up.  *(module `
 |---|---|---|
 | `double` | `0` | 1 = double click |
 | `hold` | `0.09` | s between press and release |
+| `seed` | `0` | variation |
+
+### `mower`
+
+Lawn mower: a single (four-stroke, or two-stroke) over the blade's pass under the deck, cutting grass.  *(module `heavy_vehicles`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'lawn_mower'` | lawn_mower / lawn_mower_2t |
+| `rpm` | `3000.0` | crankshaft = blade: 3000 = 25 Hz firing on 4T, 50 Hz on 2T, blade 100 Hz |
+| `blades` | `2` | blade tips |
+| `cut` | `0.6` | 0..1 grass under the deck |
+| `load` | `0.6` | 0..1 |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
+### `mud`
+
+Mud: bulles (viscoplastic bubbles: ring, film, Helmholtz, burst), marche (steps sinking, floc length from viscosity and load, then the suck out), aspiration (a foot pulled free), impact (a mass falling in).  *(module `viscous`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'bulles'` | bulles / marche / aspiration / impact |
+| `dur` | `4.0` | s, bulles |
+| `rate` | `5.0` | bulles: bubbles a second |
+| `size` | `15.0` | bulles: mean bubble radius, mm |
+| `mu` | `30.0` | Pa s of the liquid round a bubble: higher = lower and quieter |
+| `tau_y` | `100.0` | Pa, yield stress |
+| `eta` | `5000.0` | Pa s of the ground: the floc lasts in proportion |
+| `load` | `-1.0` | N on the ground, -1 = the kind's |
+| `steps` | `4` | marche |
+| `pace` | `0.9` | marche: s between steps |
+| `pull` | `0.35` | aspiration, marche: s the foot takes to come out |
+| `seed` | `0` | variation |
+
+### `mud_pot`
+
+Boiling mud: hemispheric bubbles swell and burst, a jet of gas, the mud heaving back (Jolly 2016, Vidal 2010).  *(module `geo`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `6.0` | s |
+| `rate` | `1.2` | bursts a second |
+| `thick` | `0.5` | 0..1 viscosity: long film rupture = softer pop, deeper |
 | `seed` | `0` | variation |
 
 ### `neon`
@@ -4131,6 +7298,53 @@ Background noise bed from Gaussian and Poisson models: hum, hiss, rumble, crackl
 | `bright` | `0.4` | 0..1 spectrum tilt / click sharpness |
 | `seed` | `0` | int |
 
+### `noizer`
+
+Three-voice noise synth with named presets: stepped noise, crunched pink noise and a feedback-FM sine, each through its band-pass and envelope, then a phaser and a swept resonant filter.  *(module `foley`)*
+
+| param | default | meaning |
+|---|---|---|
+| `preset` | `'fire2'` | fire2/thundery/wind_rain/woody/helicopter/steamtrain/flamethrower/rain/surf/engine |
+| `dur` | `2.0` | s |
+| `seed` | `0` | variation |
+
+### `office`
+
+Desk objects: agrafeuse (stapler: spring, staple through paper, release), stylo (retractable pen clicked twice), tampon (rubber stamp on paper), bouton_de_bureau (desk button), ecriture (pen writing, in strokes).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'agrafeuse'` | agrafeuse / stylo / tampon / bouton_de_bureau / ecriture |
+| `dur` | `2.0` | ecriture: s |
+| `seed` | `0` | variation |
+
+### `outboard`
+
+Outboard motor: exhaust through the hub under water (low-pass), propeller tone, light wake. Six cylinders 4-stroke or three 2-stroke, both 275 Hz at 5500 rpm. planing adds the hull's blows. listen=under: 70-400 Hz peak, 134 to 171 dB from 3 to 16 m/s.  *(module `marine`)*
+
+| param | default | meaning |
+|---|---|---|
+| `strokes` | `4` | 4 (6 cyl) / 2 (3 cyl, `two_stroke`) |
+| `rpm` | `5500.0` | crankshaft, 800-5500 |
+| `load` | `0.7` | 0..1 |
+| `speed` | `10.0` | m/s |
+| `planing` | `0` | 1 = on the plane: hull slamming |
+| `slap` | `2.0` | planing: blows per second |
+| `listen` | `'air'` | air / under |
+| `dur` | `4.0` | s |
+| `seed` | `0` | variation |
+
+### `overblow`
+
+Recorder-like flue pipe blown through a pressure swell: it whistles weakly at low pressure, sounds its note, jumps to the octave past a threshold and falls back lower down (hysteresis, wider for fast swells).  *(module `foley`)*
+
+| param | default | meaning |
+|---|---|---|
+| `note` | `'G4'` | fingered note |
+| `peak` | `400.0` | Pa at the top of the swell |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
 ### `paper`
 
 Paper: rustle, tear, or a page turn.  *(module `foley`)*
@@ -4140,6 +7354,16 @@ Paper: rustle, tear, or a page turn.  *(module `foley`)*
 | `kind` | `'page'` | rustle/tear/page |
 | `dur` | `0.5` | s (rustle, tear) |
 | `weight` | `0.5` | 0 tissue .. 1 heavy paper/card |
+| `seed` | `0` | variation |
+
+### `party_horn`
+
+Party blower: langue (reed and paper tongue unrolling, pitch climbing then flopping) | trompette (cone: plain steady reed).  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'langue'` | langue / trompette |
+| `freq` | `480.0` | Hz of the reed |
 | `seed` | `0` | variation |
 
 ### `pass_by`
@@ -4157,6 +7381,66 @@ A car driving past: tyre roar that grows with speed, engine or electric drive, w
 | `wet` | `0.0` | 0 dry .. 1 wet road: spray hiss above 2 kHz |
 | `direction` | `'lr'` | lr / rl |
 | `pan` | `1` | 1 = stereo, panned across; 0 = mono (when the game positions it itself) |
+| `sources` | `1` | 1 = one source at 0.3 m / 2 = rolling noise mostly at the tyre contact (0.01 m), engine mostly at 0.3 m, each with its own ground path |
+| `seed` | `0` | variation |
+
+### `pd_footstep`
+
+Footsteps from formulas: each surface is one short expression of a force curve and filtered noise (Footsteppr, a Pd patch).  *(module `geo`)*
+
+| param | default | meaning |
+|---|---|---|
+| `surface` | `'gravel'` | gravel/snow/wood/dirt/grass |
+| `steps` | `4` | steps |
+| `rate` | `1.8` | steps a second |
+| `seed` | `0` | variation |
+
+### `pea_whistle`
+
+Referee's pea whistle: 3.3-3.5 kHz, the pea orbiting in the chamber flips it between two frequencies and takes a little amplitude, with noise around the harmonics.  *(module `sports`)*
+
+| param | default | meaning |
+|---|---|---|
+| `rate` | `20.0` | Hz of the pea's orbit, 0 = no pea |
+| `blasts` | `1` | blasts |
+| `dur` | `0.5` | s per blast |
+| `gap` | `0.25` | s between blasts |
+| `freq` | `3400.0` | Hz |
+| `seed` | `0` | variation |
+
+### `pee`
+
+Pee: thin stream into water (`pour` at low flow, level hardly changing), then the last spurts.  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `4.0` | s |
+| `flow` | `0.25` | 0.1..0.4 flow rate of `pour` |
+| `seed` | `0` | variation |
+
+### `pendulum_feedback`
+
+Pendulum Music (Reich): a mic swings over its speaker, howling at each pass; the swing dies, the whistles lengthen, until the howl never stops. The room sets the pitches.  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `tau` | `12.0` | s, decay of the swing |
+| `period` | `3.0` | s, full swing |
+| `width` | `0.3` | mic-speaker gate, 0..1 of the first swing |
+| `lx` | `6.0` | m room |
+| `ly` | `5.0` | m |
+| `lz` | `3.0` | m |
+| `dur` | `20.0` | s |
+| `seed` | `0` | variation |
+
+### `pepper_grinder`
+
+A pepper mill: the head turned in short strokes, teeth clicking and peppercorns cracking.  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `turns` | `3` | strokes |
+| `rate` | `2.5` | strokes per second |
 | `seed` | `0` | variation |
 
 ### `phone_bell`
@@ -4184,6 +7468,25 @@ Telephone network tones: dial tone, busy signal or ringback, with each region's 
 | `kind` | `'dial'` | dial/busy/ringback |
 | `region` | `'us'` | us/uk/eu |
 | `dur` | `0.0` | s (0 = 2 s of dial tone, two busy cycles, or one ringback cycle) |
+| `line` | `False` | through the telephone line and handset (clipped, 2 kHz and 400 Hz band-passes) |
+
+### `photon_torpedo`
+
+Starship photon torpedo: two falling pings fed back through a delay that stretches over seconds, in a small reverb.  *(module `energy_arms`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
+### `pig`
+
+Pig calls: grognement (0.94 s), couinement, aboiement (0.21 s), trompe.  *(module `fauna`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'grognement'` | grognement / couinement / aboiement / trompe |
+| `seed` | `0` | variation |
 
 ### `pipe_blow`
 
@@ -4200,21 +7503,59 @@ Breath across the open end of a pipe: airy, noisy hoot that only hints at the pi
 
 ### `pipe_engine`
 
-Four-stroke engine built from its plumbing: each cylinder's valves gate an intake and an exhaust waveguide, joined by a collector, a pipe and a muffler. Rasps, drones and lopes like a real exhaust.  *(module `cyber`)*
+Engine built from its plumbing: each cylinder's valves or ports gate an intake and an exhaust waveguide, joined by one or two collectors, pipes and a muffler. Four-stroke by default, also two-stroke and Wankel. Rasps, drones and lopes like a real exhaust.  *(module `cyber`)*
 
 | param | default | meaning |
 |---|---|---|
 | `dur` | `3.0` | s |
-| `rpm` | `1800.0` | crankshaft |
+| `rpm` | `1800.0` | crankshaft, or a curve of values over the sound |
 | `rpm_end` | `-1.0` | glide to this rpm (-1 = steady) |
-| `cylinders` | `4` | 1..12 |
-| `load` | `0.5` | 0 coasting .. 1 full throttle: combustion strength and intake roar |
+| `cylinders` | `4` | 1..16 (rotary: rotors, 1..5) |
+| `load` | `0.5` | 0 coasting .. 1 full throttle: combustion strength and intake roar; a number or a curve |
 | `header` | `1.6` | ms exhaust runner length per cylinder: short = raspy, long = deep |
 | `pipe` | `6.0` | ms straight pipe before the muffler (the drone) |
 | `lope` | `0.0` | 0 even firing .. 1 uneven (odd cylinders fire early: V-twin / cammed idle) |
 | `unequal` | `0.15` | 0..0.5 spread of the header lengths (unequal headers burble) |
 | `mic` | `0.3` | 0 at the tailpipe .. 1 at the air intake |
-| `backfire` | `0.0` | 0..0.99 chance of a pop in the exhaust per engine cycle, only while the rpm falls (rpm_end below rpm); each pop makes the next less likely |
+| `backfire` | `0.0` | 0..0.99 chance of a pop in the exhaust per engine cycle, only while the rpm falls (rpm_end below rpm, or a falling curve); each pop makes the next less likely |
+| `seed` | `0` | variation |
+| `offsets` | `None` | firing times of each cylinder in fractions of a cycle, in firing order; replaces cylinders and lope |
+| `banks` | `None` | exhaust bank of each firing slot: 'LRLLRLRR' or [0, 1, ...]: two collectors and two pipes, summed before the muffler |
+| `headers` | `None` | ms runner length per firing slot; replaces header and unequal |
+| `cycle` | `4` | 4 / 2 / rotary |
+| `muffler` | `None` | ms of the four parallel muffler tubes; default .146 .1875 .208 .25; .23 .34 .45 .57 darker |
+| `extractor` | `0.0` | ms of the extractor runner each header feeds before the collector (added to the header) |
+| `cylinder` | `0.0` | ms: the cylinder itself as a short guide between the valves (0 = off; about 0.2), a hollow ring on each firing |
+| `timing` | `None` | valve timing: 'intake,exhaust' shifts in fractions of a cycle (cam phasing), e.g. '-0.043,-0.004' |
+| `jitter` | `0.0` | 0..1 each cylinder's firing wanders on its own (low-passed at 75 Hz): an engine that is not machined perfect |
+| `warp` | `0.0` | 0..1 the pipe stretches and shrinks with each firing (two delays modulated in antiphase): a cheap growl |
+| `block` | `1.0` | x on the engine-block vibration heard with the exhaust: 3-5 from inside the car |
+| `radiate` | `0` | 1 = the tailpipe radiates as a monopole: the sound is the rate of change of the outflow (brighter) |
+| `units` | `'ms'` | ms / m: header, headers, pipe, extractor, cylinder, outlet, muffler, expansion_ms given as lengths in metres |
+| `gas_temp` | `600.0` | K exhaust gas temperature when units=m: c = 331.45 sqrt(T / 273.15) (900 K: 601 m/s) |
+| `side` | `None` | Hz of side-branch resonators on the pipe that cancel their frequency (quarter-wave tubes, Helmholtz bottles), e.g. '110,857' |
+| `expansion` | `0.0` | area ratio of an expansion chamber on the pipe (0 = none; 4-16 a silencer drum) |
+| `expansion_ms` | `1.0` | ms length of that chamber |
+| `outlet` | `0.0` | ms of a tail outlet pipe after the muffler (0 = none) |
+| `outlet_r` | `0.3` | reflection the outlet's open end sends back into the muffler |
+| `alternator` | `0.0` | 0..1 alternator whine: 36 ripples per alternator turn, pulley 2.8 |
+| `roots` | `0.0` | 0..1 Roots supercharger whine: two three-lobe rotors, driven at 2 x crank (6 per rotor turn) |
+| `view` | `'tail'` | tail / cabin (heard from the driver's seat: body panels low-pass, 85 Hz boom) |
+| `crank` | `0.0` | 0..1 crank position flutter shared by all cylinders: 0.331 cycle of noise low-passed at 57 Hz at 1 |
+| `norm4` | `0` | 1 = scale the collector by 4 / C above four cylinders |
+| `intake_gain` | `1.0` | gain of the intake bus |
+| `outlet_gain` | `1.0` | gain of the exhaust outlet bus |
+| `ends` | `'engine'` | free-end reflections: engine (intake -0.7576, collector 0.06) / paper (-0.5, 0.1) |
+| `transients` | `0.0` | 0..1 a short burst above 4 kHz on every firing (the phase transients of the combustion), heard while the firing rate stays under 80 Hz, gone by 160 Hz |
+
+### `pipe_water`
+
+Plumbing: coup_de_belier (water hammer: a valve shuts, the pipe bangs and bangs again, 200-800 Hz), tuyau_qui_fuit (a pressurised leak, broadband), radiateur (hot water ticking, knocking, gurgling).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'coup_de_belier'` | coup_de_belier / tuyau_qui_fuit / radiateur |
+| `dur` | `3.0` | tuyau_qui_fuit, radiateur: s |
 | `seed` | `0` | variation |
 
 ### `piston`
@@ -4224,8 +7565,17 @@ Pneumatic piston strokes: a hiss of air, the rod travelling, and the end-stop cl
 | param | default | meaning |
 |---|---|---|
 | `cycles` | `3` | out-and-back cycles |
-| `rate` | `1.2` | cycles per second |
+| `rate` | `1.2` | cycles per second, up to 12.5 (25 strokes/s, the top of `machines.jackhammer`) |
 | `pressure` | `0.6` | 0..1 air pressure: louder, brighter hiss |
+| `seed` | `0` | variation |
+
+### `plasma`
+
+Plasma gun: bolt is the charge, the bolt's flight (low whoosh, noise throbbing at 40 Hz) and its hit; impact is the hit alone, an arc and its vapour.  *(module `energy_arms`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'bolt'` | bolt/impact |
 | `seed` | `0` | variation |
 
 ### `plate_bow`
@@ -4276,6 +7626,22 @@ Pouring liquid into a vessel: bubbles + plunging stream through an air resonance
 | `neck_len` | `0.05` | neck length, m |
 | `material` | `'glass'` | glass/metal/ceramic/plastic/paper (resonance sharpness) |
 | `resonance` | `0.6` | 0..1 how readable the fill pitch is |
+| `temperature` | `20.0` | liquid temperature in C, 0..95: hot = vapour in the air space (higher pitch) and in the bubbles (larger) |
+| `collective` | `0.0` | 0..1 level of the low collective mode of the bubbles active together |
+| `seed` | `0` | variation |
+
+### `power_tool`
+
+Power tools, motor plus material: ponceuse (sander), disqueuse (angle grinder), scie circulaire (blade passing at rpm x teeth / 60), cloueuse (nailer), tournevis (clutch), soudeur (arc welder).  *(module `machines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'scie_circulaire'` | ponceuse / disqueuse / scie_circulaire / cloueuse / tournevis / soudeur |
+| `rpm` | `-1.0` | motor rpm, 3000..11000 (-1 = the kind's own) |
+| `teeth` | `24` | saw blade teeth |
+| `load` | `0.6` | 0 free-running .. 1 biting hard |
+| `shots` | `2` | nailer: nails fired |
+| `dur` | `2.0` | s |
 | `seed` | `0` | variation |
 
 ### `powerdown`
@@ -4300,6 +7666,15 @@ Rising arpeggio power-up.  *(module `sfx`)*
 | `rate` | `0.05` | s per step |
 | `wave` | `'square'` | square/saw/sine |
 
+### `primate`
+
+Primates: singe (hoo-hoo rising to chatter), gorille (roar and chest beats), diane (male Diana monkey leopard alarm calls, formants from a four-tube tract).  *(module `fauna`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'singe'` | singe / gorille / diane |
+| `seed` | `0` | variation |
+
 ### `printer`
 
 Desktop printer: the carriage stepping back and forth with the head buzzing, and a paper feed after each line.  *(module `foley`)*
@@ -4308,6 +7683,22 @@ Desktop printer: the carriage stepping back and forth with the head buzzing, and
 |---|---|---|
 | `lines` | `3` | printed lines |
 | `speed` | `1.0` | 0.5 slow .. 2 fast |
+| `seed` | `0` | variation |
+
+### `prop_engine`
+
+Propeller aircraft with its engine on one speed: Hamilton Standard harmonics + vortex noise, plus radial, V12, flat-four or turbine.  *(module `aero`)*
+
+| param | default | meaning |
+|---|---|---|
+| `aircraft` | `'cessna172'` | r985/p51/cessna172/atr72 |
+| `rpm` | `0.0` | engine rpm (0 = from the table); the propeller follows through the reduction |
+| `engine` | `0.5` | 0 propeller only .. 1 engine only |
+| `angle` | `110.0` | degrees from the flight direction |
+| `distance` | `30.0` | m |
+| `speed` | `0.0` | m/s: > 0 makes it pass the listener |
+| `closest` | `40.0` | m at the pass |
+| `dur` | `3.0` | s |
 | `seed` | `0` | variation |
 
 ### `propeller`
@@ -4338,6 +7729,38 @@ Repeating proximity beep (faster = closer).  *(module `sfx`)*
 | `dur` | `1.0` | total s |
 | `width` | `0.4` | beep length as fraction of period |
 
+### `pulley`
+
+A pulley running: bearing rumble, axle squeak, rope or pawl clicks at the sheave's rate.  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `rate` | `4.0` | pawl clicks per second |
+| `dur` | `2.5` | s |
+| `load` | `0.5` | 0..1 squeak under load |
+| `seed` | `0` | variation |
+
+### `pulse_dial`
+
+Rotary phone pulse dialling heard down the line: the exchange current switched on and off, one 40 ms pulse every 100 ms per count of the digit.  *(module `foley`)*
+
+| param | default | meaning |
+|---|---|---|
+| `digit` | `7` | 1..9, or 0 = ten pulses |
+| `line` | `True` | through the telephone line and handset |
+
+### `pump`
+
+Pumps: aquarium (membrane at twice the mains, bubbles), puits (slow piston, the water), air (compressor piston with its pressure hiss).  *(module `machines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'aquarium'` | aquarium / puits / air |
+| `mains` | `50.0` | Hz, aquarium |
+| `rate` | `-1.0` | strokes per second (-1 = the kind's own) |
+| `dur` | `4.0` | s |
+| `seed` | `0` | variation |
+
 ### `punch`
 
 Meaty punch / body hit.  *(module `sfx`)*
@@ -4356,6 +7779,20 @@ Cat purr: glottal pulses near 26 Hz through the tract, breathing in and out.  *(
 | `size` | `1.0` | body scale |
 | `dur` | `3.0` | s |
 | `seed` | `0` | variation |
+| `voice` | `0.0` | 0..1 voicing during the purr: a ~200 Hz tone (/ size) swelling with each purr cycle, on expiration |
+
+### `race_car`
+
+A racing car at full song: a high-revving V10 pulling through a gear, with a turbo over it.  *(module `engines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `rpm` | `18000.0` | the top of the pull (18000 = F1 V10) |
+| `gear` | `4` | 1..6: a low gear climbs faster |
+| `load` | `1.0` | 0..1 |
+| `turbo_mix` | `0.12` | 0..1 turbo whine over the engine |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
 
 ### `radar`
 
@@ -4364,6 +7801,50 @@ Radar ping with echo tail.  *(module `sfx`)*
 | param | default | meaning |
 |---|---|---|
 | `freq` | `1200` | Hz or note name (110, '110hz' or 'A2') |
+
+### `radio`
+
+Walkie-talkie: squelch (the tail of static cut by a click), emetteur (keyed carrier: click, hiss, click), recherche (scanning: bursts of static and heterodyne whistles).  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'squelch'` | squelch / emetteur / recherche |
+| `dur` | `1.5` | emetteur, recherche: s |
+| `seed` | `0` | variation |
+
+### `rail`
+
+Rail vehicles: train_welded (rolling alone), train_diesel (EMD V16 two-stroke by notches), train_diesel_4t (railcar), train_electric, metro_start (inverter steps), tram_roll, curve_squeal, pantograph_arc, tram_bell, train_door, train_brake.  *(module `rail`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'train_welded'` | train_welded / train_diesel / train_diesel_4t / train_electric / metro_start / tram_roll / curve_squeal / pantograph_arc / tram_bell / train_door / train_brake |
+| `speed` | `-1.0` | km/h, -1 = the kind's; metro_start: end of the start |
+| `rail_len` | `-1.0` | m between joints: 0 = welded, -1 = the kind's |
+| `corrugation` | `0.0` | rolling kinds: amplitude / static contact compression, .3 stays in contact, .55 leaves it at resonance |
+| `wavelength` | `0.05` | m of the corrugation (V / wavelength Hz) |
+| `notch` | `8.0` | train_diesel: 0 idle (200 rpm) .. 8 (900 rpm) |
+| `notch_end` | `-1.0` | train_diesel: move through the notches to this one |
+| `rpm` | `-1.0` | diesel kinds: crankshaft, -1 = by notch, 1800 on the railcar |
+| `fs` | `2000.0` | electric kinds: switching frequency, Hz |
+| `pwm` | `'sv'` | sv / dpwm |
+| `radius` | `50.0` | curve_squeal: m |
+| `dur` | `4.0` | s, where the kind has no length of its own |
+| `seed` | `0` | variation |
+
+### `railgun`
+
+Railgun: charge is the capacitors winding up, 500 Hz to 4 kHz in 1.5 s; fire is the crack of a Mach 7-10 slug ahead of the muzzle's arc and fireball; flyby is the N-wave alone.  *(module `energy_arms`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'fire'` | charge/fire/flyby |
+| `speed` | `3390.0` | m/s: 2520 (10.64 MJ, 2008), 3390 (18.4 MJ, 2010) |
+| `distance` | `100.0` | m from the muzzle (fire) |
+| `azimuth` | `0.0` | degrees off the line of fire (fire) |
+| `miss` | `60.0` | m from the trajectory (flyby), 60 at least: far field |
+| `dur` | `1.5` | s (charge) |
+| `seed` | `0` | variation |
 
 ### `rain`
 
@@ -4375,9 +7856,57 @@ Physical/statistical rain field with Poisson drops and surface interactions.  *(
 | `intensity` | `1.0` | strength |
 | `seed` | `0` | variation |
 
+### `rain_on`
+
+Rain on one surface: vitre (dispersive window), toit (tin), bois, sol (dry ground to puddles with wetness), eau, feuilles.  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `surface` | `'vitre'` | vitre / toit / bois / sol / eau / feuilles |
+| `intensity` | `0.5` | 0..1 |
+| `wetness` | `0.0` | 0 dry .. 1 puddles, ground only |
+| `wind` | `1.0` | x density: wind drives the rain |
+| `rate` | `0.0` | mm/h, eau only: > 0 = drop by drop, each drop by its size class (rain_water); 0 = bubble bed from intensity |
+| `dur` | `4.0` | s |
+| `seed` | `0` | variation |
+
+### `rain_water`
+
+Rain on water drop by drop: each drop by its size class (silent, impact, impact then bubble), level growing with the drop count.  *(module `matter`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `4.0` | s |
+| `rate` | `5.0` | rain rate in mm/h, 0.1..300 (drop sizes and count) |
+| `wind` | `0.0` | m/s, 0..20: the drizzle bubbles (13-16 kHz) die out by 9 m/s |
+| `rough` | `0` | 1 = rough, agitated water (more large-drop bubbles) |
+| `area` | `1.0` | m2 of water heard, 0.01..10 |
+| `seed` | `0` | variation |
+
+### `rap`
+
+Rap: speech with its words set on a grid of eighth notes, level pitch.  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `text` | `'time to go over the level now'` | words |
+| `bpm` | `95.0` | beats per minute |
+| `voice` | `'male'` | any speech voice |
+| `seed` | `0` | variation |
+
+### `rapids`
+
+Rapids and whirlpools: dense bubbles over a low roar, surging harder with turbulence.  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `turbulence` | `0.5` | 0..1: more bubbles, more surge, deeper |
+| `dur` | `6.0` | s |
+| `seed` | `0` | variation |
+
 ### `ratchet`
 
-Ratchet / pawl clicks (Farnell click-factory ratchet cluster) at a steady or slowing rate.  *(module `foley`)*
+Ratchet / pawl clicks (click-factory ratchet cluster) at a steady or slowing rate.  *(module `foley`)*
 
 | param | default | meaning |
 |---|---|---|
@@ -4422,15 +7951,60 @@ Starship red alert: a rising klaxon whoop repeated.  *(module `foley`)*
 | `high` | `847` | end: Hz or note name |
 | `rate` | `0.78` | whoops per second |
 
+### `relay_chatter`
+
+A relay switched on and off in a row, each operation a contact click with its bounce; the rate is held to what the relay can do (20 Hz unloaded, 960 an hour under load).  *(module `foley`)*
+
+| param | default | meaning |
+|---|---|---|
+| `rate` | `5.0` | operations per second |
+| `loaded` | `0` | 1 = switching a load: at most 960 per hour |
+| `count` | `8` | operations |
+| `mount` | `'plastic'` | plastic/wood/metal |
+| `seed` | `0` | variation |
+
 ### `reload`
 
 Weapon reload / cocking: metal slide sweep, ratchet click clusters and the end-stop clunk through the weapon body.  *(module `foley`)*
 
 | param | default | meaning |
 |---|---|---|
-| `kind` | `'rifle'` | rifle/pistol/smg/shotgun/silenced/cannon |
+| `kind` | `'rifle'` | rifle/pistol/smg/shotgun/silenced/silenced_rifle/cannon |
 | `speed` | `1.0` | 0.5 slow and deliberate .. 2 fast |
 | `slide` | `1.0` | 0..1 slide friction level |
+| `seed` | `0` | variation |
+
+### `reptile`
+
+Reptiles: serpent (hiss then rattle), crocodile (hiss over a low bellow), tortue (slow breathy hiss with a low grunt).  *(module `fauna`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'serpent'` | serpent / crocodile / tortue |
+| `seed` | `0` | variation |
+
+### `ricochet`
+
+Bullet glancing off a surface: a short hit, then a whining tone falling as it flies away.  *(module `arms`)*
+
+| param | default | meaning |
+|---|---|---|
+| `surface` | `'metal'` | metal/stone/water |
+| `variant` | `'whine'` | whine / tumble (fluttering) / zip (short and high) / none (only the hit) |
+| `f0` | `1343.0` | Hz of the whine (one forum reading of 3200 -> 850 Hz; UNSOURCED) |
+| `speed` | `199.0` | m/s after the bounce (same reading) |
+| `closest` | `5.0` | m |
+| `dur` | `0.8` | s |
+| `seed` | `0` | variation |
+
+### `ride`
+
+Fairground: montagnes russes (chain lift clacking, the crest, the drop with wind, wheels and screams), manege (turning carousel, motor, crowd).  *(module `machines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'montagnes_russes'` | montagnes_russes / manege |
+| `dur` | `10.0` | s |
 | `seed` | `0` | variation |
 
 ### `riser`
@@ -4442,6 +8016,7 @@ Tension riser (noise + pitch climbing).  *(module `sfx`)*
 | `dur` | `2.0` | s |
 | `start` | `100` | Hz |
 | `end` | `2000` | Hz |
+| `pulse` | `0.0` | 0..1 depth of a pulsing that speeds up from 2 to 16 per second as it climbs |
 
 ### `roar`
 
@@ -4449,9 +8024,10 @@ Big-cat roar (Farnell lion arc 30->240->120 Hz, flapping cords into a long tract
 
 | param | default | meaning |
 |---|---|---|
-| `size` | `1.0` | body scale 0.4..4: f0 = arc/size, tract = 0.4 m x size |
+| `size` | `1.0` | body scale 0.4..4: f0 = arc/size, tract = species length x size |
 | `aggression` | `0.7` | 0 smooth .. 1 snarling |
 | `dur` | `2.5` | s |
+| `species` | `'lion'` | lion 0.38 m / tiger 0.29 / jaguar 0.33 / jaguar_female 0.31 / cub 0.035 (newborn jaguar): lips-glottis length |
 | `seed` | `0` | variation |
 
 ### `robot_babble`
@@ -4466,6 +8042,60 @@ Droid chatter: a string of random FM bleeps, whistles and warbles.  *(module `fo
 | `high` | `2800.0` | Hz highest carrier |
 | `seed` | `0` | variation |
 
+### `rocket_flyby`
+
+A rocket passing you: motor, Doppler drop, swell.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `295.0` | m/s (RPG 295) |
+| `closest` | `10.0` | m |
+| `dur` | `2.0` | s |
+| `seed` | `0` | variation |
+
+### `rocket_salvo`
+
+A battery of Katyusha rockets leaving their rails, one after another, with their howl.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `count` | `16` | rockets (16-24 per launcher) |
+| `rate` | `8.0` | departures/s (6.4-13.7 for 4 launchers over 7-10 s) |
+| `seed` | `0` | variation |
+
+### `rockfall`
+
+Rocks falling: blocks with a power law of sizes bounce down, breaking up as they go.  *(module `geo`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `5.0` | s |
+| `blocks` | `30` | number of blocks |
+| `size` | `0.3` | m typical block |
+| `height` | `15.0` | m of fall: speed of the hits |
+| `fragment` | `0.3` | 0..1 chance a hit breaks the block |
+| `seed` | `0` | variation |
+
+### `rod_cage`
+
+Sound sculpture left to itself: pendulums strike a cage of metal rods, a rod drawn at random each time, with glass or wooden balls rattling free inside.  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `pendulums` | `2` | their number sets the density |
+| `ball` | `'glass'` | glass / wood / none |
+| `dur` | `6.0` | s |
+| `seed` | `0` | variation |
+
+### `rodent`
+
+Small squeakers: souris (high chirps), rat (rougher squeaks), chauve_souris (bat: sweeps brought down from ultrasound by 10, and wings).  *(module `fauna`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'souris'` | souris / rat / chauve_souris |
+| `seed` | `0` | variation |
+
 ### `roll`
 
 Ball rolling on a surface: surface profile -> rolling filter (ball radius) -> micro-impacts with the ball's inertia -> surface modes.  *(module `contact`)*
@@ -4476,14 +8106,85 @@ Ball rolling on a surface: surface profile -> rolling filter (ball radius) -> mi
 | `speed` | `0.5` | m/s; a number, or a list of breakpoints = speed curve over the sound (e.g. [1.2, 0.6, 0]) |
 | `radius` | `0.03` | m ball radius: bigger = smoother, lower, heavier (small balls sound least real) |
 | `roughness` | `0.5` | 0..1 microscopic surface roughness |
-| `material` | `'steel'` | rubber/plastic/wood/glass/ceramic/metal/steel/aluminium/bronze/ice/stone/concrete: the ball |
-| `surface` | `'wood'` | rubber/plastic/wood/glass/ceramic/metal/steel/aluminium/bronze/ice/stone/concrete: the surface (dominates the timbre) |
+| `material` | `'steel'` | rubber/plastic/plastic2/polycarbonate/polystyrene/mdf/wood/wood:<species> (spruce, maple, padauk, ebony...)/glass/ceramic/metal/steel/cast_iron/carbide/aluminium/bronze/copper/acrylic/ice/stone/concrete: the ball |
+| `surface` | `'wood'` | rubber/plastic/plastic2/polycarbonate/polystyrene/mdf/wood/wood:<species> (spruce, maple, padauk, ebony...)/glass/ceramic/metal/steel/cast_iron/carbide/aluminium/bronze/copper/acrylic/ice/stone/concrete: the surface (dominates the timbre) |
 | `surface_size` | `1.0` | m: size of the surface plate |
 | `joints` | `0.0` | m: spacing of floor joints / grooves the ball crosses (0 = none) |
 | `dents` | `0.0` | 0..1 a dent on the ball, heard once per revolution |
-| `asymmetry` | `0.0` | 0..1 non-round ball: speed and load wobble at the rotation rate |
+| `asymmetry` | `0.0` | 0..1 off-centre centre of mass, 0.1 x asymmetry x radius: contact point, height and load swing once per turn |
 | `feedback` | `0.18` | legacy, ignored: the contact is now physically two-way coupled |
+| `body` | `''` | '' a solid ball, only the surface rings / can: an empty can with its four measured modes |
+| `patch` | `0.0` | 0 = off; 1 = the surface is felt as its mean height over the Hertz contact patch (half-length x patch), which dulls wavelengths shorter than the patch: a low-pass at speed / (2 a) |
 | `bright` | `0.4` | 0 dark .. 1 bright |
+| `seed` | `0` | variation |
+
+### `roller_drop`
+
+A cylinder landing on its side: bouteille (lying bottle), buche (log), tube. Contact stiffness of a finite roller, almost linear with a logarithmic correction.  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'bouteille'` | bouteille / buche / tube |
+| `velocity` | `2.0` | m/s |
+| `floor` | `'wood'` | wood / concrete / stone |
+| `seed` | `0` | variation |
+
+### `room_tone`
+
+What an empty room sounds like: its air (pink noise low-passed at 300 Hz, slowly breathing) through the room's own decay, with the mains hum where there are mains.  *(module `scenes`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'salon'` | salon/bureau/hall/eglise/cave/cabine |
+| `mains` | `50.0` | Hz of the hum: 50 or 60 |
+| `dur` | `6.0` | s |
+| `seed` | `0` | variation |
+
+### `rope`
+
+Rope: tension (fibres creaking under a growing load), passage (running through a block or a hand, whistle for a zip line), impact (slapping a surface), frottement (dragged over wood).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'tension'` | tension / passage / impact / frottement |
+| `whistle` | `0.0` | passage: 0..1 zip-line whistle |
+| `dur` | `1.5` | s |
+| `seed` | `0` | variation |
+
+### `rotary`
+
+Rotary phone dialling: the dial wound round by hand (ratchet), then its return: 10 line pulses per second, each digit its own count, 0 = 10.  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `digits` | `'0471'` | digits to dial |
+| `seed` | `0` | variation |
+
+### `rotorcraft`
+
+Helicopter built on Farnell's rotor pulse: main rotor with moving combs, tail rotor, turbine or piston, gear whine, slap by flight state and by where you stand.  *(module `aero`)*
+
+| param | default | meaning |
+|---|---|---|
+| `craft` | `''` | '' (300 rpm) / uh60 / oh58 / r44 / ch47 / uh1b / s55 / ah1 |
+| `rpm` | `0.0` | main rotor rpm (0 = from craft) |
+| `blades` | `0` | main blades (0 = from craft; 4 alone picks uh60) |
+| `radius` | `0.0` | m (0 = from craft) |
+| `kind` | `''` | single / tandem / coaxial ('' = from craft) |
+| `tail_rpm` | `0.0` | 0 = rpm (4 + load), at most 2000 |
+| `tail_blades` | `4` | 2..16 |
+| `engine` | `''` | turbine / piston ('' = from craft) |
+| `gearbox` | `0` | 1 = three gear whines |
+| `interior` | `0` | 1 = inside the fuselage |
+| `state` | `'hover'` | hover/cruise/bank/descent/fast |
+| `angle` | `30.0` | 0 ahead in the rotor plane, 30 slap peak, 90 under it, 180 behind |
+| `symmetry` | `-1.0` | pulse apex 0..1, -1 = from state and angle |
+| `shift` | `0.5` | 0 swoosh .. 1 slap |
+| `load` | `0.55` | 0..1 |
+| `far` | `0.0` | 0 near .. 1 far: Farnell's distance filter |
+| `speed` | `0.0` | m/s: > 0 passes the listener |
+| `closest` | `60.0` | m |
+| `dur` | `3.0` | s |
 | `seed` | `0` | variation |
 
 ### `rub`
@@ -4498,6 +8199,16 @@ A hand rubbing a balloon, a glass pane or a wooden board, back and forth.  *(mod
 | `strokes` | `3` | number of back-and-forth strokes in dur |
 | `dur` | `1.2` | s |
 | `seed` | `0` | int |
+
+### `rubber_duck`
+
+Rubber duck squeezed: air whining through the squeaker into its small body, up on the squeeze, down on the release.  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `squeezes` | `1` | count |
+| `pitch` | `1.0` | 0.5..2 |
+| `seed` | `0` | variation |
 
 ### `rumble`
 
@@ -4514,6 +8225,44 @@ Low rumble (earthquake, heavy machinery, distant collapse): enveloped noise into
 | `hold` | `0.0` | s when the fade starts (0 = 70 % of dur) |
 | `fade` | `0.0` | s when the drive has ended (0 = 90 % of dur) |
 | `seed` | `0` | which modes |
+
+### `sailboat`
+
+Under sail: shroud singing in the wind (5 mm at 10 m/s, 400 Hz), a sail flapping, a halyard against the mast, water on the hull.  *(module `marine`)*
+
+| param | default | meaning |
+|---|---|---|
+| `wind` | `10.0` | m/s |
+| `shroud` | `5.0` | mm |
+| `flap` | `3.0` | sail flaps / s |
+| `halyard` | `2.5` | halyard hits / s |
+| `dur` | `8.0` | s |
+| `seed` | `0` | variation |
+
+### `sand_storm`
+
+Blown sand: wind, and grain impacts that only start above the threshold and then rise as the cube of its excess (Bagnold; Saltiphone counts).  *(module `geo`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `8.0` | s |
+| `wind` | `0.7` | 0..1 mean strength; sand moves above 0.35 |
+| `hard` | `0.5` | 0 soft ground .. 1 hard (a helmet, a car) |
+| `seed` | `0` | variation |
+
+### `savart_wheel`
+
+Savart's wheel: a reed scraped by a toothed wheel sounds teeth x rpm / 60, whatever the reed's own frequency. mount cup adds a cup formant.  *(module `machines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `teeth` | `60` | teeth |
+| `rpm` | `600.0` | wheel rpm |
+| `rpm_end` | `-1.0` | glide to this rpm (-1 = steady) |
+| `reed_f` | `1200.0` | Hz of the reed |
+| `mount` | `'free'` | free / cup |
+| `dur` | `2.0` | s |
+| `seed` | `0` | variation |
 
 ### `saw`
 
@@ -4539,6 +8288,56 @@ Scanner / tricorder: a repeating swept warble.  *(module `foley`)*
 | `high` | `1800.0` | Hz |
 | `warble` | `18.0` | Hz of the fast flutter |
 
+### `scene`
+
+An ambience: a bed (wind, sea, fire, rooms) with layers and events of the catalogue over it. Every UCS AMB* place by name or CatID, the five act beds, or a place described in words.  *(module `scenes`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'forest'` | air/alpine/amusement/birdsong/cacophony/celebration/construction/desert/designed/emergency/environmental/fantasy/farm/forest/grassland/historical/hitech/hospital/industrial/insect/lakeside/market/nautical/office/park/prison/protest/public/religious/residential/restaurant/room/rural/school/scifi/seaside/sport/suburban/swamp/town/traffic/transportation/tropical/tundra/underground/underwater/urban/warfare/wildfire/awakening/caravan/city/shore/wilds/place / a UCS CatID: AMBForst, AMBWar... |
+| `dur` | `20.0` | s |
+| `density` | `1.0` | x how often events come |
+| `modifier` | `''` | night / dawn / high_tide / dark: the bed's variant |
+| `place` | `''` | words for bed_generic: its keywords pick the emitters ('frozen river under a stone wall'); replaces the kind's bed |
+| `climax` | `-1.0` | s of a big blast with a quieter lead-in, four small hits, a silence, then dulled ears; -1 = the kind's own (warfare 70 % of dur), 0 = none |
+| `loop` | `0` | 1 = seamless: no end fades, event tails folded onto the start, no climax |
+| `seed` | `0` | variation |
+
+### `scifi_fm`
+
+Genre-convention sci-fi FM effects: implode (falling FM, ring-mod and a vent), fission (two splitting FM voices), thrust (opening noise jet over a rising FM).  *(module `foley`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'implode'` | implode/fission/thrust |
+| `freq` | `440.0` | base frequency f0: Hz or note name |
+| `dur` | `None` | s (default: the length of the kind) |
+| `seed` | `0` | variation |
+
+### `scissors`
+
+Blades and tape: lames (a pair of scissors cutting paper), ruban (packing tape pulled off the roll in one long screech), adhesif (a strip of sticky tape: peeled, torn off, pressed down).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'lames'` | lames / ruban / adhesif |
+| `snips` | `3` | lames: cuts |
+| `dur` | `1.0` | ruban: s |
+| `seed` | `0` | variation |
+
+### `scooter`
+
+Scooter: a 50 cc single, two-stroke or four-stroke, through a CVT: the engine note holds still while the speed climbs, under a belt noise.  *(module `heavy_vehicles`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'2t'` | 2t / 4t |
+| `rpm` | `-1.0` | where the CVT holds the crank; -1 = 7000 (2t), 6000 (4t) |
+| `load` | `0.7` | 0..1 |
+| `belt` | `0.2` | 0..1 level of the belt noise |
+| `dur` | `4.0` | s |
+| `seed` | `0` | variation |
+
 ### `scrape`
 
 Scraping / sliding: a surface profile read at the sliding speed x normal force, driving any modal body.  *(module `contact`)*
@@ -4551,11 +8350,32 @@ Scraping / sliding: a surface profile read at the sliding speed x normal force, 
 | `roughness` | `0.5` | 0..1 (1 = white, very rough; 0 = smooth); used when texture is empty |
 | `texture` | `''` | '' / white/pink_half/pink/brown/gritty/sandpaper/grid/wood/metal/plastic |
 | `grain` | `0.1` | mm: size of the surface grain; smaller or faster = brighter |
-| `body` | `'rect_plate'` | string/bar/bar_clamped/bar_supported/rect_membrane/rect_plate/circ_membrane/circ_plate or a modal table (sy_vase, sy_sword1...) |
-| `material` | `'wood'` | rubber/plastic/wood/glass/ceramic/metal/steel/aluminium/bronze/ice/stone/concrete: the scraped body |
+| `body` | `'rect_plate'` | string/bar/bar_clamped/bar_supported/rect_membrane/rect_plate/circ_membrane/circ_plate/circ_plate_free/l_membrane/ri_<object> (measured: ceramic_bowl, glass, wood_plate, iron_pan, plastic_bowl, steel_pot, polycarbonate_cup) or a modal table (sy_vase, sy_sword1...) |
+| `material` | `'wood'` | rubber/plastic/plastic2/polycarbonate/polystyrene/mdf/wood/wood:<species> (spruce, maple, padauk, ebony...)/glass/ceramic/metal/steel/cast_iron/carbide/aluminium/bronze/copper/acrylic/ice/stone/concrete: the scraped body |
 | `size` | `0.4` | m: size of the body |
-| `position` | `0.3` | 0..1 where it is scraped |
+| `position` | `0.3` | 0..1 where it is scraped; a list of breakpoints = the scraper moves along the body (each mode follows its shape there) |
+| `variation` | `0.0` | 0..1 random change of each mode's level along the path (0.2 = measured spread of 20 % in power); 0 = none |
+| `level` | `'force'` | force: the profile x normal force (van den Doel), speed changes only the pitch of the grain / power: x sqrt(speed x force), silent at rest (van den Doel & Pai; friction power) |
+| `model` | `'profile'` | profile / curvature: the path of a scraper of real mass over the profile, its inertia gives the force (Agarwal et al. 2021) / meso: one impulse per surface pixel crossed, the change of the scraper's normal momentum (a height map) |
+| `scraper_mass` | `0.02` | kg, model curvature |
+| `height` | `2e-05` | m rms of the profile, model curvature |
 | `bright` | `0.5` | 0 dark .. 1 bright |
+| `stroke` | `0.0` | Hz of a back-and-forth stroke by hand (0 = off): speed and normal force follow the gesture, pressing hardest at the near end |
+| `stroke_len` | `0.1` | m, half the stroke |
+| `stroke_angle` | `30.0` | degrees of the held scraper from the surface |
+| `mu` | `0.6` | friction coefficient, stroke only |
+| `gate` | `0` | 1 = the scraper leaves the surface where the profile falls away faster than force/mass can pull it down (fast scrapes chatter); uses height, scraper_mass, force in N |
+| `seed` | `0` | variation |
+
+### `scratch`
+
+DJ scratch on a turntable: the record pushed and pulled under the needle (baby, scribble), or slowed by the fingertip (hydroplane).  *(module `sfx`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'baby'` | baby / scribble / hydroplane |
+| `dur` | `1.5` | s |
+| `pitch` | `220.0` | Hz of the scratched sound at normal speed |
 | `seed` | `0` | variation |
 
 ### `scream`
@@ -4569,6 +8389,16 @@ Scream: high, rough voice with jitter, shimmer and amplitude modulation (Anikin'
 | `pitch` | `1.0` | f0 scale |
 | `seed` | `0` | variation |
 
+### `sea_mine`
+
+A sea mine going off near the surface, heard from above: a thump cut short by the surface, and the column of water falling back.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `charge` | `100.0` | kg TNT |
+| `distance` | `100.0` | m |
+| `seed` | `0` | variation |
+
 ### `servo`
 
 Servo / stepper moves: a small motor whining up to speed and stopping, in a sequence of moves.  *(module `foley`)*
@@ -4580,6 +8410,17 @@ Servo / stepper moves: a small motor whining up to speed and stopping, in a sequ
 | `speed` | `180.0` | rotor Hz at full speed (pitch) |
 | `gap` | `0.12` | s between moves |
 | `seed` | `0` | variation |
+| `case` | `0` | 1 = the motor shut in its case: a 4 kHz low-pass |
+
+### `sewing_machine`
+
+Sewing machine: motor and gears, the needle cam ticking 800 times a minute with a lighter tick as it rises.  *(module `machines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `spm` | `800.0` | stitches per minute |
+| `dur` | `2.0` | s |
+| `seed` | `0` | variation |
 
 ### `sfxr`
 
@@ -4587,15 +8428,28 @@ The sfxr engine (jsfxr-faithful, 8x oversampled): 22 knobs, seeded presets, muta
 
 | param | default | meaning |
 |---|---|---|
+| `link` | `None` | a jsfxr share link or its base58 code: replaces preset and knobs' defaults; explicit knobs still apply |
+| `presets` | `'jsfxr'` | jsfxr / bfxr: what Bfxr's generators do differently (random, mutate on the wave too) |
+| `jump1` | `None` | bfxr: first pitch jump -1..1 (retro.jump_knob(ratio) gives it from a ratio) |
+| `onset1` | `None` | bfxr: when in the window it jumps, 0..1; 1 = never |
+| `jump2` | `0.0` | bfxr: second jump |
+| `onset2` | `1.0` | bfxr: second onset |
+| `jump_repeat` | `0.0` | bfxr: 0..1 jumps undone and rearmed every (lerp of the envelope length and 20 ms): the only arpeggio in an sfxr sound |
 | `preset` | `'none'` | none/pickup/laser/explosion/powerup/hit/jump/blip/synth/tone/click/random (aliases coin, shoot, hurt, select): seeded jsfxr preset generator |
 | `seed` | `0` | int or string: preset draw, mutation and the noise buffer |
 | `mutate` | `0` | rounds of the sfxr mutate (each knob: 50% chance of +-0.05) applied after the preset |
-| `wave` | `None` | square/saw/sine/noise; engine bfxr adds triangle/breaker/tan/whistle/bitnoise (default: the preset's, else square) |
+| `wave` | `None` | square/saw/sine/noise; engine bfxr adds triangle/breaker/tan/whistle/bitnoise/rasp/fmsyn/voice (default: the preset's, else square) |
 | `engine` | `'sfxr'` | sfxr = jsfxr-faithful / bfxr = also the extra waves, harmonics, crush, compression |
 | `level` | `0.8` | peak level 0..1.4 of the result (raw sfxr gain is meaningless across seeds) |
 | `max_dur` | `3.0` | s: longest sound, cut with a 20 ms fade |
 | `soften` | `1.0` | 0 = raw sfxr .. 1 = top end rounded (12 dB/oct lowpass at 4 kHz) so it is not piercing |
 | `hz` | `None` | base pitch in Hz or as a note name; overrides `freq` (3.6..3500 Hz) |
+| `attack_s` | `None` | attack in s; overrides `attack` (0..2.27) |
+| `sustain_s` | `None` | sustain in s; overrides `sustain` |
+| `decay_s` | `None` | decay in s; overrides `decay` |
+| `slide_oct` | `None` | pitch slide in octaves per second (+ up); overrides `slide` |
+| `lpf_hz` | `None` | low-pass in the Hz jsfxr displays (not the physical cutoff: a resonant 2-pole that peaks near 56 kHz x sqrt(hz / (hz + 352800))); overrides `lpf` |
+| `hpf_hz` | `None` | high-pass in the Hz jsfxr displays (not the physical cutoff: one pole, about this / 2 pi); overrides `hpf` |
 | `attack` | `None` | envelope attack 0..1 (v^2 * 2.27 s); default 0 or the preset's |
 | `sustain` | `None` | envelope sustain 0..1 (v^2 * 2.27 s); default 0.3 or the preset's |
 | `punch` | `None` | sustain punch 0..1 (start of sustain up to 3x); default 0 or the preset's |
@@ -4623,6 +8477,7 @@ The sfxr engine (jsfxr-faithful, 8x oversampled): 22 knobs, seeded presets, muta
 | `crush` | `0.0` | bfxr: sample-and-hold rate reduction 0..1 |
 | `crush_sweep` | `0.0` | bfxr: crush sweep over the sound -1..1 |
 | `compression` | `0.0` | bfxr: 0..1, lifts the quiet parts (/x/^(1/(1+4c))) |
+| `strict` | `False` | bfxr: also Bfxr's own knob laws (relative minimum frequency, sustain >= 0.01, 0.18 minimum length, +10 decay samples, cubic flanger sweep) |
 
 ### `shake`
 
@@ -4649,6 +8504,50 @@ Physical fracture/destruction event with time-varying modal body.  *(module `sfx
 | `energy` | `1.0` | strength |
 | `seed` | `0` | variation |
 
+### `shaver`
+
+Vibrating armature in a plastic shell: rasoir, tondeuse at twice the mains (100 or 120 Hz), brosse_a_dents at 260 Hz.  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'rasoir'` | rasoir / tondeuse / brosse_a_dents |
+| `mains` | `50.0` | Hz: 50 / 60 |
+| `dur` | `2.0` | s |
+| `seed` | `0` | variation |
+
+### `sheep`
+
+Sheep bleat with its fast amplitude trill and vibrato: brebis (ewe), agneau (lamb).  *(module `fauna`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'brebis'` | brebis / agneau |
+| `seed` | `0` | variation |
+
+### `shell_crack_overhead`
+
+An artillery shell going over at Mach 2.4: a hard crack, and the gun's boom long after.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `miss` | `50.0` | m it passes overhead |
+| `range` | `1000.0` | m from the gun: the boom comes this much later |
+| `boom` | `True` | true = with the distant gun |
+| `seed` | `0` | variation |
+
+### `shell_incoming`
+
+A shell falling on you: a whistle climbing as it comes closer (an estimate, nothing measured), then the blast. A negative sweep is the film's falling whistle.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `2.5` | s of whistle |
+| `f0` | `900.0` | Hz at the start |
+| `sweep` | `1.0` | octaves over the fall |
+| `distance` | `60.0` | m |
+| `charge` | `6.0` | kg TNT |
+| `seed` | `0` | variation |
+
 ### `shepard`
 
 Shepard tone: a pitch that seems to rise (or fall) forever. Loops exactly when dur is a whole number of cycles.  *(module `foley`)*
@@ -4673,6 +8572,120 @@ A shield slammed into something: a heavy long contact on a wooden or iron shield
 | `size` | `1.0` | shield size (bigger = lower) |
 | `seed` | `0` | variation |
 
+### `shield_up`
+
+Energy shield raised: two detuned triangles settling in pitch under a slow ring modulator.  *(module `foley`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `0.5` | s |
+| `freq` | `0.0` | Hz (0 = random 320-520) |
+| `seed` | `0` | variation |
+
+### `ship`
+
+A ship's radiated noise. Under water: Wales-Heitmeyer (cargo) or Ross (tanker) spectrum in absolute dB, speed law 60 log V, blade-rate comb, cavitation above 9 kn. In air: the same 29.5 dB down under funnel and wake (estimated). Levels are kept, do not normalize to compare them.  *(module `marine`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'cargo'` | cargo / tanker |
+| `listen` | `'under'` | under / air |
+| `model` | `''` | wales / sonic / ross / randi; empty = the kind's |
+| `speed` | `-1.0` | knots, 2..30; -1 = 14 |
+| `length` | `91.44` | m: +20 log(l / 300 ft), wales and sonic |
+| `tons` | `-1.0` | t displacement, ross, up to 30000 |
+| `rpm` | `-1.0` | shaft at the kind's reference speed |
+| `blades` | `0` | propeller blades; 0 = the kind's |
+| `cavitation` | `0` | 1 = cavitates above vc |
+| `vc` | `9.0` | knots, inception |
+| `engine` | `1.0` | air: level of funnel and wake |
+| `dur` | `6.0` | s |
+| `seed` | `0` | variation |
+
+### `ship_bell`
+
+Ship's bell: rapid strokes for 5 s (rule 35), mouth of 300 mm or more, 110 dB at 1 m (annex III), on the church bell model. Level kept against ship_horn.  *(module `marine`)*
+
+| param | default | meaning |
+|---|---|---|
+| `mouth` | `300.0` | mm, 300 or more for ships of 20 m and over |
+| `hammer` | `0.03` | hammer / bell mass, 0.03 or more |
+| `ring` | `5.0` | s of strokes |
+| `rate` | `4.0` | strokes per second |
+| `seed` | `0` | variation |
+
+### `ship_engine`
+
+Slow marine diesel: a two-stroke cargo engine, six cylinders at 100 rpm firing at 10 Hz, felt as a pulse through the hull.  *(module `marine`)*
+
+| param | default | meaning |
+|---|---|---|
+| `rpm` | `100.0` | crankshaft, 30.. |
+| `cylinders` | `6` | 1..12 |
+| `strokes` | `2` | 2 / 4 |
+| `load` | `0.6` | 0..1 |
+| `hull` | `1.0` | level of the pulse in the hull |
+| `dur` | `4.0` | s |
+| `seed` | `0` | variation |
+
+### `ship_horn`
+
+Ship's whistle by COLREG annex III: two reed pipes, fundamental by ship length (70-200 Hz at 200 m and over), 143 dB at 1 m down to 120. Distance, echo off the coast. Levels are kept.  *(module `marine`)*
+
+| param | default | meaning |
+|---|---|---|
+| `length` | `250.0` | ship's length, m: sets the band and the level |
+| `freq` | `0.0` | fundamental, Hz; 0 = the middle of the band |
+| `signal` | `'prolonged'` | prolonged (5 s) / short (1 s) / underway / stopped / sail |
+| `distance` | `1.0` | m to the listener |
+| `coast` | `0.0` | m to a coast that echoes it; 0 = none |
+| `dur` | `0.0` | s of a single blast; 0 = the signal's |
+| `seed` | `0` | variation |
+
+### `shout`
+
+Shout (the nonverbal scream engine): cri de guerre, hurlement, encouragement. people > 1: a group, each voice its own.  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'cri de guerre'` | cri de guerre / hurlement / encouragement |
+| `people` | `1` | voices, 1..24 |
+| `pitch` | `1.0` | f0 scale |
+| `seed` | `0` | variation |
+
+### `siege_impact`
+
+A siege projectile on masonry: 60-250 kg at 34-66 m/s, the wall's blow, stone breaking and the debris.  *(module `melee`)*
+
+| param | default | meaning |
+|---|---|---|
+| `mass` | `150.0` | kg, 60-250 |
+| `velocity` | `50.0` | m/s, 34-66 |
+| `debris` | `0.5` | 0..1 level of the fall of stones |
+| `seed` | `0` | variation |
+
+### `singing_dune`
+
+Singing or booming dune: an avalanche of dry sand gives one sustained, almost pure note near 100 Hz that beats.  *(module `geo`)*
+
+| param | default | meaning |
+|---|---|---|
+| `freq` | `100.0` | Hz; set by the grain size (Douady et al. 2006, Vriend et al. 2007: whichever explains it, about 100) |
+| `dur` | `6.0` | s |
+| `beat` | `1.5` | Hz between the patches of grains that do not quite lock |
+| `seed` | `0` | variation |
+
+### `singing_sand`
+
+Singing sand: an avalanche whose grains lock into step by a resonance in the flowing layer. The note is 0.4 sqrt(g/d); it comes up, holds and stops when the surface slows below c/4.  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `grain` | `160.0` | um grain diameter: 160 = 99 Hz, 210 = 87, 270 = 76, 340 = 68 |
+| `depth` | `6.0` | mm of flowing layer at the start; it drains over dur. Below c/4f (2.3 mm at 160 um) there is no song |
+| `dur` | `8.0` | s |
+| `seed` | `0` | variation |
+
 ### `siren`
 
 Smooth rising/falling siren.  *(module `sfx`)*
@@ -4690,7 +8703,7 @@ Emergency siren heard in a street: police wail, two-tone ambulance or a wind-up 
 
 | param | default | meaning |
 |---|---|---|
-| `kind` | `'police'` | police/ambulance/air_raid |
+| `kind` | `'police'` | police/police_rc (both oscillators RC-shaped, overdriven diaphragm)/ambulance/air_raid; French two-tones: police_fr/gendarmerie/pompiers/samu/ambulance_fr |
 | `dur` | `5.0` | s |
 | `rate` | `0.0` | cycles per second (0 = the kind's own) |
 | `echo` | `0.5` | 0..1 building echoes (delays 165, 121, 33 ms) |
@@ -4711,15 +8724,66 @@ Water or fat on a hot pan: dense micro-explosions, spitting pops and evaporation
 | `bright` | `0.5` | 0..1 top end: low-pass 3.5..12 kHz |
 | `seed` | `0` | variation |
 
+### `skateboard`
+
+Skateboard rolling: hard wheels on the ground, both axles clacking over each joint (L / v, then wheelbase / v). ollie = pop of the tail, silence in the air, landing.  *(module `sports`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `4.0` | m/s |
+| `surface` | `'concrete'` | concrete / asphalt / wood |
+| `joints` | `-1.0` | m between joints, -1 = the surface's, 0 = none |
+| `ollie` | `0` | 1 = an ollie in the middle |
+| `dur` | `4.0` | s |
+| `seed` | `0` | variation |
+
+### `skin`
+
+Skin: grattage (nails, strokes of `scrape`), tape (pats, cupped `handclap`), poignee (handshake: slap, rub, cloth).  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'grattage'` | grattage / tape / poignee |
+| `rate` | `4.0` | scratches or pats per second |
+| `count` | `4` | strokes or pats |
+| `seed` | `0` | variation |
+
 ### `slash`
 
-A sword cut: the swing through the air, then the edge landing on flesh, armour or wood.  *(module `foley`)*
+A weapon swing: the swing through the air, then the blow landing on flesh, armour, wood, stone or a shell.  *(module `foley`)*
 
 | param | default | meaning |
 |---|---|---|
 | `swing` | `0.5` | 0..1 level of the air swoosh before the cut |
-| `target` | `'flesh'` | flesh/armour/wood |
+| `target` | `'flesh'` | flesh/armour/wood/stone/shell (shell = a creature's chitin) |
 | `force` | `0.7` | 0..1 |
+| `weapon` | `'blade'` | blade/heavy/spear/improvised (heavy = mace / axe head, improvised = a stick or bar) |
+| `seed` | `0` | variation |
+
+### `slime`
+
+Slime: as mud, thinner and higher, with strings of it drawn out and snapping.  *(module `viscous`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `3.0` | s |
+| `rate` | `14.0` | bubbles a second |
+| `strands` | `4.0` | strings a second |
+| `mu` | `2.0` | Pa s |
+| `seed` | `0` | variation |
+
+### `sling`
+
+A sling: whirl (the cord's tone, swelling at each turn), release (a soft flick and the stone leaving, no crack), whistling (a bullet with a 5 mm hole singing away, 20 % of those at Burnswark).  *(module `melee`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'whirl'` | whirl / release / whistling |
+| `speed` | `40.0` | m/s, 20-50 |
+| `cord` | `0.003` | m |
+| `radius` | `1.0` | m |
+| `mass` | `0.028` | kg: release, 28 g of lead .. 0.5 kg of stone |
+| `dur` | `2.0` | s: whirl, whistling |
 | `seed` | `0` | variation |
 
 ### `slingshot`
@@ -4730,6 +8794,41 @@ Slingshot kicker: coil fires, rubber band snaps the ball away (thwap) and twangs
 |---|---|---|
 | `tone` | `1.0` | 0.6..1.6 band pitch |
 | `seed` | `9` | variation |
+
+### `slingshot_weapon`
+
+A slingshot, the weapon: the latex drawn, the band's twang, a ball at 28 m/s, its arrival.  *(module `melee`)*
+
+| param | default | meaning |
+|---|---|---|
+| `draw` | `0.5` | s of draw (0 = none) |
+| `freq` | `140.0` | Hz, the band's settled pitch |
+| `speed` | `28.27` | m/s |
+| `distance` | `10.0` | m to the target (0 = none) |
+| `target` | `'wood'` | what it lands on: any contact material |
+| `seed` | `0` | variation |
+
+### `slither`
+
+A long body sliding: sable (fine grit), feuilles (leaves and cloth-like rustle), pierre (dry scales on rock). The force swells with each body wave.  *(module `fauna`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'sable'` | sable / feuilles / pierre |
+| `rate` | `1.5` | body waves per second |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
+### `slot_machine`
+
+One-armed bandit: pull (lever and ratchet), spin (reels), stop (one thunk per reel), win (coins and bell), play (the whole sequence).  *(module `machines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `state` | `'play'` | play / pull / spin / stop / win |
+| `reels` | `3` | reels |
+| `win` | `1` | play: ends in a payout |
+| `seed` | `0` | variation |
 
 ### `smash`
 
@@ -4746,6 +8845,17 @@ Something brittle breaking on a hard floor: impact + noise burst + dense, random
 | `burst` | `0.5` | 0..1 level of the 50 ms rupture noise |
 | `bright` | `0.5` | 0 dark .. 1 bright |
 | `seed` | `0` | variation |
+| `distance` | `0.0` | m from the listener: farther fragments keep fewer modes, the most important first (0 = all modes) |
+
+### `smoke_alarm`
+
+Smoke alarm: narrow-band piezo in the temporal pattern. t3: three 0.5 s beeps, 0.5 s apart, 1.5 s pause, 4 s cycle, at 3.1 kHz or a 520 Hz square; t4: the CO pattern.  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `pattern` | `'t3'` | t3 / t4 |
+| `tone` | `'piezo'` | piezo 3100 Hz / low 520 Hz square |
+| `cycles` | `2` | cycles |
 
 ### `sneeze`
 
@@ -4781,6 +8891,53 @@ Snore: soft-palate flutter on each inhale, quiet breath out.  *(module `creature
 | `dur` | `8.0` | s |
 | `seed` | `0` | variation |
 
+### `snow`
+
+Snow under load, the squeak of footsteps taken out of the step: ski (carved turns), luge (runners and bumps), boule (packing a snowball), chute (a body into powder). Colder is brighter.  *(module `sports`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'ski'` | ski / luge / boule / chute |
+| `temperature` | `-8.0` | C: squeak spectrum, none at 0 |
+| `speed` | `1.0` | pace scale |
+| `dur` | `3.0` | s, ski and luge |
+| `seed` | `0` | variation |
+
+### `snow_avalanche`
+
+Powder avalanche: a moving turbulent cloud, blocks of snow thudding inside the flow and the low rumble under it (Kogelnig et al. 2011).  *(module `geo`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `12.0` | s |
+| `powder` | `0.6` | 0 dense flow .. 1 powder cloud |
+| `blocks` | `70` | snow blocks |
+| `precursor` | `0.0` | s of snowpack cracking before the release: faint crackle at a rising rate, a quiet spell, then the slide |
+| `density` | `200.0` | kg/m3 of the snowpack, 80..500: light snow damps the highs of the cracking |
+| `seed` | `0` | variation |
+
+### `snow_squeal`
+
+Very cold dry snow roaring under a load: grains locking into a squeal near 200 Hz, heard kilometres off at -45 C (Patitsas 2013).  *(module `geo`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `0.2` | m/s of slip |
+| `grain` | `1.0` | mm; Bagnold's f = speed / grain: 0.2 / 1 = 200 Hz |
+| `dur` | `1.5` | s |
+| `seed` | `0` | variation |
+
+### `snowfall`
+
+Snow settling: the near-silent hiss of flakes and, now and then, the soft whump of snow dropping from a branch or a roof.  *(module `geo`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `10.0` | s |
+| `rate` | `0.3` | whumps a second |
+| `hiss` | `0.15` | 0..1 flakes against clothes or a hood |
+| `seed` | `0` | variation |
+
 ### `solenoid`
 
 Pinball coil / relay: plunger slams its stop and bounces (ka-chak), steel ring + cabinet thump.  *(module `pinball`)*
@@ -4805,6 +8962,37 @@ Active sonar ping with its echo coming back from a target.  *(module `foley`)*
 | `ring` | `0.6` | s decay of the ping in the water |
 | `seed` | `0` | variation |
 
+### `sonic_boom`
+
+Sonic boom: the N-wave at the ground from Carlson's simplified prediction. Heard indoors with interior=1 (through the glass, panes rattling).  *(module `aero`)*
+
+| param | default | meaning |
+|---|---|---|
+| `mach` | `1.99` | flight Mach number > 1 |
+| `altitude` | `14480.0` | m |
+| `length` | `32.7` | m aircraft length |
+| `ks` | `0.087` | Carlson shape factor |
+| `kp` | `1.1` | pressure factor |
+| `kt` | `0.85` | duration factor |
+| `rise_ms` | `3.0` | rise time, 1-5 ms measured, about 3.7 x longer in moderate turbulence |
+| `interior` | `0` | 1 = heard inside a room |
+| `seed` | `0` | variation |
+
+### `space_rocket`
+
+Rocket motor from far: broad two-pole roar with the Strouhal peak of its exhaust, crackle, high-frequency dispersion. phase=liftoff: ignition ramp, maximum, departure.  *(module `aero`)*
+
+| param | default | meaning |
+|---|---|---|
+| `size` | `'heavy'` | heavy / small |
+| `diameter` | `0.0` | m exit diameter (0 = from size) |
+| `phase` | `'steady'` | steady / liftoff |
+| `distance` | `1500.0` | m |
+| `angle` | `50.0` | degrees from the jet axis: loudest at 50 |
+| `dur` | `8.0` | s (liftoff: use 25) |
+| `turbulence` | `0.0` | m/s wind across the path: scintillation (0 = still air) |
+| `seed` | `0` | variation |
+
 ### `spark`
 
 Electric spark snap: 7 kHz to 20 Hz sweep with a quartic noise burst through a spark formant.  *(module `matter`)*
@@ -4813,6 +9001,18 @@ Electric spark snap: 7 kHz to 20 Hz sweep with a quartic noise burst through a s
 |---|---|---|
 | `size` | `0.3` | 0..1: static tick (5 ms) .. heavy contactor snap (120 ms) |
 | `tone` | `1.0` | formant scale, 0.5..1.5 (lower = bigger, enclosed) |
+| `seed` | `0` | variation |
+
+### `spear`
+
+A spear: poussee (a short thrust, the point landing, the shaft shaking), parade (a blow caught on the shaft or a flat shield), hampe (the shaft handled, sliding in the hand).  *(module `melee`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'poussee'` | poussee / parade / hampe |
+| `target` | `'flesh'` | poussee: flesh/wood/armour |
+| `length` | `2.5` | m, 2-3 |
+| `shield` | `0` | parade: 1 = on a wooden shield, a flat contact |
 | `seed` | `0` | variation |
 
 ### `spinner`
@@ -4826,6 +9026,15 @@ Spinner flap: thin metal flap ticking past its wire; spins > 1 = a decelerating 
 | `tone` | `1.0` | 0.6..1.6 flap pitch |
 | `seed` | `6` | variation |
 
+### `spit`
+
+Spit: fricative 'ptt', then the drops landing after the time of the fall.  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `height` | `1.0` | m the drops fall |
+| `seed` | `0` | variation |
+
 ### `splash`
 
 Object falling into water: slap, cavity collapse, bubble cloud, crown droplets falling back.  *(module `matter`)*
@@ -4835,6 +9044,18 @@ Object falling into water: slap, cavity collapse, bubble cloud, crown droplets f
 | `size` | `0.5` | 0..1 object size (cavity bubble 6..20 mm, bubble count) |
 | `dur` | `1.5` | s |
 | `droplets` | `6` | crown droplets that fall back |
+| `entrain` | `'exp'` | exp (bubble rate decays from the impact) / stochastic (entrainment kernel over the rejection time) |
+| `seed` | `0` | variation |
+
+### `sport`
+
+Struck balls: tennis (ball on strings, swing), golf (driver), bowling (roll down the lane, then the pins), billard (tip, ball on ball by Hertz time, cushion), batte (bat, wood or aluminium).  *(module `sports`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'tennis'` | tennis / golf / bowling / billard / batte |
+| `speed` | `-1.0` | m/s, -1 = the kind's |
+| `bat` | `'wood'` | batte: wood / aluminium |
 | `seed` | `0` | variation |
 
 ### `spray`
@@ -4872,15 +9093,17 @@ Squeak of a hinge, a rubber sole or chalk: friction locking onto one resonance, 
 | `pitch` | `1.0` | resonance multiplier (0.5-2) |
 | `dur` | `0.6` | s |
 | `seed` | `0` | int |
+| `model` | `'physical'` | physical (bristle friction on the modes) / additive (harmonic source with a wandering pitch through the same modes) |
 
 ### `stab`
 
-A blade point driven into flesh, armour or wood (no swing).  *(module `foley`)*
+A weapon point driven into flesh, armour, wood, stone or a shell (no swing).  *(module `foley`)*
 
 | param | default | meaning |
 |---|---|---|
-| `target` | `'flesh'` | flesh/armour/wood |
+| `target` | `'flesh'` | flesh/armour/wood/stone/shell (shell = a creature's chitin) |
 | `force` | `0.7` | 0..1 |
+| `weapon` | `'blade'` | blade/heavy/spear/improvised (heavy = mace / axe head, improvised = a stick or bar) |
 | `seed` | `0` | variation |
 
 ### `static`
@@ -4939,8 +9162,31 @@ Generic stick-slip creak driver: a body dragged through a spring over a rubbing 
 | `speed` | `0.01` | drag speed, m/s (0.001-0.5): slow = separate cracks, faster = groan |
 | `pressure` | `8.0` | normal force, N (0.5-50) |
 | `freq` | `420.0` | main resonance of the creaking body, Hz or note |
+| `oil` | `0.0` | 0 = dry; oil viscosity, Pa s (0.1 = a light oil): the film lifts the contact at a speed computed from it, so more oil keeps friction low at slower drags |
+| `radius` | `0.1` | m, contact radius, with oil |
 | `dur` | `1.5` | s |
 | `seed` | `0` | int |
+
+### `stinger_sfx`
+
+Designed stingers: boom (reversed rise into a hit), bass_dive (sub falling away), danger (rising minor second), defeat (falling minor third).  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'boom'` | boom / bass_dive / danger / defeat |
+| `freq` | `165.0` | danger, defeat: Hz of the first note |
+| `seed` | `0` | variation |
+
+### `storm`
+
+A storm: gusts crossing the scene at the wind's speed, rain they push about going from dry ground to puddles, thunder at its distance.  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `intensity` | `0.7` | 0..1 |
+| `wind` | `30.0` | m/s: objects 30 m apart get a gust 30/wind s after each other |
+| `dur` | `16.0` | s |
+| `seed` | `0` | variation |
 
 ### `strain`
 
@@ -4963,6 +9209,40 @@ Procedural running water using stochastic cavities and bubble resonances.  *(mod
 | `dur` | `3.0` | s |
 | `seed` | `0` | variation |
 
+### `stridulation`
+
+Stridulation that is not a cricket's: a grasshopper rubbing pegs on a wing vein (friction noise, two stroke directions) or a spiny lobster's soft stick-slip rasp.  *(module `creatures`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'grasshopper'` | grasshopper / lobster |
+| `rate` | `0.0` | strokes per second (0 = 12 grasshopper, 4 lobster) |
+| `dur` | `2.0` | s |
+| `seed` | `0` | variation |
+
+### `stun_gun`
+
+Stun gun: a train of arcs at 19 pulses per second. contact is on a body, duller than the open-air arc_gap.  *(module `energy_arms`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'contact'` | contact/arc_gap |
+| `rate` | `19.0` | pulses per second: 19, 20 in some sources, 29 on the X3W |
+| `dur` | `1.0` | s |
+| `seed` | `0` | variation |
+
+### `submarine`
+
+Submarine. view=out: machine tonals and a soft continuum below 8 kn, flow and propulsion above, no cavitation; 100 or 110 dB at 1 kHz at 4 kn. view=in: machines, sonar ping, pressure creaks in the hull, a ballast blow.  *(module `marine`)*
+
+| param | default | meaning |
+|---|---|---|
+| `view` | `'out'` | out / in |
+| `kind` | `'electric'` | electric / nuclear |
+| `speed` | `4.0` | knots |
+| `dur` | `10.0` | s |
+| `seed` | `0` | variation |
+
 ### `success`
 
 Bright rising two-note confirm.  *(module `sfx`)*
@@ -4975,7 +9255,7 @@ Bright rising two-note confirm.  *(module `sfx`)*
 
 ### `surf`
 
-Waves breaking on a shore (Moss bubble populations following each crest).  *(module `matter`)*
+Waves breaking on a shore (bubble populations following each crest).  *(module `matter`)*
 
 | param | default | meaning |
 |---|---|---|
@@ -4984,6 +9264,33 @@ Waves breaking on a shore (Moss bubble populations following each crest).  *(mod
 | `period_min` | `8.0` | shortest gap between waves, s |
 | `period_max` | `13.0` | longest gap between waves, s |
 | `bubble_rate` | `3000.0` | bubbles per second at a crest |
+| `sizes` | `'breaking'` | breaking (0.3-20 mm) / plume (surf-zone plume 0.1-5 mm: brighter) |
+| `plume` | `0.0` | m of bubble plume between the bubbles and the water surface (dulls the highs) |
+| `puffs` | `0.0` | air injections per second at a full crest (0 = continuous; under ~20/s bursts are heard) |
+| `active` | `0` | 1 = bubbles only during the active window after each crest |
+| `seed` | `0` | variation |
+
+### `suspension`
+
+Car springs and dampers over bumps: bushes creak and squeak, stops knock. load raises the strain.  *(module `road`)*
+
+| param | default | meaning |
+|---|---|---|
+| `load` | `0.5` | 0 empty .. 1 full |
+| `bumps` | `3` | count |
+| `dur` | `1.6` | s |
+| `seed` | `0` | variation |
+
+### `swarm`
+
+Swarm of N decorrelated insects: abeilles (230 Hz wings), mouches (220 Hz), moustiques (600 Hz), cigales (Farnell's 3 calls, bands at 5.5 and 7.5 kHz), grillons (7-pulse chirps falling 4.5 to 3.9 kHz).  *(module `fauna`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'abeilles'` | abeilles / mouches / moustiques / cigales / grillons |
+| `count` | `8` | insects, 1..64 |
+| `call` | `'auto'` | cigales: auto (new call every 5 s) / chirp / rattle / whirr / song (25 Hz) |
+| `dur` | `3.0` | s |
 | `seed` | `0` | variation |
 
 ### `sweep_down`
@@ -5008,6 +9315,17 @@ Pure tone sweep upward.  *(module `sfx`)*
 | `dur` | `0.4` | s |
 | `wave` | `'sine'` | sine/saw/square |
 
+### `swim`
+
+Swimming: arm entries as small splashes, kick beats, a breath's gurgle, over water lapping. crawl, breast, butterfly, back.  *(module `sports`)*
+
+| param | default | meaning |
+|---|---|---|
+| `stroke` | `'crawl'` | crawl / breast / butterfly / back |
+| `rate` | `1.0` | tempo scale |
+| `dur` | `6.0` | s |
+| `seed` | `0` | variation |
+
 ### `switch`
 
 Mechanical switch: every click is one mechanical event, coloured by what it is mounted on.  *(module `foley`)*
@@ -5016,8 +9334,10 @@ Mechanical switch: every click is one mechanical event, coloured by what it is m
 |---|---|---|
 | `kind` | `'toggle'` | toggle/rocker/push/relay/slide/rotary |
 | `mount` | `'plastic'` | plastic/wood/metal: the panel it sits on |
-| `state` | `'on'` | on/off (latching push button sounds different each way) |
+| `state` | `'on'` | on/off (latching push button sounds different each way; a relay bounces longer when it releases) |
+| `coil` | `0` | relay: 1 = start when the coil is switched, the contact moves 14 ms (on) / 12 ms (off) later |
 | `seed` | `0` | variation |
+| `noise` | `'band'` | band: white noise in each click / pnoise: one shared generator of three crossed phasors, the same level every click |
 
 ### `swoosh`
 
@@ -5032,14 +9352,38 @@ Distributed aeroacoustic swing using Reynolds/Strouhal vortex-shedding model.  *
 
 ### `sword`
 
-A blade or club swung through the air: Aeolian tones of eight sources along the blade (Selfridge presets).  *(module `foley`)*
+A blade or club swung through the air: Aeolian tones of eight sources along the blade (measured blade presets).  *(module `foley`)*
 
 | param | default | meaning |
 |---|---|---|
-| `blade` | `'sword'` | sword/sword2/golf_club/bat (thin sword, thicker sword, golf club, baseball bat) |
+| `blade` | `'sword'` | sword/sword2/golf_club/bat/broom/wood_sword (thin sword, thicker sword, golf club, baseball bat, broom, wooden sword) |
 | `speed` | `1.0` | tip-speed scale (1 = the preset, e.g. 36 m/s) |
 | `thickness` | `1.0` | diameter scale (thicker = lower) |
 | `model` | `'loq'` | loq (St 0.2, Q 10: rated best) / patch (Fey Strouhal, bandwidth Q) |
+| `groove` | `0.0` | 0..1 level of the fuller groove's cavity tones (Rossiter modes of a 3 mm groove: ~3.2, 7.5, 11.8 kHz at 24 m/s) |
+| `seed` | `0` | variation |
+
+### `tank_gun`
+
+A 120 mm tank gun: an enormous blast, a Mach 5 crack far ahead, the breech slamming open.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `distance` | `100.0` | m |
+| `azimuth` | `30.0` | degrees off the line of fire |
+| `breech` | `True` | true = with the breech |
+| `seed` | `0` | variation |
+
+### `taser`
+
+Taser fired: the nitrogen cartridge, the wire paying out while the probes fly at 55 m/s, then the 19 pulses per second on the target.  *(module `energy_arms`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'fire'` | fire |
+| `distance` | `11.0` | m to the target, 11 at most: 0.2 s of flight |
+| `rate` | `19.0` | pulses per second |
+| `dur` | `1.0` | s on the target |
 | `seed` | `0` | variation |
 
 ### `teleport`
@@ -5051,6 +9395,7 @@ Teleport zap: a fast endless-rise glissando with a noise rush, ending in a thump
 | `dur` | `0.8` | s |
 | `direction` | `'out'` | out (dematerialise) / in (arrive) |
 | `seed` | `0` | variation |
+| `style` | `'shepard'` | shepard / ring (a sine gliding up 4.5-7x under a ring modulator gliding 15-25 -> 80-140 Hz) |
 
 ### `tesla`
 
@@ -5086,6 +9431,9 @@ Thunder: Farnell's layered patch blended with Few's tortuous channel of N-waves,
 | `dur` | `2.5` | s |
 | `distance` | `80.0` | m from the strike |
 | `channel` | `0.5` | 0 Farnell patch only .. 1 physical channel only |
+| `strokes` | `1` | return strokes down the same channel, 1..3 |
+| `walk` | `'farnell'` | channel shape: farnell / ribner (3-D walk) |
+| `fineberg` | `0` | 1 = add the multi-impact strikes (1-5 noise sub-impacts through a falling band-pass bank), the afterimage (to 14 s) and deepener (to 18.5 s) layers; 2 = also the 0.6 s feedback delay on the strikes and the paper's compressor |
 | `seed` | `0` | variation |
 
 ### `tide`
@@ -5098,6 +9446,26 @@ The tide turning: water starting to run through channels (rising) or dragging sh
 | `dur` | `1.95` | s |
 | `seed` | `0` | seed |
 
+### `tinnitus`
+
+Ringing in the ears: a thin high tone over a little noise around it, as after a blast.  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `freq` | `6000.0` | Hz, 4000..8000 |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
+### `toilet_flush`
+
+Toilet flush in 4 phases: the tank lets go, the bowl's vortex, the siphon gulping air, the tank refilling (30 s by default, a hiss rising as it fills).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'reservoir'` | reservoir / economique / chasse_forte |
+| `refill` | `30.0` | s of refill, 0 to skip |
+| `seed` | `0` | variation |
+
 ### `tone`
 
 Plain sustained tone with chosen wave (raw: nothing is rounded off).  *(module `sfx`)*
@@ -5109,9 +9477,53 @@ Plain sustained tone with chosen wave (raw: nothing is rounded off).  *(module `
 | `wave` | `'sine'` | any osc wave |
 | `seed` | `0` | noise waves only: a different seed gives a different take |
 
+### `tool`
+
+Hand tools: lime (file, push strokes), ciseaux (tin snips), tenaille (pincers: bite, a nail squealing out), tournevis (ratcheting screwdriver, the screw seating), ponceuse_main (sanding block, back and forth).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'lime'` | lime / ciseaux / tenaille / tournevis / ponceuse_main |
+| `strokes` | `4` | lime, ponceuse_main: strokes |
+| `rate` | `2.0` | lime, ponceuse_main: strokes per second |
+| `seed` | `0` | variation |
+
+### `tornado`
+
+Tornado: infrasound peak at 8.3 Hz and its overtones, roar in a 40-200 Hz band, wind above it, debris when close.  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `distance` | `500.0` | m: farther = air takes the top off, less debris |
+| `dur` | `12.0` | s |
+| `seed` | `0` | variation |
+
+### `torpedo`
+
+Torpedoes under water: tube launch, steam and piston engines passing, a supercavitating rocket, the hit.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'steam'` | launch/steam/piston/supercav/hit |
+| `dur` | `4.0` | s |
+| `speed` | `0.0` | m/s (0 = its own: steam 23.7, or 15.9 low; piston 29; supercav 25.7 -> 103) |
+| `distance` | `50.0` | m (hit) |
+| `charge` | `380.0` | kg TNT (hit: Mk 14 292 kg Torpex, or 230 of TNT) |
+| `depth` | `10.0` | m (hit) |
+| `seed` | `0` | variation |
+
+### `toy`
+
+Toys: mecanique (wind-up: ratchet, spring, clockwork), telecommandee (RC: servo and a small buzzing motor), jouet_parlant (pull string, tiny speaker voice, a few music-box notes).  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'mecanique'` | mecanique / telecommandee / jouet_parlant |
+| `seed` | `0` | variation |
+
 ### `toy_boat`
 
-Toy boat engine (Klang procedural port of Farnell's putt-putt): a 9 Hz valve pulse gating formant noise through three body resonances.  *(module `klang`)*
+Toy boat engine (Klang procedural port, putt-putt): a 9 Hz valve pulse gating formant noise through three body resonances.  *(module `klang`)*
 
 | param | default | meaning |
 |---|---|---|
@@ -5119,6 +9531,66 @@ Toy boat engine (Klang procedural port of Farnell's putt-putt): a 9 Hz valve pul
 | `broken` | `0` | 1 = broken engine: the regular pulse is replaced by 9 Hz band-passed noise (sputtering) |
 | `dur` | `3.0` | s |
 | `seed` | `1` | noise seed |
+
+### `tracks`
+
+Tracked vehicle: each link engaging the sprocket and crossing the road wheels at v / pitch, into the shoes and the hull, with the engine: tracked_vehicle, tank_m1 (193.7 mm, turbine), tank_diesel (V12), snowmobile (light, 400 Hz at speed), bulldozer (blade on gravel), excavator_tracks.  *(module `heavy_vehicles`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'tracked_vehicle'` | tracked_vehicle / tank_m1 / tank_diesel / snowmobile / bulldozer / excavator_tracks |
+| `speed` | `-1.0` | km/h, or a curve; -1 = the kind's |
+| `pitch` | `0.0` | m of a link; 0 = the kind's |
+| `wheels` | `0` | road wheels; 0 = the kind's |
+| `wheel_spacing` | `0.0` | m between road wheels; 0 = the kind's |
+| `slack` | `-1.0` | 0..1 slapping of a loose track; -1 = the kind's |
+| `engine` | `0.6` | level of the engine against the track; 0 = track alone; snowmobile: any > 0, the level comes from the 2 dB |
+| `rpm` | `-1.0` | engine; -1 = the kind's |
+| `load` | `0.6` | engine 0..1 |
+| `dur` | `4.0` | s |
+| `seed` | `0` | variation |
+
+### `traction_drive`
+
+Inverter-fed traction motor of a metro or electric train: slot orders, carrier lines k1 fs +- k2 f0, stator modes at 2-4 kHz, gear mesh. 627 rpm at 15 km/h.  *(module `rail`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `15.0` | km/h |
+| `speed_end` | `-1.0` | glide to this km/h (-1 = steady) |
+| `fs` | `2000.0` | inverter switching frequency, Hz, 500-4000 |
+| `pwm` | `'sv'` | sv (largest harmonic at 2 fs, loudest near fs 1500) / dpwm (at fs, loudest near 3000) |
+| `poles` | `2` | pole pairs |
+| `slots` | `36` | stator slots |
+| `load` | `0.8` | 0 coasting .. 1 full torque |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
+### `tractor`
+
+Farm tractor: tractor (slow four-cylinder diesel with a short vertical stack), tractor_vintage (a big slow single, each firing apart).  *(module `heavy_vehicles`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'tractor'` | tractor / tractor_vintage |
+| `rpm` | `-1.0` | crankshaft; -1 = 2100 (rated) or 600 (vintage) |
+| `load` | `0.5` | 0..1 |
+| `stroke` | `4` | vintage: 4 or 2 |
+| `dur` | `4.0` | s |
+| `seed` | `0` | variation |
+
+### `traffic`
+
+A road beside you: cars passing at random in both directions, as a Poisson flow with a 2 s minimum gap.  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `20.0` | s |
+| `rate` | `600.0` | vehicles per hour |
+| `speed` | `70.0` | km/h speed limit: each car drives 0.85-1.1 of it |
+| `distance` | `8.0` | m to the near lane (the far lane is 3.5 m further) |
+| `electric` | `0.2` | share of electric cars |
+| `seed` | `0` | variation |
 
 ### `train`
 
@@ -5132,6 +9604,9 @@ Riding a train: wheels clacking over rail joints in the rhythm set by the bogie 
 | `wheelbase` | `2.5` | m between the two axles of a bogie |
 | `bogie_spacing` | `16.0` | m between the bogies of a car |
 | `horn` | `0.0` | s of horn at the start (0 = none) |
+| `creep` | `0.0` | 0 = none; wheel creep, as a ratio (saturates near 0.002): the contact's tangential force, heard only below V / 2a |
+| `corrugation` | `0.0` | 0 = smooth rail; corrugation amplitude / static compression: a line at V / wavelength, the wheel leaves the rail above 0.5 |
+| `wavelength` | `0.05` | m of the corrugation |
 | `seed` | `0` | variation |
 
 ### `transformer`
@@ -5147,7 +9622,13 @@ Power transformer / substation hum from the core's magnetostriction: 100 or 120 
 | `load` | `0.3` | 0..1 winding current: adds pure 2f |
 | `loose` | `0.0` | 0..1 loose laminations / panel: buzz and rattle |
 | `size` | `1.0` | 0.3 small wall unit .. 3 substation: scales the tank resonances down |
+| `strip` | `0.0` | 0..1 resonance of a lamination strip near 1.5 kHz, the 16th harmonic of 100 Hz |
+| `joints` | `0.0` | 0..1 the core's regions differ: corners and T-joints strain 2-3 times the limbs, a harsher hum |
+| `stress` | `0.0` | 0..1 mechanical stress on the sheets (clamping, corrugation): magnetostriction up 11 dB at 1 |
 | `seed` | `0` | variation |
+| `packet` | `0` | 1..3 the measured induction of one core packet in its five regions (0 = uniform) |
+| `grid` | `''` | grid whose frequency wanders: DE / US / EE / RU / GB / SE / ZA / ES-PM / ES-GC / IS / FO (1 s increments 1.1 to 9.8 mHz); empty = steady |
+| `tesla` | `0.0` | core induction in T (0.5..2): sets flux = tesla / 2.0 and the level follows the measured noise rise, 0 dB at 1.5 T; 0 = use flux |
 
 ### `transporter`
 
@@ -5158,6 +9639,55 @@ Sci-fi transporter beam: a shimmering whole-tone cluster of narrow noise bands t
 | `dur` | `3.0` | s |
 | `freq` | `466.0` | lowest band: Hz or note name |
 | `bands` | `10` | whole-tone steps stacked |
+| `activate` | `0` | 1 = start on the activation buzz (775 Hz through three narrow bands) |
+| `seed` | `0` | variation |
+
+### `tree`
+
+One part of a tree falling: craquement (fibres going, faster and faster, to the break), chute (crown through the branches, then the ground). `tree_fall` is the whole event.  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'craquement'` | craquement / chute |
+| `size` | `1.0` | 0.3..2 trunk: deeper, slower |
+| `seed` | `0` | variation |
+
+### `tree_fall`
+
+A tree going down: cracks that come faster and faster, the break, the crown falling through branches, the thud.  *(module `geo`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dur` | `7.0` | s |
+| `size` | `1.0` | 0.3..2 trunk: deeper, slower |
+| `seed` | `0` | variation |
+
+### `truck`
+
+Heavy truck: truck_passby (commercial-vehicle Harmonoise levels, source at .75 m, Doppler), jake_brake (compression release: one exhaust bark per cylinder, the machine-gun; worst with no muffler).  *(module `heavy_vehicles`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'truck_passby'` | truck_passby / jake_brake |
+| `rpm` | `1800.0` | crankshaft: 1800 on six cylinders = 90 Hz |
+| `rpm_end` | `-1.0` | jake_brake: slowing to this (-1 = steady) |
+| `speed` | `80.0` | truck_passby: km/h |
+| `load` | `0.7` | truck_passby: 0..1 |
+| `muffler` | `1` | jake_brake: 1 muffled, 0 straight stack |
+| `distance` | `7.5` | truck_passby: m |
+| `direction` | `'lr'` | truck_passby: lr / rl |
+| `pan` | `1` | truck_passby: 1 stereo, 0 mono |
+| `dur` | `5.0` | s |
+| `seed` | `0` | variation |
+
+### `tsunami`
+
+A tsunami by stage: retrait (the water drawn back, a low rush), vague (a wall of water, huge surf and rumble), debris (the flood carrying wreckage).  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `stage` | `'vague'` | retrait / vague / debris |
+| `dur` | `12.0` | s |
 | `seed` | `0` | variation |
 
 ### `turbo`
@@ -5167,10 +9697,33 @@ Turbocharger: the compressor whine rising as it spools, intake hiss, and the blo
 | param | default | meaning |
 |---|---|---|
 | `dur` | `2.5` | s |
-| `spool` | `90000.0` | peak shaft rpm, 30000..200000 (the pitch of the whine) |
+| `spool` | `90000.0` | peak shaft rpm, 30000..300000 (the pitch of the whine; 300000 = the air turbine of `dental_drill`, 5 kHz) |
 | `boost` | `0.7` | 0..1 how hard it is pushed: hiss and blow-off level |
 | `blowoff` | `1` | 1 = end on the blow-off valve's pshh |
 | `flutter` | `0.0` | 0..1 compressor surge chatter in the blow-off |
+| `seed` | `0` | variation |
+
+### `turbofan`
+
+Civil turbofan: fan tone at the blade rate, buzz-saw harmonics of the shaft once the tip is supersonic, a bypass-reduced jet.  *(module `aero`)*
+
+| param | default | meaning |
+|---|---|---|
+| `engine` | `'cfm56_7b'` | cfm56_7b/cfm56_5b |
+| `n1` | `1.0` | fan speed as a fraction of the table's |
+| `rpm` | `0.0` | fan rpm at n1 = 1 (0 = from the table) |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation: the blade-to-blade table |
+
+### `turntable`
+
+Record player: lecture (needle in the groove, ticking once a turn), demarrage (motor spins up), arret (spins down), pose (the stylus lands).  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `state` | `'lecture'` | lecture / demarrage / arret / pose |
+| `rpm` | `33.333333333333336` | platter rpm |
+| `dur` | `6.0` | s |
 | `seed` | `0` | variation |
 
 ### `twang`
@@ -5183,10 +9736,36 @@ Twang: 'band' = rubber band / slack string that starts sharp and sags; 'ruler' =
 | `freq` | `140.0` | Hz, settled pitch |
 | `dur` | `0.9` | seconds |
 | `amount` | `1.0` | 0..2: band = glide depth (4 semitones at 1), ruler = how hard it slaps the desk |
+| `slide` | `0.0` | ruler: -0.5..0.6 fraction of the free length pulled in over `dur` (> 0 shortens it: the pitch rises as 1/L^2) |
+
+### `two_stroke`
+
+Two-stroke engine: one firing per turn through piston-controlled ports and a tuned expansion chamber. Moped, chainsaw, dirt bike, outboard.  *(module `engines`)*
+
+| param | default | meaning |
+|---|---|---|
+| `rpm` | `7000.0` | crankshaft, or a curve: 7000 rpm = 116.7 Hz |
+| `cylinders` | `1` | 1..4, one chamber per bank |
+| `load` | `0.6` | 0 coasting .. 1 full throttle |
+| `bore` | `0.05` | m: sets the chamber's diameters |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
 
 ### `typewriter`
 
 Key press clack.  *(module `sfx`)*
+
+### `tyre_roll`
+
+Tyres rolling: tyre_road (Harmonoise bands + tread line), tyre_wet, tyre_gravel, tyre_dirt, tyre_sand, tyre_snow, tyre_mud (PhISEM grains at 40 v), tyre_cobble (v / 0.12 m), tyre_burnout, tyre_lockup (ABS), road_cruise_interior.  *(module `road`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'tyre_road'` | tyre_road / tyre_wet / tyre_gravel / tyre_dirt / tyre_sand / tyre_snow / tyre_mud / tyre_cobble / tyre_burnout / tyre_lockup / road_cruise_interior |
+| `speed` | `70.0` | km/h |
+| `tread` | `0.5` | tyre_road, tyre_wet: level of the tread line |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
 
 ### `tyre_squeal`
 
@@ -5197,6 +9776,7 @@ Tyres scrubbing past their grip limit (a drift, a hard brake, a getaway).  *(mod
 | `dur` | `1.5` | s |
 | `slip` | `0.8` | 0.2 chirp .. 1.5 full slide: pitch and harshness |
 | `wobble` | `0.5` | 0..1 unsteadiness of the slide |
+| `model` | `'band'` | band = noise through a moving band; brush = the contact's brush model: a tyre that grips (slip 0.05) is 30 times quieter than one that slides |
 | `seed` | `0` | variation |
 
 ### `ui_chime`
@@ -5209,6 +9789,16 @@ Notification chimes from physical bells: Risset bell (discovery), a telephone be
 | `pitch` | `1.0` | pitch ratio applied to the cue (0.5 = an octave down) |
 | `seed` | `0` | seed |
 
+### `ui_slide`
+
+Panel sliding in or out: a short whoosh that lands on a tick.  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `direction` | `'in'` | in (rising) / out (falling) |
+| `dur` | `0.18` | s |
+| `seed` | `0` | variation |
+
 ### `ui_tick`
 
 Physical interface cues (wooden tick, iron click, dull refusal, panel switch, page and book, latch and lid, felt knock): material sounds instead of beeps.  *(module `klang`)*
@@ -5217,6 +9807,15 @@ Physical interface cues (wooden tick, iron click, dull refusal, panel switch, pa
 |---|---|---|
 | `kind` | `'focus'` | focus (wood tick) / back (double tick) / activate (iron click) / refuse (dull thud) / toggle (panel switch) / page / save (book closes) / load (book opens) / dialog_open / dialog_close / hint (felt knock) |
 | `seed` | `0` | noise seed; the same seed always gives the same cue (a UI action must sound the same every time) |
+
+### `umbrella`
+
+An umbrella: ouvre (runner up the shaft, catch, the canopy snaps taut), ferme (catch, folding cloth), secoue (shaken dry).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `action` | `'ouvre'` | ouvre / ferme / secoue |
+| `seed` | `0` | variation |
 
 ### `underwater_ambience`
 
@@ -5227,6 +9826,44 @@ Underwater bed: muffled low rumble with slow swell and passing deep bubbles.  *(
 | `dur` | `6.0` | s |
 | `depth` | `5.0` | m, 0.5..100: deeper = darker and quieter bubbles |
 | `bubbles` | `4.0` | deep bubbles per second, 0..200 |
+| `surf` | `0.0` | 0..1 breaking surf heard underwater (20 Hz-5 kHz, peak near 850 Hz) |
+| `tide` | `0.0` | 0..1 tidal-flow band, 40-110 Hz |
+| `wind` | `0.0` | 0..1 wind-driven sea noise, 50 Hz-20 kHz, -17 dB/decade |
+| `ships` | `0.0` | 0..1 distant shipping, below 100 Hz with a blade-rate line |
+| `biophony` | `0.0` | 0..1 snapping shrimp crackle, 1.5-6 kHz |
+| `seed` | `0` | variation |
+
+### `vacuum`
+
+Vacuum cleaner: centrifugal fan (BPF = blades x rpm / 60, 4000 Hz at 12 blades and 20 000 rpm, with 8000 and 12 000), a broadband bed dominant near 600 Hz, suction hiss. clog: the note of a blocked hose, the motor racing.  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `rpm` | `20000.0` | rpm |
+| `blades` | `12` | count |
+| `clog` | `0.0` | 0 free .. 1 blocked nozzle |
+| `dur` | `3.0` | s |
+| `seed` | `0` | variation |
+
+### `vacuum_hose`
+
+A corrugated vacuum hose as an instrument: blown, or swung so that it sings at its pipe note.  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `length` | `1.8` | m |
+| `radius` | `0.016` | m |
+| `dur` | `2.0` | s |
+| `breath` | `0.7` | 0..1 |
+| `seed` | `0` | variation |
+
+### `vehicle_mech`
+
+Cabin mechanics: ceinture (webbing, retractor ratchet, buckle), frein_a_main (ratchet, then the button), boite (gate and detent), siege (motor on rails), vitre (12 V window motor, seal, stop).  *(module `road`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'ceinture'` | ceinture / frein_a_main / boite / siege / vitre |
 | `seed` | `0` | variation |
 
 ### `velcro`
@@ -5239,6 +9876,17 @@ Velcro peeled apart: a dense crackle of hooks letting go.  *(module `foley`)*
 | `speed` | `0.6` | 0..1 peel speed |
 | `seed` | `0` | variation |
 
+### `ventilation`
+
+Ventilation unit: motor, fan and duct: speed 22, motor ratio 20, duct delays 22 and 70 ms. shutdown winds it down through a 0.1 Hz lag.  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `22.0` | main speed, turns per second |
+| `shutdown` | `-1.0` | s when the unit is switched off (-1 = never) |
+| `dur` | `4.0` | s |
+| `seed` | `0` | variation |
+
 ### `vinyl`
 
 Vinyl record surface: crackle, pops and a little hiss and rumble (the bed under lo-fi music; loop it with "loop": true).  *(module `sfx`)*
@@ -5248,6 +9896,50 @@ Vinyl record surface: crackle, pops and a little hiss and rumble (the bed under 
 | `dur` | `4.0` | s |
 | `crackle` | `14.0` | clicks per second |
 | `hiss` | `0.3` | 0..1 surface noise |
+| `seed` | `0` | variation |
+| `wear` | `0.0` | 0..1 worn record: a narrow band of noise near 5 kHz, and the crackle repeats every 1.6 s (one turn) |
+
+### `volcano`
+
+A volcano by stage: tremor (below 20 Hz, a rumble over it), eruption (blast, roaring column), retombees (ash and stones falling), complet (the three in order).  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `stage` | `'complet'` | tremor / eruption / retombees / complet |
+| `dur` | `16.0` | s, whatever the stage |
+| `seed` | `0` | variation |
+
+### `vomit`
+
+Vomit: two retching efforts (`strain`), then voice over a splash and gurgles.  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `size` | `0.5` | 0..1 how much comes out |
+| `seed` | `0` | variation |
+
+### `wagon`
+
+Horse and wagon: hooves at a trot, iron-shod wooden wheels on the road, a creak per turn of the wheel.  *(module `heavy_vehicles`)*
+
+| param | default | meaning |
+|---|---|---|
+| `speed` | `3.0` | m/s: scales the trot and the wheels |
+| `dur` | `5.0` | s |
+| `seed` | `0` | variation |
+
+### `wah_pipe`
+
+Long pipe blown by a fan through a rubber flap that swells: the pressure ramp brings in the fundamental, then the partials one by one; a half-stopped end beats its open and stopped series.  *(module `tubes`)*
+
+| param | default | meaning |
+|---|---|---|
+| `length_m` | `6.1` | pipe length, m (0.5..12) |
+| `diameter` | `0.254` | pipe diameter, m |
+| `dur` | `4.0` | s |
+| `ramp` | `2.5` | s for the flap pressure to rise to full |
+| `pressure` | `1.0` | 0..1 final blowing pressure: how many partials sound |
+| `stop` | `0.0` | 0 open end .. 1 stopped end; in between both series sound and beat |
 | `seed` | `0` | variation |
 
 ### `warp`
@@ -5259,6 +9951,18 @@ Warp / hyperspace jump: engines winding up faster and faster, then the jump.  *(
 | `dur` | `3.0` | s |
 | `start` | `40.0` | Hz |
 | `end` | `1400.0` | Hz at the jump |
+| `seed` | `0` | variation |
+
+### `water_whistle`
+
+Bird whistle dipped in water: an edge tone whose pitch warbles with the immersion, and bubbles. After the 1972 Mexico fountain ("similar to nightingale song").  *(module `designed`)*
+
+| param | default | meaning |
+|---|---|---|
+| `length` | `0.04` | m of pipe |
+| `warble` | `9.0` | Hz of the bobbing |
+| `bubble` | `0.4` | level of the bubbles |
+| `dur` | `3.0` | s |
 | `seed` | `0` | variation |
 
 ### `waterfall`
@@ -5283,6 +9987,16 @@ Planted feet shifting under load: a scuff / shuffle on any granular ground (no f
 | `weight` | `1.0` | load on the feet |
 | `seed` | `0` | seed |
 
+### `whale`
+
+Whales: bleue (Southern Ocean blue whale: 27 Hz for 9 s, down to 19 Hz, then 18 Hz, 18 s, mostly felt), bosse (humpback song units, 40-4000 Hz), dauphin (FM whistles).  *(module `fauna`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'bosse'` | bleue / bosse / dauphin |
+| `wet` | `0.3` | 0..1 share through the underwater effect |
+| `seed` | `0` | variation |
+
 ### `whip`
 
 Whip crack: the thong accelerates past the speed of sound and its tip makes a small sonic boom.  *(module `foley`)*
@@ -5292,6 +10006,16 @@ Whip crack: the thong accelerates past the speed of sound and its tip makes a sm
 | `dur` | `0.35` | s of swing before the crack |
 | `size` | `1.0` | whip length scale: longer N-wave, lower whoosh |
 | `echo` | `0.2` | 0..1 outdoor echoes |
+| `seed` | `0` | variation |
+
+### `whisper_bed`
+
+Bed of whispers: several unvoiced speakers, each their own phrases, tract and place.  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `voices` | `6` | speakers, 1..16 |
+| `dur` | `4.0` | s |
 | `seed` | `0` | variation |
 
 ### `whistle_human`
@@ -5317,6 +10041,15 @@ Air whoosh / swipe (filtered noise sweep).  *(module `sfx`)*
 | `high` | `4000` | Hz |
 | `direction` | `'up'` | up/down |
 
+### `wild_animal`
+
+Wild animals: ours (bear growl), cerf (stag bell), renard (fox scream), loup (wolf howl), hyene (rising whoops).  *(module `fauna`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'ours'` | ours / cerf / renard / loup / hyene |
+| `seed` | `0` | variation |
+
 ### `wind`
 
 Procedural causal wind field using the physical ambience engine.  *(module `sfx`)*
@@ -5325,6 +10058,25 @@ Procedural causal wind field using the physical ambience engine.  *(module `sfx`
 |---|---|---|
 | `dur` | `3.0` | s |
 | `scale` | `1.0` | strength |
+| `seed` | `0` | variation |
+
+### `wind_kind`
+
+Wind by character: interieur (heard through a doorway, muffled), sifflement (a gap and wires singing), tempete (canyon roar and howl), feuillage (through leaves).  *(module `nature`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'interieur'` | interieur / sifflement / tempete / feuillage |
+| `dur` | `6.0` | s |
+| `seed` | `0` | variation |
+
+### `window`
+
+Windows and blinds: battant (casement: latch, frame), coulissant (sash sliding, stop), store_lames (slatted blind rattling down), store_toile (roller blind, cloth, spring).  *(module `household`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'battant'` | battant / coulissant / store_lames / store_toile |
 | `seed` | `0` | variation |
 
 ### `wings`
@@ -5353,6 +10105,25 @@ Knock on a wooden panel / soundboard (orthotropic plate, stiff along the grain).
 | `vel` | `0.8` | strike strength 0..1 (harder = shorter contact, brighter) |
 | `bright` | `0.5` | 0..1 output lowpass 1.5 kHz .. 12 kHz |
 | `quality` | `1.0` | 0.25..3 internal sample rate / grid size |
+
+### `yawn`
+
+Yawn: long inward pull, a held voiced vowel rising then falling, breath out.  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `size` | `1.0` | 0.7..1.5 body scale |
+| `seed` | `0` | variation |
+
+### `yodel`
+
+Yodel: leaps across the chest-falsetto break, chest on 'oh', falsetto on 'ee', with the short drop of the break between them.  *(module `human`)*
+
+| param | default | meaning |
+|---|---|---|
+| `note` | `0.28` | s per note |
+| `transpose` | `0` | semitones |
+| `seed` | `0` | variation |
 
 ### `zap`
 
@@ -5409,20 +10180,73 @@ The ZzFX 1.3.2 sound function: paste a ZzFX array as `p`, or use named slots / a
 | `tremolo` | `None` | tremolo depth 0..1 (period = repeat_time); default 0 |
 | `filter` | `None` | Hz: >0 high-pass, <0 low-pass (actual corner about 2x); default 0 |
 
-## Effects (98)
+## Effects (159)
 
 Usage: `"fx": [{"type": "<name>", ...params}]  on a layer, a group or the whole spec`
 
-Index by module: **chiptune2**: `dpcm`; **contact**: `resonate`, `cavity`; **cyber**: `packet_loss`, `beat_repeat`, `paulstretch`, `waveset`, `formant_shift`, `cyber_voice`, `texturize`; **dsp**: `convolve`, `fir_eq`, `steep_lowpass`, `steep_highpass`, `steep_bandpass`, `overdrive`, `wavefold`, `mulaw`, `dither`, `codec`, `lofi`, `smooth`, `tape`, `wall`, `dc_block`; **fdstring**: `spring_reverb`; **friction**: `sheet_radiator`, `cone_radiator`, `sympathetic`; **fx**: `reverb`, `delay`, `vibrato`, `tremolo`, `distortion`, `bitcrush`, `lowpass`, `highpass`, `bandpass`, `notch`, `eq`, `lowshelf`, `highshelf`, `sweep`, `muffle`, `telephone`, `underwater`, `ringmod`, `compressor`, `limiter`, `gain`, `normalize`, `pan`, `autopan`, `width`, `fade`, `loop`, `reverse`, `speed`, `pitch`, `trim`, `stutter`, `mono`; **plates**: `plate_reverb`, `room2d`; **reverbs**: `chorus`, `flanger`, `phaser`, `jcrev`, `satrev`, `fdn_reverb`, `velvet_reverb`, `early_reflections`, `room`, `zita`, `distance`, `doppler`, `occlude`, `leslie`, `tape_delay`, `shimmer`, `gated_reverb`, `reverse_reverb`; **spectral**: `timestretch`, `pitch_shift`, `harmonizer`, `vocoder`, `cross_synth`, `spectral_gate`, `sines_only`, `noise_only`, `freeze`, `spectral_blur`, `freqshift`, `robotize`, `whisperize`, `spectral_tilt`; **tubes**: `formant_tract`, `tube`
+Index by module: **acoustic**: `body_morph`; **chiptune2**: `dpcm`; **contact**: `resonate`, `cavity`; **cyber**: `car_cabin`, `packet_loss`, `beat_repeat`, `paulstretch`, `waveset`, `formant_shift`, `cyber_voice`, `texturize`, `adaptive_fm`, `grain_delay`; **dsp**: `convolve`, `fir_eq`, `steep_lowpass`, `steep_highpass`, `steep_bandpass`, `overdrive`, `wavefold`, `serge_fold`, `multiband`, `deesser`, `exciter`, `tape_stop`, `crunch`, `chebyshev`, `diode_clipper`, `lockhart_fold`, `delta_sigma`, `mulaw`, `dither`, `codec`, `lofi`, `smooth`, `tape`, `wall`, `dc_block`; **fdstring**: `spring_reverb`; **friction**: `sheet_radiator`, `cone_radiator`, `force_pitch`, `sympathetic`; **fx**: `reverb`, `shaker_comb`, `delay`, `vibrato`, `tremolo`, `distortion`, `bitcrush`, `lowpass`, `ladder`, `antisat_svf`, `random_allpass`, `highpass`, `bandpass`, `notch`, `eq`, `lowshelf`, `highshelf`, `sweep`, `wah`, `octaver`, `radio`, `muffle`, `telephone`, `underwater`, `ringmod`, `compressor`, `dyno`, `expander`, `duck`, `gate`, `limiter`, `gain`, `normalize`, `pan`, `autopan`, `balance`, `exp_delay`, `width`, `fade`, `loop`, `reverse`, `speed`, `pitch`, `trim`, `stutter`, `mono`, `kasfilter`, `phase_bash`; **ordnance**: `earplug`; **plates**: `plate_reverb`, `room2d`; **reverbs**: `chorus`, `flanger`, `phaser`, `nrev`, `prcrev`, `jcrev`, `satrev`, `fdn_reverb`, `lucier`, `velvet_reverb`, `costello`, `early_reflections`, `room`, `coupled_room`, `zita`, `distance`, `doppler`, `directivity`, `occlude`, `leslie`, `decorrelate`, `tape_delay`, `shimmer`, `gated_reverb`, `reverse_reverb`, `dattorro`, `gverb`, `binaural`, `jpverb`, `greyhole`, `room_feedback`, `reflection`, `huggins`, `bell_swing`, `orchestra_seat`, `pv_reverb`; **road**: `air_speaker`; **spectral**: `timestretch`, `hpss`, `autotune`, `gender`, `pitch_shift`, `harmonizer`, `vocoder`, `cross_synth`, `spectral_gate`, `sines_only`, `noise_only`, `freeze`, `spectral_blur`, `mutate`, `freqshift`, `robotize`, `whisperize`, `spectral_tilt`, `spectacle`, `granular`, `granulate`, `fog`, `tf_pad`; **synths**: `va_ladder`; **tubes**: `formant_tract`, `tube`, `tube_mesh`
+
+### `adaptive_fm`
+
+Adaptive FM: the sound reads itself through a delay swinging at fm = freq / ratio, which frequency-modulates everything in it (bright, metallic, the timbre of FM on a real input).  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `freq` | `220.0` | Hz the carrier the depth is set for (the note of the input) |
+| `index` | `2.0` | modulation index 0..5 |
+| `ratio` | `1.0` | c:m ratio 0.1..5 (an integer = harmonic) |
+| `mix` | `1.0` | wet 0..1 |
+
+### `air_speaker`
+
+Compressed-air loudspeaker (Pathé, Auxetophone): the signal opens a valve on an air supply, the flow puffs into a horn. Loud, thin, and the valve shuts on the troughs when driven hard.  *(module `road`)*
+
+| param | default | meaning |
+|---|---|---|
+| `depth` | `1.2` | valve swing: under 1 clean, over 1 the valve shuts on the troughs |
+| `horn` | `300.0` | Hz, horn cut-off |
+| `hiss` | `0.05` | flow noise, follows the opening |
+| `seed` | `0` | variation |
+
+### `antisat_svf`
+
+State-variable filter with a sinh antisaturator on its damping: past res 0.5 the damping turns negative and it self-oscillates at a level held by the antisaturator.  *(module `fx`)*
+
+| param | default | meaning |
+|---|---|---|
+| `cutoff` | `1000` | Hz |
+| `res` | `0.3` | 0..1 (0.5 = undamped, above: self-oscillation) |
+| `kind` | `'lowpass'` | lowpass/bandpass/highpass |
+| `a` | `1.0` | antisaturator weight |
+| `b` | `1.0` | antisaturator knee |
 
 ### `autopan`
 
-Moving stereo position.  *(module `fx`)*
+Moving stereo position; `rear` walks the sound around the head, duller behind.  *(module `fx`)*
 
 | param | default | meaning |
 |---|---|---|
 | `rate` | `1.0` | Hz |
 | `depth` | `1.0` | 0..1 |
+| `itd` | `0.0` | ms the far ear hears late at full position, up to 0.6 |
+| `rear` | `False` | low-pass that closes behind the listener |
+
+### `autotune`
+
+Pull the pitch to the nearest semitone (sines + noise analysis, partials moved frame by frame).  *(module `spectral`)*
+
+| param | default | meaning |
+|---|---|---|
+| `amount` | `1.0` | 0 = untouched .. 1 = on the semitone |
+| `thresh` | `-50.0` | peak threshold in dB below each frame's loudest partial |
+
+### `balance`
+
+Pan a stereo sound without collapsing it: the channel on the losing side folds into the other.  *(module `fx`)*
+
+| param | default | meaning |
+|---|---|---|
+| `pos` | `0.0` | -1 left .. 1 right; 0 leaves it untouched |
 
 ### `bandpass`
 
@@ -5447,6 +10271,28 @@ Buffer repeat: now and then a slice of the sound is caught and played again in p
 | `reverse` | `0.2` | probability that a caught slice plays backwards |
 | `seed` | `0` | which slices |
 
+### `bell_swing`
+
+A church bell swinging in its tower: the mouth sweeps toward you and away, so each stroke comes with a Doppler sway and a brighter, louder sound when the mouth faces you.  *(module `reverbs`)*
+
+| param | default | meaning |
+|---|---|---|
+| `swing` | `80.0` | degrees each side of rest (< 90) |
+| `period` | `2.0` | seconds per full swing |
+| `radius` | `0.7` | metres from the pivot to the mouth centre |
+| `distance` | `25.0` | metres to the listener |
+| `height` | `20.0` | metres the tower rises above the listener |
+
+### `binaural`
+
+Headphone position: Brown & Duda's structural HRTF (head shadow, interaural delay, shoulder, pinna echoes). Stereo.  *(module `reverbs`)*
+
+| param | default | meaning |
+|---|---|---|
+| `azimuth` | `0.0` | degrees, -90 left, 0 ahead, 90 right, 180 behind |
+| `elevation` | `0.0` | degrees, 0 level, 90 above |
+| `pinna` | `'PB'` | PB/RD: whose ears (Brown & Duda's two subjects) |
+
 ### `bitcrush`
 
 Lo-fi bit depth and sample rate reduction.  *(module `fx`)*
@@ -5455,6 +10301,25 @@ Lo-fi bit depth and sample rate reduction.  *(module `fx`)*
 |---|---|---|
 | `bits` | `8` | 1..16 |
 | `rate` | `11025` | effective sample rate Hz |
+| `bits_end` | `None` | bit depth reached at the end: a linear sweep, rounded to whole bits (jsfxr's bit crush sweep) |
+
+### `body_morph`
+
+Guitar body morph: the input is filtered by a warped all-pole model of a guitar body, interpolated between two bodies (seed / size) through their reflection coefficients, so every step is a stable, real body.  *(module `acoustic`)*
+
+| param | default | meaning |
+|---|---|---|
+| `a` | `0` | first body seed (0 = nominal) |
+| `b` | `1` | second body seed |
+| `morph` | `0.5` | 0 = body a .. 1 = body b |
+| `size_a` | `0.5` | first body size 0..1 |
+| `size_b` | `0.5` | second body size 0..1 |
+| `steel` | `False` | steel-string body |
+| `mix` | `1.0` | wet amount 0..1 |
+
+### `car_cabin`
+
+Heard from inside a car: body panels low-pass the outside sound and the cabin booms at 85 Hz.  *(module `cyber`)*
 
 ### `cavity`
 
@@ -5469,6 +10334,15 @@ Hollow box / sphere resonance: the sound of being inside a small enclosure (Sabi
 | `seed` | `0` | which modes are excited |
 | `tail` | `0.5` | s of ring-out appended |
 
+### `chebyshev`
+
+Waveshaping by Chebyshev polynomials: a sine at full level comes out with exactly the harmonics you list; quieter input gets fewer of them.  *(module `dsp`)*
+
+| param | default | meaning |
+|---|---|---|
+| `harmonics` | `'1:1,2:0.3,3:0.2'` | harmonic:level, ... |
+| `oversample` | `4` | 1/2/4/8 |
+
 ### `chorus`
 
 Thickening chorus: several copies on slowly swept, interpolated delays, spread across the stereo field (stereo output).  *(module `reverbs`)*
@@ -5482,7 +10356,10 @@ Thickening chorus: several copies on slowly swept, interpolated delays, spread a
 | `delay` | `15.0` | delay of the first voice in ms |
 | `spacing` | `5.0` | extra delay per further voice in ms |
 | `spread` | `0.5` | how far the voices are panned apart 0..1 |
-| `feedback` | `0.0` | regeneration 0..0.7 (towards a flanger) |
+| `feedback` | `0.0` | regeneration -0.7..0.7 (towards a flanger) |
+| `lfo` | `'sine'` | sine / noise (low-passed noise at `rate` Hz: less regular, no audible cycle) |
+| `preset` | `''` | white = Dattorro's white chorus: blend 0.7, feedforward 1, feedback -0.7, noise LFO (an allpass when the delay does not move, so it never colours) |
+| `seed` | `0` | noise LFO seed |
 
 ### `codec`
 
@@ -5490,12 +10367,12 @@ Speech/streaming codec artefacts.  *(module `dsp`)*
 
 | param | default | meaning |
 |---|---|---|
-| `kind` | `'adpcm'` | adpcm (4-bit IMA) / cvsd / delta / gsm (8 kHz LPC, GSM-like) / dct (block transform, streaming artefact) |
+| `kind` | `'adpcm'` | adpcm (4-bit IMA) / cvsd / cvsd_irig (military voice: 16 kbps, 32 at quality > 0.5, its band limits) / delta / gsm (8 kHz LPC, GSM-like) / dct (block transform, streaming artefact) |
 | `quality` | `0.5` | 0..1: adpcm rate 6-32 kHz; cvsd clock 12-64 kHz; delta clock 48-192 kHz; gsm pulse bits 2-4; dct coarse-fine |
 
 ### `compressor`
 
-Dynamics compressor (evens out level, adds punch): feed-forward, soft knee, smooth peak detector on the gain.  *(module `fx`)*
+Dynamics compressor (evens out level, adds punch): feed-forward, soft knee, smooth peak detector on the gain; side-chain and parallel mix.  *(module `fx`)*
 
 | param | default | meaning |
 |---|---|---|
@@ -5503,8 +10380,12 @@ Dynamics compressor (evens out level, adds punch): feed-forward, soft knee, smoo
 | `ratio` | `4.0` | n:1 |
 | `attack` | `0.005` | s |
 | `release` | `0.1` | s |
-| `makeup` | `0.0` | dB gain after (auto if 0) |
+| `makeup` | `0.0` | dB gain after (auto if 0 and auto_makeup) |
 | `knee` | `6.0` | dB width of the soft knee (0 = hard knee) |
+| `mix` | `1.0` | compressed amount against the dry sound 0..1: parallel compression |
+| `auto_makeup` | `True` | false: makeup is exactly what you set, 0 included |
+| `key` | `None` | side-chain: the level comes from this WAV file instead of the sound itself (ducking) |
+| `preset` | `''` | mastering / invisible / parallel: sets threshold, ratio, attack, release, auto_makeup and mix |
 
 ### `cone_radiator`
 
@@ -5531,6 +10412,32 @@ Convolution with an impulse response: a wav file or a generated space/body (tail
 | `mix` | `None` | wet amount 0..1 (default 0.3 for spaces, 1.0 for cabinet/tube/car/phone-speaker and files) |
 | `predelay` | `0.0` | seconds before the wet signal starts |
 | `seed` | `0` | int: which random room |
+| `loop` | `False` | fold the tail back onto the start: same length as the input, loops seamlessly |
+
+### `costello`
+
+Sean Costello's reverb (Soundpipe revsc, Csound reverbsc): 8 slowly wandering delay lines at one scattering junction. Lush, no metallic ring. Stereo output.  *(module `reverbs`)*
+
+| param | default | meaning |
+|---|---|---|
+| `mix` | `0.3` | wet amount 0..1 |
+| `feedback` | `0.97` | decay 0..0.999 (0.97 = about 8 s, 0.8 = about 1.5 s) |
+| `lpfreq` | `10000.0` | Hz of the low-pass in each line |
+| `tail` | `None` | seconds of tail appended (auto = from feedback, max 12) |
+
+### `coupled_room`
+
+Two rooms joined by an opening, heard from the deader one (side chapel off a nave, cave gallery, stage behind a door): a quick first decay, then the livelier room's long tail through the opening. Stereo output.  *(module `reverbs`)*
+
+| param | default | meaning |
+|---|---|---|
+| `mix` | `0.5` | wet amount 0..1 |
+| `t60_near` | `1.0` | decay time of the room you are in, seconds |
+| `t60_far` | `5.0` | decay time of the other room, seconds (longer than t60_near) |
+| `v_near` | `500.0` | volume of the room you are in, m3 |
+| `v_far` | `5000.0` | volume of the other room, m3 |
+| `aperture` | `10.0` | area of the opening between them, m2 (the bigger, the louder the tail) |
+| `seed` | `0` | variation of the tails |
 
 ### `cross_synth`
 
@@ -5543,6 +10450,17 @@ Cross-synthesis: put this sound's moving spectral envelope (its 'vowels') on ano
 | `smooth` | `2.0` | envelope detail: cepstral cut-off in ms, below the pitch period of both sounds |
 | `mix` | `1.0` | wet amount |
 | `seed` | `0` | noise seed when no carrier file is given |
+| `method` | `'envelope'` | envelope (cepstral) / stamp (bin by bin: this sound's magnitudes on the carrier, finer and noisier) |
+| `squelch` | `20.0` | stamp: how far a quiet carrier bin may be raised; low = its noise stays down |
+| `amount` | `1.0` | stamp: 0 = carrier only .. 1 = full stamp |
+
+### `crunch`
+
+Dead zone: only the crests above the threshold survive; on noise, a sparse crackle (fire, Geiger, dust).  *(module `dsp`)*
+
+| param | default | meaning |
+|---|---|---|
+| `threshold` | `0.315` | 0..1 |
 
 ### `cyber_voice`
 
@@ -5560,6 +10478,19 @@ Synthetic / augmented voice in one step: formant shift, vocoder, ring modulation
 | `radio` | `1.0` | 0 full band .. 1 the 300-3400 Hz band of a comms channel |
 | `seed` | `0` | variation |
 
+### `dattorro`
+
+Dattorro's plate reverb: the classic figure-eight tank of the Lexicon 224 era, dense and smooth at once, stereo.  *(module `reverbs`)*
+
+| param | default | meaning |
+|---|---|---|
+| `mix` | `0.3` | wet amount 0..1 |
+| `decay` | `0.5` | tank gain 0..0.95: longer tail |
+| `damping` | `0.0005` | 0..0.9 high-frequency loss in the tank |
+| `bandwidth` | `0.9995` | 0.05..1 input brightness |
+| `predelay` | `0.0` | s |
+| `tail` | `None` | s of tail appended (auto = decay time) |
+
 ### `dc_block`
 
 Remove DC offset (one-pole/one-zero DC blocker).  *(module `dsp`)*
@@ -5567,6 +10498,31 @@ Remove DC offset (one-pole/one-zero DC blocker).  *(module `dsp`)*
 | param | default | meaning |
 |---|---|---|
 | `cutoff` | `20.0` | Hz |
+
+### `decorrelate`
+
+Mono into wide stereo with no delay or comb you can hear: each channel gets its own short allpass-like filter (Kendall), or a constant phase offset.  *(module `reverbs`)*
+
+| param | default | meaning |
+|---|---|---|
+| `mode` | `'fir'` | fir (random phase, the two channels unrelated) / phase (right channel turned by `angle`) / velvet (sparse 30 ms exponential velvet noise, one per channel) |
+| `taps` | `512` | fir length in samples, under about 20 ms |
+| `angle` | `90.0` | mode phase: degrees; correlation = cos(angle) |
+| `seed` | `0` | fir: first seed tried |
+| `mix` | `1.0` | against the mono input |
+
+### `deesser`
+
+De-esser: when the sibilant band gets loud against the rest of the sound, that band alone is turned down (voices, `say`).  *(module `dsp`)*
+
+| param | default | meaning |
+|---|---|---|
+| `freq` | `6000.0` | centre of the sibilant band, Hz |
+| `threshold` | `-6.0` | dB of band level against the whole sound |
+| `ratio` | `4.0` | n:1 |
+| `q` | `1.5` | band width |
+| `attack` | `0.001` | s |
+| `release` | `0.05` | s |
 
 ### `delay`
 
@@ -5581,6 +10537,37 @@ Echo / feedback delay.  *(module `fx`)*
 | `damp` | `0.3` | lowpass in feedback loop 0..1 |
 | `tail` | `None` | seconds of tail to append (auto if omitted) |
 
+### `delta_sigma`
+
+One-bit DAC / PDM: the sound through a sigma-delta stream at a low oversampling ratio, its noise left in (lo-fi hiss that rises with frequency).  *(module `dsp`)*
+
+| param | default | meaning |
+|---|---|---|
+| `order` | `1` | 1/2 |
+| `osr` | `16` | oversampling ratio 4..128 (lower = dirtier) |
+
+### `diode_clipper`
+
+Diode clipper as a circuit: unlike `overdrive`, how much it clips depends on frequency (the RC rolls the treble off before the diodes).  *(module `dsp`)*
+
+| param | default | meaning |
+|---|---|---|
+| `drive` | `4.0` | full scale = drive volts into the circuit |
+| `mix` | `1.0` | wet 0..1 |
+
+### `directivity`
+
+What a player's instrument sounds like from off its axis: a brass bell seen from the side or behind loses its highs; a flute's two openings cancel harmonics by direction.  *(module `reverbs`)*
+
+| param | default | meaning |
+|---|---|---|
+| `instrument` | `'trumpet'` | trumpet / trombone / french_horn / flute |
+| `angle` | `180.0` | degrees: bell axis for brass (0 = aimed at you, 180 = behind); from the normal to the flute's axis (0 = in front of the player, 90 = along the tube) |
+| `f0` | `440.0` | flute only: the note in Hz |
+| `wall` | `False` | true = a wall right behind the player: +6 dB in the bass, up to +15 dB at 1.5-2 kHz for a horn whose bell faces it |
+| `podium` | `False` | true = the player stands on a wooden podium: +3 dB around 50 Hz |
+| `split` | `False` | true = the noisy part of the sound (breath, attack) has a lobe twice as wide as the tones, never more than 10 dB down |
+
 ### `distance`
 
 Put a sound some metres away: 1/r level drop, air absorption that dulls it with distance and humidity, and optionally more reverberation relative to the direct sound.  *(module `reverbs`)*
@@ -5591,7 +10578,7 @@ Put a sound some metres away: 1/r level drop, air absorption that dulls it with 
 | `air` | `True` | true = air absorption low-pass |
 | `humidity` | `50` | relative humidity % (10..100; drier air absorbs more highs) |
 | `temperature` | `20.0` | air temperature, C (-20..50): sets the absorption and the speed of sound |
-| `ground` | `'none'` | reflection off the ground between them: none / grass (flow resistivity 300 cgs) / hard (rigid) / a number = flow resistivity in cgs units; over grass the low end gains 6 dB and a dip opens at 300-800 Hz |
+| `ground` | `'none'` | reflection off the ground between them: none / grass (flow resistivity 300 cgs) / snow (fresh, 10 cgs) / old_snow (settled, 30 cgs) / forest (50) / dirt (550) / gravel (53) / packed_earth (6000) / asphalt (20000) / sand (253) / sharp_sand (906) / dry_loam (370) / wet_loam (218) / clay (106) / rolled_clay (168) / silt (110) / compacted_silt (1045) / hard (rigid) / a number = flow resistivity in cgs units; over grass the low end gains 6 dB and a dip opens at 300-800 Hz |
 | `source_height` | `1.5` | metres, for `ground` |
 | `listener_height` | `1.5` | metres, for `ground` |
 | `reverb` | `0.0` | reverb send 0..1: reverberant level stays constant while the direct sound falls with distance (stereo out when > 0) |
@@ -5599,6 +10586,18 @@ Put a sound some metres away: 1/r level drop, air absorption that dulls it with 
 | `ref` | `1.0` | reference distance in metres where gain = 1 (closer than this the gain is capped at +6 dB) |
 | `line_source` | `False` | true = line source (road, river): 1/sqrt(r), -3 dB per doubling |
 | `delay` | `False` | true = prepend the travel time (r - ref) / c, c = 343 m/s at 20 C |
+| `source_radius` | `None` | radius in metres of a piston source (loudspeaker, horn or muzzle mouth), with `angle`: off axis it loses its highs |
+| `angle` | `0.0` | degrees off the axis of that source, 0 = aimed at the listener, 90 = side on |
+| `pipe` | `False` | true = that source is the open end of a pipe (exhaust, horn bell, muzzle, mouth): it also radiates sideways and behind, the highs still beam forward |
+| `wall_distance` | `None` | metres from the source to a wall behind it: bass boost up to +3 dB and a dip above |
+| `scatter_mfp` | `None` | metres between obstacles along the path (forest, crowded hall): adds exp(-r / rs) in energy |
+| `flat_height` | `None` | height in metres of a flat room (open-plan office, car park) replacing 1/r spreading |
+| `flat_alpha` | `0.2` | mean absorption 0.05..0.95 of its floor and ceiling |
+| `turbulence` | `0.0` | m/s of turbulent air drifting across the path: scintillation, level and arrival time wander, more in the highs and further away (0 = still air) |
+| `gradient` | `0.0` | temperature gradient C/km: negative (day, -6 normal) bends sound up and opens a shadow zone far away, positive (night inversion) bends it down and carries it further |
+| `rolling` | `False` | true = rolling terrain: the ground dip is averaged over source heights +-2 m (softer, no deep notch) |
+| `across_water` | `False` | true = the source is under water (or the listener is): -29.5 dB through the surface |
+| `seed` | `0` | variation of the turbulence |
 
 ### `distortion`
 
@@ -5609,6 +10608,7 @@ Waveshaping overdrive/fuzz.  *(module `fx`)*
 | `drive` | `4.0` | 1..50 |
 | `mix` | `1.0` | wet |
 | `tone` | `4000` | post lowpass Hz |
+| `aa` | `'adaa1'` | adaa1 / adaa2: antiderivative anti-aliasing order (2 aliases less, one sample of delay) |
 
 ### `dither`
 
@@ -5617,7 +10617,7 @@ Reduce bit depth with dither (and optional noise shaping) instead of bare roundi
 | param | default | meaning |
 |---|---|---|
 | `bits` | `8` | 1..24 |
-| `shape` | `'tpdf'` | none / tpdf / gauss (sd 2/3 LSB) / shaped (tpdf + first-order noise shaping) |
+| `shape` | `'tpdf'` | none / tpdf / gauss (sd 2/3 LSB) / shaped (tpdf + first-order noise shaping) / fweighted / lipshitz (psychoacoustic shaping) |
 | `seed` | `0` | int |
 
 ### `doppler`
@@ -5636,6 +10636,16 @@ Fly-by: the sound passes the listener on a straight line, with the true Doppler 
 | `ref` | `None` | distance in metres where gain = 1 (default = `closest`, so the pass is at full level) |
 | `ground` | `0.0` | 0..1 strength of the reflection off the ground: a comb that sweeps as the source passes (0.35 = asphalt) |
 | `height` | `1.8` | source height + listener height in metres, for the ground path |
+| `c` | `343.2` | speed of sound in m/s (1500 = under water) |
+| `path` | `None` | any trajectory instead of the straight pass: rows [t, x, y, z] in seconds and metres, listener at the origin, x right, y ahead, z up (accelerate, climb, circle); speed, closest, pass_at and direction are then ignored |
+| `surface` | `None` | real ground under the path instead of the `ground` comb: grass / asphalt / gravel ... / flow resistivity in cgs (same list as `distance`); dips that glide as it passes |
+| `reverb` | `0.0` | reverb send 0..1 (Chowning): the reverberation falls more slowly than the direct sound and, far away, comes from the source's side |
+| `reverb_time` | `1.5` | decay time of that reverb, seconds |
+| `shadow` | `False` | true = head shadow: the far ear loses its highs as the source goes off to one side |
+| `horn` | `'none'` | tyre horn directivity: none / low (wheel source: -2.5 dB beside it to +1.5 dB ahead and behind, 800-6300 Hz) / truck (high source, full band) |
+| `turbulence` | `False` | true = scintillation through turbulent air: level and arrival time wander, faster while the source crosses the line of sight, deeper far away |
+| `law` | `'sincos'` | pan law: sincos (constant power) / tangent (Chowning's: the image stays full in the middle) |
+| `seed` | `0` | variation of the turbulence |
 
 ### `dpcm`
 
@@ -5647,6 +10657,32 @@ NES delta-modulation channel: the sound as 1-bit delta samples at one of the 2A0
 | `drive` | `1.0` | level into the 7-bit counter: above 1 the slope limit is hit sooner (grittier), below 1 it is quieter and noisier |
 | `mix` | `1.0` | 0..1 |
 
+### `duck`
+
+Duck this sound under another one (music under sfx): side-chain gain, ChucK's Dyno duck preset.  *(module `fx`)*
+
+| param | default | meaning |
+|---|---|---|
+| `key` | `''` | WAV file that pushes this sound down |
+| `thresh` | `0.1` | level of the key where ducking starts, linear |
+| `slope` | `0.5` | slope above it |
+| `attack` | `0.01` | s |
+| `release` | `1.0` | s |
+
+### `dyno`
+
+Dynamics by a slope above and below one threshold (ChucK's Dyno): limit | compress | gate | expand | duck.  *(module `fx`)*
+
+| param | default | meaning |
+|---|---|---|
+| `preset` | `'compress'` | limit/compress/gate/expand/duck |
+| `above` | `None` | slope above the threshold |
+| `below` | `None` | slope below it |
+| `thresh` | `None` | threshold, linear |
+| `attack` | `None` | s |
+| `release` | `None` | s |
+| `key` | `None` | WAV file driving the gain (needed by duck) |
+
 ### `early_reflections`
 
 Early reflections of a box room from an image-source model: the first echoes off walls, floor and ceiling (size, shape and materials of the room) without a reverb tail.  *(module `reverbs`)*
@@ -5657,15 +10693,23 @@ Early reflections of a box room from an image-source model: the first echoes off
 | `order` | `3` | highest reflection order 1..4 |
 | `stereo` | `True` | true = stereo output (reflections arrive from their directions) |
 | `humidity` | `50` | relative humidity % (40..70) for air absorption |
-| `preset` | `'hall'` | closet / studio / bedroom / bathroom / hall / church / cave / forest / street / canyon |
+| `preset` | `'hall'` | closet / practice_room / studio / bedroom / bathroom / orchestra_studio / opera / hall / concert_hall / church / cave / forest / street / canyon / arena / amphitheater / priory |
 | `lx` | `None` | room width in metres (overrides the preset) |
 | `ly` | `None` | room length in metres (the direction you look in) |
 | `lz` | `None` | room height in metres |
-| `walls` | `None` | wall material: carpet concrete marble wood brick glass plaster fabric metal people water tile rock foliage soil open |
+| `walls` | `None` | wall material: carpet concrete marble wood brick glass plaster fabric metal people water tile rock foliage soil open hard light_panel vibrating_wood thin_carpet curtain foam acoustic_plaster audience_seated car_glass car_floor car_seat car_trim |
 | `floor` | `None` | floor material (same list) |
 | `ceiling` | `None` | ceiling material (same list; `open` = no ceiling) |
 | `distance` | `None` | source to listener distance in metres (default from the preset); farther = more room, less direct |
 | `furnish` | `None` | m2 of soft absorbers (people, sofas, curtains). Presets have their own; a room with explicit dimensions or materials is bare unless this is set |
+
+### `earplug`
+
+Cotton in the ears: -5 dB below 500 Hz, then 5 dB per octave more; special cotton starts at -10 dB. What you hear just after a blast.  *(module `ordnance`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'cotton'` | cotton/special |
 
 ### `eq`
 
@@ -5676,6 +10720,39 @@ Peaking EQ band.  *(module `fx`)*
 | `freq` | `1000` | Hz |
 | `gain` | `6.0` | dB, negative to cut |
 | `q` | `1.0` | width |
+
+### `exciter`
+
+Exciter (Aphex type): treble is distorted and a little of it added back, for air without boosting the treble.  *(module `dsp`)*
+
+| param | default | meaning |
+|---|---|---|
+| `freq` | `3000.0` | where the effect starts, Hz |
+| `drive` | `4.0` | into the nonlinearity |
+| `mix` | `0.15` | level of the added harmonics |
+
+### `exp_delay`
+
+Echoes that bunch up or spread out, like a bouncing ball: N taps at a power law of time and level.  *(module `fx`)*
+
+| param | default | meaning |
+|---|---|---|
+| `length` | `2.0` | s of the last tap |
+| `taps` | `20` | N |
+| `durcurve` | `1.0` | tap time = length (i/N)^durcurve; < 1 bunches them at the end |
+| `ampcurve` | `1.0` | tap level follows (i/N)^ampcurve, normalised to a sum of 1; 0 = all equal |
+| `mix` | `0.5` | wet |
+
+### `expander`
+
+Downward expander: above `thresh` differences in level grow (ChucK's Dyno expand preset, slope 2 above 0.5).  *(module `fx`)*
+
+| param | default | meaning |
+|---|---|---|
+| `thresh` | `0.5` | threshold, linear |
+| `slope` | `2.0` | slope above it |
+| `attack` | `0.02` | s |
+| `release` | `0.4` | s |
 
 ### `fade`
 
@@ -5700,9 +10777,12 @@ Feedback-delay-network reverb (Jot): 8 or 16 mutually prime lines, Householder o
 | `mix` | `0.3` | wet amount 0..1 |
 | `width` | `1.0` | stereo width 0..1 |
 | `lines` | `16` | delay lines: 8 or 16 (16 = denser) |
-| `matrix` | `'householder'` | feedback matrix: householder / hadamard |
+| `matrix` | `'householder'` | feedback matrix: householder / hadamard / weighted (reflection about `weights`) |
 | `tonal` | `1.0` | tonal correction 0..1: restores the highs that the faster HF decay removes from the tail |
 | `tail` | `None` | seconds of tail appended (auto = 1.2 x t60_low, max 10) |
+| `prime_power` | `False` | round the line lengths to powers of distinct primes (PASP 3.7.3) |
+| `diffuser` | `'serial'` | input diffusion: serial (three allpasses per side) / vector (one 4-channel allpass mixing both sides) |
+| `weights` | `''` | matrix weighted: comma list of line weights, repeated over the lines (e.g. '1,1,2,3') |
 
 ### `fir_eq`
 
@@ -5729,6 +10809,32 @@ Jet-like sweeping comb: a short delay swept by an LFO and mixed with the dry sou
 | `shape` | `'sine'` | LFO shape: sine / triangle / exp (triangle on a log scale: even sweep in pitch) |
 | `phase` | `0.0` | LFO start phase 0..1 cycles |
 | `stereo` | `0.0` | LFO phase offset between left and right in cycles (0.25 = wide; makes stereo output) |
+| `damp` | `0.0` | 0..0.95 low-pass in the feedback loop: the regeneration dulls |
+| `deep` | `False` | true = notches stay at zero whatever the feedback (level rises); false = plain PASP regeneration, the notches fill in |
+
+### `fog`
+
+FOG: FOF grains read from the sound as a sample table (granular formant synthesis on a recording).  *(module `spectral`)*
+
+| param | default | meaning |
+|---|---|---|
+| `dens` | `80.0` | grains per second |
+| `trans` | `1.0` | read speed inside each grain (2 = an octave up) |
+| `spd` | `0.0` | table passes per second of the grain start pointer (0 = every grain starts at the beginning) |
+| `band` | `50.0` | Hz: grain decay exp(-pi band t) |
+| `ris` | `0.01` | s grain rise |
+| `dec` | `0.07` | s grain fall at its end |
+| `dur` | `0.1` | s grain length |
+
+### `force_pitch`
+
+Forces a pitched input onto one note (or the nearest semitone): its f0 is tracked and each moment is shifted by the ratio to the target.  *(module `friction`)*
+
+| param | default | meaning |
+|---|---|---|
+| `note` | `'A3'` | target note or Hz, or nearest (snap to the closest semitone) |
+| `floor` | `40.0` | Hz: frames tracked below this, or unvoiced, are left alone |
+| `mix` | `1.0` | 0 dry .. 1 shifted |
 
 ### `formant_shift`
 
@@ -5766,6 +10872,8 @@ Frequency shifter: every component moves by the same number of Hz (inharmonic, m
 | param | default | meaning |
 |---|---|---|
 | `hz` | `100.0` | shift in Hz, negative = down |
+| `fold` | `False` | true = what crosses Nyquist or 0 Hz comes back mirrored (the raw ring-modulator artefact); false removes it first |
+| `hz_end` | `None` | shift at the end: the shift glides linearly from hz to it (barber-pole sweeps) |
 
 ### `gain`
 
@@ -5774,6 +10882,20 @@ Volume change.  *(module `fx`)*
 | param | default | meaning |
 |---|---|---|
 | `db` | `0.0` | decibels |
+
+### `gate`
+
+Noise gate with hysteresis and hold: opens above open_db, closes below close_db once the hold has run out, with linear fades.  *(module `fx`)*
+
+| param | default | meaning |
+|---|---|---|
+| `open_db` | `-40.0` | dB relative to the peak of the sound (or the key): opens above it |
+| `close_db` | `-45.0` | closes below it, under open_db |
+| `hold` | `0.05` | s below the threshold before fading |
+| `attack` | `0.001` | fade in, s |
+| `release` | `0.1` | fade out, s |
+| `detect` | `0.002` | time constant of the level detector, s |
+| `key` | `None` | WAV file that opens the gate instead of the sound |
 
 ### `gated_reverb`
 
@@ -5788,6 +10910,96 @@ Gated reverb (the 80s drum sound): a big dense reverb that is cut off abruptly a
 | `t60` | `2.5` | decay time of the reverb under the gate, seconds (long = flat plateau) |
 | `size` | `9.0` | mean free path in metres |
 | `boost` | `6.0` | dB of gain on the gated reverb |
+
+### `gender`
+
+Voice change by pitch and formants together: male to female or the reverse.  *(module `spectral`)*
+
+| param | default | meaning |
+|---|---|---|
+| `to` | `'female'` | female (pitch x 2) / male (pitch / 2) |
+
+### `grain_delay`
+
+Granular delay: raised-cosine grains read from the past at a random delay, size, pan, level and offset (each a centre plus a random spread), a scattered, glittering echo.  *(module `cyber`)*
+
+| param | default | meaning |
+|---|---|---|
+| `delay` | `0.25` | s centre delay |
+| `delay_spread` | `0.15` | s random spread of the delay |
+| `size` | `0.08` | s grain length |
+| `size_spread` | `0.04` | s |
+| `density` | `20.0` | grains per second |
+| `pan_spread` | `0.6` | 0..1 |
+| `level_spread` | `0.4` | 0..1 |
+| `mix` | `0.5` | wet 0..1 |
+| `seed` | `0` | variation |
+
+### `granular`
+
+Granular cloud from a ring buffer of the sound: grain size, density, spray, pitch, stereo spread, freeze and feedback.  *(module `spectral`)*
+
+| param | default | meaning |
+|---|---|---|
+| `density` | `20.0` | grains per second (2..200) |
+| `size` | `0.08` | grain length in s (0.005..1) |
+| `spray` | `0.2` | random reach back into the buffer, 0..1 |
+| `position` | `0.05` | how far back grains read, 0..1 of the 6 s buffer |
+| `spread` | `0.5` | stereo spread of the grains 0..1 (0 = mono output) |
+| `pitch` | `0.0` | grain transposition in semitones |
+| `feedback` | `0.0` | output written back into the buffer, 0..0.95 |
+| `freeze` | `None` | seconds after which the buffer stops recording (hold) |
+| `window` | `'hann'` | hann / tukey / perc |
+| `overlap` | `'normal'` | normal / sola (each grain crossfades over the life left in the previous one) |
+| `mix` | `1.0` | 0 = dry .. 1 = grains only |
+| `seed` | `0` | random seed |
+
+### `granulate`
+
+Brassage: the sound rebuilt from short Hann grains drawn near the current time (or anywhere), same length.  *(module `spectral`)*
+
+| param | default | meaning |
+|---|---|---|
+| `grain` | `0.08` | grain length in s (0.001..0.1) |
+| `window` | `0.1` | s around the current time from which grains are drawn; 0 = anywhere in the sound |
+| `overlap` | `2.0` | grains per grain length (2 = half-grain overlap) |
+| `pitch_var` | `0.02` | random transposition per grain, in octaves (sd) |
+| `pitch_st` | `0.0` | random transposition per grain, uniform in +-semitones (12 = random granulation over two octaves); replaces pitch_var |
+| `positions` | `'random'` | with window 0: random / gauss / walk / zigzag read positions |
+| `match` | `0` | concatenative: candidates per grain, the one that best continues the previous grain wins (0 = off) |
+| `min_back` | `0.0` | s: no backward jump shorter than this between grains |
+| `seed` | `0` | random seed |
+
+### `greyhole`
+
+Greyhole: a long modulated delay fed back through nested rotating diffusers; from a smeared echo to a dark, endless cloud. Stereo output.  *(module `reverbs`)*
+
+| param | default | meaning |
+|---|---|---|
+| `delay` | `0.2` | seconds 0.001..1.45 |
+| `feedback` | `0.9` | 0..0.99 |
+| `damping` | `0.0` | 0..0.99 (darker repeats) |
+| `diffusion` | `0.5` | 0..0.99 |
+| `size` | `1.0` | 0.5..3 |
+| `mod_depth` | `0.1` | 0..1 |
+| `mod_freq` | `2.0` | Hz |
+| `mix` | `0.4` | wet 0..1 |
+| `tail` | `None` | seconds of tail appended (auto from the feedback) |
+
+### `gverb`
+
+GVerb (Griesinger-style FDN by Juhana Sadeharju): big natural halls, a room size in metres and a decay in seconds.  *(module `reverbs`)*
+
+| param | default | meaning |
+|---|---|---|
+| `roomsize` | `30.0` | m |
+| `revtime` | `5.0` | s |
+| `damping` | `0.8` | 0..1 high-frequency loss |
+| `spread` | `15.0` | stereo spread of the diffusers, samples |
+| `bandwidth` | `0.5` | 0..1 input brightness |
+| `dry` | `0.6` | linear |
+| `early` | `0.4` | linear |
+| `tail_level` | `0.5` | linear |
 
 ### `harmonizer`
 
@@ -5818,6 +11030,25 @@ Treble shelf.  *(module `fx`)*
 | `freq` | `4000` | Hz |
 | `gain` | `6.0` | dB |
 
+### `hpss`
+
+Split a sound by median filtering: keep its tones or its hits.  *(module `spectral`)*
+
+| param | default | meaning |
+|---|---|---|
+| `keep` | `'harmonic'` | harmonic / percussive |
+
+### `huggins`
+
+Dichotic pitch: a pitch that exists only in the head. Over headphones, noise whose phase turns once round a narrow band in one ear (Huggins pitch), or a copy delayed by T in the other ear (a faint pitch at 1/T). Stereo output.  *(module `reverbs`)*
+
+| param | default | meaning |
+|---|---|---|
+| `freq` | `600.0` | Hz of the phase transition (mode phase) |
+| `bw` | `0.16` | relative width of the transition |
+| `mode` | `'phase'` | phase / delay |
+| `delay` | `0.012` | seconds (mode delay): pitch near 1/T |
+
 ### `jcrev`
 
 Chowning's JCRev Schroeder reverb (3 series allpasses into 4 parallel combs, exact CCRMA lengths); `variant=samson` is the Samson-box version (longer, smoother). Stereo output.  *(module `reverbs`)*
@@ -5825,12 +11056,53 @@ Chowning's JCRev Schroeder reverb (3 series allpasses into 4 parallel combs, exa
 | param | default | meaning |
 |---|---|---|
 | `mix` | `0.3` | wet amount 0..1 |
-| `variant` | `'mus10'` | mus10 (1972: AP 347/113/37, combs 1687/1601/2053/2251 at 25 kHz) / samson (AP 1051/337/113, combs 4799/4999/5399/5801) |
+| `variant` | `'mus10'` | mus10 (1972: AP 347/113/37, combs 1687/1601/2053/2251 at 25 kHz) / samson (AP 1051/337/113, combs 4799/4999/5399/5801) / stk (Cook's version: AP 225/341/441, combs 1116/1356/1422/1617 at 44.1 kHz with a low-pass in the loop) |
 | `t60` | `None` | decay time s; omit for the published comb gains (about 2 s mus10, 4.5 s samson) |
 | `damp` | `0.0` | extra high-frequency damping in the comb loops 0..0.95 (0 = published) |
 | `width` | `1.0` | stereo width 0..1 (1 = the two decorrelated outputs) |
 | `predelay` | `0.0` | seconds before the reverb starts |
 | `tail` | `None` | seconds of tail appended (auto = decay time) |
+
+### `jpverb`
+
+JPverb (Julian Parker): rotating stereo diffusers into a modulated loop with separate decay for lows, mids and highs. Smooth, wide, lush. Stereo output.  *(module `reverbs`)*
+
+| param | default | meaning |
+|---|---|---|
+| `t60` | `1.0` | decay time of the mids, seconds (0.1..60) |
+| `size` | `1.0` | room size 0.5..5 (loop length) |
+| `early_diff` | `0.707` | early diffusion 0..0.99 |
+| `mod_depth` | `0.1` | delay modulation 0..1 |
+| `mod_freq` | `2.0` | modulation rate Hz |
+| `low` | `1.0` | decay multiplier below low_cut |
+| `mid` | `1.0` | decay multiplier of the mids |
+| `high` | `1.0` | decay multiplier above high_cut |
+| `low_cut` | `500.0` | Hz |
+| `high_cut` | `2000.0` | Hz |
+| `damp` | `0.0` | extra high damping 0..1 |
+| `mix` | `0.3` | wet 0..1 |
+
+### `kasfilter`
+
+Undersampling filter: the input is sampled twice per cycle of `freq` into two held values that cross-fade on a cosine, the second fed back with `res` (gritty, resonant, aliasing on purpose).  *(module `fx`)*
+
+| param | default | meaning |
+|---|---|---|
+| `freq` | `440.0` | Hz |
+| `res` | `0.85` | -1..1 feedback (negative = hollow) |
+| `accent` | `0.75` | 0..1 sharpness of the cross-fade (0 = abrupt, 1 = plain cosine) |
+
+### `ladder`
+
+Transistor or diode ladder low-pass: the Moog and TB-303 filters, saturating, self-oscillating at res 1.  *(module `fx`)*
+
+| param | default | meaning |
+|---|---|---|
+| `cutoff` | `1000` | Hz |
+| `res` | `0.5` | 0..1 resonance |
+| `kind` | `'moog'` | moog/diode/lpf18 (3-pole, 18 dB/oct, Soundpipe)/huovilainen (2x oversampled, tanh per stage) |
+| `drive` | `1.0` | level into the saturation (lpf18: its distortion, 2 in Soundpipe) |
+| `solver` | `'node'` | moog: node (tanh of the linear estimate)/newton (delay-free loop)/adaa (antialiased tanh in the loop) |
 
 ### `leslie`
 
@@ -5844,15 +11116,31 @@ Rotary speaker cabinet (Leslie): a spinning treble horn and bass drum give Doppl
 | `mic` | `0.6` | microphone distance from the rotor axis in metres 0.3..3 (close = deep tremolo, far = mostly vibrato) |
 | `spread` | `90.0` | angle between the two microphones in degrees 0..180 |
 | `mix` | `1.0` | wet amount 0..1 |
-| `crossover` | `800.0` | horn/drum crossover Hz |
+| `crossover` | `800.0` | horn/drum crossover Hz (12 dB/octave) |
+| `leak` | `-10.0` | dB of horn sound leaking straight out of the cabinet without rotating (-60 = none) |
 
 ### `limiter`
 
-Hard ceiling with lookahead smoothing.  *(module `fx`)*
+Hard ceiling: look-ahead gain with a double release (fast for an isolated peak, slow under a sustained overload).  *(module `fx`)*
 
 | param | default | meaning |
 |---|---|---|
 | `ceiling` | `-0.5` | dB |
+| `lookahead` | `0.0015` | s |
+| `release` | `0.1` | s, under a sustained overload |
+| `true_peak` | `False` | true = the level includes the peaks between samples (4x oversampled) |
+
+### `lockhart_fold`
+
+Lockhart wavefolder (West Coast transistor circuit, four stages), exact Lambert W at each stage, oversampled.  *(module `dsp`)*
+
+| param | default | meaning |
+|---|---|---|
+| `drive` | `1.0` | input gain |
+| `stages` | `4` | 1..4 |
+| `load` | `7500.0` | load resistor Ohm, 1000..50000 |
+| `tone` | `1300.0` | post low-pass Hz (0 = off) |
+| `mix` | `1.0` | wet 0..1 |
 
 ### `lofi`
 
@@ -5895,6 +11183,17 @@ Bass shelf.  *(module `fx`)*
 | `freq` | `200` | Hz |
 | `gain` | `6.0` | dB |
 
+### `lucier`
+
+Room feedback by re-recording (Lucier): the sound played into a room and re-recorded again and again until only the room's resonances remain.  *(module `reverbs`)*
+
+| param | default | meaning |
+|---|---|---|
+| `generations` | `8` | number of passes through the room (1..64) |
+| `t60` | `1.5` | room decay time, s |
+| `size` | `6.0` | room mean free path, m |
+| `chain` | `False` | true = all passes one after the other (the piece); false = the last one |
+
 ### `mono`
 
 Collapse to mono.  *(module `fx`)*
@@ -5915,6 +11214,28 @@ Companded quantisation (telephone codec grain: noise follows the signal level). 
 |---|---|---|
 | `bits` | `8` | 2..16 bits in the compressed domain |
 | `law` | `'mu'` | mu (mu=255) / a (A=87.6) |
+
+### `multiband`
+
+Compressor per frequency band: tames one band without pumping the others (phase-corrected Linkwitz-Riley split, sums flat at ratio 1).  *(module `dsp`)*
+
+| param | default | meaning |
+|---|---|---|
+| `freqs` | `'300 3000'` | crossover frequencies in Hz |
+| `threshold` | `-18.0` | dB, every band |
+| `ratio` | `2.0` | n:1 |
+| `attack` | `0.01` | s |
+| `release` | `0.1` | s |
+| `band` | `-1` | index of the only band to compress (-1 = all), from 0 at the bottom |
+
+### `mutate`
+
+Spectral mutation of this sound with another: multiplied magnitudes, or the phases of one on the magnitudes of the other.  *(module `spectral`)*
+
+| param | default | meaning |
+|---|---|---|
+| `other` | `''` | WAV file, looped to length |
+| `mode` | `'magmul'` | magmul (/X1//X2/ with the phase of this sound) / magadd (/X1/ + /X2/) / phaseswap (this magnitude, the other's phase) |
 
 ### `noise_only`
 
@@ -5942,6 +11263,16 @@ Notch filter.  *(module `fx`)*
 | `center` | `1000` | Hz |
 | `q` | `4.0` | narrowness |
 
+### `nrev`
+
+Perry Cook's NRev (STK, after CCRMA): 6 parallel combs into 6 allpasses and a low-pass. Dense and a little gritty. Stereo output.  *(module `reverbs`)*
+
+| param | default | meaning |
+|---|---|---|
+| `mix` | `0.3` | wet amount 0..1 |
+| `t60` | `1.0` | decay time, seconds |
+| `tail` | `None` | seconds of tail appended (auto = t60) |
+
 ### `occlude`
 
 Sound from behind an obstacle (a wall, a door, a window, a curtain): the part that goes through the material loses its highs by the mass law, the part that bends round the edge is dulled smoothly.  *(module `reverbs`)*
@@ -5952,6 +11283,27 @@ Sound from behind an obstacle (a wall, a door, a window, a curtain): the part th
 | `thickness` | `0.1` | thickness of the obstacle in metres (0.004 window pane, 0.04 door, 0.1 wall, 0.3 thick wall) |
 | `leak` | `0.15` | level 0..1 of the path that diffracts round the obstacle (0 = sealed room, 1 = a screen you can nearly see past) |
 | `edge` | `600.0` | Hz above which the diffracted path falls off (smaller = deeper in the shadow) |
+| `path_diff` | `None` | extra metres the sound travels over the top of a barrier: replaces `edge` with Maekawa's curve for the diffracted path |
+
+### `octaver`
+
+Octave up and down on any sound, no pitch tracking: rectification for the octave up, a flip-flop on zero crossings for the octave down (best on single notes).  *(module `fx`)*
+
+| param | default | meaning |
+|---|---|---|
+| `up` | `0.5` | level of the octave up |
+| `down` | `0.5` | level of the octave down |
+| `dry` | `1.0` | level of the input |
+| `tone` | `1000.0` | low-pass on the octave down, Hz |
+
+### `orchestra_seat`
+
+Where a player sits in the orchestra: back desks of a string section are heard softer and duller from the hall; the pit adds a little body.  *(module `reverbs`)*
+
+| param | default | meaning |
+|---|---|---|
+| `desk` | `1` | desk number from the front 1..8 |
+| `pit` | `False` | true = playing in an opera pit |
 
 ### `overdrive`
 
@@ -5961,10 +11313,11 @@ Alias-free waveshaping overdrive (oversampled; bias adds even harmonics).  *(mod
 |---|---|---|
 | `drive` | `4.0` | input gain 0.05..100 |
 | `bias` | `0.0` | -1..1 DC offset before the curve: asymmetry = even harmonics |
-| `shape` | `'tanh'` | tanh/tube/fuzz/fold/diode |
+| `shape` | `'tanh'` | tanh/tube/fuzz/fold/diode/hard/algebraic/hyper/asinh/asym (2x above 0, x/2 below, rounded)/tube_bendiksen (asymmetric tube, linear above, clipped below) |
 | `tone` | `4000` | post low-pass Hz (0 = off) |
 | `mix` | `1.0` | wet 0..1 |
 | `oversample` | `4` | 1/2/4/8 (1 = naive, aliases) |
+| `aa` | `'none'` | none / adaa1 / adaa2 / adaa3 (shapes hard, fold) / vicanek (shape algebraic): antiderivative anti-aliasing on top of the oversampling |
 
 ### `packet_loss`
 
@@ -5976,6 +11329,7 @@ Lossy digital link: packets drop out in bursts and are muted, replaced by the la
 | `burst` | `2.0` | average number of packets lost in a row (1 = scattered) |
 | `packet_ms` | `20.0` | packet length, 10..60 ms |
 | `conceal` | `'repeat'` | mute / repeat (stutter) / noise (the last spectrum with random phase) |
+| `channel` | `''` | GSM radio channel instead of loss: good / fair / poor (C/I 10, 7, 4 dB): frames erased 1, 15, 95 in 750 and bit errors in the samples |
 | `seed` | `0` | which packets |
 
 ### `pan`
@@ -5985,6 +11339,7 @@ Stereo position (produces stereo).  *(module `fx`)*
 | param | default | meaning |
 |---|---|---|
 | `pos` | `0.0` | -1 left .. 1 right |
+| `itd` | `0.0` | ms the far ear hears late at full position, up to 0.6 |
 
 ### `paulstretch`
 
@@ -5998,6 +11353,22 @@ Extreme time-stretch that turns any sound into a slowly evolving wash (random-ph
 | `length` | `4.0` | seconds of output when `hold` is used |
 | `smear` | `0.0` | 0..1 blur across frequency (a held note becomes a noise band) |
 | `seed` | `0` | phase seed |
+| `phase` | `1.0` | 1 random phases .. 0 the analysed ones, keeps transients |
+| `continuity` | `0.0` | 0..1 each frame's phase stays near the last (about 0.3 smooths without pumping) |
+| `scan` | `0.0` | with hold: the frozen instant travels, by this fraction of the source over the output |
+| `loop` | `False` | the source wraps round: for loops, its end does not fade to silence |
+| `recipe` | `None` | subtle/standard/lush/shimmer/shimmer_deep: several window sizes stacked, some an octave up or down |
+| `drift` | `0.0` | 0..1 the read point wanders round its place (three golden-ratio sines, up to 30 % of the source): a slowly changing wash |
+
+### `phase_bash`
+
+Phase-bashed wavetables: each window of the sound becomes one cycle of a zero-phase wavetable (its spectrum, phases set so the cycle is centred), played at `pitch` and cross-faded window to window: the timbre of the source on a steady pitch, without vibrato.  *(module `fx`)*
+
+| param | default | meaning |
+|---|---|---|
+| `pitch` | `110.0` | Hz of the oscillator |
+| `window` | `2048` | samples per window (power of 2) |
+| `mix` | `1.0` | wet |
 
 ### `phaser`
 
@@ -6015,6 +11386,10 @@ Sweeping phaser: a chain of 4, 6 or 8 first-order allpass stages mixed with the 
 | `sweep` | `3.0` | sweep range in octaves at depth 1 |
 | `phase` | `0.0` | LFO start phase 0..1 cycles |
 | `stereo` | `0.0` | LFO phase offset between left and right in cycles (makes stereo output) |
+| `invert` | `False` | subtract the allpass chain: notches and peaks swap |
+| `mode` | `'allpass1'` | allpass1 / notch (second-order sections: one notch per stage, independent width) |
+| `notch_q` | `4.0` | mode notch: the higher, the narrower |
+| `style` | `''` | pd = Puckette's law for the first-order coefficient, c = 0.97 - 0.6 v^2, v = /phasor - 0.5/ (his rate: 0.3 Hz); no depth, freq, spacing |
 
 ### `pitch`
 
@@ -6033,6 +11408,7 @@ Pitch shift at the same length (phase vocoder + band-limited resampling), option
 | `semitones` | `0.0` | +/- semitones (-36..36) |
 | `formant` | `'shift'` | shift = formants move with the pitch (chipmunk / giant) / keep = timbre stays (voices, instruments) |
 | `fine` | `0.0` | extra shift in cents |
+| `mode` | `'vocoder'` | vocoder / psola (pitch-synchronous grains, keeps formants; pulsed voices) / auto (psola where the voice pulses are sharp, vocoder elsewhere) |
 
 ### `plate_reverb`
 
@@ -6050,13 +11426,70 @@ Plate reverberation: the signal drives a lossy steel plate (finite differences),
 | `tail` | `None` | seconds of tail to append (auto if omitted) |
 | `quality` | `1.0` | 0.5..2 internal sample rate 16 kHz x quality (wet bandwidth, cost ~ quality^2) |
 
+### `prcrev`
+
+Perry Cook's PRCRev (STK): the smallest useful reverb, 2 allpasses into 2 combs, one per channel. Sparse and cheap. Stereo output.  *(module `reverbs`)*
+
+| param | default | meaning |
+|---|---|---|
+| `mix` | `0.5` | wet amount 0..1 |
+| `t60` | `1.0` | decay time, seconds |
+| `tail` | `None` | seconds of tail appended (auto = t60) |
+
+### `pv_reverb`
+
+Spectral reverb: every frequency bin of the sound decays at its own rate, steady partials ringing longer than noise (a frozen, singing tail). Stereo output.  *(module `reverbs`)*
+
+| param | default | meaning |
+|---|---|---|
+| `t60` | `3.0` | decay of the tonal part, seconds |
+| `noise_t60` | `1.0` | decay of the noisy part, seconds |
+| `mix` | `0.4` | wet 0..1 |
+| `seed` | `0` | phase randomisation |
+
+### `radio`
+
+FM broadcast sound: phase rotator, AGC, 75 us pre-emphasis, clipper, de-emphasis, 15 kHz low-pass.  *(module `fx`)*
+
+| param | default | meaning |
+|---|---|---|
+| `tau` | `7.5e-05` | pre-emphasis time constant in s: 75e-6 USA, 50e-6 Europe |
+| `drive` | `1.0` | level into the clipper |
+
+### `random_allpass`
+
+Cascade of second-order allpasses at random log-spaced frequencies (20-8000 Hz): same spectrum, scrambled phase (decorrelation, smeared transients).  *(module `fx`)*
+
+| param | default | meaning |
+|---|---|---|
+| `n` | `8` | sections |
+| `seed` | `0` | draw |
+| `radius` | `0.9` | pole radius (closer to 1: sharper phase jumps) |
+
+### `reflection`
+
+One reflecting structure heard with the direct sound: flutter between two parallel walls, a picket fence or a staircase (a chirped echo, the 'singing' stairs), or a finite panel (only its highs come back).  *(module `reverbs`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'flutter'` | flutter / fence / stairs / panel |
+| `width` | `10.0` | flutter: metres between the walls (a buzz above c/2w, a rattle below 20 Hz when wider than 8.6 m) |
+| `absorption` | `0.05` | flutter: wall absorption 0..0.99 |
+| `spacing` | `0.3` | fence/stairs: metres between elements (pitch c/2d: 572 Hz at 0.3 m) |
+| `count` | `30` | fence/stairs: number of elements |
+| `distance` | `5.0` | metres to the structure (first element, panel) |
+| `size` | `2.0` | panel: width in metres |
+| `angle` | `0.0` | panel: incidence in degrees |
+| `level` | `0.5` | reflection level relative to its geometric value 0..1 |
+| `mix` | `1.0` | wet 0..1 |
+
 ### `resonate`
 
 Re-body: the signal is the force driving a modal body (plate, bar, membrane or a measured object).  *(module `contact`)*
 
 | param | default | meaning |
 |---|---|---|
-| `body` | `'rect_plate'` | string/bar/bar_clamped/bar_supported/rect_membrane/rect_plate/circ_membrane/circ_plate, or a modal table (sy_vase, sy_wok, churchBell...) |
+| `body` | `'rect_plate'` | string/bar/bar_clamped/bar_supported/rect_membrane/rect_plate/circ_membrane/circ_plate/circ_plate_free/l_membrane, or a modal table (sy_vase, sy_wok, churchBell...) |
 | `material` | `'steel'` | rubber/plastic/wood/glass/ceramic/metal/steel/aluminium/bronze/ice/stone/concrete: sets ring time (and pitch with size) |
 | `size` | `0.4` | m: length / diameter of the body; bigger = lower |
 | `position` | `0.3` | 0..1 where the force enters (bars: 0 end .. 0.5 middle; circles: 0 centre .. 1 rim) |
@@ -6078,6 +11511,8 @@ Schroeder/Freeverb-style room reverb.  *(module `fx`)*
 | `predelay` | `0.0` | seconds before reverb starts |
 | `tail` | `None` | seconds of tail to append (auto if omitted) |
 | `width` | `1.0` | stereo width 0..1 (stereo output when > 0) |
+| `variant` | `'genny'` | genny (comb lengths follow size) / freeverb (Jezar's exact structure: lengths fixed, damp 0.2 by default, his non-allpass 'allpass') |
+| `freeze` | `False` | Freeverb freeze: comb feedback 1 and no damping, the sound hangs for the whole tail (4 s if tail is omitted) |
 
 ### `reverse`
 
@@ -6102,6 +11537,7 @@ Ring modulation (metallic / robotic).  *(module `fx`)*
 |---|---|---|
 | `freq` | `200` | carrier Hz |
 | `mix` | `1.0` | wet |
+| `leak` | `0.0` | carrier and input leaking through, as an unbalanced diode ring: wet = x c + leak (x + c); 0.5 = the classic ab + (a + b)/2 |
 
 ### `robotize`
 
@@ -6118,16 +11554,24 @@ A physical room: early reflections from its shape, decay per frequency band from
 | param | default | meaning |
 |---|---|---|
 | `mix` | `0.5` | 0 = dry, 1 = what a listener at `distance` hears (direct + reflections + reverberation) |
-| `model` | `'fdn'` | late reverb engine: fdn (16-line Jot network) / zita (zita-rev1) / puckette (Puckette G08, one decay time) / farnell (Farnell's tight prime-delay room, fixed about 0.5 s) |
+| `model` | `'fdn'` | late reverb engine: fdn (16-line Jot network) / zita (zita-rev1) / puckette (Puckette G08, one decay time) / farnell (Farnell's tight prime-delay room, fixed about 0.5 s) / moorer (6 low-passed combs and an allpass) / sdn (scattering delay network: one node per wall, exact first echoes) / raytrace (rays with diffuse walls, energy histogram turned into noise; slow) |
 | `width` | `1.0` | stereo width of the reverberation 0..1 |
 | `predelay` | `0.0` | extra seconds before the late reverb (the room adds its own: mean free path / c) |
 | `humidity` | `50` | relative humidity % (40..70) for air absorption |
 | `tail` | `None` | seconds of tail appended (auto = 1.2 x the longest decay, max 10) |
-| `preset` | `'hall'` | closet / studio / bedroom / bathroom / hall / church / cave / forest / street / canyon |
+| `formula` | `'sabine'` | decay formula: sabine / eyring / millington / kuttruff (the last three give shorter, truer decays in dead rooms) |
+| `source_gain` | `1.0` | directivity g of the source aimed at the listener: the critical distance grows by sqrt(g), so less room (voice about 2.5 at 1 kHz) |
+| `source_radius` | `None` | or: radius in metres of a piston source (loudspeaker, horn mouth); g comes from its size at 1 kHz |
+| `modal` | `False` | true = low end from the room's own resonances below the Schroeder frequency (small rooms boom at their modes) |
+| `audience` | `False` | true = rows of seats between source and listener: a dip around 150 Hz in the direct sound, deeper with distance |
+| `scattering` | `None` | diffusing walls: 0..1, or rpg_skyline / rpg_qrd / theatre_audience / flat: early echoes smeared into a diffuse wash |
+| `mic` | `1.0` | microphone pattern 0..1: 1 omni, 0.5 cardioid aimed at the source, 0 figure of eight (less room) |
+| `rays` | `20000` | model raytrace: number of rays (1e4..1e6; more = smoother, slower) |
+| `preset` | `'hall'` | closet / practice_room / studio / bedroom / bathroom / orchestra_studio / opera / hall / concert_hall / church / cave / forest / street / canyon / arena / amphitheater / priory |
 | `lx` | `None` | room width in metres (overrides the preset) |
 | `ly` | `None` | room length in metres (the direction you look in) |
 | `lz` | `None` | room height in metres |
-| `walls` | `None` | wall material: carpet concrete marble wood brick glass plaster fabric metal people water tile rock foliage soil open |
+| `walls` | `None` | wall material: carpet concrete marble wood brick glass plaster fabric metal people water tile rock foliage soil open hard light_panel vibrating_wood thin_carpet curtain foam acoustic_plaster audience_seated car_glass car_floor car_seat car_trim |
 | `floor` | `None` | floor material (same list) |
 | `ceiling` | `None` | ceiling material (same list; `open` = no ceiling) |
 | `distance` | `None` | source to listener distance in metres (default from the preset); farther = more room, less direct |
@@ -6148,6 +11592,29 @@ A physical room: early reflections from its shape, decay per frequency band from
 | `width` | `1.0` | stereo width 0..1 |
 | `tail` | `None` | seconds of tail to append (auto if omitted) |
 | `quality` | `1.0` | 0.5..2 internal rate / grid (cost ~ quality^3) |
+| `absorb` | `0.0` | wall absorption 0..1 at normal incidence (one value, or 4 for the walls x0, x1, y0, y1); 0 = rigid walls |
+
+### `room_feedback`
+
+Acoustic feedback (Larsen): a microphone hears the loudspeaker through a room; near the howl point the room's own resonances ring and take over. A slow swell of the loop gain makes pitches rise and die (David Tudor / Earls style); an optional pipe picks the partial; a small frequency shift fights the howl.  *(module `reverbs`)*
+
+| param | default | meaning |
+|---|---|---|
+| `gain` | `0.9` | loop gain relative to the howl point (1 = it starts to howl; 0.5..1.5, a limiter holds it) |
+| `swell` | `0.0` | depth 0..1 of a slow sinusoidal swell of the loop gain |
+| `swell_rate` | `0.5` | Hz 0.2..2 |
+| `pipe` | `None` | Hz: an open pipe in the loop picks that partial (30..400) |
+| `shift` | `0.0` | Hz of frequency shift in the loop (about 4 / T60 lets the gain rise a few dB before howling) |
+| `mix` | `1.0` | wet 0..1 |
+| `preset` | `'hall'` | closet / practice_room / studio / bedroom / bathroom / orchestra_studio / opera / hall / concert_hall / church / cave / forest / street / canyon / arena / amphitheater / priory |
+| `lx` | `None` | room width in metres (overrides the preset) |
+| `ly` | `None` | room length in metres (the direction you look in) |
+| `lz` | `None` | room height in metres |
+| `walls` | `None` | wall material: carpet concrete marble wood brick glass plaster fabric metal people water tile rock foliage soil open hard light_panel vibrating_wood thin_carpet curtain foam acoustic_plaster audience_seated car_glass car_floor car_seat car_trim |
+| `floor` | `None` | floor material (same list) |
+| `ceiling` | `None` | ceiling material (same list; `open` = no ceiling) |
+| `distance` | `None` | source to listener distance in metres (default from the preset); farther = more room, less direct |
+| `furnish` | `None` | m2 of soft absorbers (people, sofas, curtains). Presets have their own; a room with explicit dimensions or materials is bare unless this is set |
 
 ### `satrev`
 
@@ -6162,6 +11629,26 @@ Chowning's SATREV (1971): 4 parallel combs into 3 series allpasses; small, brigh
 | `predelay` | `0.0` | seconds before the reverb starts |
 | `tail` | `None` | seconds of tail appended (auto = decay time) |
 
+### `serge_fold`
+
+Serge wavefolder: six diode stages, each fold exact (Lambert W), with its soft knee, oversampled.  *(module `dsp`)*
+
+| param | default | meaning |
+|---|---|---|
+| `drive` | `1.0` | input gain: full scale = drive x 4 V; each stage takes about 0.6 V off the peak and folds it |
+| `stages` | `6` | 1..6 |
+| `mix` | `1.0` | wet 0..1 |
+
+### `shaker_comb`
+
+Four-tap comb (0, 11, 17, 30 ms) whose tap gains wander at random: a steadily changing timbre (Puckette's shaker).  *(module `fx`)*
+
+| param | default | meaning |
+|---|---|---|
+| `rate` | `4.0` | gain changes per second (one tap at a time, in turn) |
+| `ramp` | `0.2` | seconds each gain takes to reach its new value |
+| `seed` | `0` | random gains |
+
 ### `sheet_radiator`
 
 Folded stainless-sheet radiator (Baschet): uneven modal colouring, long ring, level-dependent saturation and low 'thunder' modes.  *(module `friction`)*
@@ -6175,6 +11662,8 @@ Folded stainless-sheet radiator (Baschet): uneven modal colouring, long ring, le
 | `mix` | `0.5` | 0 dry .. 1 sheet only |
 | `bright` | `1.0` | upper limit of the modes = 4500 Hz x bright |
 | `seed` | `0` | int: which modes and how uneven |
+| `metal` | `''` | '' (modes up to 4500 Hz x bright) / galvanized (up to about 7 kHz) / stainless (up to about 15 kHz) |
+| `mute` | `0.0` | 0..1 foam clamp pressed on the sheet (pedal): shorter ring and later saturation |
 
 ### `shimmer`
 
@@ -6206,6 +11695,21 @@ Moving-average smoothing (no ringing; repeated passes approach a Gaussian).  *(m
 | `width` | `1.0` | window length in ms (first null at 1000/width Hz) |
 | `passes` | `1` | 1 box, 2 triangle, 4 ~Gaussian |
 
+### `spectacle`
+
+Spectral delay: the spectrum is cut into bands, each delayed by its own time with its own feedback (rising, falling or scattered echoes of different colours).  *(module `spectral`)*
+
+| param | default | meaning |
+|---|---|---|
+| `delay` | `0.5` | s longest band delay |
+| `table` | `'random'` | random / ascending / descending: which bands wait longest |
+| `feedback` | `0.8` | 0..0.95 per-band feedback |
+| `bands` | `64` | number of bands |
+| `low` | `100.0` | Hz |
+| `high` | `4100.0` | Hz |
+| `mix` | `0.5` | wet 0..1 |
+| `seed` | `0` | variation |
+
 ### `spectral_blur`
 
 Smear the spectrum in time (and optionally frequency): washes attacks into a pad-like sustain.  *(module `spectral`)*
@@ -6226,6 +11730,11 @@ Spectral gate / denoiser: attenuate the quiet bins of the spectrum; `keep` split
 | `reduction` | `30.0` | attenuation in dB |
 | `smoothing` | `1.0` | gain smoothing over time and frequency 0..4 (0 = hard, 'musical noise') |
 | `keep` | `'all'` | all = plain gate / tonal = only spectral peaks above the threshold (removes hiss, breath) / noise = everything but the peaks |
+| `mode` | `'gate'` | gate / soft (no threshold: g = /X/ / (/X/ + c), no musical noise) / subtract (the noise is learned from the start of the sound or from `noise`) |
+| `c` | `0.01` | soft: the knee, on /X/ / (N/2) |
+| `learn` | `0.2` | subtract: seconds at the start that hold only the noise |
+| `noise` | `None` | subtract: WAV file of the noise alone |
+| `mask_level` | `10.0` | subtract: bins this many times over the noise power start to pass |
 
 ### `spectral_tilt`
 
@@ -6246,15 +11755,23 @@ Resample: >1 faster and higher pitch, <1 slower and lower (like a tape).  *(modu
 
 ### `spring_reverb`
 
-Spring-tank reverb as a dispersive allpass-chain loop (chirping 'boing' echoes); not the helical-spring FD model.  *(module `fdstring`)*
+Spring-tank reverb: dispersive allpass-chain loops for the low chirps and the wide-band chirps, with the tank's pre-echo, ripple and wandering delay (chirping 'boing' echoes); or the helical spring itself solved as a curved bar (`model=fd`, slow).  *(module `fdstring`)*
 
 | param | default | meaning |
 |---|---|---|
 | `mix` | `0.3` | wet level 0..1 |
-| `decay` | `1.7` | seconds of ring |
-| `delay` | `0.053` | seconds per trip along the spring |
-| `cutoff` | `4300.0` | Hz: top of the chirps |
-| `density` | `100` | allpass sections 10..200: more = longer chirps |
+| `preset` | `'leem1'` | leem1 / leem2 / leem3 (the three springs of a Leem Pro KA-1210) / sansui (darker, wobblier) / leem_auto (automatically fitted leem1) |
+| `tank` | `'single'` | single / two_spring / three_spring: springs of the given geometry side by side (overrides the preset's delay and cutoff) |
+| `decay` | `None` | seconds of ring (default from the preset's loop gain: 1.7 s for leem1) |
+| `delay` | `None` | seconds per trip along the spring, chain delay excluded (default from the preset) |
+| `cutoff` | `None` | Hz: top of the low chirps (default from the preset, 4300 Hz) |
+| `density` | `None` | allpass sections 10..200: more = longer chirps (default 100) |
+| `hf` | `1.0` | level of the wide-band chirp series: 1 = the -60 dB of the measured spring; 0 = off, half the cost |
+| `efficient` | `False` | true = the low chain at a quarter of the rate (about a third of the cost, a small notch at fC/2) |
+| `clip` | `0.0` | hard limit inside the loop (0 = off; 0.1..1 = an overdriven tank crashing) |
+| `model` | `'chain'` | chain (allpass loops) / fd (wire as two coupled wave equations, slow) |
+| `seed` | `0` | variation of the delay wander |
+| `wander` | `'smooth'` | smooth (slow 2 Hz drift) / uniform (fast random jitter of the delay: uniform noise smoothed by a one-pole, the published spring model) |
 
 ### `steep_bandpass`
 
@@ -6265,30 +11782,30 @@ Steep band-pass: high-pass at `low` then low-pass at `high`, each of `order` pol
 | `low` | `300` | Hz |
 | `high` | `3400` | Hz |
 | `order` | `8` | number of poles, even, 2..20 (6 dB/octave each) |
-| `type` | `'butter'` | butter/cheby/bessel |
-| `ripple` | `0.5` | cheby pass-band ripple in percent, 0..29 |
+| `type` | `'butter'` | butter/cheby/bessel/cheby2/ellip |
+| `ripple` | `0.5` | cheby pass-band ripple in percent, 0..29; ellip: in dB |
 
 ### `steep_highpass`
 
-Steep high-pass (true Butterworth / Chebyshev / Bessel cascade).  *(module `dsp`)*
+Steep high-pass (true Butterworth / Chebyshev / Bessel / inverse Chebyshev / elliptic cascade).  *(module `dsp`)*
 
 | param | default | meaning |
 |---|---|---|
-| `cutoff` | `200` | Hz (-3 dB) |
+| `cutoff` | `200` | Hz (-3 dB; cheby and ellip: edge of the ripple) |
 | `order` | `8` | number of poles, even, 2..20 (6 dB/octave each) |
-| `type` | `'butter'` | butter/cheby/bessel |
-| `ripple` | `0.5` | cheby pass-band ripple in percent, 0..29 |
+| `type` | `'butter'` | butter/cheby/bessel/cheby2/ellip |
+| `ripple` | `0.5` | cheby pass-band ripple in percent, 0..29; ellip: in dB |
 
 ### `steep_lowpass`
 
-Steep low-pass (true Butterworth / Chebyshev / Bessel cascade).  *(module `dsp`)*
+Steep low-pass (true Butterworth / Chebyshev / Bessel / inverse Chebyshev / elliptic cascade).  *(module `dsp`)*
 
 | param | default | meaning |
 |---|---|---|
-| `cutoff` | `2000` | Hz (-3 dB) |
+| `cutoff` | `2000` | Hz (-3 dB; cheby and ellip: edge of the ripple) |
 | `order` | `8` | number of poles, even, 2..20 (6 dB/octave each) |
-| `type` | `'butter'` | butter/cheby/bessel |
-| `ripple` | `0.5` | cheby pass-band ripple in percent, 0..29 |
+| `type` | `'butter'` | butter/cheby/bessel/cheby2/ellip |
+| `ripple` | `0.5` | cheby pass-band ripple in percent, 0..29; ellip: in dB |
 
 ### `stutter`
 
@@ -6302,7 +11819,7 @@ Repeat a slice N times (glitch).  *(module `fx`)*
 
 ### `sweep`
 
-Filter cutoff sweep over the sound (auto-wah / opening filter).  *(module `fx`)*
+Filter cutoff sweep over the sound, or following its level (`follow`: auto-wah).  *(module `fx`)*
 
 | param | default | meaning |
 |---|---|---|
@@ -6311,6 +11828,10 @@ Filter cutoff sweep over the sound (auto-wah / opening filter).  *(module `fx`)*
 | `end` | `6000` | Hz |
 | `q` | `2.0` | resonance |
 | `curve` | `'exp'` | exp/lin |
+| `follow` | `''` | 'env' = the cutoff goes from start to end with the level of the sound instead of with time |
+| `attack` | `0.005` | follow: s |
+| `release` | `0.06` | follow: s |
+| `sens` | `1.0` | follow: level x sens = position 0..1 |
 
 ### `sympathetic`
 
@@ -6318,10 +11839,12 @@ Bank of sympathetic strings or free-end rods ('whiskers') excited by the input. 
 
 | param | default | meaning |
 |---|---|---|
-| `tuning` | `'D3 A3 D4 F#4 A4'` | notes or Hz the resonators are tuned to (list or space-separated string) |
+| `tuning` | `'D3 A3 D4 F#4 A4'` | notes or Hz the resonators are tuned to (list or space-separated string), or random |
 | `kind` | `'string'` | string (harmonic partials) / rod (clamped-rod partials 1 : 6.27 : 17.55 : 34.39) |
 | `decay` | `3.0` | ring time of the fundamentals, s (0.1-12) |
 | `mix` | `0.3` | level of the resonators added to the input (0-1) |
+| `spread` | `2.0` | tuning=random: five fundamentals drawn log-uniform over this many octaves above 110 Hz |
+| `seed` | `0` | tuning=random: which tunings |
 
 ### `tape`
 
@@ -6336,6 +11859,8 @@ Tape machine: wow and flutter (band-limited variable-speed read), saturation, he
 | `hf` | `12000` | high-frequency roll-off Hz |
 | `hiss` | `-58` | hiss level in dB RMS (-120 = none) |
 | `seed` | `0` | int |
+| `model` | `'tanh'` | tanh / hysteresis: Jiles-Atherton magnetisation, the loop real tape has |
+| `wow_rate` | `0.6` | wow frequency Hz (0.556 = a record at 33 1/3 rpm, with wow about 0.5) |
 
 ### `tape_delay`
 
@@ -6353,6 +11878,17 @@ Tape echo: each repeat is duller and thinner than the last (filters in the feedb
 | `flutter` | `0.2` | fast tape-speed flutter 0..1 |
 | `drive` | `0.3` | tape saturation 0..1 |
 | `tail` | `None` | seconds of tail appended (auto from feedback, max 8) |
+
+### `tape_stop`
+
+A tape or turntable stopping: speed and level fall to nothing.  *(module `dsp`)*
+
+| param | default | meaning |
+|---|---|---|
+| `start` | `0.0` | s where the stop begins |
+| `time` | `0.5` | s from full speed to standstill |
+| `alpha` | `1.0` | curve of the speed (1 - t/time)^alpha |
+| `gain_alpha` | `1.0` | curve of the level, the same form |
 
 ### `telephone`
 
@@ -6374,6 +11910,17 @@ Turn a recording of a steady texture (rain, a server room, a crowd, static) into
 | `iters` | `12` | refinement passes (more = closer, slower) |
 | `seed` | `0` | a different rendition |
 
+### `tf_pad`
+
+Time-frequency pad: grains scan the sound and a drawn curve shifts each one in frequency by its position.  *(module `spectral`)*
+
+| param | default | meaning |
+|---|---|---|
+| `curve` | `'0:0,1:0'` | points 'x:y' (x = read position 0..1, y = shift in Hz), e.g. '0:0,0.5:300,1:-100' |
+| `density` | `40.0` | grains per second |
+| `size` | `0.08` | s grain length |
+| `seed` | `0` | random seed |
+
 ### `timestretch`
 
 Change length without changing pitch (phase vocoder, or SOLA for speech and drums).  *(module `spectral`)*
@@ -6381,8 +11928,9 @@ Change length without changing pitch (phase vocoder, or SOLA for speech and drum
 | param | default | meaning |
 |---|---|---|
 | `factor` | `1.0` | length ratio 0.1..10: 2 = twice as long |
-| `mode` | `'vocoder'` | vocoder (tonal, music) / sola (speech, drums, single voices) |
-| `window_ms` | `0.0` | analysis window in ms; 0 = auto (45 vocoder, 25 sola). Longer = cleaner bass, more smear |
+| `mode` | `'vocoder'` | vocoder (tonal, music) / sola (speech, drums, single voices) / ola (sola without the similarity search) / hps (vocoder on the tones, OLA on the hits) / psola (pitch-synchronous, voices) / auto (psola where the voice pulses are sharp, vocoder elsewhere) |
+| `window_ms` | `0.0` | analysis window in ms; 0 = auto (45 vocoder, 50 sola). Longer = cleaner bass, more smear |
+| `anchors` | `None` | time map instead of a factor: 't_in:t_out, ...' in seconds, to land moments of the sound on an animation; rate 1 after the last one |
 | `lock` | `True` | vocoder: lock bin phases to spectral peaks (less 'phasiness') |
 | `transients` | `True` | keep attacks unstretched; a number is the detector sensitivity (1 = default, 2 = more attacks) |
 
@@ -6392,9 +11940,13 @@ Amplitude wobble.  *(module `fx`)*
 
 | param | default | meaning |
 |---|---|---|
-| `rate` | `6.0` | Hz |
+| `rate` | `6.0` | Hz, 0.01..20 |
 | `depth` | `0.5` | 0..1 |
 | `shape` | `'sine'` | sine/triangle/square |
+| `skew` | `0.0` | -1..1: crest earlier (<0) or later (>0) in the cycle |
+| `duty` | `0.5` | square: share of the cycle at full level |
+| `phase` | `0.0` | 0..1 start of the cycle |
+| `spread` | `0.0` | -1..1: the right channel runs this half-cycle ahead (stereo output) |
 
 ### `trim`
 
@@ -6415,6 +11967,21 @@ Through a pipe / vent / well / tunnel: the sound enters one end of a resonant du
 | `ends` | `'closed-open'` | closed-open (source at a closed end: odd quarter-wave series) / open-open (half-wave series) / closed-closed (heard inside a sealed duct) |
 | `loss` | `1.0` | wall loss 0..20: 1 = smooth rigid pipe, higher = rough / lined / leaky |
 | `mix` | `1.0` | 0..1 wet/dry |
+| `steepen` | `0.0` | kPa peak pressure in the duct: loud pulses steepen into shocks on the way (0 = linear) |
+| `silencer` | `0.0` | ms: absorptive silencer at the outlet, diffusive response peaking at this time (0 = none; 1-10) |
+
+### `tube_mesh`
+
+Heard down a long square duct (3-D mesh): the source sits at one end on the axis, two ears at `distance`; the level falls slower than in open air, the reverberation grows with distance.  *(module `tubes`)*
+
+| param | default | meaning |
+|---|---|---|
+| `distance` | `1.68` | source-to-listener distance along the duct 0.1..length_m m |
+| `length_m` | `9.5` | duct length 1..20 m; both ends absorb completely |
+| `width_m` | `0.45` | side of the square section 0.25..1.5 m |
+| `absorption` | `0.2` | energy absorbed by the side walls at each reflection 0.01..1 |
+| `tail` | `0.3` | seconds of ring-out added after the input |
+| `mix` | `1.0` | 0..1 wet/dry |
 
 ### `underwater`
 
@@ -6423,6 +11990,17 @@ Submerged wobble + heavy lowpass.  *(module `fx`)*
 | param | default | meaning |
 |---|---|---|
 | `amount` | `0.8` | 0..1 |
+
+### `va_ladder`
+
+Virtual-analog filters as exact linear models: 4- and 8-pole low-, high- and band-pass ladders, the Korg35 (MS-20) low-pass, and a steep elliptic low-pass.  *(module `synths`)*
+
+| param | default | meaning |
+|---|---|---|
+| `kind` | `'lp'` | lp / hp / bp (LP-HP stages, positive feedback; bp 8 with k < 0 = two peaks) / korg35 / ellip |
+| `poles` | `4` | 4 / 8 (lp, hp, bp) |
+| `cutoff` | `1000.0` | Hz |
+| `k` | `0.0` | feedback: lp 0..4 (8 poles 0..1.88), hp > -1, bp 0..2^(N/2) (4 or 16; 8 poles also down to -64), korg35 0..2; ellip ignores it |
 
 ### `velvet_reverb`
 
@@ -6437,6 +12015,11 @@ Velvet-noise convolution reverb: a sparse +-1 noise shaped per octave into a dec
 | `width` | `1.0` | stereo width 0..1 (two independent velvet tails) |
 | `density` | `2205.0` | impulses per second (1000 = grainy, 2205 = smooth, 4000 = dense) |
 | `seed` | `0` | variation of the tail |
+| `kind` | `'velvet'` | velvet / dark (wider pulses: warmer) / edvn (filtered pulses fitted to the decay per band) / sparse (additions only, no FFT) |
+| `dark` | `0.5` | kind dark: pulse width 0..1 |
+| `t60_late` | `None` | seconds: a second, slower slope after the knee (double decay); None = single slope |
+| `knee` | `-20.0` | dB where the second slope starts |
+| `preset` | `None` | pori / cologne / musikverein: measured halls (decay and early-reflection time) |
 
 ### `vibrato`
 
@@ -6463,6 +12046,21 @@ Channel vocoder: the sound (modulator, e.g. speech) shapes a synthetic carrier b
 | `hiss` | `0.05` | noise mixed into the carrier 0..1 (consonants need some) |
 | `seed` | `0` | noise seed |
 
+### `wah`
+
+Wah-wah: a resonant band-pass moved by a pedal position, an LFO or the level of the sound (auto-wah); folds > 1 gives the M-fold wah and bell effect.  *(module `fx`)*
+
+| param | default | meaning |
+|---|---|---|
+| `mode` | `'lfo'` | lfo / env (auto-wah) / pos (fixed pedal) |
+| `rate` | `0.5` | lfo: Hz |
+| `pos` | `0.5` | pos: pedal 0 (heel) .. 1 (toe) |
+| `sens` | `1.0` | env: level x sens = pedal position |
+| `attack` | `0.005` | env: s |
+| `release` | `0.06` | env: s |
+| `folds` | `1` | M: 1 = wah, 5-20 = M-fold wah, 100 = bell effect |
+| `mix` | `1.0` | wet 0..1 |
+
 ### `wall`
 
 Heard through a wall, door or window: mass-law transmission loss (real level loss, not just dullness).  *(module `dsp`)*
@@ -6473,6 +12071,7 @@ Heard through a wall, door or window: mass-law transmission loss (real level los
 | `thickness` | `1.0` | mass multiplier 0.25..8 (2 = twice as thick: 6 dB more loss) |
 | `leak` | `None` | loss ceiling in dB set by gaps and flanking (default per material: door 22 .. concrete 58) |
 | `makeup` | `0.0` | dB of gain after the loss (the true loss is 20-55 dB) |
+| `leak_area` | `None` | open fraction 0..1 of the wall (gaps, keyholes): TL' = -10 log((1 - r) 10^(-TL/10) + r), in place of the leak ceiling |
 
 ### `wavefold`
 
@@ -6506,11 +12105,12 @@ Whisper: the phase of every short frame is randomised, which removes the pitch a
 
 ### `width`
 
-Stereo widening via short Haas delay (produces stereo).  *(module `fx`)*
+Stereo widening via short Haas delay (right copy 0-12 ms late: heard as one sound from the earlier, left side, not as an echo; the precedence holds for 1-30 ms, beyond it the copy splits off), or mid/side (produces stereo).  *(module `fx`)*
 
 | param | default | meaning |
 |---|---|---|
 | `amount` | `0.5` | 0..1 |
+| `mode` | `'haas'` | haas / ms: mid/side, amount 0 = mono, 0.5 = unchanged, 1 = side doubled; a mono input stays mono |
 
 ### `zita`
 
@@ -6618,7 +12218,10 @@ Keys: ``dir``, ``pattern`` (glob, default ``*``), ``root`` (note of files that n
 default C4), ``steps`` / ``step`` / ``legato`` / ``gap`` / ``transpose`` / ``vel`` as in a
 ``seq`` layer, ``release`` (s, fade after the note length; 0 = let every sample ring out),
 ``tune`` (cents), ``max_shift`` (semitones; farther notes raise an error instead of
-sounding wrong). Returns mono, or stereo if any file is stereo.
+sounding wrong), ``hold`` (true: a note longer than its recording loops the recording's
+stable part, spliced by cross-correlation with constant-power crossfades of
+min(0.15 s, span/4), at the stable RMS; default false: the note ends with the recording).
+Returns mono, or stereo if any file is stereo.
 
 **satb** — Four `sing` parts with shared lyrics. Either {"chords": "C4:maj:2 F4:maj:2 G4:dom7:2 C4:maj:2"}
 

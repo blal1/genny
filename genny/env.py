@@ -30,6 +30,61 @@ def adsr(dur: float, attack: float = 0.01, decay: float = 0.1, sustain: float = 
     return on
 
 
+def power_adsr(dur: float, attack: float = 0.01, decay: float = 0.1, sustain: float = 0.7, release: float = 0.2,
+               sr: int = DEFAULT_SR, curves: tuple[float, float, float] = (1.0, 1.0, 1.0)) -> np.ndarray:
+    """ADSR with its own power curve per stage: each stage goes from start to target as start + (target - start)
+    * x^c, x the linear 0..1 ramp; c < 1 is sharp, c > 1 soft, 1 linear. ``curves`` = (attack, decay, release).
+    Same lengths as ``adsr``: samples(dur + release), the release starting at the note-on end."""
+    ca, cd, cr = (max(float(c), 1e-6) for c in curves)
+    n_on = samples(dur, sr)
+    n_rel = samples(release, sr) if release > 0 else 0
+    a = min(samples(attack, sr) if attack > 0 else 0, n_on)
+    d = min(samples(decay, sr) if decay > 0 else 0, n_on - a)
+    ramp = lambda m: np.arange(1, m + 1) / m
+    on = np.concatenate([ramp(a) ** ca, 1.0 + (sustain - 1.0) * ramp(d) ** cd, np.full(n_on - a - d, float(sustain))])
+    if n_rel == 0:
+        return on
+    last = on[-1] if on.size else 0.0
+    return np.concatenate([on, last * (1.0 - ramp(n_rel) ** cr)])
+
+
+WINDOWS = ("hann", "blackman", "parzen", "tukey", "welch", "poisson")
+
+
+def _half_window(window: str, x: np.ndarray, a: float | None) -> np.ndarray:
+    """Rising half of a window: x 0 at the edge, 1 at the centre (value 1)."""
+    if window == "hann":
+        return 0.5 - 0.5 * np.cos(np.pi * x)
+    if window == "blackman":
+        a = 0.16 if a is None else a
+        return (1 - a) / 2 - 0.5 * np.cos(np.pi * x) + a / 2 * np.cos(2 * np.pi * x)
+    if window == "parzen":
+        u = 1.0 - x
+        return np.where(u <= 0.5, 1 - 6 * u ** 2 + 6 * u ** 3, 2 * (1 - u) ** 3)
+    if window == "tukey":
+        a = 0.5 if a is None else a
+        return np.where(x < a, 0.5 - 0.5 * np.cos(np.pi * np.minimum(x / max(a, 1e-9), 1.0)), 1.0)
+    if window == "welch":
+        return 1.0 - (1.0 - x) ** 2
+    if window == "poisson":
+        a = np.log(1000.0) if a is None else a
+        return np.exp(-a * (1.0 - x))
+    raise ValueError(f"unknown window {window!r}; use one of {WINDOWS}")
+
+
+def win_env(dur: float, attack: float = 0.05, release: float = 0.05, sr: int = DEFAULT_SR, window: str = "hann",
+            a: float | None = None) -> np.ndarray:
+    """Attack / release envelope shaped by a window function: the attack is the window's rising half, held at 1
+    until ``dur``, then the falling half over ``release``. ``a``: the window's coefficient (blackman alpha 0.16,
+    tukey taper 0.5, poisson decay ln 1000 = -60 dB at the edge). Length samples(dur + release)."""
+    n_on = samples(dur, sr)
+    n_rel = samples(release, sr) if release > 0 else 0
+    na = min(samples(attack, sr) if attack > 0 else 0, n_on)
+    rise = _half_window(window, np.arange(na) / max(na, 1), a)
+    fall = _half_window(window, 1.0 - np.arange(1, n_rel + 1) / max(n_rel, 1), a)
+    return np.concatenate([rise, np.ones(n_on - na), fall])
+
+
 def decay(dur: float, tau: float, sr: int = DEFAULT_SR, floor: float = 0.0) -> np.ndarray:
     """Exponential decay exp(-t/tau) over dur seconds."""
     t = np.arange(samples(dur, sr)) / sr

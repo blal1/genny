@@ -211,6 +211,13 @@
     {"type": "pattern", "kind": "hihat", "steps": "x-x-x-x-x-x-x-x-", "gain": 0.119, "bars": 4, "params": {"decay": 0.03, "tone": 6500}}
    ],
    "fx": [{"type": "compressor", "threshold": -16, "ratio": 2.5}], "normalize": -2.0},
+  {"out": "atari_vcs.wav", "about": "Atari 2600 VCS: two TIA voices only, a lead and a bass on their own out-of-tune grids, noise hits borrowed from the bass channel.", "bpm": 132, "beats": 16, "tail": 1.5,
+   "layers": [
+    {"type": "seq", "inst": "tia", "steps": "C5:.5 -:.5 C5:.5 E5:.5 G5:1 -:1 | G5:.5 -:.5 E5:.5 C5:.5 D5:2 | C5:.5 -:.5 C5:.5 E5:.5 G5:1 A5:1 | G5:1 E5:1 C5:2", "step": 1, "gain": 0.55, "legato": 0.8, "params": {"wave": "lead"}},
+    {"type": "seq", "inst": "tia", "steps": "C3:.5 -:.5 C3:.5 -:.5 G2:.5 -:.5 G2:.5 -:.5 C3:.5 -:.5 C3:.5 -:.5 G2:.5 -:.5 G2:.5 -:.5 C3:.5 -:.5 C3:.5 -:.5 G2:.5 -:.5 G2:.5 -:.5 C3:.5 -:.5 C3:.5 -:.5 G2:.5 -:.5 G2:.5 -:.5", "step": 1, "gain": 0.6, "legato": 0.7, "params": {"wave": "bass"}},
+    {"type": "seq", "inst": "tia", "steps": "-:1 C4:.25 -:.75 -:1 C4:.25 -:.75 -:1 C4:.25 -:.75 -:1 C4:.25 -:.75 -:1 C4:.25 -:.75 -:1 C4:.25 -:.75 -:1 C4:.25 -:.75 -:1 C4:.25 -:.75", "step": 1, "gain": 0.35, "legato": 0.5, "params": {"wave": "noise"}}
+   ],
+   "fx": [{"type": "reverb", "mix": 0.14, "size": 0.45, "damp": 0.5}, {"type": "compressor", "threshold": -16, "ratio": 2.5}], "normalize": -2.0},
   {"out": "orchestral_heroic.wav", "about": "Heroic orchestral: horn theme over string chords, trumpet answer, cello and timpani underneath, taiko and cymbal accents.", "bpm": 108, "beats": 16, "tail": 2.5,
    "layers": [
     {"type": "seq", "inst": "strings", "steps": "[C4,E4,G4]:4 | [A3,C4,F4]:4 | [G3,C4,E4]:4 | [G3,B3,D4]:4", "step": 1, "gain": 0.5, "params": {"attack": 0.12}},

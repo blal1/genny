@@ -21,24 +21,44 @@ def _norm(x, peak=.9):
 
 @dataclass
 class DynamicToneHole:
-    """Side-hole model with smoothly variable opening [0,1]."""
+    """Side hole with a smoothly variable opening [0,1], as an impedance magnitude at ``f_ref``.
+
+    Open: the inertance of t_e + t_i (chimney with its matching and radiation lengths, inner length) on the bore
+    of radius ``bore_radius_m``. Closed: the chimney t + t_m as a quarter-wave stub, |cot k(t + t_m)|, which
+    vanishes at c / 4(t + t_m): a 4 cm bassoon chimney puts an anti-formant near 2 kHz. In between, the two
+    admittances blend with openness^2. ``nonlinear``: the hole's quadratic loss 0.5 (|v| / c) Z_h at the hole
+    velocity of the last step. ``series_length`` is the (negative) series length of the closed hole."""
     radius_m: float=.0035
     chimney_m: float=.004
     openness: float=0.0
     rho: float=1.2041
     c: float=343.0
+    bore_radius_m: float=.0075
+    f_ref: float=440.0
+    nonlinear: bool=False
+    v_hole: float=0.0
+    # ponytail: real magnitudes at one frequency (f_ref) in a resistive junction; a frequency-dependent hole needs a reactive (filter) port
 
     @property
     def area(self): return math.pi*max(self.radius_m,1e-6)**2
 
+    @property
+    def series_length(self) -> float:
+        from .physical.winds import series_length
+        b,a=self.radius_m,max(self.bore_radius_m,self.radius_m*1.01)
+        return series_length(b,a,self.chimney_m,open_=False)
+
     def impedance(self, sr: int) -> float:
-        # Lumped inertive hole impedance magnitude.  The large impedance when
-        # closed continuously removes the side branch without a topology jump.
+        from .physical.winds import chimney_length, inner_length, matching_length
         o=float(np.clip(self.openness,0.0,1.0))
-        leff=max(1e-5,self.chimney_m+1.5*self.radius_m)
-        base=self.rho*self.c/max(self.area,1e-12)
-        inertive=base*(1.0 + leff*sr/self.c)
-        return inertive/max(o*o,1e-5)
+        b,a,t=self.radius_m,max(self.bore_radius_m,self.radius_m*1.01),self.chimney_m
+        zh=self.rho*self.c/max(self.area,1e-12)
+        k=2*math.pi*self.f_ref/self.c
+        z_open=zh*k*(chimney_length(b,a,t)+inner_length(b,a))
+        if self.nonlinear: z_open+=0.5*abs(self.v_hole)/self.c*zh
+        z_closed=zh*abs(1.0/math.tan(max(k*(t+matching_length(b,a)),1e-9)))
+        y=o*o/max(z_open,1e-3*zh)+(1.0-o*o)/max(z_closed,1e-3*zh)
+        return 1.0/y
 
 
 @dataclass
@@ -58,6 +78,8 @@ class MultiHoleBore:
     loss_dc: float=.999
     loss_hf: float=.982
     bell_cutoff_hz: float=900.0
+    f_ref_hz: float=0.0
+    nonlinear_holes: bool=False
 
     def __post_init__(self):
         n=len(self.hole_positions)
@@ -70,6 +92,11 @@ class MultiHoleBore:
         self.zb=rho*c/(math.pi*self.bore_radius_m**2)
         boundaries=np.concatenate(([0.0],pos,[1.0]))
         lengths=np.diff(boundaries)*self.length_m
+        fref=self.f_ref_hz or c/(4.0*self.length_m)
+        self.holes=[DynamicToneHole(r,ch,0.0,bore_radius_m=self.bore_radius_m,f_ref=fref,nonlinear=self.nonlinear_holes)
+                    for r,ch in zip(self.hole_radii_m,self.hole_chimneys_m)]
+        for j,h in enumerate(self.holes):   # each closed hole shortens the bore by its series length (negative)
+            lengths[j]+=0.5*h.series_length; lengths[j+1]+=0.5*h.series_length
         # One-way delays per segment. A minimum >1 sample keeps interpolation safe.
         self.seg=[]
         for L in lengths:
@@ -80,7 +107,6 @@ class MultiHoleBore:
                 'loss_lr': FrequencyDependentLoss(self.loss_dc,self.loss_hf,.55),
                 'loss_rl': FrequencyDependentLoss(self.loss_dc,self.loss_hf,.55),
             })
-        self.holes=[DynamicToneHole(r,ch,0.0) for r,ch in zip(self.hole_radii_m,self.hole_chimneys_m)]
         self.bell=BellRadiation(self.bell_cutoff_hz,self.sr,1.0)
 
     def set_fingering(self, openings):
@@ -107,6 +133,7 @@ class MultiHoleBore:
             out=zj.scatter(inc)
             to_left[j]=out[0]
             to_right[j+1]=out[1]
+            if h.nonlinear: h.v_hole=float(out[2]+inc[2])/(h.rho*h.c)   # junction pressure / rho c
             # Side-port outward pressure contribution weighted by openness.
             radiated += float(out[2])*float(h.openness)*0.16
         # Bell termination on final right-going wave.

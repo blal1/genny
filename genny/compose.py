@@ -72,6 +72,8 @@ RATIO_SCALES = {
     "slendro_equal": [2 ** (i / 5) for i in range(5)],               # octave in 5 equal parts (Ruiz i Carulla, Baschet annexes, citing Sethares p. 306)
 }
 RATIO_SCALES["7-11"] = RATIO_SCALES["seven_eleven"]
+RATIO_SCALES["ikeda_18"] = [2 ** (i / 18) for i in range(18)]
+RATIO_SCALES["pythagorean"] = sorted(1.5 ** i / 2 ** math.floor(i * math.log2(1.5)) for i in range(12))
 # 5-limit chromatic, used by "tuning": "just" to retune any 12-TET scale: every ratio is in Truax,
 # Handbook for Acoustic Ecology, "Just tuning" table (semitone 16:15 ... augmented fourth 45:32, minor seventh 9:5, major seventh 15:8)
 JUST12 = [1, 16 / 15, 9 / 8, 6 / 5, 5 / 4, 4 / 3, 45 / 32, 3 / 2, 8 / 5, 5 / 3, 9 / 5, 15 / 8]
@@ -200,8 +202,7 @@ def voice_lead(prev, pcs, key_pc: float = 0, lo: float = 48, hi: float = 72) -> 
 
 
 def functional_progression(rng, n: int = 4) -> str:
-    """Tonic -> subdominant -> dominant walk that ends on a dominant (turnaround).
-    # UNSOURCED: transition weights are textbook functional harmony, not from the findings files."""
+    """Tonic -> subdominant -> dominant walk that ends on a dominant (turnaround)."""
     cls = {"T": ["I", "vi", "iii"], "S": ["IV", "ii"], "D": ["V", "vii"]}
     nxt = {"T": (["T", "S", "D"], [0.2, 0.5, 0.3]), "S": (["T", "S", "D"], [0.3, 0.1, 0.6]), "D": (["T", "S", "D"], [0.8, 0.1, 0.1])}
     out, cur = ["I"], "T"
@@ -232,6 +233,388 @@ def euclid(k: int, n: int, rotate: int = 0) -> list[bool]:
     pat = [x for g in a + b for x in g]
     r = int(rotate) % n
     return pat[-r:] + pat[:-r] if r else pat
+
+
+_SIEVE_TOK = re.compile(r"\s*(?:(\d+)@(\d+)|([|&()-]))")
+
+
+def sieve(expr: str, n: int | None = None):
+    """Xenakis sieve: residue classes M@shift joined by | (union), & (intersection), - (difference),
+    with parentheses. Returns (steps of 0..n-1 in the sieve, period = lcm of the moduli)."""
+    toks, pos, mods = [], 0, []
+    expr = str(expr)
+    while pos < len(expr.rstrip()):
+        m = _SIEVE_TOK.match(expr, pos)
+        if not m:
+            raise SpecError(f"sieve {expr!r}: write residue classes like 3@0 | 4@1 & (5@2 - 7@0)")
+        if m.group(1):
+            mods.append((int(m.group(1)), int(m.group(2))))
+            toks.append(("c", mods[-1]))
+        else:
+            toks.append(("o", m.group(3)))
+        pos = m.end()
+    if not mods or any(mm < 1 for mm, _ in mods):
+        raise SpecError(f"sieve {expr!r}: needs at least one class with modulus >= 1")
+    period = math.lcm(*[mm for mm, _ in mods])
+    n = period if n is None else int(n)
+
+    def expr_(i):                                       # union and difference bind looser than intersection
+        s, i = term(i)
+        while i < len(toks) and toks[i] in (("o", "|"), ("o", "-")):
+            op = toks[i][1]
+            t, i = term(i + 1)
+            s = s | t if op == "|" else s - t
+        return s, i
+
+    def term(i):
+        s, i = atom(i)
+        while i < len(toks) and toks[i] == ("o", "&"):
+            t, i = atom(i + 1)
+            s = s & t
+        return s, i
+
+    def atom(i):
+        if i >= len(toks):
+            raise SpecError(f"sieve {expr!r}: incomplete")
+        kind, v = toks[i]
+        if kind == "c":
+            mm, sh = v
+            return {x for x in range(n) if x % mm == sh % mm}, i + 1
+        if v == "(":
+            s, i = expr_(i + 1)
+            if i >= len(toks) or toks[i] != ("o", ")"):
+                raise SpecError(f"sieve {expr!r}: missing )")
+            return s, i + 1
+        raise SpecError(f"sieve {expr!r}: unexpected {v!r}")
+
+    s, i = expr_(0)
+    if i != len(toks):
+        raise SpecError(f"sieve {expr!r}: unexpected {toks[i][1]!r}")
+    return sorted(s), period
+
+
+def tone_row_matrix(row) -> list[list[int]]:
+    """12 x 12 matrix of a twelve-tone row: row 0 is P0 (transposed to start on 0), column 0 is I0
+    (I = (12 - n) % 12 from the first note); read rows right to left for R, columns bottom-up for RI."""
+    row = [int(p) % 12 for p in row]
+    if sorted(row) != list(range(12)):
+        raise SpecError("a twelve-tone row uses each pitch class 0..11 once")
+    p0 = [(p - row[0]) % 12 for p in row]
+    return [[(p + (12 - q) % 12) % 12 for p in p0] for q in p0]
+
+
+def urn(values, n: int, rng) -> list:
+    """n draws without replacement, the urn refilled once empty: no value comes back before all the others."""
+    vals, out = list(values), []
+    if not vals:
+        raise SpecError("urn needs at least one value")
+    while len(out) < n:
+        out += [vals[i] for i in rng.permutation(len(vals))]
+    return out[:n]
+
+
+def select(values, n: int, rng, method: str = "alea", weights=None, group=None) -> list:
+    """Koenig's selection principles: series (urn), alea (random choice), ratio (weighted choice),
+    group (a random choice repeated `group` times, an int or [lo, hi]), sequence (in order, cycling)."""
+    vals = list(values)
+    if not vals:
+        raise SpecError("select needs at least one value")
+    if method == "series":
+        return urn(vals, n, rng)
+    if method == "alea":
+        return [vals[int(i)] for i in rng.integers(0, len(vals), n)]
+    if method == "ratio":
+        w = np.asarray(weights if weights is not None else [], float)
+        if w.shape != (len(vals),) or np.any(w < 0) or w.sum() <= 0:
+            raise SpecError("ratio needs one weight >= 0 per value")
+        return [vals[int(i)] for i in rng.choice(len(vals), n, p=w / w.sum())]
+    if method == "group":
+        if group is None:
+            raise SpecError("group needs `group`: repetitions, an int or [lo, hi]")
+        lo, hi = (group, group) if np.isscalar(group) else group
+        out = []
+        while len(out) < n:
+            out += [vals[int(rng.integers(0, len(vals)))]] * int(rng.integers(int(lo), int(hi) + 1))
+        return out[:n]
+    if method == "sequence":
+        return [vals[i % len(vals)] for i in range(n)]
+    raise SpecError("select method: series|alea|ratio|group|sequence")
+
+
+def _curve(c, x):
+    """A constant, or breakpoints [[x, value], ...] with x in 0..1, read at x."""
+    if np.isscalar(c):
+        return np.full(np.shape(x), float(c))
+    pts = np.asarray(c, float)
+    return np.interp(x, pts[:, 0], pts[:, 1])
+
+
+def tendency(lo, hi, n: int, rng) -> np.ndarray:
+    """Tendency mask: n uniform draws between two boundaries that move over the span (constants or breakpoints)."""
+    x = np.linspace(0.0, 1.0, n) if n > 1 else np.zeros(n)
+    a, b = _curve(lo, x), _curve(hi, x)
+    return np.minimum(a, b) + rng.random(n) * np.abs(b - a)
+
+
+def elementary_ca(rule: int, width: int, rows: int, init="center") -> np.ndarray:
+    """One-dimensional two-state cellular automaton, neighbourhood 3, Wolfram rule number, wrapping row."""
+    r = int(rule) % 256
+    if init == "center":
+        row = np.zeros(width, int)
+        row[width // 2] = 1
+    else:
+        row = np.array([int(ch) for ch in str(init)] * (width // max(1, len(str(init))) + 1), int)[:width]
+    out = [row]
+    for _ in range(rows - 1):
+        k = 4 * np.roll(row, 1) + 2 * row + np.roll(row, -1)
+        row = (r >> k) & 1
+        out.append(row)
+    return np.array(out)
+
+
+_LSYS = re.compile(r"(\w+)\{([^}]*)\}")
+
+
+def lsystem(grammar: str, steps: int, rng=None):
+    """'a{3}b{-2} @ a{ab} b{a} @ a': symbol values, rewrite rules (alternatives `x|y`, weights `x=3|y=2`), axiom.
+    Returns the values of the string after `steps` rewrites."""
+    parts = [p.strip() for p in str(grammar).split("@")]
+    if len(parts) != 3:
+        raise SpecError("lsystem grammar: 'values @ rules @ axiom'")
+    vals = {k: float(v) for k, v in _LSYS.findall(parts[0])}
+    rules = {}
+    for src, dst in _LSYS.findall(parts[1]):
+        alts = [a.split("=") for a in dst.split("|")]
+        rules[src] = ([a[0] for a in alts], np.array([float(a[1]) if len(a) > 1 else 1.0 for a in alts]))
+    s = parts[2]
+    syms = sorted(vals, key=len, reverse=True)
+    for _ in range(int(steps)):
+        out, i = [], 0
+        while i < len(s):
+            src = next((r for r in sorted(rules, key=len, reverse=True) if s.startswith(r, i)), None)
+            if src is None:
+                out.append(s[i])
+                i += 1
+                continue
+            alts, w = rules[src]
+            j = 0 if len(alts) == 1 or rng is None else int(rng.choice(len(alts), p=w / w.sum()))
+            out.append(alts[j])
+            i += len(src)
+        s = "".join(out)
+    res, i = [], 0
+    while i < len(s):
+        sym = next((k for k in syms if s.startswith(k, i)), None)
+        if sym is None:
+            raise SpecError(f"lsystem: symbol at {s[i:i + 4]!r} has no value")
+        res.append(vals[sym])
+        i += len(sym)
+    return res
+
+
+GA_FIT = ((4, 3, 1), (4, 3, 1), (4, 1, 0), (2, 1, 1), (4, 1, 0), (3, 2, 1), (3, 1, 0))
+
+
+def ga_fitness(ch, fit) -> float:
+    """Distance in beats of a rhythm (divisor, multiplier, note 1 / rest 0) to the target: 0 = the target."""
+    dur = lambda a: a[1] / a[0]                                                  # noqa: E731
+    tot = lambda r, s: sum(dur(a) for a in r if s is None or a[2] == s)          # noqa: E731
+    same_v = sum(abs(dur(a) - dur(b)) < 1e-9 for a, b in zip(ch, fit))
+    same_a = sum(abs(dur(a) - dur(b)) < 1e-9 and a[2] == b[2] for a, b in zip(ch, fit))
+    unit = tot(fit, None) / len(fit)
+    return (1.5 * abs(tot(ch, 1) - tot(fit, 1)) + 1.5 * abs(tot(ch, 0) - tot(fit, 0)) + 2.33 * abs(tot(ch, None) - tot(fit, None))
+            + 1.0 * (len(fit) - same_a) * unit + 0.66 * (len(fit) - same_v) * unit)
+
+
+def _ga_mutate(ch, rng):
+    ch = [list(a) for a in ch]
+    kind = int(rng.integers(5))
+    i = int(rng.integers(len(ch)))
+    a = ch[i]
+    if kind == 0:
+        f = int(rng.choice((2, 3)))
+        if rng.random() < 0.5 and a[0] % f == 0 and a[1] % f == 0:
+            a[0], a[1] = a[0] // f, a[1] // f
+        else:
+            a[0], a[1] = a[0] * f, a[1] * f
+    elif kind in (1, 2):
+        j = kind - 1
+        a[j] = a[j] + 1 if a[j] == 1 or rng.random() < 0.5 else a[j] - 1
+    elif kind == 3:
+        a[2] = 1 - a[2]
+    else:
+        lo, hi = sorted(int(x) for x in rng.integers(len(ch), size=2))
+        ch[lo:hi + 1] = ch[lo:hi + 1][::-1]
+    return [tuple(x) for x in ch]
+
+
+_RIFF_TXT = """
+Eb4 D4 A4 F4 E4 C5 A4 A4 | F4 A4 Eb5 D5 E4 A4 C5 A4 | Ab4 A4 H G5 H Eb5 C5 E5 | Ab4 A4 B4 C5 Eb5 E5 Ab5 A5
+A4 Bb4 B4 C5 Db5 D5 Eb5 E5 | A4 Bb4 B4 C5 E5 Eb5 D5 C5 | A4 B4 C5 A4 B4 C5 D5 B4 | A4 B4 C5 D5 Eb5 E5 Eb5 C5
+A4 C5 D5 Eb5 Gb5 Ab5 A5 C6 | A4 C5 Eb5 B4 D5 F5 Eb5 C5 | A4 C5 E5 G5 B5 A5 G5 E5 | A4 C5 E5 A5 G5 Eb5 C5 A4
+B4 A4 B4 C5 B4 A4 B4 C5 | B4 A4 B4 C5 B4 C5 B4 A4 | B4 A4 B4 C5 D5 C5 D5 Eb5 | C5 Ab4 A4 G5 F5 Gb5 Eb5 E5
+C5 D5 C5 B4 C5 B4 A4 H | C5 D5 Eb5 C5 D5 Eb5 F5 D5 | D5 C5 A4 C5 E5 Eb5 D5 C5 | D5 C5 D5 Eb5 D5 C5 D5 Eb5
+D5 Eb5 E5 F5 Gb5 G5 Ab5 A5 | D5 Eb5 G5 Eb5 D5 C5 B4 C5 | D5 Eb5 A5 D5 H C5 A4 E4 | D5 E5 G5 E5 C5 H D5 A5
+Eb5 D5 Eb5 D5 H C5 A4 H | Eb5 D5 Eb5 F5 Eb5 D5 C5 B4 | Eb5 E5 D5 C5 B4 A4 Ab4 A4 | Eb5 E5 A5 C5 B4 E5 A4 A4
+Eb5 Gb5 E5 A4 B4 D5 C5 E4 | E5 A4 C5 Ab4 B4 G4 Gb4 E4 | E5 Eb5 D5 C5 B4 C5 D5 F5 | G5 E5 D5 B4 Eb5 H C5 A4
+G5 E5 D5 Gb5 C5 H A4 H | Ab5 A5 Ab5 A5 Ab5 A5 Ab5 A5 | A5 E5 C5 G4 C5 E5 A5 A5 | A5 E5 C5 A4 G5 Eb5 C5 A4
+A5 B5 G5 E5 F5 Gb5 G5 Ab5 | B5 C6 A5 E5 G5 B5 A5 H | B5 D6 C6 E5 Ab5 B5 A5 C5 | C6 B5 A5 G5 Gb5 E5 Eb5 C5
+"""
+_PC = {"C": 0, "Db": 1, "D": 2, "Eb": 3, "E": 4, "F": 5, "Gb": 6, "G": 7, "Ab": 8, "A": 9, "Bb": 10, "B": 11}
+RIFFS = [[None if n == "H" else 12 * (int(n[-1]) + 1) + _PC[n[:-1]] for n in r.split()]
+         for r in _RIFF_TXT.replace("\n", " | ").split("|") if r.strip()]
+RIFF_TRIES = 3
+RIFF_BIV = (28, 0, 7, 0, 14, 0, 7, 4)
+
+
+def riff_energy(i: int, nbars: int) -> float:
+    """Chance (%) that a riff note is played: high at the start, lowest in the middle third, rising to the end."""
+    if 3 * i < nbars:
+        return 100 - 90 * i / nbars
+    if 3 * i > 2 * nbars:
+        return 40 + 90 * i / nbars
+    return 70.0
+
+
+def riffology(nbars: int, rng, meter: float = 4.0, transpose: float = 0.0, vel: float = 0.5) -> list:
+    """Riffs of 8 notes strung end to end: each bar plays 1, 2 or 4 riffs (a random walk of the speed), each riff
+    the best of three draws, the one starting nearest the last note (a repeat counts as a tritone); a note is
+    skipped when energy + beat weight < U(0, 100), and then becomes a rest or a hold."""
+    out, last, tempo, t = [], None, 1, 0.0
+    for b in range(nbars):
+        if tempo > rng.integers(3):
+            tempo -= 1
+        elif tempo < rng.integers(3):
+            tempo += 1
+        rpb = 1 << tempo
+        d = meter / (8 * rpb)
+        en = riff_energy(b, nbars)
+        for _ in range(rpb):
+            best, bd = None, 999
+            for _ in range(RIFF_TRIES):
+                r = RIFFS[int(rng.integers(len(RIFFS)))]
+                if last is None:
+                    best = r
+                    break
+                dn = abs(last - (r[0] if r[0] is not None else last)) or 6
+                if dn < bd:
+                    best, bd = r, dn
+            for i, n in enumerate(best):
+                if n is not None and en + RIFF_BIV[i] < rng.integers(100):
+                    n = "rest" if rng.random() < 0.5 else None
+                if n is None:
+                    if out and out[-1]["t"] + out[-1]["dur"] >= t - 1e-9:
+                        out[-1]["dur"] += d
+                elif n != "rest":
+                    out.append(_ev(t, d, n + transpose, vel))
+                    last = n
+                t += d
+    return out
+
+
+def _vlq(n: int) -> bytes:
+    out = [n & 0x7F]
+    while n > 0x7F:
+        n >>= 7
+        out.append(0x80 | (n & 0x7F))
+    return bytes(reversed(out))
+
+
+def write_midi(events, path, bpm: float = 120.0, ppq: int = 480, channel: int = 0) -> bytes:
+    """Standard MIDI File, format 0, one track: events {"t", "dur"} in beats, "pitch" MIDI, "vel" 0..1.
+    Writes ``path`` when given and returns the bytes."""
+    msgs = []
+    for e in events:
+        k, v = int(round(e["pitch"])), max(1, min(127, int(round(127 * float(e.get("vel", 0.5))))))
+        on, off = int(round(e["t"] * ppq)), int(round((e["t"] + e["dur"]) * ppq))
+        msgs += [(off, 0, bytes((0x80 | channel, k, 0))), (on, 1, bytes((0x90 | channel, k, v)))]
+    us = int(round(60e6 / bpm))
+    trk, now = bytearray(b"\x00\xff\x51\x03" + us.to_bytes(3, "big")), 0
+    for tick, _, m in sorted(msgs, key=lambda m: m[:2]):
+        trk += _vlq(tick - now) + m
+        now = tick
+    trk += b"\x00\xff\x2f\x00"
+    data = b"MThd" + (6).to_bytes(4, "big") + (0).to_bytes(2, "big") + (1).to_bytes(2, "big") + ppq.to_bytes(2, "big")
+    data += b"MTrk" + len(trk).to_bytes(4, "big") + bytes(trk)
+    if path:
+        with open(path, "wb") as f:
+            f.write(data)
+    return data
+
+
+def ga_rhythm(fit, gens: int, rng, n: int = 20, pc: float = 0.8, pm: float = 0.18, elite: float = 0.16) -> list:
+    """Best rhythm of each generation of a genetic algorithm that evolves random rhythms toward `fit`."""
+    fit = [tuple(int(v) for v in a) for a in fit]
+    pop = [[fit[int(i)] for i in rng.integers(len(fit), size=len(fit))] for _ in range(n)]
+    best = []
+    for _ in range(int(gens)):
+        f = np.array([ga_fitness(ch, fit) for ch in pop])
+        order = np.argsort(f, kind="stable")
+        best.append(pop[order[0]])
+        w = f.max() - f + 1e-9
+        w = w / w.sum()
+        new = [pop[i] for i in order[:int(round(elite * n))]]
+        while len(new) < n:
+            a, b = (pop[int(i)] for i in rng.choice(n, size=2, p=w))
+            if rng.random() < pc and len(fit) > 2:
+                i, j = sorted(int(x) for x in rng.choice(np.arange(1, len(fit)), size=2, replace=False))
+                a, b = a[:i] + b[i:j] + a[j:], b[:i] + a[i:j] + b[j:]
+            new += [_ga_mutate(x, rng) if rng.random() < pm else list(x) for x in (a, b)]
+        pop = new[:n]
+    return best
+
+
+def monte_carlo(n: int, size: int, rng, min_step: int = 1, max_step: int = 3, start: int = 0) -> list[int]:
+    """Indices into a scale of `size` pitches: each next one drawn uniformly among those whose distance
+    to the previous one lies in [min_step, max_step] (rejection sampling without the retries)."""
+    if not 0 <= min_step <= max_step or min_step >= size:
+        raise SpecError("montecarlo needs 0 <= min_step <= max_step < scale size")
+    out = [int(np.clip(start, 0, size - 1))]
+    while len(out) < n:
+        ok = [j for j in range(size) if min_step <= abs(j - out[-1]) <= max_step]
+        if not ok:
+            raise SpecError(f"montecarlo: no scale degree lies {min_step}..{max_step} steps from degree {out[-1]} of {size}")
+        out.append(ok[int(rng.integers(0, len(ok)))])
+    return out[:n]
+
+
+MOOD_POINTS = {"calm": (0.6, -0.6, 0.05), "fun": (0.8, 0.5, 0.1), "fastpaced": (0.3, 0.9, 0.4),
+               "anticipation": (0.0, 0.3, 0.7), "threat": (-0.7, 0.4, 0.8), "horror": (-0.9, 0.2, 0.9),
+               "sad": (-0.6, -0.5, 0.2), "triumphant": (0.9, 0.7, 0.15)}
+
+
+def mood_params(valence: float, arousal: float, tension: float) -> dict:
+    """Mood (valence -1..1, arousal -1..1, tension 0..1) -> tempo, root (MIDI), scale, brightness (Hz),
+    detune between voices (semitones), decorative events per minute, heart rate (bpm)."""
+    v, a, T = float(valence), float(arousal), float(tension)
+    if not (-1 <= v <= 1 and -1 <= a <= 1 and 0 <= T <= 1):
+        raise SpecError("mood: valence and arousal in -1..1, tension in 0..1")
+    scale = "chromatic" if T > 0.75 else "major" if v > 0.3 else "minor" if v > -0.3 else "phrygian"
+    return {"bpm": 72 + 48 * a, "root": 45 + 7 * v - 8 * T, "scale": scale,
+            "brightness": 600 + 2600 * min(1.0, max(0.0, 0.5 + 0.35 * v + 0.25 * a)),
+            "detune": 0.03 + 0.35 * T + 0.15 * max(0.0, -v), "events_per_min": 2 + 10 * max(0.0, a) + 4 * T,
+            "heart_bpm": 60 + 30 * max(0.0, a) + 40 * T}
+
+
+def tension_step(tension: int) -> int:
+    """One update of a decaying tension 0..100: minus (tension + 20) // 10 from 2 up, minus 1 at 1."""
+    t = int(tension)
+    if t >= 2:
+        return max(0, t - (t + 20) // 10)
+    return t - 1 if t >= 1 else t
+
+
+def condition_met(cond: dict, value) -> bool:
+    """{"type": "equal|greater|less|range", "value": v or [lo, hi]} against a game value."""
+    kind, v = str(cond.get("type", "equal")).lower(), cond.get("value")
+    if kind == "equal":
+        return value == v
+    if kind == "greater":
+        return value > v
+    if kind == "less":
+        return value < v
+    if kind == "range":
+        return v[0] <= value <= v[1]
+    raise SpecError("condition type: equal|greater|less|range")
 
 
 def steps_str(pat) -> str:
@@ -283,6 +666,41 @@ def voss(n: int, rng, generators: int = 4) -> np.ndarray:
                 vals[g] = rng.random()
         out[i] = vals.sum() / generators
     return out
+
+
+def gamma_noise(n: int, gamma: float, rng) -> np.ndarray:
+    """1/f^gamma sequence in 0..1 (gamma 0 white, 1 pink, 2 brown), from `contact.fractal_noise` run at
+    one sample per step with its lowest pole at 1/n."""
+    from .contact import fractal_noise
+    if n < 2:
+        return np.full(max(n, 0), 0.5)
+    x = fractal_noise(n, gamma, 1.0, f_low=1.0 / n, seed=int(rng.integers(2**31)))
+    return (x - x.min()) / (x.max() - x.min() + 1e-12)
+
+
+HENNIG_BETA, HENNIG_MS = 1.0, 15.0
+ARMA_HIHAT_AR = (-0.5, 0.48, 0.19, 0.03)
+ARMA_HIHAT_MA = 0.93
+
+
+def arma_hihat(n: int, rng) -> np.ndarray:
+    """Unit-sd timing deviations from the ARIMA(4,0,1) fitted to a drummer's 16th-note hi-hat
+    (AR -0.5, 0.48, 0.19, 0.03; MA 0.93); 200 burn-in steps are dropped."""
+    e = rng.standard_normal(n + 200)
+    x = lfilter([1.0, ARMA_HIHAT_MA], np.r_[1.0, -np.asarray(ARMA_HIHAT_AR)], e)[200:]
+    return (x - x.mean()) / (x.std() + 1e-12) if n > 1 else np.zeros(n)
+
+
+def poisson_grains(dur: float, density: float, rng, grain=(0.06, 0.12)) -> list[tuple[float, float]]:
+    """Stochastic grain cloud: exponential inter-onset times (Poisson, `density` grains per second),
+    each grain lasting uniform in `grain` seconds. Returns (onset, length) pairs in seconds."""
+    out, t = [], 0.0
+    lam = max(float(density), 1e-6)
+    while True:
+        t += rng.exponential(1.0 / lam)
+        if t >= dur:
+            return out
+        out.append((t, float(rng.uniform(*grain))))
 
 
 # ============================================================================ theory: motifs
@@ -565,8 +983,7 @@ def harmony(layer: dict, bpm=None) -> list[dict]:
 
 def _weight(c, s):
     """Metric weight of a step: bar start and half bar 1, beats 0.8, half beats 0.5, the rest 0.12.
-    Order after Colley & Dean 2019 (PLoS ONE e0216088): drummers accent 16ths 1 and 9 > 3, 5, 7... > the rest.
-    # UNSOURCED: the weight values themselves."""
+    Order after Colley & Dean 2019 (PLoS ONE e0216088): drummers accent 16ths 1 and 9 > 3, 5, 7... > the rest."""
     if s == 0 or (_strong(c, s) and c.meter == 4):
         return 1.0
     if s % c.spb == 0:
@@ -623,12 +1040,32 @@ def _gen_melody(c, sec, rng, L):
     mode = L.get("mode", "walk")
     if mode in ("motif", "call_response"):
         return _gen_motif(c, sec, rng, L, mode)
+    if mode == "riff":
+        tr = (c.kpc - 9) % 12
+        tr = tr - 12 if tr > 6 else tr
+        tr += 12 * round((0.5 * (c.lo + c.hi) - 72 - tr) / 12)
+        t0 = sec.bar0 * c.meter
+        return [{**e, "t": e["t"] + t0, "vel": float(L.get("vel", 0.5))}
+                for e in riffology(sec.nbars, rng, c.meter, tr)]
     P = _pitches(c.kpc, c.offs, c.lo, c.hi)
     if len(P) < 3:
         raise SpecError("range too narrow for the scale")
+    if mode == "ga":
+        t, end, out, j = sec.bar0 * c.meter, (sec.bar0 + sec.nbars) * c.meter, [], len(P) // 2
+        for ch in ga_rhythm(L.get("fit", GA_FIT), int(L.get("generations", 25)), rng):
+            for dv, ml, state in ch:
+                d = ml / dv
+                if t + d > end + 1e-9:
+                    return out
+                if state:
+                    j = _reflect(j + int(rng.integers(-2, 3)), len(P))
+                    out.append(_ev(t, d * float(L.get("gate", 0.92)), P[j], 0.7))
+                t += d
+        return out
     ph = max(1, min(int(L.get("phrase", 2)), sec.nbars))
     snap = bool(L.get("snap", True))
-    p_near, p_chord = float(L.get("p_near", 0.75)), float(L.get("p_chord", 0.3))     # UNSOURCED: Zen rules give no numbers
+    p_near, p_chord = float(L.get("p_near", 0.75)), float(L.get("p_chord", 0.3))
+    p_repeat = float(L.get("p_repeat", 0.0))
     gate = float(L.get("gate", 0.92))
     shape = {"arch": lambda x: 0.3 + 0.5 * math.sin(math.pi * x), "rise": lambda x: 0.2 + 0.6 * x,
              "fall": lambda x: 0.8 - 0.6 * x, "flat": lambda x: 0.5}.get(L.get("contour", "arch"))
@@ -650,18 +1087,65 @@ def _gen_melody(c, sec, rng, L):
     # pitch sources ---------------------------------------------------------------
     mid = P.index(_near(P, (c.lo + c.hi) / 2))
     if mode == "markov":
-        order = int(np.clip(L.get("order", 1), 1, 2))
+        ford = float(np.clip(L.get("order", 1), 0, 4))
+        o_lo, frac = int(math.floor(ford)), ford - math.floor(ford)
         mot = [o for o, _ in (_parse_motif(c, L["motif"], 0.5) if L.get("motif") is not None
                               else [(int(v), 0.5) for v in np.cumsum(rng.integers(-2, 3, 8))])]
-        table = {}
-        for i in range(len(mot)):                       # trained cyclically so no context is a dead end
-            table.setdefault(tuple(mot[(i + j) % len(mot)] for j in range(order)), []).append(mot[(i + order) % len(mot)])
-        seq = list(mot[:order])
+        tables = {}
+        for order in {o_lo, min(4, o_lo + 1)}:
+            table = tables[order] = {}
+            for i in range(len(mot)):                   # trained cyclically so no context is a dead end
+                table.setdefault(tuple(mot[(i + j) % len(mot)] for j in range(order)), []).append(mot[(i + order) % len(mot)])
+        seq = list(mot[:o_lo + (1 if frac > 0 else 0)])
         while len(seq) < n:
-            seq.append(int(rng.choice(table[tuple(seq[-order:])])))
-        raw = [P[_reflect(mid + o, len(P))] for o in seq]
+            order = o_lo + 1 if frac > 0 and rng.random() < frac else o_lo      # fractional order: the two neighbours
+            seq.append(int(rng.choice(tables[order][tuple(seq[len(seq) - order:])])))
+        raw = [P[_reflect(mid + o, len(P))] for o in seq[:n]]
+    elif mode == "montecarlo":
+        idx = monte_carlo(n, len(P), rng, int(L.get("min_step", 1)), int(L.get("max_step", 3)), mid)
+        raw = [P[i] for i in idx]
+    elif mode == "ca":
+        width = int(L.get("cells", 20))
+        rows = elementary_ca(int(L.get("rule", 90)), width, max(2, n), L.get("init", "center"))
+        act = [int(i) for r in rows for i in np.flatnonzero(r)] or [0]
+        raw = [P[_reflect(mid - width // 2 + a, len(P))] for a in act[:n]]
+    elif mode == "lsystem":
+        g = L.get("grammar", "a{3}b{-2} @ a{ab} b{a} @ a")
+        k, vals = 1, []
+        while len(vals) < n and k < 40:
+            vals = lsystem(g, k, rng)
+            k += 1
+        steps = (list(vals) * (n // max(1, len(vals)) + 1))[:n]
+        raw, j = [], mid
+        for s in steps:                                 # values are intervals in scale steps
+            j = _reflect(j + int(round(s)), len(P))
+            raw.append(P[j])
+    elif mode == "koenig":
+        raw = select(P, n, rng, L.get("select", "series"), L.get("weights"), L.get("group"))
+    elif mode == "tendency":
+        lo, hi = L.get("mask_lo", c.lo), L.get("mask_hi", c.hi)
+        raw = [_near(P, x) for x in tendency(lo, hi, n, rng)]
+    elif mode == "logistic":
+        r = float(L.get("r", 3.9))
+        if not 0.0 < r <= 4.0:
+            raise SpecError("logistic r: 0 < r <= 4")
+        x, raw = float(L.get("x0", rng.uniform(0.05, 0.95))), []
+        for _ in range(n):
+            raw.append(P[int(round(x * (len(P) - 1)))])
+            x = r * x * (1.0 - x)
+    elif mode == "row":
+        M = tone_row_matrix(L.get("row") or list(rng.permutation(12)))
+        forms = [M[0], M[0][::-1], [r[0] for r in M], [r[0] for r in M][::-1]]       # P0, R0, I0, RI0
+        pcs = [pc for f in forms for pc in f]
+        raw = []
+        for i in range(n):
+            pc = (pcs[i % len(pcs)] + c.kpc) % 12
+            same = [p for p in P if abs((p - pc) % 12) < 1e-6]
+            raw.append(_near(same or P, raw[-1] if raw else P[mid]))
     elif mode == "voss":
-        raw = [P[int(round(v * (len(P) - 1)))] for v in voss(n, rng)]
+        g = L.get("gamma")
+        seq = voss(n, rng) if g is None else gamma_noise(n, float(g), rng)
+        raw = [P[int(round(v * (len(P) - 1)))] for v in seq]
     elif mode == "collatz":                             # hailstone numbers coerced to the range and scale
         a0 = a = max(2, int(L.get("start", 7 + c.seed % 90)))
         raw = []
@@ -674,7 +1158,7 @@ def _gen_melody(c, sec, rng, L):
     elif mode == "walk":
         raw = None
     else:
-        raise SpecError("melody mode: walk|markov|voss|collatz|motif|call_response")
+        raise SpecError("melody mode: ga|riff|walk|markov|voss|collatz|logistic|row|montecarlo|ca|lsystem|koenig|tendency|motif|call_response")
     vel = _contour(n, rng)
     out, cur = [], None
     for i, (b, s) in enumerate(onsets):
@@ -684,10 +1168,13 @@ def _gen_melody(c, sec, rng, L):
         nxt = onsets[i + 1][0] * c.S + onsets[i + 1][1] if i + 1 < n else sec.nbars * c.S
         phrase_end = i + 1 == n or onsets[i + 1][0] // ph != b // ph
         target = c.lo + (c.hi - c.lo) * shape(((b % ph) * c.S + s) / (ph * c.S))
+        rep = None
         if raw is not None:
             prop = raw[i]
         elif cur is None:
             prop = _near(P, target)
+        elif p_repeat and rng.random() < p_repeat:
+            prop = rep = cur
         else:
             j = P.index(cur)
             toward = 1 if target > cur else -1
@@ -696,7 +1183,8 @@ def _gen_melody(c, sec, rng, L):
         if i + 1 == n and sec.index == len(c.sections) - 1:
             prop = _near([p for p in T if abs((p - c.kpc - ch["root"]) % 12) < 1e-6] or T, prop)   # home: the root
         elif phrase_end or (snap and _strong(c, s)) or (raw is None and rng.random() < p_chord):
-            prop = _near([p for p in T if p != cur] or T, prop)       # a chord tone, but keep the line moving
+            if rep is None or rep not in T:
+                prop = _near([p for p in T if p != cur] or T, prop)   # a chord tone, but keep the line moving
         cur = prop
         dur = min((nxt - here) * c.grid, c.meter if phrase_end else 2.0) * gate
         out.append(_ev(sec.bar0 * c.meter + here * c.grid, dur, cur, float(vel[i]) * (0.75 + 0.25 * _weight(c, s))))
@@ -971,6 +1459,12 @@ def _gen_drums(c, sec, rng, L):
     names = [k.split(":")[0] for k in kit]
     fill_a = next((k for k in ("snare", "snare808", "clap", "snap", "rim") if k in names), names[0] if names else "snare")
     fill_b = "tom" if fill_a.startswith(("snare", "clap", "snap")) else fill_a
+    lv = dict(_LEVEL)
+    if L.get("accent") is not None:                     # accent X : hit x ratio; ghosts keep their ratio to x
+        r = float(L["accent"])
+        if r < 1:
+            raise SpecError("accent >= 1 (X : x)")
+        lv = {"X": 1.0, "x": 1.0 / r, "?": 1.0 / r, "o": _LEVEL["o"] / _LEVEL["x"] / r}
     out = []
     for b in range(sec.nbars):
         zone = c.S
@@ -988,11 +1482,21 @@ def _gen_drums(c, sec, rng, L):
                     continue
                 if name in _HATS and s % c.spb and (rng.random() > 0.5 + c.density or (ch == "o" and c.density < 0.35)):
                     continue
-                out.append(_ev(t0 + s * c.grid, 0.0, None, _LEVEL[ch], drum=key))
+                out.append(_ev(t0 + s * c.grid, 0.0, None, lv[ch], drum=key))
         for s in range(zone, c.S):
             if rng.random() < 0.75:
                 x = (s - zone) / max(1, c.S - zone - 1)
                 out.append(_ev(t0 + s * c.grid, 0.0, None, 0.5 + 0.5 * x, drum=fill_b if x > 0.5 else fill_a, fill=True))
+    dip = L.get("accent_dip")
+    if dip:
+        dip = ACCENT_DIP_DB if dip is True else float(dip)
+        by = {}
+        for e in sorted(out, key=lambda e: e["t"]):
+            by.setdefault(e["drum"], []).append(e)
+        for seq in by.values():
+            for a, b in zip(seq, seq[1:]):
+                if b["vel"] >= lv["X"] - 1e-9 > a["vel"]:
+                    a["vel"] *= 10 ** (-dip / 20.0)
     return out
 
 
@@ -1001,37 +1505,434 @@ _GEN = {"melody": _gen_melody, "bass": _gen_bass, "chords": _gen_chords, "arp": 
 
 
 # ============================================================================ performance
+def swing_auto(pair_s: float) -> float:
+    """`swing` for a long-short pair lasting `pair_s` seconds: the short note stays at 100 ms, the
+    ratio between 1:1 and 3.5:1 (2:1 at 200 bpm eighths, 1:1 at 300)."""
+    r = float(np.clip((pair_s - 0.1) / 0.1, 1.0, 3.5))
+    return (r - 1.0) / (r + 1.0)
+
+
+def soloist_delay(bpm: float) -> float:
+    """Jazz soloist's lag behind the ride cymbal on the beats, in ms (the off-beats stay together)."""
+    return max(0.0, 107.2 - 0.306 * float(bpm))
+
+
+PHRASE_LENGTHEN_NOTES, PHRASE_LENGTHEN_LAST = 3, 0.20
+NMA_MS = {"musician": 30.0, "novice": 50.0}
+ENSEMBLE_SD = (0.03, 30.0, 50.0)
+ACCENT_DIP_DB = 2.0
+EMOTIONS = {
+    "angry": {"rules": {"duration_contrast": 1.0, "high_loud": 1.0, "leap_articulation": 1.0, "repetition": 1.0,
+                        "phrase_arch": -1.0}, "tempo": 1.15, "level_db": 3.0, "articulation": 0.75},
+    "happy": {"rules": {"duration_contrast": 1.0, "leap_articulation": 1.0, "repetition": 1.0, "faster_uphill": 1.0},
+              "tempo": 1.15, "level_db": 3.0, "articulation": 0.75},
+    "sad": {"rules": {"duration_contrast": -1.0, "phrase_arch": 1.0, "kth_phrase": 1.0},
+            "tempo": 0.85, "level_db": -3.0, "articulation": 1.0},
+    "tender": {"rules": {"duration_contrast": -1.0, "phrase_arch": 1.0, "kth_phrase": 1.0, "high_loud": -1.0},
+               "tempo": 0.85, "level_db": -3.0, "articulation": 1.0},
+}
+
+
+def ensemble_sigma_ms(ioi_ms: float) -> float:
+    """Spread (sd, ms) of the onsets of an ensemble: 3 % of the IOI, held within 30-50 ms."""
+    r, lo, hi = ENSEMBLE_SD
+    return float(np.clip(r * float(ioi_ms), lo, hi))
+
+
+ELLIS_DELAY = ((90.0, 40.0), (120.0, 47.0), (150.0, 53.0), (180.0, 54.0), (210.0, 63.0))
+FEEL_BASS_MS = 10.0
+RIDE_RATIO_REF = (132.0, 2.4)
+RIDE_STRAIGHT_BPM = 300.0
+
+
+def ellis_delay(bpm: float) -> float:
+    """Soloist's lag on the beats in ms, measured over 90-210 bpm (held flat outside)."""
+    b, d = zip(*ELLIS_DELAY)
+    return float(np.interp(float(bpm), b, d))
+
+
+def ride_ratio(bpm: float) -> float:
+    """Long:short ratio of the ride cymbal's swung eighths: 2.4:1 at 132 bpm, straight (1:1) at 300,
+    linear in between and beyond, capped at 3.5:1."""
+    b0, r0 = RIDE_RATIO_REF
+    return float(np.clip(r0 + (1.0 - r0) * (float(bpm) - b0) / (RIDE_STRAIGHT_BPM - b0), 1.0, 3.5))
+
+
+def ritard_map(rit, total: float, meter: float = 4.0, end: float | None = None):
+    """Final ritardando over the `beats` (default one bar) before `end`, the onset of the last note
+    (default `total`): tempo v(x) = [1 + (v_end^q - 1) x]^(1/q), x from 0 to 1 across the span, then
+    v_end. Returns the nominal-beat -> played-beat map, or None. `rit`: a number of beats or
+    {"beats", "v_end", "q"}."""
+    if not rit:
+        return None
+    rit = rit if isinstance(rit, dict) else {"beats": rit}
+    end = float(rit.get("end", total if end is None else end))
+    span = float(rit.get("beats", meter))
+    if rit.get("model") == "kth":
+        span = min(span, end)
+        if span <= 0:
+            return None
+        s0 = end - span
+        return lambda b: b if b <= s0 else (s0 + span * 2.0 * (math.sqrt(1.1) - math.sqrt(1.1 - min((b - s0) / span, 1.0)))
+                                            + max(0.0, b - end) / math.sqrt(0.1))
+    q, v_end = float(rit.get("q", 3.0)), float(rit.get("v_end", 0.3))
+    if span <= 0 or q <= 0 or not 0 < v_end <= 1:
+        raise SpecError("ritard needs beats > 0, q > 0 and 0 < v_end <= 1")
+    span = min(span, end)
+    if span <= 0:
+        return None
+    total = end
+    s0, k = total - span, v_end ** q - 1.0
+
+    def f(b):
+        if b <= s0:
+            return b
+        x = min((b - s0) / span, 1.0)
+        if abs(k) < 1e-12:
+            u = x
+        elif abs(q - 1.0) < 1e-12:
+            u = math.log1p(k * x) / k
+        else:
+            u = q / ((q - 1.0) * k) * ((1.0 + k * x) ** ((q - 1.0) / q) - 1.0)
+        return s0 + span * u + max(0.0, b - total) / v_end
+    return f
+
+
+def _ioi_warp(ev, q, fn):
+    """Re-time the onsets (chords together) so each inter-onset interval in seconds becomes fn(ioi)."""
+    on = sorted({e["t"] for e in ev})
+    if len(on) < 2:
+        return
+    new = np.concatenate(([on[0]], on[0] + np.cumsum(np.maximum(fn(np.diff(on) * q), 0.0) / q)))
+    m = lambda b: float(np.interp(b, on, new)) if b <= on[-1] else new[-1] + b - on[-1]   # noqa: E731
+    for e in ev:
+        t1 = m(e["t"] + e["dur"])
+        e["t"] = m(e["t"])
+        e["dur"] = max(0.0, t1 - e["t"])
+
+
+def _kth(ev, c, L):
+    """KTH rules on the score, chords as one tone (top pitch): high loud, high sharp, double duration, duration
+    contrast, faster uphill, articulation of repetition."""
+    k = float(L.get("high_loud", 0.0))
+    if k:
+        for e in ev:
+            if e["pitch"] is not None:
+                e["vel"] *= 10 ** ((e["pitch"] - 60.0) / 4.0 * k / 20.0)
+    written = {id(e): e["pitch"] for e in ev}
+    k = float(L.get("high_sharp", 0.0))
+    if k:
+        for e in ev:
+            if e["pitch"] is not None:
+                e["pitch"] += k * 0.04 * (e["pitch"] - 60.0) / 12.0
+    on = sorted({e["t"] for e in ev})
+    if len(on) < 2:
+        return
+    grp = [[e for e in ev if e["t"] == t] for t in on]
+    top = [max((written[id(e)] for e in g if e["pitch"] is not None), default=None) for g in grp]
+    ioi = 1000.0 * c.q * np.diff(on)
+    last = 1000.0 * c.q * max(e["dur"] for e in grp[-1])
+    d = np.zeros(ioi.size)
+    dbl = set()
+    k = float(L.get("double_duration", 0.0))
+    if k:
+        nxt = np.append(ioi[1:], last)
+        for i in range(1, ioi.size):
+            if ioi[i] < 1000.0 and abs(2.0 * ioi[i] - ioi[i - 1]) < 1e-6 and nxt[i] > ioi[i]:
+                x = 0.12 * ioi[i] * k
+                d[i] += x
+                d[i - 1] -= x
+                dbl |= {i - 1, i}
+    k = float(L.get("duration_contrast", 0.0))
+    if k:
+        for i in range(ioi.size):
+            if i in dbl:
+                continue
+            x = k * float(np.interp(ioi[i], *_DDC_DDR))
+            d[i] += max(x, min(0.0, 100.0 - ioi[i]))
+            for e in grp[i]:
+                e["vel"] *= 10 ** (k * float(np.interp(ioi[i], *_DDC_DL)) / 20.0)
+    k = float(L.get("faster_uphill", 0.0))
+    if k:
+        for i in range(ioi.size):
+            if top[i] is not None and top[i + 1] is not None and top[i + 1] > top[i]:
+                d[i] -= 2.0 * k
+    k = float(L.get("inegales", 0.0))
+    if k:
+        i = 0
+        while i < ioi.size - 1:
+            if abs(ioi[i] - ioi[i + 1]) < 1e-6:
+                pos = on[i] * 1000.0 * c.q / ioi[i]
+                x = 0.22 * ioi[i] * k
+                if abs(pos - round(pos)) < 1e-6 and round(pos) % 2 == 0:
+                    d[i] += x
+                    d[i + 1] -= x
+                    i += 2
+                    continue
+                if i == 0 or abs(ioi[i - 1] - ioi[i]) > 1e-6:
+                    d[i] -= x
+            i += 1
+    k = float(L.get("leap_duration", 0.0))
+    if k:
+        step = lambda a, b: a is not None and b is not None and abs(b - a) <= 2.0 + 1e-6   # noqa: E731
+        for i in range(1, ioi.size):
+            if top[i] is None or top[i + 1] is None or top[i - 1] is None:
+                continue
+            dn = top[i + 1] - top[i]
+            if abs(dn) < 3.0 - 1e-6 or not step(top[i - 1], top[i]) or (i + 2 < len(on) and not step(top[i + 1], top[i + 2])):
+                continue
+            s = math.sqrt(abs(dn)) * k
+            d[i] += (-4.2 if dn > 0 else 2.4) * s
+            if i + 1 < ioi.size:
+                d[i + 1] += (4.2 if dn > 0 else -4.2) * s
+    k = float(L.get("harmonic_charge", 0.0))
+    chords = getattr(c, "chords", None)
+    if k and chords and len(on) > 1:
+        ci = [min(int(t // c.meter), len(chords) - 1) for t in on]
+        charge = []
+        for j in ci:
+            p = chords[j].get("pcs") or []
+            charge.append(max(0.0, 2.0 * (_CMEL[int(round(p[0])) % 12] / 2 + _CMEL[int(round(p[1])) % 12] / 3
+                                          + _CMEL[int(round(p[2])) % 12] / 6) - 3.0) if len(p) >= 3 else 0.0)
+        first = [0] + [i for i in range(1, len(on)) if ci[i] != ci[i - 1] and chords[ci[i]].get("pcs") != chords[ci[i - 1]].get("pcs")]
+        sec = [t * c.q for t in on]
+        bx, by = [], []
+        for a, b in zip(first, first[1:] + [None]):
+            la = 1.5 * math.sqrt(charge[a]) * k
+            if b is None:
+                bx += [sec[a]]
+                by += [la]
+                break
+            lb = 1.5 * math.sqrt(charge[b]) * k
+            bx += [sec[a]] + ([max(sec[a], sec[b] - 1.9)] if lb >= la else [])
+            by += [la] + ([la] if lb >= la else [])
+        dl = np.interp(sec, bx, by)
+        for i, g in enumerate(grp):
+            for e in g:
+                e["vel"] *= 10 ** (dl[i] / 20.0)
+            if i < ioi.size:
+                d[i] += ioi[i] * (math.sqrt(1.0 + 0.018 * dl[i]) - 1.0) + 2.0 * math.sqrt(charge[i]) * k
+                if i in first:
+                    d[i] += 8.0 * math.sqrt(charge[i]) * k
+    k = float(L.get("melodic_charge", 0.0))
+    chords = getattr(c, "chords", None)
+    root_at = lambda i: c.kpc + chords[min(int(on[i] // c.meter), len(chords) - 1)]["root"]   # noqa: E731
+    if k and chords:
+        cms = [None if top[i] is None else _CMEL[int(round(top[i] - root_at(i))) % 12] for i in range(len(grp))]
+        dl0 = [None if x is None else 0.2 * x * k for x in cms]
+        dl, dur = list(dl0), np.append(ioi, last)
+        for n in range(1, len(grp)):
+            m = n - 1
+            if (dl0[n] is None or dl0[m] is None or not 1.0 - 1e-6 <= abs(top[n] - top[m]) <= 2.0 + 1e-6
+                    or abs(dur[m] - dur[n]) > 1e-6 or dur[m] >= 500.0 or not dl0[m] < 0.5 * dl0[n]):
+                continue
+            dl[m] = 0.75 * dl0[n]
+            if n + 1 < len(grp) and dl0[n + 1] is not None and dl0[n + 1] < 0.5 * dl0[n]:
+                dl[n + 1] = 0.55 * dl0[n]
+        for i, g in enumerate(grp):
+            if cms[i] is None:
+                continue
+            for e in g:
+                e["vel"] *= 10 ** (dl[i] / 20.0)
+            if i < ioi.size:
+                d[i] += ioi[i] * 2.0 / 3.0 * cms[i] * k / 100.0
+    k = float(L.get("melodic_intonation", 0.0))
+    if k and chords:
+        for i, g in enumerate(grp):
+            if top[i] is None:
+                continue
+            ic = int(round(top[i] - root_at(i))) % 12
+            lead = (0 < i < len(grp) - 1 and top[i - 1] is not None and top[i + 1] is not None
+                    and abs(top[i] - top[i - 1] - 1.0) > 1e-6 and abs(top[i + 1] - top[i] - 1.0) < 1e-6)
+            cents = -_MEL_INT[ic] if lead and ic in (1, 3, 8) else _MEL_INT[ic]
+            for e in g:
+                if written[id(e)] == top[i]:
+                    e["pitch"] += cents * k / 100.0
+    k = float(L.get("harmonic_intonation", 0.0))
+    if k and chords:
+        for i, g in enumerate(grp):
+            for e in g:
+                if written[id(e)] is not None:
+                    e["pitch"] += _HARM_INT[int(round(written[id(e)] - root_at(i))) % 12] * k / 100.0
+    k = float(L.get("chromatic_charge", 0.0))
+    tones = [i for i in range(len(grp)) if top[i] is not None]
+    if k and len(tones) > 1:
+        # chromatic charge of each tone from the interval to the next, averaged over five tones (centred)
+        cc = np.array([((32 - abs(top[j] - top[i])) % 12) - 6 for i, j in zip(tones, tones[1:])] + [np.nan])
+        for m, i in enumerate(tones):
+            w = cc[max(0, m - 2):m + 3]
+            cm = float(np.nanmean(w)) if np.isfinite(w).any() else 0.0
+            for e in grp[i]:
+                e["vel"] *= 10 ** (1.35 * cm * k / 20.0)
+            if i < ioi.size:
+                d[i] += ioi[i] * 0.009 * cm * k / 100.0
+    k = float(L.get("kth_phrase", 0.0))
+    ends = []
+    if k:
+        ends = [i for i in range(len(on) - 1) for sct in getattr(c, "sections", [])
+                if on[i] < (sct.bar0 + sct.nbars) * c.meter <= on[i + 1]]
+        for i in ends:
+            d[i] += 40.0 * k
+    k = float(L.get("phrase_arch", 0.0))
+    if k:
+        bounds = sorted({0.0, *(s.bar0 * c.meter for s in getattr(c, "sections", [])), on[-1] + 1e-9})
+        for a, b in zip(bounds, bounds[1:]):
+            idx = [i for i in range(ioi.size) if a <= on[i] < b]
+            if len(idx) < 2:
+                continue
+            x = (np.array([on[i] for i in idx]) - a) / (b - a)
+            p = float(L.get("phrase_turn", 0.7))
+            m = 0.1 * k * ((x - p) / np.where(x < p, p, 1.0 - p)) ** 2
+            m -= np.average(m, weights=ioi[idx])
+            for j, i in enumerate(idx):
+                d[i] += ioi[i] * m[j]
+                for e in grp[i]:
+                    e["vel"] /= 1.0 + m[j]
+    k = float(L.get("phrase_lengthen", 0.0))
+    if k:
+        pe = sorted({i for i in range(len(on) - 1) for sct in getattr(c, "sections", [])
+                     if on[i] < (sct.bar0 + sct.nbars) * c.meter <= on[i + 1]} | {ioi.size - 1})
+        for i in pe:
+            for m in range(1, PHRASE_LENGTHEN_NOTES + 1):
+                j = i - PHRASE_LENGTHEN_NOTES + m
+                if j >= 0:
+                    d[j] += ioi[j] * PHRASE_LENGTHEN_LAST * k * (m / PHRASE_LENGTHEN_NOTES) ** 2
+    if d.any():
+        _ioi_warp(ev, c.q, lambda x: x + d / 1000.0)
+    k = float(L.get("repetition", 0.0))
+    if k:
+        for i in range(len(on) - 1):
+            if top[i] is not None and top[i] == top[i + 1]:
+                gap = grp[i + 1][0]["t"] - grp[i][0]["t"] - 0.035 * k / c.q
+                for e in grp[i]:
+                    e["dur"] = max(0.0, min(e["dur"], gap))
+    k = float(L.get("leap_articulation", 0.0))
+    if k:
+        borders = {s.bar0 * c.meter for s in getattr(c, "sections", [])}
+        for i in range(ioi.size):
+            if top[i] is None or top[i + 1] is None or ioi[i] < 100.0 or any(on[i] < b <= on[i + 1] for b in borders):
+                continue
+            dn = min(abs(top[i + 1] - top[i]), 9.0)
+            if dn < 3.0 - 1e-6:
+                continue
+            dro = 8.0 * dn * (0.3 * (ioi[i] - 100.0) / 600.0 + 0.3) * k
+            gap = grp[i + 1][0]["t"] - grp[i][0]["t"] - dro / 1000.0 / c.q
+            for e in grp[i]:
+                e["dur"] = max(0.0, min(e["dur"], gap))
+    k = float(L.get("kth_phrase", 0.0))
+    if k:
+        for i in ends:
+            gap = grp[i + 1][0]["t"] - grp[i][0]["t"] - 0.08 * k / c.q
+            for e in grp[i]:
+                e["dur"] = max(0.0, min(e["dur"], gap))
+        for e in grp[-1]:
+            e["dur"] += 0.08 * k / c.q
+
+
+def _rmd(ev, c, L):
+    """Power-law change of expressive timing: IOI' = e^a IOI^b, total kept; IOIs longer than `rmd_unit`
+    beats are cut in equal units first."""
+    b = L.get("rmd")
+    if b is None:
+        return
+    if b == "auto":
+        ref = L.get("rmd_ref_bpm") or (sum(c.style.bpm) / 2.0 if getattr(c, "style", None) else 60.0 / c.q)
+        b = float(np.clip(1.0 + 0.8 * (float(ref) * c.q / 60.0 - 1.0), 0.8, 1.2))
+    b, u = float(b), float(L.get("rmd_unit", 0.5))
+
+    def f(x):
+        m = np.maximum(np.round(x / (u * c.q)), 1.0)
+        y = m * (x / m) ** b
+        return y * x.sum() / y.sum()
+    _ioi_warp(ev, c.q, f)
+
+
+_CMEL = (0.0, 6.5, 2.0, 4.5, 4.0, 2.5, 6.0, 1.0, 5.5, 3.0, 3.5, 5.0)
+_MEL_INT = (0.0, -7.0, 3.0, -4.0, 4.0, 2.0, 10.0, 1.0, -6.0, 4.0, -4.0, 9.0)
+_HARM_INT = (0.0, 5.0, 4.0, 16.0, -14.0, -2.0, -10.0, 2.0, 14.0, -16.0, 18.0, -12.0)
+_DDC_DDR = ([30.0, 200.0, 400.0, 600.0], [0.0, -16.5, -10.5, 0.0])
+_DDC_DL = ([30.0, 200.0, 400.0, 600.0], [0.0, -0.825, -0.525, 0.0])
+
+
+def sync_asynchrony(ioi, rng, sigma: float, alpha: float = 0.6, beta: float = 0.0) -> np.ndarray:
+    """Asynchronies a(n) of a player keeping time with the score's inter-onset intervals `ioi`: timekeeper
+    T(n) = T(n-1) - beta (T(n-1) - IOI(n-1)) plus gaussian noise of sd `sigma`, phase correction
+    a(n+1) = a(n) - alpha a(n) + T(n) - IOI(n)."""
+    ioi = np.asarray(ioi, float)
+    a = np.zeros(ioi.size)
+    T = float(ioi[0]) if ioi.size else 0.0
+    for n in range(ioi.size - 1):
+        if n:
+            T -= beta * (T - ioi[n - 1])
+        a[n + 1] = a[n] - alpha * a[n] + (T + sigma * rng.standard_normal()) - ioi[n]
+    return a
+
+
 def _perform(ev, c, L, tag):
-    """Swing, humanise (timing / velocity), tempo drift, clamp to the piece length, sort."""
+    """KTH rules, swing, humanise (timing / velocity), tempo drift, clamp to the piece length, sort."""
     total = c.bars * c.meter
-    sw = float(L.get("swing", c.style.swing if c.style else 0.0))
+    for e in ev:
+        e["_t0"], e["_t1"] = e["t"], e["t"] + e["dur"]
+    emo = L.get("emotion")
+    if emo:
+        if emo not in EMOTIONS:
+            raise SpecError(f"emotion must be one of {sorted(EMOTIONS)}")
+        L = {**EMOTIONS[emo]["rules"], **L}
+    _kth(ev, c, L)
+    if emo:
+        g, art = 10 ** (EMOTIONS[emo]["level_db"] / 20.0), EMOTIONS[emo]["articulation"]
+        for e in ev:
+            e["vel"] *= g
+            e["dur"] *= art
+    sw = L.get("swing", c.style.swing if c.style else 0.0)
     sg = float(L.get("swing_grid", c.grid))
+    if sw == "auto":
+        sw = swing_auto(2 * sg * c.q)
+    sw = float(sw)
     if sw:                                              # same meaning as `pattern`: every other step is late
         for e in ev:
             k = e["t"] / sg
             if abs(k - round(k)) < 1e-6 and int(round(k)) % 2:
                 e["t"] += sw * sg
     hum = L.get("humanize", 0)
-    # humanize 1: onset sigma 0.98 % of a beat (Rasanen et al. 2015, PLoS ONE e0127902: Porcaro's 16th hi-hat,
-    # IOI 157 ms, interval sd 8.7 ms with lag-1 r = -0.48, i.e. about 6 ms of onset jitter = 3.9 % of a 16th);
-    # 6 ms at 96 bpm, 10 ms at 60. A dict gives "time" in ms instead. Velocity spread 13 % (MIT 21M.380 p.56).
+    # humanize 1: onset sigma 0.98 % of a beat (about 6 ms of onset jitter on a 16th hi-hat), 6 ms at 96 bpm,
+    # 10 ms at 60. A dict gives "time" in ms instead. Velocity spread 13 %.
     hum = hum if isinstance(hum, dict) else {"time": 1000.0 * 0.0098 * c.q * float(hum), "vel": 0.13 * float(hum)}
-    sig, vs = float(hum.get("time", 0.0)) / 1000.0 / c.q, float(hum.get("vel", 0.0))
+    sig = float(hum.get("time", HENNIG_MS if hum.get("model") == "hennig" else 0.0)) / 1000.0 / c.q
+    vs = float(hum.get("vel", 0.0))
     if sig > 0 or vs > 0:
         rng = _rng(c.seed, tag, "perform")
         order = sorted(ev, key=lambda e: e["t"])
         onsets = sorted({e["t"] for e in order})        # notes of one chord move together
-        # Deviations are 1/f, which listeners prefer to white jitter at the same sigma (Hennig et al. 2011,
-        # PLoS ONE e26457), plus an equal white part: real drumming is long-range correlated over phrases
-        # (DFA alpha 0.72) and anticorrelated hit to hit (alpha 0.31, Rasanen 2015).
-        tdev = dict(zip(onsets, sig * _pink_white(len(onsets), rng))) if sig > 0 else {}
-        # velocity: 1/f too (Rasanen: hi-hat amplitudes alpha 0.63), mapped to 0..1 like the old Beta draw
+        # Deviations are 1/f, which listeners prefer to white jitter at the same sigma, plus an equal white part:
+        # real drumming is long-range correlated over phrases and anticorrelated hit to hit. model "hennig":
+        # pure 1/f^beta, one series shared by every layer of the seed (the whole band drifts together).
+        sync = L.get("sync")
+        if sync and sig > 0:
+            sync = sync if isinstance(sync, dict) else {}
+            tdev = dict(zip(onsets, sync_asynchrony(np.diff(onsets, append=onsets[-1] + (onsets[-1] - onsets[-2] if len(onsets) > 1 else 1.0)),
+                                                    rng, sig, float(sync.get("alpha", 0.6)), float(sync.get("beta", 0.0)))))
+        elif hum.get("model") == "hennig" and sig > 0:
+            g = gamma_noise(len(onsets), float(hum.get("beta", HENNIG_BETA)), _rng(c.seed, "hennig"))
+            tdev = dict(zip(onsets, sig * (g - g.mean()) / (g.std() + 1e-12)))
+        elif hum.get("model") == "arma" and sig > 0:
+            tdev = dict(zip(onsets, sig * arma_hihat(len(onsets), rng)))
+        else:
+            tdev = dict(zip(onsets, sig * _pink_white(len(onsets), rng))) if sig > 0 else {}
+        # velocity: 1/f too, mapped to 0..1 like the old Beta draw
         vdev = _pink_white(len(order), rng, white=0.3) if vs > 0 else None
         for i, e in enumerate(order):
             if vdev is not None:
                 e["vel"] *= 1.0 - vs * float(np.clip(0.5 + 0.25 * vdev[i], 0.0, 1.0))
         for e in ev:
             e["t"] = max(0.0, e["t"] + tdev.get(e["t"], 0.0))
+    if L.get("ensemble"):
+        rng_e = _rng(c.seed, tag, "ensemble")
+        on_ = sorted({e["t"] for e in ev})
+        nxt = dict(zip(on_, np.diff(on_, append=on_[-1] + 1.0)))
+        for e in ev:
+            sd = ensemble_sigma_ms(1000.0 * c.q * nxt[e["t"]])
+            e["t"] = max(0.0, e["t"] + rng_e.normal(0.0, sd) / 1000.0 / c.q)
     a = float(L.get("drift", 0.0))
     if a:
         # periodic tempo drift, +-a around the tempo with a whole number of ~20 s cycles so the piece
@@ -1044,17 +1945,106 @@ def _perform(ev, c, L, tag):
             t1 = f(e["t"] + e["dur"])
             e["t"] = f(e["t"])
             e["dur"] = t1 - e["t"]
-    out = []
+    p = float(L.get("drift_trend", 0.0))
+    if p:
+        # monotone tempo change, (1 + p) x faster at the end, renormalised so the piece keeps its length
+        if p <= -1:
+            raise SpecError("drift_trend > -1")
+        f = lambda b: total * math.log1p(p * min(b, total) / total) / math.log1p(p) + max(0.0, b - total) / (1 + p)   # noqa: E731
+        for e in ev:
+            t1 = f(e["t"] + e["dur"])
+            e["t"] = f(e["t"])
+            e["dur"] = t1 - e["t"]
+    _rmd(ev, c, L)
+    s = L.get("expression")
+    if s is not None:
+        # every timing deviation from the score scaled by s (0 = deadpan, 1 = as performed)
+        s = float(s)
+        for e in ev:
+            t1 = e["_t1"] + s * (e["t"] + e["dur"] - e["_t1"])
+            e["t"] = e["_t0"] + s * (e["t"] - e["_t0"])
+            e["dur"] = max(0.0, t1 - e["t"])
+    ph = L.get("phase")
+    if ph:
+        # Reich phasing: every repetition of the `cycle` beats lands `shift` beats later than the last
+        ph = ph if isinstance(ph, dict) else {"cycle": float(ph)}
+        cyc, sh = float(ph.get("cycle", c.meter)), float(ph.get("shift", 1.0 / 16.0))
+        for e in ev:
+            e["t"] += sh * int(e["_t0"] // cyc + 1e-9)
+    feel = L.get("feel")
+    if feel not in (None, False, "soloist", "bass", "ride"):
+        raise SpecError(f"feel must be soloist, bass or ride, not {feel!r}")
+    bpm = 60.0 / c.q
+    if feel == "ride":
+        r = ride_ratio(bpm)
+        for e in ev:
+            if abs(e["_t0"] - math.floor(e["_t0"]) - 0.5) < 1e-6:
+                e["t"] += r / (1.0 + r) - 0.5
     for e in ev:
+        e["_on"] = abs(e["_t0"] - round(e["_t0"])) < 1e-6
+        del e["_t0"], e["_t1"]
+    ev = _off_echo(ev, L, total, c.q)
+    out = []
+    last = max((round(max(0.0, e["t"]), 6) for e in ev if e["t"] < total - 1e-9), default=total)
+    rit = ritard_map(L.get("ritard"), total, c.meter, last)
+    shift = float(L.get("offset_ms", 0.0)) / 1000.0 / c.q
+    late = float(L.get("downbeat_delay_ms", ellis_delay(bpm) if feel == "soloist" else 0.0)) / 1000.0 / c.q
+    if feel == "bass":
+        shift += FEEL_BASS_MS / 1000.0 / c.q
+    nma = L.get("nma")
+    if nma:
+        shift -= (NMA_MS.get(nma, 0.0) if isinstance(nma, str) else (NMA_MS["musician"] if nma is True else float(nma))) / 1000.0 / c.q
+    for e in ev:
+        on_beat = e.pop("_on", False)
         if e["t"] >= total - 1e-9:
             continue
-        e["t"] = round(max(0.0, e["t"]), 6)
-        e["dur"] = round(max(0.0, min(e["dur"], total - e["t"])), 6)
+        if on_beat and late:
+            e["t"] += late
+        t0 = round(max(0.0, e["t"]), 6)
+        d = max(0.0, min(e["dur"], total - t0))
+        if rit:
+            t0, d = rit(t0), rit(t0 + d) - rit(t0)
+        e["t"] = round(t0 + shift, 6)
+        e["dur"] = round(d, 6)
         e["vel"] = round(float(np.clip(e["vel"], 0.05, 1.0)), 4)
         if e["pitch"] is not None:
             e["pitch"] = round(float(e["pitch"]), 6)
         out.append(e)
     return sorted(out, key=lambda e: (e["t"], e.get("drum", ""), e["pitch"] or 0.0))
+
+
+def _off_echo(ev, L, total, q=1.0):
+    """`off` {"time" beats, "steps" semitones, "vel"}: adds a shifted, transposed copy of every event.
+    `echo` {"n", "time" beats, "decay"}: adds n delayed repeats, each `decay` times softer.
+    `min_ioi` (ms): per drum (or for the pitched part), drops onsets closer than that to the last kept one."""
+    off, echo = L.get("off"), L.get("echo")
+    src = list(ev)
+    if off:
+        off = off if isinstance(off, dict) else {"time": float(off)}
+        dt, st, gv = float(off.get("time", 0.25)), float(off.get("steps", 0.0)), float(off.get("vel", 0.8))
+        for e in src:
+            d = dict(e, t=e["t"] + dt, vel=e["vel"] * gv)
+            if d["pitch"] is not None:
+                d["pitch"] = d["pitch"] + st
+            ev.append(d)
+    if echo:
+        echo = echo if isinstance(echo, dict) else {"n": int(echo)}
+        n, dt, g = int(echo.get("n", 2)), float(echo.get("time", 0.5)), float(echo.get("decay", 0.5))
+        for e in src:
+            for k in range(1, n + 1):
+                ev.append(dict(e, t=e["t"] + k * dt, vel=e["vel"] * g ** k))
+    m = float(L.get("min_ioi", 0.0)) / 1000.0 / q
+    if m > 0:
+        last, keep = {}, []
+        for e in sorted(ev, key=lambda e: e["t"]):
+            k = e.get("drum")
+            t0 = last.get(k)
+            if t0 is None or abs(e["t"] - t0) < 1e-6 or e["t"] - t0 >= m:
+                if t0 is None or e["t"] - t0 >= 1e-6:
+                    last[k] = e["t"]
+                keep.append(e)
+        ev = keep
+    return [e for e in ev if e["t"] < total - 1e-9]
 
 
 def _beat_q(layer, bpm):
@@ -1085,10 +2075,18 @@ def generate(layer: dict, bpm: float | None = None) -> list[dict]:
         # a section's material depends on its letter, so "A" comes back note for note
         ev += gen(c, sec, _rng(c.seed, c.role, sec.mat, layer.get("name", "")), layer)
     thr = float(layer.get("threshold", 0.0))
+    owner, gi = None, None
+    if layer.get("group") is not None:
+        # interchange: the parts of one group never sound together; bar by bar the group's urn picks one
+        gn = int(layer.get("group_size", 2))
+        gi = int(layer.get("group_index", 0))
+        if not 0 <= gi < gn:
+            raise SpecError("group_index must be in 0 .. group_size - 1")
+        owner = urn(range(gn), c.bars, _rng(c.seed, "group", str(layer["group"])))
     kept = []
     for e in ev:                                        # vertical layering: mute the bars under the threshold
         lvl = c.intensity[min(c.bars - 1, int(e["t"] // c.meter + 1e-9))]
-        if lvl + 1e-9 >= thr:
+        if lvl > 0 and lvl + 1e-9 >= thr and (owner is None or owner[min(c.bars - 1, int(e["t"] // c.meter + 1e-9))] == gi):
             e["vel"] *= 0.8 + 0.2 * min(1.0, lvl)
             kept.append(e)
     return _perform(kept, c, layer, c.role)
@@ -1154,7 +2152,11 @@ def to_spec(layer: dict, bpm: float | None = None, sr: int = DEFAULT_SR) -> dict
     with their gains, pans (`automix`, analysed at `sr`) and master fx."""
     kind = layer.get("type")
     if kind in ("compose", "euclid", "arp", "stinger"):
-        dflt = MOODS.get(layer.get("mood", "victory"), MOODS["victory"])[1] if kind == "stinger" else (
+        mp = stinger_mood(layer) if kind == "stinger" else None
+        if mp:
+            layer = {**layer, "fx": list(layer.get("fx") or []) + [{"type": "lowpass", "cutoff": round(mp["brightness"], 3)}]}
+        mkey = _MAP_FIGURE[mp["scale"]] if mp else layer.get("mood", "victory")
+        dflt = MOODS.get(mkey, MOODS["victory"])[1] if kind == "stinger" else (
             _ROLES.get({"lead": "melody"}.get(layer.get("role", "melody"), layer.get("role", "melody")), (0, None))[1] if kind == "compose" else None)
         inner = _layers_from_events(generate(layer, bpm), layer, layer.get("inst") or dflt)
     elif kind == "scatter":
@@ -1197,7 +2199,11 @@ layer_type("scatter", "Random placement of child layers (count or rate, time / p
 def _euclid_events(layer, bpm=None):
     """{"type": "euclid", "kind": "hihat", "k": 5, "n": 16, "rotate": 0, "bars": 2, "step": 0.25}"""
     n, step = int(layer.get("n", 16)), float(layer.get("step", 0.25))
-    pat = euclid(int(layer.get("k", 4)), n, int(layer.get("rotate", 0)))
+    if layer.get("sieve"):
+        on = set(sieve(layer["sieve"], n)[0])
+        pat = [i in on for i in range(n)]
+    else:
+        pat = euclid(int(layer.get("k", 4)), n, int(layer.get("rotate", 0)))
     acc = [ch for ch in str(layer.get("accent", "")) if ch not in " |"]
     prob, rng = float(layer.get("prob", 1.0)), _rng(layer.get("seed", 0), "euclid")
     pitch = 69 + 12 * math.log2(N.to_freq(layer["note"]) / 440.0) if layer.get("inst") else None
@@ -1234,33 +2240,52 @@ def _arp_events(layer, bpm=None):
 # cluster-like and unmetred, 12-music s2.3).
 MOODS = {"victory": ("major", "brass", 5, 60, 0.9), "defeat": ("minor", "piano", 4, 60, 0.75),
          "mystery": ("whole_tone", "vibraphone", 5, 60, 0.6), "danger": ("locrian", "brass", 4, 48, 0.95),
-         "pickup": ("pentatonic", "marimba", 3, 72, 0.8), "unlock": ("lydian", "bell", 4, 72, 0.7)}
+         "pickup": ("pentatonic", "marimba", 3, 72, 0.8), "unlock": ("lydian", "bell", 4, 72, 0.7),
+         "alarm": ("chromatic", "brass", 5, 60, 0.9), "settle": ("chromatic", "strings", 5, 60, 0.7)}
+_MAP_FIGURE = {"major": "victory", "minor": "defeat", "phrygian": "danger", "chromatic": "alarm"}
+
+
+def stinger_mood(layer) -> dict | None:
+    """The (valence, arousal, tension) map of a numeric or preset mood, None for a named shape."""
+    m = layer.get("mood", "victory")
+    if isinstance(m, (list, tuple)):
+        return mood_params(*m)
+    return mood_params(*MOOD_POINTS[m]) if m in MOOD_POINTS else None
 
 
 def _stinger_events(layer, bpm=None):
     mood = layer.get("mood", "victory")
-    if mood not in MOODS:
-        raise SpecError(f"stinger mood {mood!r}: one of {sorted(MOODS)}")
+    mp = stinger_mood(layer)
+    if mp:
+        mood = _MAP_FIGURE[mp["scale"]]
+    elif mood not in MOODS:
+        raise SpecError(f"stinger mood {mood!r}: one of {sorted(MOODS)}, {sorted(MOOD_POINTS)} or [valence, arousal, tension]")
     sc, _, n0, base, vel = MOODS[mood]
-    offs = scale_offsets(layer.get("scale", sc))
+    offs = scale_offsets(layer.get("scale", mp["scale"] if mp else sc))
     L, n = len(offs), max(2, int(layer.get("length", n0)))
     q = _beat_q(layer, bpm)
-    step = float(layer.get("step", 0.25 if q != 1.0 else (0.22 if mood == "defeat" else 0.11)))
+    step = float(layer.get("step", 0.25 if q != 1.0 else (15.0 / mp["bpm"] if mp else 0.22 if mood == "defeat" else 0.11)))
     rng = _rng(layer.get("seed", 0), "stinger", mood)
-    tonic = _key_pc(layer.get("key", "C")) + base + 12 * int(layer.get("octave", 0))
+    tonic = (mp["root"] if mp and "key" not in layer else _key_pc(layer.get("key", "C")) + base) + 12 * int(layer.get("octave", 0))
     P = lambda i: tonic + 12 * (i // L) + offs[i % L]                             # noqa: E731
     v = int(rng.integers(0, 3))
+    if mood in ("alarm", "settle"):                     # a chromatic cluster, attacks off any grid, held;
+        hold = float(layer.get("dur", 2.0)) / q         # settle enters from the top down (falling action)
+        on = np.sort(rng.uniform(0.0, (n - 1) * step, n))
+        ev = [_ev(float(t), hold - float(t), P(n - 1 - i if mood == "settle" else i), vel) for i, t in enumerate(on)]
+        c = NS(bars=1, meter=hold, grid=step, style=None, seed=int(layer.get("seed", 0)), q=q)
+        return _perform(ev, c, layer, "stinger")
     if mood == "victory":                               # up the tonic triad, landing on the octave chord
         seq = [[0, 2, 4][k % 3] + L * (k // 3 + 1) for k in range(1 - n, 0)]      # ...sol do mi sol | DO
         final = [[L, L + 2, L + 4], [4, L, L + 2], [L, L + 4, 2 * L]][v]
-    elif mood == "defeat":                              # down by step to the tonic, last note long
-        seq = [n - 1 - i + (1 if (i == 0 and v == 1) else 0) for i in range(n - 1)]
+    elif mood == "defeat":                              # down by step, then a falling minor third to the tonic
+        seq = [n - i + (1 if (i == 0 and v == 1 and n > 2) else 0) for i in range(n - 1)]
         final = [0]
     elif mood == "mystery":                             # wandering whole tones ending on an unresolved augmented chord
         seq = [int(x) for x in np.cumsum(np.concatenate([[v], rng.choice([-1, 1, 2], n - 2)]))]
         final = [seq[-1] + 1, seq[-1] + 3, seq[-1] + 5]
     elif mood == "danger":                              # root against the flat second, then a tritone cluster
-        seq = [(i + v) % 2 for i in range(n - 1)]
+        seq = ([0, 1] + [(i + v) % 2 for i in range(n - 3)])[:n - 1]
         final = [0, 1, 4]
     elif mood == "pickup":                              # a quick rising figure
         up = [0, 2, 3, 5, 7, 8, 10]
@@ -1272,6 +2297,8 @@ def _stinger_events(layer, bpm=None):
         final = [L, L + 4]
     ev = [_ev(i * step, step * 0.95, P(s), vel * (0.8 + 0.2 * (i + 1) / n)) for i, s in enumerate(seq)]
     ev += [_ev((n - 1) * step, step * float(layer.get("hold", 4)), P(s), vel) for s in final]
+    if mp:                                              # a second voice detuned against the final chord
+        ev += [_ev((n - 1) * step, step * float(layer.get("hold", 4)), P(s) + mp["detune"], vel) for s in final]
     c = NS(bars=1, meter=(n - 1 + float(layer.get("hold", 4))) * step, grid=step, style=None, seed=int(layer.get("seed", 0)), q=q)
     return _perform(ev, c, layer, "stinger")
 
@@ -1282,10 +2309,21 @@ def _scatter_layers(layer: dict) -> list[dict]:
     random volume / pitch windows; Xenakis density fields). Placement modes: `interval` [min, max]
     between onsets, `rate` (events per time unit, Poisson: exponential waits, as Cook's PhISM
     collisions), or `count` uniform in the window. `silence_p` leaves slots empty (Farnell's
-    "silence as an option", g15 s7)."""
+    "silence as an option", g15 s7). Child choice: `pick` "random" (default) or "shuffle" (each child
+    once before any repeats), `weights` one number per child, random picks only."""
     kids = layer.get("layers") or []
     if not kids:
         raise SpecError("scatter needs child `layers`")
+    pick, weights = layer.get("pick", "random"), layer.get("weights")
+    if pick not in ("random", "shuffle"):
+        raise SpecError("scatter pick: random or shuffle")
+    if weights is not None:
+        if pick == "shuffle":
+            raise SpecError("scatter weights only apply to pick=random")
+        weights = np.asarray(weights, float)
+        if weights.shape != (len(kids),) or not np.all(weights >= 0) or weights.sum() <= 0:
+            raise SpecError("scatter weights: one number >= 0 per child, not all zero")
+        weights = weights / weights.sum()
     rng = np.random.default_rng(int(layer.get("seed", 0)))
     dur = float(layer.get("dur", 8.0))
     if "interval" in layer:
@@ -1310,9 +2348,14 @@ def _scatter_layers(layer: dict) -> list[dict]:
     jt, pw, gw, nw = float(layer.get("time_jitter", 0.0)), win("pitch", (0, 0)), win("gain_db", (0, 0)), win("pan", (0, 0))
     sil = float(layer.get("silence_p", 0.0))
     from . import sfx as S
-    out = []
+    out, bag = [], []
     for t in times:
-        kid = dict(kids[int(rng.integers(len(kids)))])
+        if pick == "shuffle":
+            bag = bag or [int(i) for i in rng.permutation(len(kids))]
+            k = bag.pop()
+        else:
+            k = int(rng.choice(len(kids), p=weights)) if weights is not None else int(rng.integers(len(kids)))
+        kid = dict(kids[k])
         st, g, p, j = float(rng.uniform(*pw)), float(rng.uniform(*gw)), float(rng.uniform(*nw)), float(rng.uniform(-jt, jt))
         new_seed = int(rng.integers(1 << 30))
         if rng.random() < sil:
@@ -1399,11 +2442,14 @@ def automix(layers: list[dict], sr: int = DEFAULT_SR, bpm: float | None = None, 
 
 # ============================================================================ arrangement
 # part, role, gain (AGENTS.md "Mix by gain"), intensity threshold
-# UNSOURCED thresholds: low / medium / high intensity grouping (inFAMOUS 2, 12-music s2.1) as numbers
 _PARTS = [("drums", "drums", 1.0, 0.4), ("bass", "bass", 0.85, 0.2), ("chords", "chords", 0.45, 0.0),
           ("pad", "pad", 0.3, 0.0), ("lead", "melody", 0.7, 0.5), ("arp", "arp", 0.35, 0.7), ("counter", "counter", 0.45, 0.85)]
 _SHARED = ("key", "scale", "tuning", "bars", "sections", "progression", "chords", "harmonic_rhythm", "seed", "meter",
-           "grid", "swing", "humanize", "drift", "intensity", "density", "chord_size")
+           "grid", "swing", "humanize", "drift", "intensity", "density", "chord_size", "ritard", "high_loud",
+           "high_sharp", "double_duration", "duration_contrast", "faster_uphill", "repetition", "rmd", "rmd_unit",
+           "rmd_ref_bpm", "inegales", "leap_duration", "melodic_charge", "kth_phrase", "chromatic_charge", "drift_trend",
+           "expression", "harmonic_charge", "leap_articulation", "phrase_arch", "phrase_turn", "melodic_intonation",
+           "harmonic_intonation")
 
 
 def tempo_delay(bpm: float, k: float = 3, feedback: float = 0.3, mix: float = 0.25) -> dict:
@@ -1451,9 +2497,29 @@ def arrange(layer: dict, bpm: float | None = None) -> dict:
         if isinstance(ov, dict):
             p.update(ov)
         parts.append(p)
+    lead = layer.get("melody_lead", False)
+    if lead == "jazz" or (lead is True and name.startswith("jazz")):
+        for p in parts:
+            if p["name"] == "lead":
+                p["downbeat_delay_ms"] = soloist_delay(bpm)
+    elif lead and any(p["name"] == "lead" for p in parts):
+        ms = 20.0 if lead is True else float(lead)
+        for p in parts:
+            if p["name"] != "lead":
+                p["offset_ms"] = p.get("offset_ms", 0.0) + ms
     c = _context(parts[0] if parts else dict(shared, type="compose"), bpm)
+    rit = None
+    if shared.get("ritard"):
+        # one map for every part: the span ends on the last onset of the whole arrangement
+        last = max((e["t"] for p in parts for e in generate({**p, "ritard": None, "offset_ms": 0.0}, bpm)), default=None)
+        r = shared["ritard"]
+        r = {**(r if isinstance(r, dict) else {"beats": r}), "end": last if last is not None else c.bars * c.meter}
+        for p in parts:
+            p["ritard"] = r
+        rit = ritard_map(r, c.bars * c.meter, c.meter)
     master = [] if layer.get("master", True) is False else [{"type": "reverb", "mix": 0.15, "size": 0.5}, {"type": "compressor", "threshold": -16, "ratio": 2.5}]
-    return {"bpm": bpm, "beats": c.bars * c.meter, "layers": parts, "fx": master}
+    return {"bpm": bpm, "beats": rit(c.bars * c.meter) if rit else c.bars * c.meter, "layers": parts, "fx": master,
+            "meter": c.meter, "bars": c.bars}
 
 
 def _stems(layer, sr, q):
@@ -1462,7 +2528,7 @@ def _stems(layer, sr, q):
     a = arrange(layer, bpm)
     bpm = a["bpm"]
     if layer.get("automix", True):
-        parts, sigs = _automix(a["layers"], sr, bpm, float(layer.get("width", 0.6)))     # UNSOURCED width: the paper's full spread hard-pans pairs
+        parts, sigs = _automix(a["layers"], sr, bpm, float(layer.get("width", 0.6)))
         sigs = [FX.apply_chain(s, [f for f in p.get("fx", [])[-1:] if f["type"] == "pan"], sr) for p, s in zip(parts, sigs)]
     else:
         parts = a["layers"]
@@ -1501,6 +2567,15 @@ def _safe(name) -> str:
     return re.sub(r"[^A-Za-z0-9_-]", "_", str(name)) or "x"
 
 
+def xfade_times(layer, states, a, b):
+    """(fade in of b, fade out of a) in seconds when b takes over from a: the fade in is b's own `xfade_in`,
+    else a's, else the piece's; the fade out b's `xfade_out`, else a's, else the piece's (0: a stops at once)."""
+    sa, sb = states.get(a) or {}, states.get(b) or {}
+    fin = next((float(v) for v in (sb.get("xfade_in"), sa.get("xfade_in"), layer.get("xfade_in")) if v is not None), 0.0)
+    fout = next((float(v) for v in (sb.get("xfade_out"), sa.get("xfade_out"), layer.get("xfade_out")) if v is not None), 0.0)
+    return fin, fout
+
+
 @layer_type("adaptive")
 def _render_adaptive(layer, sr, q):
     """iMuse-style state graph kept to what a WAV renderer can honestly do (g15 s8; Phillips, vertical
@@ -1513,16 +2588,42 @@ def _render_adaptive(layer, sr, q):
     states = layer.get("states") or {}
     if not states:
         raise SpecError("adaptive needs `states`: {name: {arrangement overrides}}")
-    base = {k: v for k, v in layer.items() if k not in ("type", "states", "transitions", "order", "out_stems", "at", "gain", "fx", "repeat", "every")}
-    rendered, graph = {}, {"states": {}, "transitions": []}
+    own = ("type", "states", "transitions", "order", "out_stems", "at", "gain", "fx", "repeat", "every", "xfade_in", "xfade_out", "tails", "first")
+    base = {k: v for k, v in layer.items() if k not in own}
+    rendered, graph, tails, firsts = {}, {"states": {}, "transitions": []}, {}, {}
     for name, over in states.items():
-        cfg = {**base, **(over or {}), "type": "arrangement", "fold": True}
-        cfg.pop("tail", None)
+        over = over or {}
+        once = bool(over.get("oneshot"))
+        cfg = {k: v for k, v in {**base, **over, "type": "arrangement", "fold": not once}.items()
+               if k not in ("condition", "xfade_in", "xfade_out")}
+        if not once:
+            cfg.pop("tail", None)
         stems, n, a = _stems(cfg, sr, q)
-        full = _fit(FX.apply_chain(mix([(s, 0.0) for _, s in stems], sr), a["fx"], sr), n, sr, cfg)
-        rendered[name] = (to_stereo(full), [(pn, _fit(s, n, sr, cfg)) for pn, s in stems], a)
-        graph["states"][name] = {"file": f"{_safe(name)}.wav", "beats": a["beats"], "bpm": a["bpm"], "loop": True,
+        y = FX.apply_chain(mix([(s, 0.0) for _, s in stems], sr), a["fx"], sr)
+        full = _fit(y, n, sr, cfg)
+        rendered[name] = (to_stereo(full), [(pn, _fit(s, n, sr, cfg)) for pn, s in stems], a, n)
+        bars = int(a["bars"])
+        graph["states"][name] = {"file": f"{_safe(name)}.wav", "beats": a["beats"], "bpm": a["bpm"], "loop": not once,
+                                 "meter": a["meter"], "bars": bars, "samples": n,
+                                 "markers": [int(round(b * n / bars)) for b in range(bars)],
                                  "stems": [f"{_safe(name)}__{_safe(pn)}.wav" for pn, _ in stems]}
+        for k in ("xfade_in", "xfade_out"):
+            if over.get(k) is not None:
+                graph["states"][name][k] = float(over[k])
+        if over.get("condition") is not None:
+            cond = dict(over["condition"])
+            condition_met(cond, cond["value"][0] if isinstance(cond.get("value"), (list, tuple)) else cond.get("value"))
+            graph["states"][name]["condition"] = cond
+        if not once and layer.get("tails") and y.shape[0] > n:
+            tails[name] = to_stereo(y[n:])                  # the ring-out past the loop, played when the state is left
+            graph["states"][name]["tail"] = f"{_safe(name)}__tail.wav"
+        if not once and layer.get("first"):              # the first pass, without the ring-out folded onto its start
+            firsts[name] = to_stereo(pad_to(y[:n].copy(), n))
+            graph["states"][name]["first"] = f"{_safe(name)}__first.wav"
+        if once and over.get("next"):
+            if over["next"] not in states:
+                raise SpecError(f"state {name!r}: next {over['next']!r} is not a state")
+            graph["states"][name]["next"] = over["next"]
     key = base.get("key", "C")
     stingers = {}
     for tr in layer.get("transitions") or []:
@@ -1530,32 +2631,70 @@ def _render_adaptive(layer, sr, q):
         if a not in states or b not in states:
             raise SpecError(f"transition {a!r} -> {b!r}: unknown state")
         g = {"from": a, "to": b, "quantize": tr.get("quantize", "bar")}
-        if tr.get("stinger"):
-            st = {"type": "stinger", "mood": tr["stinger"], "key": key, "seed": int(base.get("seed", 0)),
+        if tr.get("layer"):                             # any layer in place of a mood stinger (e.g. two kicks)
+            stingers[(a, b)] = to_stereo(SP.render_layer(tr["layer"], sr, rendered[b][2]["bpm"])[0]) * float(tr.get("gain", 0.7))
+            g["stinger"] = f"stinger_{_safe(a)}_to_{_safe(b)}.wav"
+        elif tr.get("stinger"):
+            st = {"type": "stinger", "mood": tr["stinger"], "key": (states[b] or {}).get("key", key), "seed": int(base.get("seed", 0)),
                   **{k: tr[k] for k in ("inst", "length", "octave", "scale") if k in tr}}
             stingers[(a, b)] = to_stereo(SP.render_layer(st, sr, rendered[b][2]["bpm"])[0]) * float(tr.get("gain", 0.7))
             g["stinger"] = f"stinger_{_safe(a)}_to_{_safe(b)}.wav"
+        if tr.get("level") is not None:
+            lvl = tr["level"]
+            a_db, b_db = (float(lvl[0]), float(lvl[1])) if isinstance(lvl, (list, tuple)) else (0.0, float(lvl))
+            g["level_db"] = {"from": a_db, "to": b_db, "curve": "linear_db"}
+        if tr.get("pause"):
+            g["pause_s"] = (1.0 if tr["pause"] is True else float(tr["pause"])) * 60.0 / float(rendered[b][2]["bpm"] or 60.0)
         graph["transitions"].append(g)
     order = layer.get("order") or list(states)
-    parts, t = [], 0.0
-    for i, name in enumerate(order):
+    parts, t, bar_clock, prev = [], 0.0, 0, None
+    for i, item in enumerate(order):
+        name, nb = (item.get("state"), item.get("bars")) if isinstance(item, dict) else (item, None)
         if name not in rendered:
             raise SpecError(f"order: unknown state {name!r}")
-        if i and (order[i - 1], name) in stingers:
-            parts.append((stingers[(order[i - 1], name)], t))
-        parts.append((rendered[name][0], t))
-        t += rendered[name][0].shape[0] / sr
+        full, _, a, n = rendered[name]
+        bars = int(a["bars"])
+        spb = n / bars
+        if nb is None:
+            seg, nb = full, bars
+        else:                                           # a few bars, entered in phase with the running bar count
+            nb = int(nb)
+            idx = (np.arange(int(round(nb * spb))) + int(round((bar_clock % bars) * spb))) % n
+            seg = full[idx]
+        if prev is not None:
+            if (prev, name) in stingers:
+                parts.append((stingers[(prev, name)], t))
+            fin, fout = xfade_times(layer, states, prev, name)
+            if fin:
+                seg = seg.copy()
+                k = min(seg.shape[0], int(round(fin * sr)))
+                seg[:k] *= np.linspace(0.0, 1.0, k, endpoint=False)[:, None]
+            if fout:                                    # the state left keeps playing its loop while it fades
+                k = int(round(fout * sr))
+                pf, pn = rendered[prev][0], rendered[prev][3]
+                ramp = np.linspace(1.0, 0.0, k, endpoint=False)[:, None]
+                parts.append((pf[np.arange(k) % pn] * ramp, t))
+            elif prev in tails:
+                parts.append((tails[prev], t))
+        parts.append((seg, t))
+        t += (n if isinstance(item, str) else seg.shape[0]) / sr
+        bar_clock += nb
+        prev = name
     demo = mix(parts, sr)
-    peak = max([float(np.max(np.abs(f))) for f, _, _ in rendered.values()] + [float(np.max(np.abs(demo))), 1e-9])
+    peak = max([float(np.max(np.abs(f))) for f, _, _, _ in rendered.values()] + [float(np.max(np.abs(demo))), 1e-9])
     g = min(1.0, 0.89 / peak)                           # ONE gain for the whole set (Phillips / 12-music W3)
     if layer.get("out_stems"):
         out = Path(str(layer["out_stems"]))
-        for name, (full, stems, _) in rendered.items():
+        for name, (full, stems, _, _) in rendered.items():
             write_wav(out / f"{_safe(name)}.wav", full * g, sr)
             for pn, s in stems:
                 write_wav(out / f"{_safe(name)}__{_safe(pn)}.wav", s * g, sr)
         for (a, b), s in stingers.items():
             write_wav(out / f"stinger_{_safe(a)}_to_{_safe(b)}.wav", s * g, sr)
+        for name, s in tails.items():
+            write_wav(out / f"{_safe(name)}__tail.wav", s * g, sr)
+        for name, s in firsts.items():
+            write_wav(out / f"{_safe(name)}__first.wav", s * g, sr)
         (out / "graph.json").write_text(json.dumps(graph, indent=1), encoding="utf-8")
     return demo * g
 
@@ -1662,7 +2801,7 @@ def ks_string(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=3.0, stretch=0.0, loss=1.
     t60 = max(0.05, float(decay)) * _kt(freq, 1.0, 0.45)
     ring = max(0.05, min(t60 * 0.9, dur + 1.0))
     n = samples(ring, sr)
-    level = max(80.0, float(dyn) * (0.25 + 0.75 * float(np.clip(vel, 0.0, 1.0)) ** 2))   # UNSOURCED velocity -> bandwidth map
+    level = max(80.0, float(dyn) * (0.25 + 0.75 * float(np.clip(vel, 0.0, 1.0)) ** 2))
     y = js_string(freq, n, sr, t60, stretch, loss, pick, level, bright, seed)
     g = float(np.clip(sympathetic, 0.0, 0.5))
     if g > 0:                                           # Jaffe-Smith sympathetic string: a second loop fed by the first
@@ -1685,19 +2824,35 @@ _KS_TRIM = 0.85           # level match: about -12 dB K-weighted at vel 0.9 (mea
 _KS_FI = 22050           # internal rate of the drum kernel
 
 
-def ks_drum_raw(n: int, p: int, blend: float = 0.5, stretch: float = 1.0, seed: int = 0) -> np.ndarray:
+def ks_drum_raw(n: int, p: int, blend: float = 0.5, stretch: float = 1.0, seed: int = 0, loop: str = "avg",
+                copies: int = 1) -> np.ndarray:
     """Karplus-Strong drum (CMJ 7(2):43-55; g15 s4): Y[t] = +(Y[t-p] + Y[t-p-1])/2 with probability
     `blend`, minus that otherwise. blend 1 = the plucked string, 1/2 = a drum (rms halves every 2p+1
     samples), 0 = an octave lower with odd harmonics only. Decay stretching: with probability
     1 - 1/stretch the sample is copied instead of averaged. The table starts as two-level noise.
-    Vectorised a period at a time (a sample only depends on samples at least p back)."""
+    Vectorised a period at a time (a sample only depends on samples at least p back).
+    `loop`: "avg" the two-point average, "121" (Y[t-p-1] + 2Y[t-p] + Y[t-p+1])/4 (pitch fs/p), "siegel"
+    (Y[t-p] + Y[t-1])/2 (softer, nylon-like). `copies` k fills the table with k copies of one noise
+    burst, so the note sounds k times higher with the same decay."""
     p = max(2, int(p))
     rng = np.random.default_rng(int(seed))
     y = np.zeros(max(n, p + 2))
-    y[:p + 1] = rng.integers(0, 2, p + 1) * 2.0 - 1.0
-    for s in range(p + 1, y.shape[0], p):
-        j = np.arange(s, min(s + p, y.shape[0]))
-        v = 0.5 * (y[j - p] + y[j - p - 1])
+    k = max(1, int(copies))
+    y[:p + 1] = np.tile(rng.integers(0, 2, -(-(p + 1) // k)) * 2.0 - 1.0, k)[:p + 1]
+    if loop == "siegel":
+        for t in range(p + 1, y.shape[0]):
+            v = 0.5 * (y[t - p] + y[t - 1])
+            if stretch > 1.0 and rng.random() < 1.0 - 1.0 / stretch:
+                v = y[t - p]
+            y[t] = v if rng.random() < blend else -v
+        return y[:n]
+    step = p - 1 if loop == "121" else p
+    for s in range(p + 1, y.shape[0], step):
+        j = np.arange(s, min(s + step, y.shape[0]))
+        if loop == "121":
+            v = 0.25 * (y[j - p - 1] + 2.0 * y[j - p] + y[j - p + 1])
+        else:
+            v = 0.5 * (y[j - p] + y[j - p - 1])
         if stretch > 1.0:
             v = np.where(rng.random(j.size) < 1.0 - 1.0 / stretch, y[j - p], v)
         y[j] = np.where(rng.random(j.size) < blend, v, -v)

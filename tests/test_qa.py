@@ -28,8 +28,8 @@ def test_triangle_keeps_its_shape():
     y = osc.triangle(110.0, SR, SR)
     t = osc.phase(110.0, SR, SR) % 1.0
     err = np.abs(y - (4 * np.abs(t - 0.5) - 1))                     # the correction only touches corners:
-    assert err.max() < 8 * 110.0 / SR / 6 + 1e-9                    # at most 8 dt / 6, on the sample next to one
-    assert np.count_nonzero(err > 1e-12) <= 2 * 2 * 110 + 2
+    assert err.max() < 8 * 110.0 / SR * 7 / 30 + 1e-9               # 4-point polyBLAMP: at most 8 dt 7/30
+    assert np.count_nonzero(err > 1e-12) <= 4 * 2 * 110 + 4         # on the 4 samples around one
     h = np.abs(np.fft.rfft(osc.triangle(1000.0, SR, SR)))             # odd harmonics at 1/k^2
     assert abs(h[3000] / h[1000] - 1 / 9) < 0.01 and h[2000] < 1e-3 * h[1000]
 

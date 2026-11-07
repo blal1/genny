@@ -181,3 +181,95 @@ def dispersion_allpass(f0: float, B: float, sr: float, M: int | None = None) -> 
     if best is None:
         return 0.0, 0.0, 0
     return best[0], best[1], best[2]
+
+
+def inharmonicity_threshold(f0: float) -> float:
+    """Just noticeable inharmonicity coefficient at fundamental ``f0`` (Hz): exp(2.54 ln f0 - 24.6)."""
+    return math.exp(2.54 * math.log(max(float(f0), 1e-9)) - 24.6)
+
+
+def inharmonicity_audible(f0: float, B: float) -> bool:
+    return float(B) >= inharmonicity_threshold(f0)
+
+
+# unwound virtual piano (steel 7850 kg/m3): the two ends of the keyboard, hammer of C1
+CHABASSIER_UNWOUND = {"C1": dict(L=4.647, d=1.258e-3, T=905.0, MH=9.45e-3, KH=1.347e9, RH=4.100e5),
+                      "B7": dict(L=0.052, d=0.662e-3, T=467.0)}
+
+# hammer and string by key: f0 Hz, L mm, strike point mm, d mm, T N, mu g/m, hammer g, hammer radius mm
+HAMMER_STRING = {"A0": (27.5, 2016.0, 243.0, 4.9, 1629.0, 130.7, 13.0, 17.0),
+                 "A3": (220.0, 777.0, 91.0, 1.075, 834.0, 7.1, 10.6, 11.0),
+                 "C4": (262.0, 620.0, 74.4, 1.025, 670.0, 6.3, 8.9, 8.0),
+                 "A6": (1760.0, 115.0, 8.1, 0.875, 774.0, 4.7, 8.2, 5.0)}
+FELT_C4 = (122e6, 8e-3, 142.3 * 1e3 ** 2.5, 2.5)   # E Pa, R m, K N/m^2.5 (142.3 N/mm^2.5), p
+
+
+def unwound_B(key: str) -> float:
+    """B = pi^3 E d^4 / (64 T L^2) of an unwound virtual-piano string."""
+    r = CHABASSIER_UNWOUND[key]
+    return math.pi ** 3 * E_STEEL * r["d"] ** 4 / (64.0 * r["T"] * r["L"] ** 2)
+
+
+def strike_ratio(key: str) -> float:
+    """Strike point / speaking length of the tabulated key (about 1/8 in the bass and middle, 1/14 in the treble)."""
+    r = HAMMER_STRING[key]
+    return r[2] / r[1]
+
+
+def felt_q(y):
+    """Shape factor of a cylindrical felt layer compressed by y (in units of its thickness):
+    q = 2 arcsin(phi) - 2 (1 - 2y) phi below y = 0.5, 8y + pi - 4 above, phi = 2 sqrt(y (1 - y))."""
+    y = np.clip(np.asarray(y, float), 0.0, 1.0)
+    phi = 2.0 * np.sqrt(y * (1.0 - y))
+    return np.where(y < 0.5, 2.0 * np.arcsin(np.minimum(phi, 1.0)) - 2.0 * (1.0 - 2.0 * y) * phi, 8.0 * y + math.pi - 4.0)
+
+
+def felt_force_fit(y, F0: float = 1.0):
+    """The geometric law fitted by a polynomial: F = F0 (2.4 y^2 + 9 y^3), close to a power p ~ 2.5."""
+    y = np.asarray(y, float)
+    return F0 * (2.4 * y * y + 9.0 * y ** 3)
+
+
+def felt_K(E: float, R: float, p: float = 2.5) -> float:
+    """Hammer stiffness K (N/m^p) from the felt's modulus E and the hammer radius R: K = c E R^(2 - p), c fixed by the
+    measured C4 hammer (E 122 MPa, R 8 mm, K 142.3 N/mm^2.5)."""
+    E0, R0, K0, p0 = FELT_C4
+    c = K0 / (E0 * R0 ** (2.0 - p0))
+    return c * E * R ** (2.0 - p)
+
+
+def bensa_losses(f0: float) -> tuple[float, float]:
+    """(b1 1/s, b2 m^2/s) of the piano string loss law across the keyboard (mf): b1 = 4.4e-3 f0 - 4e-2,
+    b2 = 1.0e-6 f0 + 1e-5."""
+    return 4.4e-3 * f0 - 4e-2, 1.0e-6 * f0 + 1e-5
+
+
+def bensa_decay(f, f0: float, B: float, L: float):
+    """Decay rate (1/s, positive) of a stiff string partial at f: b1 + b2 pi^2 / (2 B L^2)
+    (sqrt(1 + 4 B (f/f0)^2) - 1); tends to b1 + b2 (pi n / L)^2 as B -> 0."""
+    b1, b2 = bensa_losses(f0)
+    x = np.asarray(f, float) / f0
+    B = max(float(B), 1e-12)
+    return b1 + b2 * math.pi ** 2 / (2.0 * B * L * L) * (np.sqrt(1.0 + 4.0 * B * x * x) - 1.0)
+
+
+_RAUHALA_T1 = {4: dict(k1=-0.00050469, k2=-0.0064264, k3=-2.8743, C1=0.069618, C2=2.0427),
+               1: dict(k1=-0.0026580, k2=-0.014811, k3=-2.9018, C1=0.071089, C2=2.1074)}
+
+
+def rauhala_tunable(f0: float, B: float, M: int = 4) -> float:
+    """a1 of the tunable dispersion allpass (M = 1 or 4 sections): kd = exp(k1 ln(B)^2 + k2 ln B + k3),
+    Cd = exp(C1 ln B + C2), D = exp(Cd - Ikey kd), a1 = (1 - D) / (1 + D); Ikey = key number (1 = A0)."""
+    p = _RAUHALA_T1[int(M)]
+    ikey = math.log(f0 * 2 ** (1 / 12) / 27.5) / math.log(2 ** (1 / 12))
+    lb = math.log(max(B, 1e-9))
+    kd = math.exp(p["k1"] * lb * lb + p["k2"] * lb + p["k3"])
+    cd = math.exp(p["C1"] * lb + p["C2"])
+    d = math.exp(cd - ikey * kd)
+    return (1.0 - d) / (1.0 + d)
+
+
+# unwound virtual piano strings (steel 7850 kg/m^3): length m, diameter m, tension N, hammer mass kg, K, R
+CHABASSIER_STRINGS = {"C1": dict(L=4.647, d=1.258e-3, T=905.0, M_H=9.45e-3, K_H=1.347e9, R_H=4.100e5),
+                      "B7": dict(L=0.052, d=0.662e-3, T=467.0)}
+STEEL_RHO = 7850.0

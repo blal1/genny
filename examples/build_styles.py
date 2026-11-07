@@ -301,6 +301,11 @@ s.drum("kick", "X-------X-x-----", gain=0.8, params={"tune": 70, "decay": 0.12},
 s.drum("snare", "----X-------X---", gain=0.5, params={"decay": 0.1}, fx=[{"type": "bitcrush", "bits": 5, "rate": 11025}, {"type": "lowpass", "cutoff": 5000}])
 s.drum("hihat", "x-x-x-x-x-x-x-x-", gain=0.17, params={"decay": 0.03, "tone": 6500})
 
+s = song("atari_vcs", 132, about="Atari 2600 VCS: two TIA voices only, a lead and a bass on their own out-of-tune grids, noise hits borrowed from the bass channel.")
+s.line("tia", "C5:.5 -:.5 C5:.5 E5:.5 G5:1 -:1 | G5:.5 -:.5 E5:.5 C5:.5 D5:2 | C5:.5 -:.5 C5:.5 E5:.5 G5:1 A5:1 | G5:1 E5:1 C5:2", gain=0.55, legato=0.8, params={"wave": "lead"})
+s.line("tia", "C3:.5 -:.5 C3:.5 -:.5 G2:.5 -:.5 G2:.5 -:.5 " * 4, gain=0.6, legato=0.7, params={"wave": "bass"})
+s.line("tia", "-:1 C4:.25 -:.75 -:1 C4:.25 -:.75 " * 4, gain=0.35, legato=0.5, params={"wave": "noise"})
+
 # ============================================================ orchestral / classical
 s = song("orchestral_heroic", 108, about="Heroic orchestral: horn theme over string chords, trumpet answer, cello and timpani underneath, taiko and cymbal accents.",
          fx=[HALL, GLUE], tail=2.5)

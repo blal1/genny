@@ -6,8 +6,8 @@ instrument. All of them take mono or stereo input, run at any sample rate and ar
 Sources: J.O. Smith, *Physical Audio Signal Processing* (PASP) for the Schroeder reverbs, the FDN, delay-line
 interpolation, flanger, phaser, chorus, Leslie, Doppler and the electric-guitar feedback chain; Farnell,
 *Designing Sound* Table 5.1 for wall absorption; Takala & Hahn, *Sound Rendering* for the microphone pattern
-and occlusion; Puckette for the pitch shifter. Numbers the sources do not give are marked `# UNSOURCED` in the
-code (Leslie speeds and sizes, room preset geometry, material densities, tape wow/flutter rates).
+and occlusion; Puckette for the pitch shifter. Numbers the sources do not give (Leslie speeds and sizes, room
+preset geometry, material densities, tape wow/flutter rates) are justified in `research/SOURCES.md`.
 
 Wet level convention: every reverb's impulse response is normalised to about unit energy, so `mix` means the
 same thing whatever the decay time (a steady sound is as loud wet as dry).
@@ -19,6 +19,7 @@ same thing whatever the decay time (a steady sound is as loud wet as dry).
 | `jcrev` | fx | Chowning's JCRev (1972) Schroeder reverb; `variant=samson` = Samson-box version | stereo |
 | `satrev` | fx | Chowning's SATREV (1971): small, bright, vintage | as input |
 | `fdn_reverb` | fx | Jot feedback delay network, 8/16 lines, separate low and high decay times | stereo |
+| `lucier` | fx | room re-recording loop ("I am sitting in a room"): only the room's resonances remain | mono |
 | `velvet_reverb` | fx | velvet-noise convolution tail, shaped per octave: smooth from the first ms, never metallic | stereo |
 | `room` | fx | physical room: preset or dimensions + materials (early reflections + late reverb) | stereo |
 | `zita` | fx | zita-rev1 (the existing `physical/space.py` kernel) | stereo |
@@ -40,6 +41,34 @@ The old `flanger`, `phaser` and `chorus` parameter names (`rate`, `depth`, `feed
 keep their meaning. `vibrato` (interpolated-delay pitch vibrato) is available as the library function
 `genny.reverbs.vibrato`; the registered `vibrato` effect in `fx.py` is unchanged.
 
+Added since 1.2.1 (parameters: `catalog.md`):
+
+- `nrev` (Cook's NRev, STK: 6 combs into 6 allpasses, dense, stereo), `prcrev` (Cook's PRCRev: 2 allpasses into 2
+  combs, sparse and cheap, stereo), `costello` (Costello's reverbsc: 8 wandering delay lines, lush, stereo),
+  `dattorro` (figure-eight plate), `gverb` (big halls, `roomsize` in metres), `jcrev variant=stk`. `prcrev` and
+  `jcrev variant=stk` use STK's exact delay lengths at 44.1 kHz (scaled to the next odd prime at other rates; they
+  sound different from 1.2.1); `nrev` always rescales its 25.641 kHz lengths to primes, as NRev.cpp does.
+- `coupled_room`: two rooms joined by an opening, heard from the deader one: a quick first decay, then the livelier
+  room's long tail.
+- `directivity`: an instrument heard off its axis (`instrument` trumpet | trombone | french_horn | flute, `angle`);
+  omnidirectional below the instrument's limit (`winds.OMNI_BELOW`: trumpet 500 Hz, french_horn 100 Hz); `wall`
+  (a wall behind the player: +6 dB bass, up to +15 dB at 1.5-2 kHz for a horn facing it), `podium` (+3 dB around
+  50 Hz), `split` (the noisy part has a lobe twice as wide as the tones).
+- `decorrelate`: mono into wide stereo without audible delay; `mode` fir | phase | velvet.
+- `binaural`: headphone position (Brown & Duda's structural HRTF).
+- `room`: `formula` sabine | eyring | millington | kuttruff; `source_gain` or `source_radius` (a directive source
+  needs less room); `modal` (small rooms boom at their own modes); `audience` (the seat dip near 150 Hz); presets
+  `practice_room`, `orchestra_studio`, `opera`, `concert_hall`, `arena`, `amphitheater`. `church` now decays in 5 s,
+  and the late level falls 0.85 dB per 10 m. `reverbs.room_metrics` gives the room's figures.
+- `doppler`: `path` (any trajectory, rows [t, x, y, z]), `surface` (a real ground under the path), `reverb` send,
+  `shadow` (head shadow), `horn` (tyre horn directivity), `turbulence`, `law` sincos | tangent.
+- `distance`: `turbulence` (m/s of drifting air: scintillation), `source_radius` with `angle` (a piston source
+  loses its highs off axis), `wall_distance`; more `ground` types after Hess (`sand`, `clay`, `dry_loam`...),
+  `gravel` 53 cgs, `old_snow` 30 (settled snow). `occlude path_diff`: the extra metres over a barrier.
+- `phaser`: `invert` (notches and peaks swap), `mode=notch` with `notch_q`, `style=pd` (Puckette's sweep law);
+  with feedback it sounds different from 1.2.1. `flanger`: `damp` (low-pass in the loop), `deep` (notches kept at
+  zero whatever the feedback).
+
 ## Reverbs
 
 ### `jcrev`
@@ -53,7 +82,7 @@ is used).
 | param | default | meaning |
 |---|---|---|
 | `mix` | 0.3 | wet amount 0..1 |
-| `variant` | `mus10` | `mus10` or `samson` |
+| `variant` | `mus10` | `mus10`, `samson` or `stk` (Cook's version: allpasses 225, 341, 441, combs 1116, 1356, 1422, 1617 at 44.1 kHz with a low-pass in the loop) |
 | `t60` | none | decay time in seconds; omit for the published comb gains (about 2 s, samson 4.5 s) |
 | `damp` | 0 | extra high-frequency damping in the comb loops 0..0.95 |
 | `width` | 1 | stereo width 0..1 |
@@ -69,7 +98,10 @@ two-output form, right = -left: wide, but cancels in mono), `predelay` 0, `tail`
 A lossless prototype (N delay lines fed back through an orthogonal matrix: all the energy circulates, nothing is
 lost) plus one damping filter per line. The filter is a one-pole low-pass solved so the loop loses exactly
 60 dB in `t60_low` seconds at 250 Hz and in `t60_high` seconds at 4 kHz. Line lengths are mutually prime,
-spread exponentially around the mean free path `size`.
+spread exponentially around the mean free path `size`. In Python, `fdn_lengths(sr, size, lines, t60=)` lengthens the lines until their sum reaches
+0.15 t60 sr (enough modes per Hz for a smooth tail); `greedy_filter_assign`, `scattering_delays` (delay patterns of
+a filtered feedback matrix) and `room_params(volume, t60)` (perceptual settings from a room's volume and decay) are
+the other design helpers.
 
 | param | default | meaning |
 |---|---|---|
@@ -81,7 +113,9 @@ spread exponentially around the mean free path `size`.
 | `mix` | 0.3 | wet amount |
 | `width` | 1 | stereo width |
 | `lines` | 16 | 8 or 16 delay lines |
-| `matrix` | `householder` | `householder` (N = 16: Jot's nested form) or `hadamard` |
+| `matrix` | `householder` | `householder` (N = 16: Jot's nested form), `hadamard`, or `weighted`: weighted Householder reflection A = 2wwᵀ/(wᵀw) − I about `weights` |
+| `weights` | "" | with `weighted`: comma list of line weights, repeated over the lines (e.g. `"1,1,2,3"`) |
+| `diffuser` | `serial` | input diffusion: `serial` (three allpasses per side) or `vector` (Gerzon's 4-channel vector allpass (I + gU)⁻¹(gI + U) mixing both sides) |
 | `tonal` | 1 | tonal correction 0..1: gives back the highs that the faster HF decay takes out of the tail |
 | `tail` | auto | seconds appended (1.2 x `t60_low`, max 10) |
 
@@ -99,6 +133,34 @@ split into octave bands, each band decaying in its own T60, convolved with the i
 | `width` | 1 | stereo width (two independent tails) |
 | `density` | 2205 | impulses per second: 1000 grainy, 2205 smooth, 4000 dense |
 | `seed` | 0 | variation of the tail |
+| `kind` | `velvet` | `velvet`, `dark` (wider pulses: warmer), `edvn` (extended velvet: filtered pulses fitted to the decay per band), `sparse` (additions only, no FFT) |
+| `dark` | 0.5 | `kind` dark: pulse width 0..1 |
+| `t60_late`, `knee` | none, -20 | a second, slower slope after the knee (dB): double decay |
+| `preset` | none | `pori`, `cologne`, `musikverein`: measured halls (decay and early-reflection time). `pori` follows the hall's measured octave-band decay (2.7 s at 125 Hz, 2.3 s at 1 kHz, 1.1 s at 8 kHz; `HALL_T60`) |
+
+Python: `velvet_ir(..., t60_bands=((Hz, T60), ...))` gives any octave-band decay (interpolated on log frequency,
+held outside the given bands).
+
+### `jpverb`, `greyhole`
+- `jpverb` (Julian Parker): rotating stereo diffusers into a modulated loop with separate decay for lows, mids
+  and highs. `t60` 1, `size` 1 (0.5..5), `early_diff` 0.707, `mod_depth` 0.1, `mod_freq` 2 Hz, `low` / `mid` /
+  `high` decay multipliers 1, `low_cut` 500 Hz, `high_cut` 2000 Hz, `damp` 0, `mix` 0.3.
+- `greyhole`: a long modulated delay fed back through nested rotating diffusers, from a smeared echo to an endless
+  cloud. `delay` 0.2 s, `feedback` 0.9, `damping` 0, `diffusion` 0.5, `size` 1, `mod_depth` 0.1, `mod_freq` 2 Hz,
+  `mix` 0.4.
+
+### `pv_reverb`
+Spectral reverb: every STFT bin decays at its own rate, tonal parts longer than noisy ones. `t60` 3 (tones),
+`noise_t60` 1, `mix` 0.4, `seed`.
+
+### Cascade
+Chain `early_reflections` then `costello` or `fdn_reverb` (short then long) for a big space.
+
+Haas: in `width` / `delay`, a copy 1-30 ms late is heard as one sound from the earlier side (precedence), and can be
+up to 10 dB louder before it splits into an echo.
+
+Library (`reverbs`): `dark_velvet_noise`, `edvn_ir`, `two_slope_envelope`, `sparse_velvet_convolve`,
+`histogram_ir`, `moorer_late`, `sdn_late`, `raytrace_hist`, `soundboard_fdn`, `reflector_cutoff`.
 
 ### `zita`
 `physical/space.py` `zita_rev1` at its native 48 kHz, resampled at the boundary. Params: `mix` 0.3, `preset`
@@ -130,13 +192,15 @@ Direct sound + early reflections from a shoebox image-source model + late reverb
 
 | param | default | meaning |
 |---|---|---|
-| `preset` | `hall` | `closet` `studio` `bedroom` `bathroom` `hall` `church` `cave` `forest` `street` `canyon` |
+| `preset` | `hall` | `closet` `studio` `bedroom` `bathroom` `hall` `church` `cave` `forest` `street` `canyon` `priory` (stone nave 95 m long) ... (`genny list` has them all) |
 | `lx`, `ly`, `lz` | preset | width, length (the direction you look in), height in metres |
 | `walls`, `floor`, `ceiling` | preset | `carpet concrete marble wood brick glass plaster fabric metal people water tile rock foliage soil open` |
 | `furnish` | none | m2 of soft absorbers. Presets bring their own; a room with explicit dimensions or materials is bare unless this is set |
 | `distance` | preset | source to listener, metres |
 | `mix` | 0.5 | 0 dry .. 1 the sound at the listening position |
-| `model` | `fdn` | late engine: `fdn`, `zita`, `puckette` (Puckette G08, one decay time), `farnell` (Farnell's tight prime-delay room, fixed about 0.5 s) |
+| `model` | `fdn` | late engine: `fdn`, `zita`, `puckette` (Puckette G08, one decay time), `farnell` (Farnell's tight prime-delay room, fixed about 0.5 s), `moorer` (6 low-passed combs and an allpass), `sdn` (scattering delay network), `raytrace` (`rays` 20000) |
+| `scattering` | none | diffusing walls: 0..1, or `rpg_skyline`, `rpg_qrd`, `theatre_audience`, `flat`: early echoes smeared into a diffuse wash |
+| `mic` | 1 | microphone pattern: 1 omni, 0.5 cardioid aimed at the source, 0 figure of eight (less room) |
 | `width` | 1 | stereo width of the reverberation |
 | `predelay` | 0 | extra seconds before the late reverb |
 | `humidity` | 50 | relative humidity %, 40..70 |
@@ -168,6 +232,35 @@ Only the image-source taps. Params: `mix` 0.5 (1 = direct + reflections at their
 | `ref` | 1 | metres where gain = 1 (closer than this is capped at +6 dB) |
 | `line_source` | false | true = 1/sqrt(r) (road, river) |
 | `delay` | false | true = prepend the travel time (r - ref) / c |
+| `gradient` | 0 | temperature gradient, C/km: negative (day, -6 normal) bends sound up and opens a shadow zone far away; positive (night inversion) carries it further |
+| `rolling` | false | rolling terrain: the ground dip is averaged over source heights ±2 m |
+| `across_water` | false | source (or listener) under water: -29.5 dB through the surface |
+| `pipe` | false | with `source_radius` and `angle`: the source is the open end of a pipe (exhaust, horn bell, muzzle, mouth). It also radiates sideways and behind (at the mouth's reflection level, the magnitude of R), only the highs stay beamed forward; without `pipe` the baffled piston stays the model |
+
+For a source heard down a duct or a tunnel, see `tube_mesh` (tubes): distance from reverberation rather than level.
+
+### `room_feedback`
+Acoustic feedback (Larsen) through a room: `gain` 0.9 (1 = the howl point; a limiter holds it), `swell` 0 and
+`swell_rate` 0.5 Hz (slow swell of the loop gain: pitches rise and die), `pipe` (Hz: an open pipe in the loop picks
+that partial), `shift` (Hz, frequency shifter in the loop), `mix`, and the room params (`preset`, `lx`, `ly`, `lz`,
+`walls`, `floor`, `ceiling`, `distance`, `furnish`).
+
+### `lucier`
+"I am sitting in a room": the sound played into a room and re-recorded again and again, y(k+1) = normalise(room(y(k))),
+until only the room's resonances remain. `generations` 8 (1..64 passes), `t60` 1.5 s, `size` 6 m (mean free path),
+`chain` false (true = every pass one after the other, the piece; false = the last one).
+
+### `reflection`
+One reflecting structure with the direct sound. `kind` `flutter` (two parallel walls `width` m apart, `absorption`),
+`fence` / `stairs` (`count` elements `spacing` m apart at `distance` m: stairs give a chirped echo), `panel` (a
+finite panel of `size` m at `angle`: only its highs come back); `level`, `mix`.
+
+### `huggins`, `bell_swing`, `orchestra_seat`
+- `huggins`: dichotic pitch over headphones: `mode` `phase` (noise whose phase turns once round `freq` 600 Hz,
+  relative width `bw` 0.16, in one ear) or `delay` (a copy `delay` 0.012 s late in the other ear: pitch near 1/T).
+- `bell_swing`: a church bell swinging in its tower, a Doppler sway and a brighter, louder stroke when the mouth
+  faces you. `swing` 80° (< 90), `period` 2 s, `radius` 0.7 m, `distance` 25 m, `height` 20 m.
+- `orchestra_seat`: `desk` 1..8 (back desks 3.5 dB softer each and duller), `pit` (an opera pit adds body).
 
 ### `doppler`
 The source moves on a straight line past the listener; each output sample reads the input at its emission time
@@ -186,7 +279,7 @@ The path is centred on the sound's own duration (`pass_at`).
 | `ref` | `closest` | distance where gain = 1 |
 
 ### `occlude`
-Transmitted path: mass law, `TL = 20 log10(f x surface density) - 47 dB` (6 dB more loss per octave and per
+Transmitted path: mass law, `TL = 20 log10(f x surface density) - 48 dB` (6 dB more loss per octave and per
 doubling of thickness). Diffracted path: a low-pass at `edge` scaled by `leak`.
 Params: `material` (`concrete brick marble rock tile wood glass plaster metal fabric carpet water soil foliage
 people`), `thickness` 0.1 m, `leak` 0.15 (0 = sealed, 1 = a screen you can nearly see past), `edge` 600 Hz.
@@ -194,20 +287,22 @@ people`), `thickness` 0.1 m, `leak` 0.15 (0 = sealed, 1 = a screen you can nearl
 ## Modulation and delay
 
 ### `leslie`
-Soft-clip overdrive, 800 Hz crossover, then a horn and a drum rotor. The horn is a source on a circle read
-through a delay `distance(t) / c` (Doppler vibrato of depth `radius x angular speed / c`, 2.3 % on fast) with
-1/r and directivity tremolo and a moving low-pass, plus one cabinet-wall image with the opposite shift; the drum
-is tremolo plus a moving low-pass. Two microphones `spread` degrees apart give the stereo motion.
+Soft-clip overdrive, 800 Hz crossover at 12 dB/octave (Linkwitz-Riley, like the Leslie 122's passive filter),
+then a horn and a drum rotor. The horn is a source on a circle read through a delay `distance(t) / c` (Doppler
+vibrato of depth `radius x angular speed / c`, 2.4 % on fast) with 1/r and directivity tremolo and a moving
+low-pass, plus one cabinet-wall image with the opposite shift (cabinet 53 cm deep: the rear wall 26.5 cm behind
+the rotor axis); the drum is tremolo plus a moving low-pass. Two microphones `spread` degrees apart give the stereo motion.
 
 | param | default | meaning |
 |---|---|---|
-| `speed` | `fast` | `slow` (0.8 Hz), `fast` (6.7 Hz) or `brake` |
-| `start` | none | speed at the start; if different the rotors accelerate (horn about 1 s, drum about 4 s) |
+| `speed` | `fast` | `slow` (horn 0.83 Hz, drum 0.67 Hz), `fast` (horn 6.92 Hz = 415 rpm, drum 5.9 Hz) or `brake` |
+| `start` | none | speed at the start; if different the rotors change speed (time constant: horn 1 s, drum 3.5 s) |
 | `drive` | 0.3 | amplifier overdrive 0..1 |
 | `mic` | 0.6 | microphone distance, metres 0.3..3 (close = deep tremolo) |
 | `spread` | 90 | angle between the microphones, degrees |
 | `mix` | 1 | wet amount |
 | `crossover` | 800 | Hz |
+| `leak` | -10 | dB of horn sound leaking straight out of the cabinet without rotating (-60 = none); the horn's back lobe is -12 dB |
 
 ### `flanger`
 `y = x + g x[n - M(n)]` with regeneration from the delay output back to its input. Notches sit at odd multiples
@@ -246,6 +341,8 @@ takes over.
 | `tone` | 2400 | cabinet low-pass, Hz |
 | `asym` | 0.15 | clipper asymmetry 0..0.6 |
 | `seed` | 0 | pluck noise seed |
+
+`aperture` (default 0): the pickup's sensing width in m, also `single` or `humbucker` (0.015, 0.04; 0 = a point pickup). A wave crosses it in W T0 / L (scale length 0.648 m) and the pickup averages over that time with a Hamming window (`pickup_window(period, width)`): the highs of the string fall off.
 
 ## Recipes
 

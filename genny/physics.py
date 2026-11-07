@@ -47,18 +47,20 @@ class Material:
     fracture_toughness: float = 100.0
 
 
-# Rayleigh pairs: glass, steel, wood from ObjectFolder 2.0 (supp. Table 1, = contact.OBJECTFOLDER_RAYLEIGH);
-# aluminium from Sterling & Lin 2016 Table 1 (alpha1 0.225, alpha2 1.45e-6). The old pairs (glass 0.4 / 2e-9 ...)
-# were UNSOURCED and rang 30-40 s at 1 kHz. Stone = travertine tile, Sterling, Rewkowski, Klatzky & Lin
-# (TVCG 2019) Table 1 Rayleigh fit (alpha1 1.3, alpha2 2.5e-8). UNSOURCED: rubber damping, hardness, toughness.
+# Rayleigh pairs (alpha1, alpha2) and toughnesses: sources in research/SOURCES.md, section physics.
 MATERIALS: dict[str, Material] = {
-    "glass": Material("glass", 2500, 70e9, 0.22, 1.0, 1e-7, 0.95, 50.0),
+    "glass": Material("glass", 2500, 70e9, 0.22, 1.0, 1e-7, 0.95, 80.0),
+    "ceramic": Material("ceramic", 2700, 72e9, 0.19, 189.0, 1.5e-8, 0.95, 200.0),
     "steel": Material("steel", 7850, 200e9, 0.30, 5.0, 3e-8, 0.98, 120.0),
     "aluminum": Material("aluminum", 2700, 69e9, 0.33, 0.225, 1.45e-6, 0.8, 90.0),
     "wood": Material("wood", 650, 11e9, 0.35, 60.0, 2e-6, 0.55, 180.0),
     "stone": Material("stone", 2600, 50e9, 0.25, 1.3, 2.5e-8, 0.9, 80.0),
-    "rubber": Material("rubber", 1100, 0.01e9, 0.49, 20.0, 2e-6, 0.12, 500.0),
+    "rubber": Material("rubber", 1100, 0.01e9, 0.49, 150.0, 5e-5, 0.12, 500.0),
+    "brass": Material("brass", 8500, 110e9, 0.34, 5.0, 3e-8, 0.9, 120.0),
 }
+
+
+CLICK_TAU = 0.0005
 
 
 @dataclass
@@ -82,7 +84,9 @@ class ModalBody:
 
     def strike(self, *, duration: float = 2.0, contact_ms: float = 1.0,
                velocity: float = 1.0, position: float = 0.0, sr: int = DEFAULT_SR,
-               micro_collisions: int | None = None, seed: int = 0) -> np.ndarray:
+               micro_collisions: int | None = None, seed: int = 0, click: float = 0.0) -> np.ndarray:
+        """``click`` 0..1: the contact click heard directly, a noise burst decaying in ``CLICK_TAU`` s on top
+        of the ringing modes."""
         m = self.modes(position=position)
         n = max(1, int(round(duration * _PHYS_SR)))
         force = np.zeros(n)
@@ -94,6 +98,10 @@ class ModalBody:
             _modal.micro_collisions(force, m, micro_collisions, contact_ms, velocity,
                                     np.random.default_rng(seed))
         y = _modal.render_modes(force, m)
+        if click > 0:
+            k = min(n, int(5 * CLICK_TAU * _PHYS_SR) + 1)
+            b = np.random.default_rng(seed + 1).standard_normal(k) * np.exp(-np.arange(k) / (CLICK_TAU * _PHYS_SR))
+            y[:k] += float(np.clip(click, 0.0, 1.0)) * float(np.max(np.abs(y))) * b / (np.max(np.abs(b)) + 1e-30)
         return _to_sr(y, sr)
 
     def fracture(self, *, duration: float = 4.0, toughness: float | None = None,
@@ -298,12 +306,17 @@ class BarBody:
     width_m: float | None = None
     boundary: str = "free"
     n_modes: int = 8
+    inner_radius_m: float = 0.0
+    thickness_m: float | None = None
 
     def _radius_of_gyration(self) -> float:
         if self.radius_m is not None:
-            return max(float(self.radius_m), 1e-6) / 2.0
-        if self.width_m is not None:
-            return max(float(self.width_m), 1e-6) / math.sqrt(12.0)
+            r = max(float(self.radius_m), 1e-6)
+            ri = float(np.clip(self.inner_radius_m, 0.0, 0.999 * r))
+            return math.sqrt(r * r + ri * ri) / 2.0          # a tube: hollow is stiffer for its mass
+        w = self.width_m if self.width_m is not None else self.thickness_m
+        if w is not None:
+            return max(float(w), 1e-6) / math.sqrt(12.0)
         raise ValueError("BarBody requires radius_m or width_m")
 
     def modes(self) -> _modal.Modes:
@@ -416,6 +429,8 @@ class Footstep:
     """Ground-reaction-force driven procedural footstep."""
     ground: str = "wood"
     variation: int = 0
+    accel: float = 0.0
+    incline: float = 0.0
 
     @staticmethod
     def grounds() -> tuple[str, ...]:
@@ -426,7 +441,8 @@ class Footstep:
                return_info: bool = False):
         from .physical import footsteps as _steps
         out = _steps.render_step(self.ground, self.variation,
-                                 np.random.default_rng(seed), return_info=return_info)
+                                 np.random.default_rng(seed), return_info=return_info,
+                                 accel=self.accel, incline=self.incline)
         if return_info:
             y, info = out
             return _to_sr(y, sr), info
@@ -555,6 +571,15 @@ class TunedPercussion:
             y *= velocity
         elif kind in ("bell", "church_bell", "churchbell"):
             y = _modal.additive_bell("risset_bell", frequency, duration, rng) * velocity
+        elif kind in ("ariutti", "ariutti_bell"):
+            tab = _modal.md.ARIUTTI_BELL
+            n = max(1, int(round(duration * _PHYS_SR)))
+            tt = np.arange(n) / _PHYS_SR
+            y = np.zeros(n)
+            for r, a, rd in zip(tab["ratios"], tab["amps"], tab["rel_durations"]):
+                line = np.clip(1.0 - tt / (duration * rd), 0.0, 1.0)
+                y -= 0.5 * a * line ** 2 * np.cos(4 * np.pi * r * frequency * tt)
+            y *= tab["out_gain"] * velocity
         elif kind in ("china_bell", "chinabell"):
             y = _modal.additive_bell("chinabell", frequency, duration, rng) * velocity
         else:
@@ -680,8 +705,12 @@ class MembraneDrum:
     harmonic_loading: float = 0.0
     air_coupling: float = 0.25
     shell: str = "wood"
+    bend: float = 0.06
+    bend_tau: float = 0.02
+    radiation: float = 0.0
 
     _RATIOS = np.array([1.0, 1.5933, 2.1355, 2.2954, 2.6531, 2.9173, 3.1555, 3.5001, 3.6005])
+    _MONOPOLE = np.array([2.8 / 0.4, 1, 1, 4.2 / 0.5, 1, 1, 1, 1, 4.6 / 1.0])
 
     def _modes(self, position: float, stroke: str) -> _modal.Modes:
         h = float(np.clip(self.harmonic_loading, 0.0, 1.0))
@@ -702,6 +731,7 @@ class MembraneDrum:
         size = max(self.radius_m, 0.04) / 0.16
         base = max(self.damping, 0.05) * (2.0 / max(size, 0.25))
         decay = base * (1.0 + 0.13 * idx + 0.018 * idx * idx)
+        decay = decay * (1.0 + float(np.clip(self.radiation, 0.0, 1.0)) * (self._MONOPOLE - 1.0))
         keep = f < 0.45 * _PHYS_SR
         return _modal.Modes(f[keep], decay[keep], gains[keep], "membrane")
 
@@ -722,9 +752,13 @@ class MembraneDrum:
             m = min(n, int(0.012 * _PHYS_SR))
             noise = rng.standard_normal(m) * np.exp(-np.arange(m) / (0.0022 * _PHYS_SR))
             force[:m] += noise * (0.10 + 0.22 * velocity)
-        y = _modal.render_modes(force, modes)
-        # Reduced air/shell coupling: low cavity resonance plus a weak shell mode.
         t = np.arange(n) / _PHYS_SR
+        lead = self.bend * float(np.clip(velocity, 0.0, 1.0)) ** 2 * self.bend_tau
+        extra = int(np.ceil(lead * _PHYS_SR)) + 2
+        y = _modal.render_modes(np.concatenate([force, np.zeros(extra)]), modes)
+        warp = t + lead * (1.0 - np.exp(-t / max(self.bend_tau, 1e-6)))
+        y = np.interp(warp * _PHYS_SR, np.arange(n + extra), y)
+        # Reduced air/shell coupling: low cavity resonance plus a weak shell mode.
         cavity_f = max(45.0, self.frequency * (0.42 if stroke == "bass" else 0.62))
         cavity = np.sin(2*np.pi*cavity_f*t) * np.exp(-t / (0.08 + 0.22*self.air_coupling))
         shell_ratio = 2.8 if self.shell == "metal" else 2.15
@@ -842,6 +876,10 @@ class SurfaceContact:
         return _to_sr(np.tanh(y/p)*0.62, sr)
 
 
+ROTOR_Q = 1.24
+HELI_BLADE = dict(thickness=0.01, strouhal=0.8)
+
+
 @dataclass
 class Rotor:
     """Generic rotor/propeller/fan aeroacoustic source."""
@@ -850,6 +888,14 @@ class Rotor:
     radius_m: float = 0.15
     turbulence: float = 0.45
     tonal: float = 0.55
+    style: str = "generic"
+    thickness: float = 0.05
+    strouhal: float = 1.0
+
+    @property
+    def broadband_hz(self) -> float:
+        """Peak of the vortex-shedding hump: strouhal x rotation rate / (blade thickness / circumference)."""
+        return self.strouhal*self.rotation_hz/max(self.thickness,1e-4)
 
     @property
     def rotation_hz(self) -> float:
@@ -868,27 +914,41 @@ class Rotor:
         n=max(1,int(round(dur*_PHYS_SR))); t=np.arange(n)/_PHYS_SR
         rng=np.random.default_rng(seed)
         bpf=max(1.0,self.blade_passing_hz)
+        if self.style == "farnell":
+            return _to_sr(_farnell_rotor(t, bpf, rng, self.turbulence), sr)
         # Pressure pulse train with harmonics; angle controls tonal/direct component.
         direction=0.25+0.75*abs(np.cos(float(listener_angle)))
         tonal=np.zeros(n)
         for h,a in ((1,1.0),(2,.34),(3,.17),(4,.08)):
             if h*bpf < .45*_PHYS_SR:
                 tonal += a*np.sin(2*np.pi*h*bpf*t)
-        # Broadband turbulence scales strongly with tip speed but is normalized
-        # to remain safe for public rendering.
+        from scipy import signal as sg
         noise=rng.standard_normal(n)
-        # one-pole smoothing roughly shifts spectrum with tip speed
-        fc=np.clip(300+18*self.tip_speed,350,9000)
-        alpha=np.exp(-2*np.pi*fc/_PHYS_SR); lp=np.empty(n); s=0.0
-        for i in range(n):
-            s=(1-alpha)*noise[i]+alpha*s; lp[i]=s
-        hp=noise-lp
-        turb=(.65*lp+.35*hp)*(0.15+0.85*self.turbulence)
+        f0=float(np.clip(self.broadband_hz,20.0,.4*_PHYS_SR))
+        w=math.sqrt(1+1/(4*ROTOR_Q**2)); lo,hi=f0*(w-1/(2*ROTOR_Q)),f0*(w+1/(2*ROTOR_Q))
+        bb=sg.lfilter(*sg.butter(1,[lo,min(hi,.49*_PHYS_SR)],btype="band",fs=_PHYS_SR),noise)
+        turb=bb*(.37/(np.std(bb)+1e-12))*(0.15+0.85*self.turbulence)
         y=self.tonal*direction*tonal + turb
         # small rotation-rate AM gives realistic cyclic loading.
         y*=0.78+0.22*np.sin(2*np.pi*self.rotation_hz*t+0.4)
         p=np.max(np.abs(y))+1e-12
         return _to_sr(np.tanh(y/p*1.35)*0.58, sr)
+
+
+FARNELL_ROTOR = dict(width=4.0, noise_bp=700.0, noise=0.4, sweep=600.0, res_q=5.0)
+
+
+def _farnell_rotor(t, bpf, rng, turbulence):
+    """Blade pulses 1 / (1 + k sin^2(pi f t)) at the blade rate, noise through a 700 Hz band-pass at 0.4, and a
+    resonance swept over 0..600 Hz with the speed (Q 5)."""
+    from .physical import ambience as amb
+    c = FARNELL_ROTOR
+    k = (c["width"] * 10.0) ** 2
+    pulse = 1.0 / (1.0 + k * np.sin(np.pi * bpf * t) ** 2)
+    nz = amb.bp(rng.standard_normal(len(t)), c["noise_bp"], 1.0) * c["noise"] * (0.5 + turbulence)
+    y = pulse - pulse.mean() + nz * pulse
+    y = y + amb.bp(y, float(np.clip(bpf * 2.0, 20.0, c["sweep"])), c["res_q"])
+    return np.tanh(y / (np.max(np.abs(y)) + 1e-12) * 1.2) * 0.58
 
 
 @dataclass
@@ -924,12 +984,23 @@ class Helicopter:
     tail_rpm: float = 1600.0
     tail_blades: int = 4
     load: float = 0.55
+    rotors: int = 1
+    spread: float = 0.03
+    fuselage: float = 0.0
+    gearbox: float = 0.0
+    partials: float = 0.0
 
     def render(self, dur: float, *, sr: int = DEFAULT_SR, seed: int = 0,
                listener_angle: float = 0.0) -> np.ndarray:
         n=max(1,int(round(dur*_PHYS_SR))); t=np.arange(n)/_PHYS_SR
-        main=Rotor(self.main_rpm,self.main_blades,6.5,.30,.82).render(dur,sr=_PHYS_SR,seed=seed,listener_angle=listener_angle)
-        tail=Rotor(self.tail_rpm,self.tail_blades,.65,.52,.42).render(dur,sr=_PHYS_SR,seed=seed+1,listener_angle=listener_angle+1.1)
+        main=Rotor(self.main_rpm,self.main_blades,6.5,.30,.82,**HELI_BLADE).render(dur,sr=_PHYS_SR,seed=seed,listener_angle=listener_angle)
+        k=int(np.clip(self.rotors,1,8))
+        if k>1:
+            for j in range(1,k):
+                r=self.main_rpm*(1+self.spread*(2*j/(k-1)-1))
+                main=main+Rotor(r,self.main_blades,6.5,.30,.82,**HELI_BLADE).render(dur,sr=_PHYS_SR,seed=seed+10+j,listener_angle=listener_angle+j)
+            main=main/k
+        tail=Rotor(self.tail_rpm,self.tail_blades,.65,.52,.42,**HELI_BLADE).render(dur,sr=_PHYS_SR,seed=seed+1,listener_angle=listener_angle+1.1)
         bpf=max(1.0,self.main_rpm/60*self.main_blades)
         # Blade-vortex interaction: short periodic N-ish impulses whose amount
         # rises nonlinearly with rotor loading.
@@ -940,8 +1011,33 @@ class Helicopter:
         engine=JetEngine(rpm=4500+2500*self.load,fan_blades=12,compressor_blades=18,
                          throttle=.35+.55*self.load).render(dur,sr=_PHYS_SR,seed=seed+2)
         y=.62*main+.20*tail+.22*engine+.33*slap
+        if self.partials>0:
+            y=y+float(self.partials)*_heli_partials(t,4500+2500*self.load)
+        if self.fuselage>0:
+            y=y+float(self.fuselage)*_fuselage(main+.5*slap)
+        if self.gearbox>0:
+            from .cyber import gearbox
+            g=np.asarray(gearbox(sr=_PHYS_SR,dur=dur,rpm=HELI_GEAR_MESH*60.0/23,teeth=23,load=self.load,seed=seed),float)[:n]
+            y=y+float(self.gearbox)*.3*np.pad(g,(0,n-len(g)))
         p=np.max(np.abs(y))+1e-12
         return _to_sr(np.tanh(y/p*1.4)*.68,sr)
+
+
+HELI_FUSELAGE = ((120.0, 0.5, 12.0), (200.0, 1.0, 15.0), (280.0, 0.4, 12.0), (400.0, 0.8, 20.0))
+HELI_GEAR_MESH = 250.0
+HELI_PARTIALS = ((1.0, 1.0), (2.81, 0.2), (9.41, 0.14))
+
+
+def _fuselage(x):
+    """The airframe as a few modes, 80-300 Hz and the strong 2 x 200 Hz, driven by the rotor."""
+    from .physical import ambience as amb
+    return sum(a * amb.bp(x, f, q) for f, a, q in HELI_FUSELAGE)
+
+
+def _heli_partials(t, rpm):
+    """Turbine whine as three partials, 1, 2.81 (0.2), 9.41 (0.14) times the shaft rate."""
+    f0 = rpm / 60.0
+    return 0.1 * sum(g * np.sin(2 * np.pi * min(m * f0, 0.45 * _PHYS_SR) * t) for m, g in HELI_PARTIALS)
 
 
 @dataclass
@@ -1011,27 +1107,34 @@ class KickDrum:
 @dataclass
 class SnareDrum:
     """Membrane + cavity + mechanically driven snare-wire bank."""
-    frequency: float = 180.0
+    frequency: float = 200.0
     radius_m: float = 0.17
-    decay: float = 0.28
+    decay: float = 1.0
     snare_tension: float = 0.7
-    wire_count: int = 20
+    wire_count: int = 13
+    first_hit: float = 0.009
 
     def strike(self, dur: float | None = None, *, velocity: float = 0.85,
                snappy: float = 0.7, sr: int = DEFAULT_SR, seed: int = 0) -> np.ndarray:
-        dur=float(dur if dur is not None else max(.14,self.decay*1.5))
+        dur=float(dur if dur is not None else max(.14,self.decay))
         n=max(1,int(round(dur*_PHYS_SR))); rng=np.random.default_rng(seed)
+        size=max(self.radius_m,.04)/.16
         head = MembraneDrum(self.frequency,self.radius_m,
-                            damping=max(.55,.8/max(self.decay,.05)), air_coupling=.35)
+                            damping=6.91*size/(2*1.148*max(self.decay,.05)), air_coupling=.35, radiation=1.0)
         membrane=np.asarray(head.strike(dur,velocity=velocity,position=.35,stroke="slap",
                                         sr=_PHYS_SR,seed=seed),float)[:n]
-        # Bottom-head acceleration drives the wires.  More wires raise event
-        # density, while tension moves their resonant band upward.
+        # Bottom-head acceleration drives the wires; they first come back onto the head
+        # together, then scatter.
         acc=np.gradient(np.gradient(membrane))*_PHYS_SR*_PHYS_SR
         drive=np.abs(acc); drive/=np.max(drive)+1e-12
+        k0=min(n,int(self.first_hit*_PHYS_SR))
+        drive[:k0]=0.0
         events = rng.random(n) < np.clip((6e-4 + 2.2e-3*drive)
                                          * max(self.wire_count,1)/20.0, 0, .25)
         impulses = rng.standard_normal(n)*events*drive
+        if k0 < n:
+            hits=np.minimum(n-1, k0+rng.integers(0, max(1,int(.0005*_PHYS_SR)), max(self.wire_count,1)))
+            np.add.at(impulses, hits, rng.standard_normal(hits.size)/np.sqrt(hits.size))
         # Wire resonances clustered in the upper mids; a few modes are enough
         # because the collision train already supplies the dense spectrum.
         base=1300 + 1500*np.clip(self.snare_tension,0,1)
@@ -1039,6 +1142,7 @@ class SnareDrum:
         keep=freqs < .44*_PHYS_SR; freqs=freqs[keep]
         dec=np.linspace(28,64,len(freqs)); gains=np.linspace(1,.28,len(freqs))
         wires=_modal.render_modes(impulses,_modal.Modes(freqs,dec,gains,"snare_wires"))
+        wires*=np.max(np.abs(membrane))/(np.max(np.abs(wires))+1e-12)
         y=(1-.58*np.clip(snappy,0,1))*membrane + (.35+.72*np.clip(snappy,0,1))*wires
         p=np.max(np.abs(y))+1e-12
         return _to_sr(np.tanh(y/p*1.45)*(.48+.42*velocity),sr)
@@ -1165,7 +1269,7 @@ class GearTrain:
         return _to_sr(np.tanh(y/p*1.28)*.6,sr)
 
 
-# Free-air TNT blast (Karlos, Solomos & Larcher, JRC technical report JRC101039, 2016, Table 4): with
+# Free-air TNT blast (Karlos, Solomos & Larcher, JRC technical report JRC101039, 2016, Table 4 for ps, is; Table 5 for pr, ir): with
 # T = log10(Z), Z = R / W^(1/3) in m/kg^(1/3), U = K0 + K1 T and log10(Y) = sum C_i U^i;
 # Y = peak incident overpressure (kPa) or positive impulse (kPa ms / kg^(1/3)).
 _BLAST_FITS = {
@@ -1177,7 +1281,14 @@ _BLAST_FITS = {
                                      -8.87923, -19.997, -13.89187, 38.20586)),
            ((0.76008, -0.73017), (1.13866, 1.3391, 0.37718, 0.13645, -2.53112, -5.744957, 6.41571, 19.26609, -9.99,
                                    -19.08479, 3.68941, 8.13372, -1.07378))),
+    "pr": (((-0.45355, -1.17991), (4.600, 1.64121, 2.11153, -2.69772, -4.68269, 8.999, -3.52406, -0.60343, 4.31395, -3.22106)),
+           ((-0.5736, -1.01474), (4.91457, 1.94421, 2.97654, 8.999, 5.37799, -0.02422, 2.46811, 4.17288, 1.9687, 0.30267))),
+    "ir": (((-1.22426, -1.59396), (3.91735, 1.32046, 0.29047, -1.40425, 0.95869, 6.36189, -6.02756, -8.999, 8.38468, 1.03014)),
+           ((-0.90176, -0.45548), (9.81477, 14.998, 3.16929, -14.9883, -9.84745, 5.44764, 6.14157, 1.4146, 0.21791, 0.1034))),
 }
+BLAST_DAMAGE = (("windows", 1.0e3), ("light", 3.4e3), ("panels", 7.6e3), ("concrete", 12.4e3), ("wood", 34.5e3),
+                ("demolition", 69.0e3))
+BURST_YIELD = {"air": 1.0, "rigid": 2.0, "surface": 1.5, "crater": 1.4}
 # Friedlander decay parameter alpha vs Z (m/kg^(1/3)): Kinney & Graham, Explosive Shocks in Air, Table XI part B
 # (spherical TNT, 1 ton; ft/ton^(1/3) x 0.03149)
 _BLAST_ALPHA = ((0.787, 4.5), (0.945, 3.5), (1.260, 2.3), (1.574, 1.5), (2.204, 0.9), (3.149, 0.9), (4.093, 1.0),
@@ -1196,6 +1307,102 @@ def _blast_fit(kind: str, z: float) -> float:
     (k0, k1), c = lo if z <= 0.40 else hi
     u = k0 + k1 * math.log10(z)
     return 10 ** sum(ci * u ** i for i, ci in enumerate(c))
+
+
+def rankine_hugoniot(p_pa: float, p0: float = 101325.0, t0: float = 293.15) -> tuple[float, float, float]:
+    """(shock Mach number, wind behind it m/s, temperature ratio) for overpressure ``p_pa``, gamma = 1.4 (Kinney, Explosive Shocks in Air):
+    Ms^2 = 1 + 6p/(7P0), up/a0 = 5(Ms^2 - 1)/(6 Ms), T1/T0 = (P1/P0)(P1/P0 + 6)/(6 P1/P0 + 1)."""
+    ms2 = 1.0 + 6.0 * float(p_pa) / (7.0 * p0)
+    ms = math.sqrt(ms2)
+    a0 = math.sqrt(1.4 * 287.05 * t0)
+    r = 1.0 + float(p_pa) / p0
+    return ms, 5.0 * (ms2 - 1.0) / (6.0 * ms) * a0, r * (r + 6.0) / (6.0 * r + 1.0)
+
+
+def blast_reflected(w_kg: float, r_m: float) -> tuple[float, float]:
+    """(peak overpressure Pa, positive impulse Pa s) of the free-air blast normally reflected by a wall ``r_m`` from
+    ``w_kg`` kg TNT, 0.053 <= Z <= 40 m/kg^(1/3). Never under twice the incident peak (the acoustic limit), which the fit
+    crosses past Z ~ 15."""
+    s3 = max(float(w_kg), 1e-6) ** (1.0 / 3.0)
+    z = float(np.clip(max(float(r_m), 1e-3) / s3, 0.053, 40.0))
+    return max(_blast_fit("pr", z), 2.0 * _blast_fit("ps", z)) * 1e3, _blast_fit("ir", z) * s3
+
+
+def blast_damage(ps_pa: float) -> list[str]:
+    """What a side-on overpressure breaks (``BLAST_DAMAGE``: lower bound of each class)."""
+    return [name for name, p in BLAST_DAMAGE if float(ps_pa) >= p]
+
+
+def natural_period(height_m: float, breadth_m: float | None = None) -> float:
+    """Fundamental period (s) of a building: 0.05 H / sqrt(B) with a breadth, else H / 175, H and B in feet.
+    A rough correlation: panels ring about ten times faster."""
+    h = max(float(height_m), 0.1) / 0.3048
+    if breadth_m:
+        return 0.05 * h / math.sqrt(max(float(breadth_m), 0.1) / 0.3048)
+    return h / 175.0
+
+
+def fireball(dur: float = 8.0, rise: float = 0.1, *, sr: int = DEFAULT_SR, seed: int = 0) -> np.ndarray:
+    """Rumble of a rising fireball: noise through bp 40..140 Hz (Q 1) and two low-passes swept by the same line,
+    x 10, DC trap at 5 Hz, amplitude the line to the 4th power smoothed at 5 Hz. The line rises in ``rise`` s
+    and falls back over ``dur`` s."""
+    sr0 = _amb.SR
+    rng = np.random.default_rng(int(seed))
+    nr, nf = max(1, int(rise * sr0)), max(1, int(float(np.clip(dur, 0.2, 30.0)) * sr0))
+    line = np.concatenate([np.arange(nr) / nr, 1.0 - np.arange(nf) / nf, [0.0]])
+    fc = 40.0 + 100.0 * line
+    x = _amb.lop(_amb.lop(_amb.bp(rng.uniform(-1.0, 1.0, len(line)), fc, 1.0), fc), fc)
+    y = _amb.hip(10.0 * x, 5.0) * _amb.lop(line ** 4, 5.0)
+    return resample(y, sr0, sr)
+
+
+def potential_collision(mass: float, v0: float, kappa: float, alpha: float = 1.5, *, mode_mass: float = 0.05,
+                        mode_freq: float = 200.0, dur: float = 0.05, sr: int = DEFAULT_SR) -> tuple[np.ndarray, np.ndarray]:
+    """A mallet of ``mass`` kg hitting a lossless mode (``mode_mass`` kg, ``mode_freq`` Hz) at ``v0`` m/s with the
+    force f = dPhi/deta, Phi = kappa/(alpha + 1) [eta]+^(alpha + 1). Energy-conserving scheme: the force is the
+    discrete gradient (Phi(eta+) - Phi(eta-))/(eta+ - eta-), r = eta+ - eta- solved by Newton from
+    r + g (Phi(r + a) - Phi(a))/r + b = 0. Returns (mode displacement, energy) per sample."""
+    k = 1.0 / sr
+    n = max(3, int(dur * sr))
+    K = mode_mass * (2.0 * math.pi * mode_freq) ** 2
+    cw = 1.0 / (mode_mass / k ** 2 + 0.5 * K)
+    g = cw + k * k / mass
+    phi = lambda e: kappa / (alpha + 1.0) * max(e, 0.0) ** (alpha + 1.0)      # noqa: E731
+    dphi = lambda e: kappa * max(e, 0.0) ** alpha                              # noqa: E731
+    w, z = np.zeros(n), np.zeros(n)
+    z[0], z[1] = -2.0 * v0 * k, -v0 * k
+    en = np.zeros(n - 1)
+    for i in range(1, n - 1):
+        aw = cw * (mode_mass * (2.0 * w[i] - w[i - 1]) / k ** 2 - 0.5 * K * w[i - 1])
+        az = 2.0 * z[i] - z[i - 1]
+        a = z[i - 1] - w[i - 1]
+        b = a - (az - aw)
+        r = 0.0
+        for _ in range(50):
+            if abs(r) > 1e-15:
+                fr = (phi(r + a) - phi(a)) / r
+                dfr = (dphi(r + a) * r - (phi(r + a) - phi(a))) / (r * r)
+            else:
+                fr, dfr = dphi(a), 0.5 * kappa * alpha * max(a, 0.0) ** (alpha - 1.0)
+            step = (r + g * fr + b) / (1.0 + g * dfr)
+            r -= step
+            if abs(step) < 1e-16 + 1e-13 * abs(r):
+                break
+        f = (phi(r + a) - phi(a)) / r if abs(r) > 1e-15 else dphi(a)
+        w[i + 1] = aw + cw * f
+        z[i + 1] = az - k * k * f / mass
+        en[i] = (0.5 * mode_mass * ((w[i + 1] - w[i]) / k) ** 2 + 0.25 * K * (w[i + 1] ** 2 + w[i] ** 2)
+                 + 0.5 * mass * ((z[i + 1] - z[i]) / k) ** 2 + 0.5 * (phi(z[i + 1] - w[i + 1]) + phi(z[i] - w[i])))
+    en[0] = 0.5 * mass * v0 * v0
+    return w, en
+
+
+def blast_ground(w_kg: float, r_m: float) -> float:
+    """Peak overpressure in Pa of a surface burst, 0.15 < Z < 40 m/kg^(1/3) (Catovic & Kljuno's fit, within 3.3 % of its data)."""
+    z = float(np.clip(float(r_m) / max(float(w_kg), 1e-6) ** (1.0 / 3.0), 0.15, 40.0))
+    c = (0.3078, -2.054, -0.2916, 0.06031, 0.03571) if z < 3.0 else (0.906, -3.514, 0.757, -0.08512)
+    u = math.log(z)
+    return 1e6 * math.exp(sum(a * u ** i for i, a in enumerate(c)))
 
 
 def blast_wave(w_kg: float, r_m: float) -> tuple[float, float, float]:
@@ -1237,13 +1444,14 @@ class Explosion:
     distance_m: float = 8.0
     debris: float = 0.45
     enclosure: float = 0.15
+    windows: float = 0.0
 
     def render(self, dur: float = 2.0, *, sr: int=DEFAULT_SR, seed: int=0) -> np.ndarray:
         dur=max(.15,float(dur)); n=max(1,int(round(dur*_PHYS_SR))); t=np.arange(n)/_PHYS_SR
         rng=np.random.default_rng(seed); e=max(.01,float(self.energy)); d=max(.5,float(self.distance_m))
         # Friedlander pulse: positive phase td and decay alpha of this charge at this distance; it runs on into
         # the negative phase until (1 - t/td) e^(-alpha t/td) has died out
-        _, td, alpha = blast_wave(e, d)
+        ps, td, alpha = blast_wave(e, d)
         m = min(n, max(4, int(min(td * (1.0 + 8.0 / alpha), 0.5) * _PHYS_SR)))
         tt = np.arange(m) / _PHYS_SR
         nw = np.zeros(n); nw[:m] = (1.0 - tt / td) * np.exp(-alpha * tt / td)
@@ -1264,6 +1472,12 @@ class Explosion:
             debris[k:k+L]+=rng.uniform(.03,.16)*np.sin(2*np.pi*f*tt)*np.exp(-tt/rng.uniform(.006,.035))
         # crude reflection taps for enclosure; direct path is distance delayed.
         y=1.0*nw + .62*rumble + .3*blast + self.debris*debris
+        if self.windows > 0 and "windows" in blast_damage(ps):
+            from .contact import smash
+            g = np.asarray(smash(sr=_PHYS_SR, material="glass", size=1.0, seed=seed), float)
+            g = (g.mean(axis=1) if g.ndim == 2 else g)[:n]
+            g = np.pad(g, (0, n - len(g)))
+            y += float(np.clip(self.windows, 0.0, 1.0)) * g / (np.max(np.abs(g)) + 1e-12)
         if self.enclosure>0:
             wet=np.zeros(n)
             for delay,g in ((.045,.36),(.082,.22),(.137,.13)):

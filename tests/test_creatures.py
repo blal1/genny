@@ -167,6 +167,20 @@ def test_wingbeat_fundamental():
     REPORT["wingbeat Hz"] = out
 
 
+def test_purr_breath_cycle_expiration_40_percent():
+    # Sissom, Rice & Peters 1991: expiration about 40 % of the cycle; amplitude dips at each flow reversal
+    from scipy.signal import find_peaks
+    t = np.linspace(0.0, 1.7, 17001)[:-1]
+    assert abs(np.mean(C.purr_breath(t) > 0) - 0.4) < 1e-3
+    y = C.purr(SR, dur=7.0, seed=0)
+    w = int(0.08 * SR)
+    e = np.sqrt(np.convolve(y ** 2, np.ones(w) / w, "same"))
+    pk, _ = find_peaks(-e[w:-w], distance=int(0.4 * SR), prominence=0.05 * e.max())
+    d = np.diff(pk) / SR
+    short, long = np.median(d[d < 0.85]), np.median(d[d >= 0.85])       # measured 0.69 and 1.01 s
+    assert abs(short - 0.4 * 1.7) < 0.04 and abs(long - 0.6 * 1.7) < 0.04, d
+
+
 # ------------------------------------------------------------------ body
 def test_heartbeat_timing():
     out = {}
@@ -407,6 +421,112 @@ def test_instruments_not_piercing_and_level():
         out[name] = [round(v, 1) for v in lv]
         assert abs(sum(lv) / 3 + 12.0) < 6.0, (name, lv)
     REPORT["instrument loudness dB (target -12)"] = out
+
+
+def test_clap_types_resonance_follows_repp_table():
+    rng = np.random.default_rng(0)
+    for kind, (f, df, b, db, g, dg) in C.CLAP_TYPES.items():
+        fc = np.array([C.clap_resonator(kind, rng)[0] for _ in range(400)])
+        assert abs(np.mean(fc) - f) < max(0.15 * df, 15.0), (kind, np.mean(fc))
+    for kind in ("A1+", "A1", "P3"):                            # rendered single claps: spectral peak near the table f
+        pk = []
+        for seed in range(8):
+            y = X.render_sfx("handclap", SR, clap_type=kind, seed=seed)
+            sp = np.abs(np.fft.rfft(y, 1 << 15))
+            fr = np.fft.rfftfreq(1 << 15, 1 / SR)
+            m = (fr > 250) & (fr < 4000)
+            pk.append(fr[m][np.argmax(sp[m])])
+        f = C.CLAP_TYPES[kind][0]
+        assert abs(np.median(pk) / f - 1) < 0.2, (kind, np.median(pk))
+    REPORT["clap_types"] = "mean f within 0.15 df of Jylha & Erkut Table 1; rendered peak within 20 %"
+
+
+def test_applause_mode_two_halves_rate_and_synchronises():
+    r = C.applause_rate(0.6)
+    free = C.applause_plan(30, 0.6, 8.0, 1)
+    sync = C.applause_plan(30, 0.6, 8.0, 1, sync=1.0)
+    rate = lambda plan: np.median([1.0 / np.median(np.diff(p)) for p in plan if len(p) > 2])
+    assert abs(rate(free) / r - 1) < 0.05 and abs(rate(sync) / (0.5 * r) - 1) < 0.05
+    qf, qs = C.clap_order(free, 8.0, r), C.clap_order(sync, 8.0, 0.5 * r)
+    assert qf < 0.3 and qs > 0.33, (qf, qs)             # Mode II spread 0.10/1.3 (Neda 2000): K = 1.037 Kc, mean-field r = 0.33
+    # measured threshold: with the Mode II spread (5 %), K = 0.5 Kc leaves 64 clappers unlocked, K = 1.6 Kc
+    # (the coupling of sync = 1) locks them; Kc = sqrt(8/pi) D. Means over 4 seeds measured 0.17 and 0.70
+    r2 = 0.5 * r
+    kc = math.sqrt(8 / math.pi) * 0.05 * 2 * math.pi * r2
+    q = lambda k: np.mean([C.clap_order(C._kuramoto_plan(64, r2, 0.05, k, 8.0, np.random.default_rng(s)), 8.0, r2)   # noqa: E731
+                           for s in range(4)])
+    assert q(0.5 * kc) < 0.3 and q(0.8 * r2) > 0.5
+    y = X.render_sfx("applause", SR, crowd=200, dur=3.0, sync=1.0, clap_type="mix")
+    assert np.isfinite(y).all() and np.max(np.abs(y)) > 0.1
+    REPORT["applause_sync"] = f"order parameter free {qf:.2f}, Mode II {qs:.2f}"
+
+
+def test_bark_aggression_f0_and_mass_tract():
+    assert abs(C.dog_vtl(10.0) - 0.1468) < 1e-9 and abs(C.dog_vtl(50.0) - (3.15 + 11.53 * math.log10(50.0)) / 100) < 1e-9
+    f = {}
+    for ag in (0.0, 0.6, 1.0):
+        y = X.render_sfx("bark", SR, count=1, aggression=ag, seed=3)
+        f[ag] = f0_of(y[: int(0.12 * SR)], SR, 200, 900)
+    assert abs(f[0.0] / f[0.6] - 1.116) < 0.08 and abs(f[1.0] / f[0.6] - 0.767) < 0.08, f
+    lo = centroid(X.render_sfx("bark", SR, count=1, mass=45.0, seed=3), SR)
+    hi = centroid(X.render_sfx("bark", SR, count=1, mass=3.0, seed=3), SR)
+    assert hi > lo, (hi, lo)
+
+
+def test_roar_species_and_kitten_and_stride_mass():
+    a = centroid(X.render_sfx("roar", SR, species="cub", dur=1.0), SR)
+    b = centroid(X.render_sfx("roar", SR, species="lion", dur=1.0), SR)
+    assert a > b, (a, b)
+    y = X.render_sfx("meow", SR, size=0.6, seed=0)
+    pk = f0_of(y[int(0.25 * len(y)): int(0.4 * len(y))], SR, 600, 2500)
+    assert abs(pk / 1398.0 - 1) < 0.1, pk                       # Maine Coon kitten f0 max 1398 +- 83 Hz
+    assert abs(C.stride_pace("trot", 500.0) - 358.0) < 1.0 and abs(C.stride_pace("gallop", 500.0) - 403.0) < 1.5
+    t = C.footsteps_plan("gallop", C.stride_pace("gallop", 25.0), 16, 0.0)
+    assert abs(4 * 60.0 / (t[4] - t[0]) / 4.0 - 240 * 4.44 * 25 ** -0.156 / 4.0) < 1.0
+
+
+def test_dread_choir_gates_and_doom_band():
+    y = X.render_sfx("dread_choir", SR, seed=2)
+    e = envelope(y, SR, 10.0)
+    assert e[int(0.3 * SR)] > 0.1 and e[int(0.95 * SR)] < 1e-3 and e[int(1.5 * SR)] > 0.1, "voiced phrases, silence between"
+    from scipy.signal import butter, sosfiltfilt
+    seg = X.render_sfx("dread_choir", SR, seed=2, dur=4.0, gates="0.1-3.9")[int(0.6 * SR): int(3.5 * SR)]
+    a = np.convolve(np.abs(sosfiltfilt(butter(4, 800.0, "high", fs=SR, output="sos"), seg)), np.ones(441) / 441, "same")[::441]
+    sp = np.abs(np.fft.rfft(a - a.mean(), 4096))
+    fr = np.fft.rfftfreq(4096, 0.01)
+    m = (fr > 1.0) & (fr < 20.0)
+    doom = 4.0 + 4.0 * C._rng(2, 70).uniform(0.0, 1.0, 5)[4]
+    assert abs(fr[m][np.argmax(sp[m])] - doom) < 0.1, (fr[m][np.argmax(sp[m])], doom)   # upper band pulses at the 4-8 Hz doom rate
+
+
+def test_biphonation_second_f0_at_f0_over_0_59():
+    # Riede 2000, ch. 3.3.2: f0 515 Hz, g0 875 Hz, f0/g0 = 0.59; peaks at m f0 + n g0
+    n = C.KSR
+    f0 = np.full(n, 515.0)
+    env = np.ones(n)
+    spec = []
+    for b in (0.0, 1.0):
+        y = C._voc(f0, env, C._rng(0, 99), tract_m=0.16, harsh=0.06, jitter=0.0, shimmer=0.0, biphon=b)[n // 4:]
+        p = np.abs(np.fft.rfft(y * np.hanning(len(y)), 1 << 19))
+        fr = np.fft.rfftfreq(1 << 19, 1 / C.KSR)
+        spec.append((p, fr))
+    (p0, fr), (p1, _) = spec
+    for m, k in ((0, 1), (-1, 1), (1, 1)):
+        i = np.argmin(np.abs(fr - (m * 515.0 + k * 515.0 / 0.59)))
+        assert p1[i - 20:i + 21].max() > 10 * p0[i - 20:i + 21].max()
+
+
+def test_gardner_two_tube_tract_delays_and_decay():
+    # Gardner et al. 2001, eq. 5-8 and Fig. 3: L1 3.0 cm, L2 1.0 cm, A1 0.15, A2 0.4, alpha 0.8
+    assert C.GARDNER_TRACT == (0.03, 0.01, 0.15, 0.4, 0.8)
+    imp = np.zeros(4000)
+    imp[0] = 1.0
+    h = C._two_tube_kernel(imp, 34, 11, 0.0, 0.0)              # matched tubes, no beak reflection: a pure delay t1 + t2
+    assert np.argmax(np.abs(h)) == 45 and abs(h[45] - 1.0) < 1e-12
+    h = C._two_tube(np.r_[1.0, np.zeros(C.KSR // 4)])
+    assert np.isfinite(h).all() and np.abs(h[-1000:]).max() < 1e-6 * np.abs(h).max()
+    y = X.render_sfx("birdsong", 44100, species="canary", tract="gardner")
+    assert np.isfinite(y).all() and np.abs(y).max() > 0.1
 
 
 if __name__ == "__main__":

@@ -1,42 +1,51 @@
-"""Non-verbal vocalisations (laugh, scream, cry, moan) after Anikin, "Soundgen", Behav. Res. Methods 51, 778-792
-(2019), with the parameter values of soundgen's own presets (``presets.R``, speakers M1 and F1; soundgen is GPL,
-only the numbers are taken, the synthesis below is written from the paper and the parameter documentation).
+"""Non-verbal vocalisations (laugh, scream, cry, moan) in the manner of soundgen, with the parameter values of
+soundgen's own presets (speakers M1 and F1; soundgen is GPL, only the numbers are taken, the synthesis below is
+written from its description and parameter documentation).
 
 A bout is ``nSyl`` voiced syllables of ``sylLen`` ms separated by ``pauseLen`` ms. Per syllable:
 - f0 from the ``pitch`` anchors (spread over the syllable), times 2^(st/12) of the ``pitchGlobal`` anchors (semitones,
   spread over the bout); harmonics k f0 at ``rolloff`` dB/oct, plus the +6 dB/oct of the lips (``lipRad``);
 - nonlinear epochs (at least ``shortestEpoch`` ms) cover ``nonlinBalance`` % of the sound; in them the f0 is
   multiplied by 2^(N(0, jitterDep / 12)) drawn every ``jitterLen`` ms (soundgen ``wiggleGC``) and each glottal cycle
-  by 1 + N(0, shimmerDep / 100);
+  by 1 + N(0, shimmerDep / 100); vibrato 2^(vibratoDep/12 sin 2 pi vibratoFreq t);
 - amplitude modulation 1 - amDep/100 (1/2 + 1/2 cos 2 pi amFreq t) (``addAM``, sine form), ``attackLen`` ms fades,
   ``ampl`` dB anchors over the syllable and ``amplGlobal`` over the bout;
 - turbulent noise: ``noise`` dB anchors at ms from the syllable onset (may start before it or outlast it), relative
   to the RMS of the voiced part, tilted ``rolloffNoise`` dB/kHz above 1200 Hz, through the same formants;
 - the vocal tract: an all-pole envelope (DC-normalised two-pole resonances), applied frame by frame in the STFT as
-  soundgen does. Formants from ``formants`` (anchors over the syllable), bandwidths from getBandwidth (TNF-63 above
-  500 Hz, Khodai-Joopari & Clermont below), formants above the given ones at the uniform-tube spacing
+  soundgen does. Formants from ``formants`` (anchors over the syllable), bandwidths from soundgen's getBandwidth,
+  formants above the given ones at the uniform-tube spacing
   F_n = (2n - 1) c / 4 VTL (VTL given, or fitted to the given formants), c = 35400 cm/s; ``mouth`` m shifts every
   formant by (m - 0.5) c / 4 VTL.
-UNSOURCED: ``temperature`` here only scatters the syllable lengths and pitch anchors by 2^N(0, temperature) (soundgen
-spreads it over many more parameters).
+
 """
 from __future__ import annotations
 
 import numpy as np
+from scipy.ndimage import uniform_filter1d
 from scipy.signal import istft, stft
 
-from .core import SR
+from .core import SR, seconds, soft_ends
 
-C_CM = 35400.0          # speed of sound in warm air, cm/s (Anikin 2019)
+EDGE = 0.005                                                # s, ends of a syllable and of its noise.
+
+C_CM = 35400.0          # speed of sound in warm air, cm/s
 LIP_RAD = 6.0           # dB/oct, soundgen default
 NOISE_FLAT = 1200.0     # Hz, soundgen noiseFlatSpec default
+# Mouth completely closed: nasalised, B1 = 175 Hz and a zero-pole pair near F1.
+MOUTH_CLOSED = 0.05
+NASAL_PAIR = (0.88, 1.12, 175.0)
+# Regimes of a random walk: bottom nothing, middle subharmonics, top subharmonics + chaos.
+WALK_STEP = 0.05
+WALK_CUTS = (1.0 / 3.0, 2.0 / 3.0)
+CHAOS_JITTER, CHAOS_SHIMMER = 1.0, 10.0
 
 DEFAULTS = dict(nSyl=1, sylLen=500, pauseLen=200, pitch=(100, 150, 100), pitchGlobal=None, rolloff=-12.0,
                 temperature=0.025, nonlinBalance=100.0, jitterDep=0.0, jitterLen=1.0, shimmerDep=0.0, attackLen=50.0,
                 amFreq=30.0, amDep=0.0, formants=None, vocalTract=None, mouth=None, noise=None, rolloffNoise=-4.0,
-                ampl=None, amplGlobal=None, shortestEpoch=300.0)
+                ampl=None, amplGlobal=None, shortestEpoch=300.0, vibratoDep=0.0, vibratoFreq=5.0)
 
-# soundgen presets.R (M1 = adult man, F1 = adult woman). Anchors: a tuple of values spread evenly, or (times, values)
+# soundgen presets (M1 = adult man, F1 = adult woman). Anchors: a tuple of values spread evenly, or (times, values)
 # with times in 0..1 (ms for ``noise``).
 PRESETS = {
     ("laugh", "male"): dict(nSyl=5, sylLen=120, pauseLen=120, pitch=(180, 166), pitchGlobal=((0, 0.3, 1), (1, 2, 0)),
@@ -61,8 +70,31 @@ PRESETS = {
                              ampl=(0, -40)),
 }
 KINDS = sorted({k for k, _ in PRESETS})
-# UNSOURCED: soundgen has no male scream or cry preset; the female one an octave down (0.5). Tract 17.5 cm,
-# "typical adult male" (Story 2005, footnote 2)
+PRESETS[("moan_sova", "female")] = dict(
+    nSyl=3, sylLen=520, pauseLen=400, pitch=(270, 210), vibratoDep=0.5, rolloff=-25, temperature=0.15,
+    formants=((900,), (1400,), (3100,), (3750,), (4900,), (6200,), (6800,)), mouth=(0.5, 0.6),
+    noise=((0, 350, 520, 530, 700, 830), (-55, -40, -45, -60, -40, -60)), rolloffNoise=0)
+LAUGH_RATE = (4.6, 3.6)     # Hz of the call oscillator at the start and the end of the bout
+LAUGH_DECAY = 1.2           # 1/s, B of the damped oscillator
+
+
+def damped_calls(n_calls: int, rate=LAUGH_RATE, decay: float = LAUGH_DECAY):
+    """Laugh rhythm as a damped oscillator x(t) = e^(-B t) cos(phi(t)), phi' = 2 pi f(t), f linear from rate[0] to
+    rate[1] over the bout: each positive half-cycle is a voiced call, each negative one the aspiration between calls.
+    Returns (starts ms, lengths ms, gains dB) of the calls."""
+    f0, f1 = float(rate[0]), float(rate[-1])
+    T = n_calls / (0.5 * (f0 + f1))
+    t = np.linspace(0.0, T, 20001)
+    ph = 2.0 * np.pi * np.cumsum(f0 + (f1 - f0) * t / T) * (t[1] - t[0])
+    starts, lens, gains = [], [], []
+    for i in range(int(n_calls)):
+        a, b = np.interp([2.0 * np.pi * i - 0.5 * np.pi, 2.0 * np.pi * i + 0.5 * np.pi], ph, t)
+        a = max(a, 0.0)
+        c = np.interp(2.0 * np.pi * i, ph, t)
+        starts.append(1000.0 * a)
+        lens.append(1000.0 * (b - a))
+        gains.append(20.0 * np.log10(np.exp(-decay * c)))
+    return np.array(starts), np.array(lens), np.array(gains)
 MALE_FROM_FEMALE = (0.5, 17.5)
 
 
@@ -70,8 +102,8 @@ def preset(kind: str, voice: str = "female") -> dict:
     voice = "male" if str(voice).startswith("m") else "female"
     if (kind, voice) in PRESETS:
         return {**DEFAULTS, **PRESETS[(kind, voice)]}
-    if kind not in KINDS:
-        raise ValueError(f"unknown vocalisation {kind!r}; choose from {KINDS}")
+    if kind not in {k for k, _ in PRESETS}:
+        raise ValueError(f"unknown vocalisation {kind!r}; choose from {sorted({k for k, _ in PRESETS})}")
     p = {**DEFAULTS, **PRESETS[(kind, "female")]}
     k, vtl = MALE_FROM_FEMALE
     times, vals = _split(p["pitch"])
@@ -99,7 +131,7 @@ def _curve(a, n: int, default: float = 0.0) -> np.ndarray:
 
 
 def bandwidth(f: np.ndarray) -> np.ndarray:
-    """soundgen getBandwidth: TNF-63 above 500 Hz, Khodai-Joopari & Clermont 2002 below."""
+    """soundgen getBandwidth: one law above 500 Hz, another below."""
     f = np.asarray(f, float)
     return np.where(f < 250, 26.38541 - 0.042 * f + 0.0011 * f * f,
                     np.where(f < 500, 52.08333 * (1 + (f - 500) ** 2 / 1e5), 50 * (1 + f * f / 6e6)))
@@ -123,12 +155,20 @@ def _envelope(freqs, n_frames: int, p: dict) -> np.ndarray:
         tracks.append(np.full(n_frames, (2 * k - 1) * C_CM / (4 * vtl)))
         k += 1
     shift = (_curve(p["mouth"], n_frames, 0.5) - 0.5) * C_CM / (4 * vtl) if p["mouth"] is not None else 0.0
+    closed = (_curve(p["mouth"], n_frames, 0.5) < MOUTH_CLOSED) if p["mouth"] is not None else np.zeros(n_frames, bool)
     f = freqs[:, None]
     H = np.ones((freqs.size, n_frames))
-    for tr in tracks:
+
+    def res(F, bw):
+        b = bw / 2.0
+        return (F * F + b * b) / np.sqrt((b * b + (f - F) ** 2) * (b * b + (f + F) ** 2))
+
+    for j, tr in enumerate(tracks):
         F = np.maximum(tr + shift, 60.0)[None, :]
-        b = bandwidth(F) / 2.0
-        H *= (F * F + b * b) / np.sqrt((b * b + (f - F) ** 2) * (b * b + (f + F) ** 2))
+        H *= res(F, np.where(closed, 175.0, bandwidth(F)) if j == 0 else bandwidth(F))
+        if j == 0 and closed.any():
+            kp, kz, bn = NASAL_PAIR
+            H *= np.where(closed[None, :], res(F * kp, bn) / res(F * kz, bn), 1.0)
     return H * np.maximum(freqs, 50.0)[:, None] ** (LIP_RAD / 6.0) / 50.0
 
 
@@ -153,14 +193,30 @@ def _epochs(n: int, frac: float, min_len: int, rng) -> np.ndarray:
     return g
 
 
+def regimes(n: int, rng) -> np.ndarray:
+    """0 (nothing), 1 (subharmonics) or 2 (subharmonics + chaos) per sample, from a random walk over its own range."""
+    m = max(2, int(n / (WALK_STEP * SR)) + 2)
+    w = np.cumsum(rng.standard_normal(m))
+    w = (w - w.min()) / max(float(np.ptp(w)), 1e-9)
+    return np.searchsorted(WALK_CUTS, np.interp(np.arange(n), np.linspace(0, n, m), w))
+
+
 def _syllable(p: dict, n: int, f0: np.ndarray, rng) -> np.ndarray:
     t = np.arange(n) / SR
     gate = _epochs(n, float(p["nonlinBalance"]) / 100.0, int(float(p["shortestEpoch"]) * 1e-3 * SR), rng)
+    sub = None
+    if p.get("subDep", 0.0) > 0:                  # a walk through the regimes takes over from the epochs
+        reg = regimes(n, rng)
+        gate = (reg == 2).astype(float)
+        sub = float(p["subDep"]) * (reg >= 1)
+        p = {**p, "jitterDep": max(p["jitterDep"], CHAOS_JITTER), "shimmerDep": max(p["shimmerDep"], CHAOS_SHIMMER)}
     if p["jitterDep"] > 0:
         step = max(1, int(max(float(p["jitterLen"]) * 1e-3, 1.0 / float(np.mean(f0))) * SR))
         pts = np.arange(0, n + step, step)
         jit = rng.normal(0.0, float(p["jitterDep"]) / 12.0, pts.size)
         f0 = f0 * 2.0 ** (np.interp(np.arange(n), pts, jit) * gate)
+    if p.get("vibratoDep", 0.0) > 0:
+        f0 = f0 * 2.0 ** (float(p["vibratoDep"]) / 12.0 * np.sin(2 * np.pi * float(p["vibratoFreq"]) * t))
     ph = np.cumsum(f0) / SR
     cyc = np.floor(ph).astype(np.int64)
     amp = np.ones(n)
@@ -171,6 +227,8 @@ def _syllable(p: dict, n: int, f0: np.ndarray, rng) -> np.ndarray:
         a = 10.0 ** (float(p["rolloff"]) * np.log2(k) / 20.0)
         src += np.where(k * f0 < 0.45 * SR, a, 0.0) * np.sin(2 * np.pi * k * ph)
     src *= amp
+    if sub is not None:                           # g0 = f0/2: alternate cycles scaled by 1 -/+ d, smoothed over 1 ms as voice.roughness
+        src *= uniform_filter1d(1.0 + sub * np.where(cyc % 2 == 0, 1.0, -1.0), max(1, seconds(0.001)), mode="nearest")
     if p["amDep"] > 0:
         src *= 1.0 - float(p["amDep"]) / 100.0 * (0.5 + 0.5 * np.cos(2 * np.pi * float(p["amFreq"]) * t))
     att = np.atleast_1d(p["attackLen"]).astype(float)
@@ -199,13 +257,17 @@ def _noise(p: dict, voiced_rms: float, rng) -> tuple[np.ndarray, int]:
     w = _filter(w, {**p, "mouth": None})
     w /= np.sqrt(np.mean(w * w)) + 1e-12
     env_db = np.interp(np.arange(m) + i0, times * 1e-3 * SR, vals)
-    return w * voiced_rms * 10.0 ** (env_db / 20.0), i0
+    # Soundgen's anchors can start at -15 dB, a step of noise on silence: EDGE closes the ends.
+    return w * voiced_rms * 10.0 ** (env_db / 20.0) * soft_ends(m, seconds(EDGE), seconds(EDGE)), i0
 
 
-def vocalize(kind: str, voice: str = "female", rng=None, *, n_syl: int | None = None, pitch: float = 1.0) -> np.ndarray:
-    """One bout of ``kind`` (laugh, scream, cry, moan) at SR, peak 1. ``pitch`` scales f0, ``n_syl`` the bout."""
+def vocalize(kind: str, voice: str = "female", rng=None, *, n_syl: int | None = None, pitch: float = 1.0,
+             subharmonic: float = 0.0, rhythm: str = "preset") -> np.ndarray:
+    """One bout of ``kind`` (laugh, scream, cry, moan, moan_sova) at SR, peak 1. ``pitch`` scales f0, ``n_syl`` the
+    bout. ``subharmonic`` > 0 (depth 0..1): a random walk moves the syllable through no effect, subharmonics, and
+    chaos. ``rhythm="oscillator"``: call times, lengths and levels from `damped_calls` instead of the preset's."""
     rng = rng or np.random.default_rng(0)
-    p = preset(kind, voice)
+    p = {**preset(kind, voice), "subDep": float(subharmonic)}
     ns = int(n_syl or p["nSyl"])
     temp = float(p["temperature"])
     lens = [max(0.02, p["sylLen"] * 2.0 ** rng.normal(0.0, temp)) for _ in range(ns)]
@@ -213,17 +275,21 @@ def vocalize(kind: str, voice: str = "female", rng=None, *, n_syl: int | None = 
     for L in lens:
         starts.append(t)
         t += L + p["pauseLen"] * 2.0 ** rng.normal(0.0, temp)
+    osc = None
+    if rhythm == "oscillator":
+        st_, ln_, osc = damped_calls(ns)
+        starts, lens = list(st_), [max(0.02, x) for x in ln_]
     times, vals = _split(p["noise"])
     pre = max(0.0, -min(times)) if times is not None else 0.0
     post = max(0.0, max(times) - min(lens)) if times is not None else 0.0
     total = int((pre + starts[-1] + lens[-1] + post + 20.0) * 1e-3 * SR)
     out = np.zeros(total)
     glob = _curve(p["pitchGlobal"], ns)
-    gamp = _curve(p["amplGlobal"], ns)
+    gamp = _curve(p["amplGlobal"], ns) if osc is None else osc
     for s, (st, L) in enumerate(zip(starts, lens)):
         n = int(L * 1e-3 * SR)
         f0 = _curve(p["pitch"], n) * 2.0 ** (glob[s] / 12.0 + rng.normal(0.0, temp) / 12.0) * float(pitch)
-        v = _filter(_syllable(p, n, f0, rng), p)
+        v = _filter(_syllable(p, n, f0, rng), p) * soft_ends(n, seconds(EDGE), seconds(EDGE))   # the STFT smears past the syllable, which cuts it on a step
         nz, i0 = _noise(p, float(np.sqrt(np.mean(v * v))), rng)
         seg = np.zeros(total)
         a = int((pre + st) * 1e-3 * SR)

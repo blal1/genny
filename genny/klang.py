@@ -17,7 +17,7 @@ recipes adapted to genny's registries. Every ported sound repeats the attributio
    docs/klang.md "klang quirks kept").
    ``klang_rain`` is NOT a port: ``procedural/nature/Nature.h`` holds only ``#pragma once`` (the
    README lists Rain as work in progress). It is a small original model built from the same klang
-   primitives; its constants are marked UNSOURCED.
+   primitives; its constants are in research/SOURCES.md.
 2. From the Python modules (48 kHz physical kernels in ``genny/physical``): ``ui_tick`` and
    ``ui_chime`` (interface.py), ``damage`` (impacts.py), ``sniff``, ``strain``, ``weight_shift``
    (body.py), ``hand_chime`` (charter.py); the orchestral voices the sampler map
@@ -199,13 +199,12 @@ def _toy_boat_k(n, rate, brk, seed):
     return out
 
 
-@sfx("toy_boat", "Toy boat engine (Klang procedural port of Farnell's putt-putt): a 9 Hz valve pulse gating formant noise through three body resonances.",
+@sfx("toy_boat", "Toy boat engine (Klang procedural port, putt-putt): a 9 Hz valve pulse gating formant noise through three body resonances.",
      rate=(9.0, "valve pulses per second (the header's constant: 9); the noise bursts come at twice this"),
      broken=(0, "1 = broken engine: the regular pulse is replaced by 9 Hz band-passed noise (sputtering)"),
      dur=(3.0, "s"), seed=(1, "noise seed"))
 def toy_boat(sr=DEFAULT_SR, rate=9.0, broken=0, dur=3.0, seed=1):
-    """Port of ``ToyBoatEngine`` (procedural/vehicles/Motors.h l.193-251; "A Toy Boat Engine", Farnell,
-    Designing Sound p.511). Klang Open License 1.0, (c) 2025 Chris Nash.
+    """Port of ``ToyBoatEngine`` (procedural/vehicles/Motors.h l.193-251). Klang Open License 1.0, (c) 2025 Chris Nash.
 
     sine 9 Hz (or noise >> BPF 9 Hz Q15) -> clip01(x*600) -> one-pole HPF 10 -> one-pole LPF 30,
     times (noise -> one-pole HPF 1000 -> BPF 590 Q4), into BPF 470 Q8 + 780 Q9 + 1024 Q10 summed,
@@ -658,9 +657,13 @@ def bicycle(sr=DEFAULT_SR, pedalling=0.5, wheel_speed=6.0, pedal_speed=1.0, dur=
 
 
 # ====================================================================== Rain (Nature.h is empty)
+RAIN_AREA = 3.0
+
+
 def rain_rate(intensity: float) -> float:
-    """Drops per second heard individually. UNSOURCED: 2 + 600 intensity^2."""
-    return 2.0 + 600.0 * float(np.clip(intensity, 0.0, 1.0)) ** 2
+    """Drops per second heard individually: ``ambience.rain_rate`` over ``RAIN_AREA`` m2."""
+    from .physical import ambience
+    return ambience.rain_rate(float(np.clip(intensity, 0.0, 1.0)), RAIN_AREA)
 
 
 def rain_events(dur: float, intensity: float, seed: int = 1) -> np.ndarray:
@@ -684,7 +687,7 @@ def _drops_k(n, t0, f, a, tau):
 
 
 @sfx("klang_rain", "Rain built from klang primitives (the procedural library's Rain is unwritten): Poisson drop ticks over a filtered-noise bed; both grow with intensity.",
-     intensity=(0.5, "0 drizzle .. 1 downpour: 2 + 600 x intensity^2 audible drops per second, and the bed level"),
+     intensity=(0.5, "0 drizzle .. 1 downpour: 600 x intensity audible drops per second (200 per m2 over 3 m2), and the bed level"),
      hiss=(1.0, "level of the continuous bed (the countless far drops); 0 = only the individual drops"),
      tone=(1.0, "0.5 darker (soft ground) .. 2 brighter (hard surface): scales drop pitch and bed cutoff"),
      dur=(4.0, "s"), seed=(1, "seed"))
@@ -692,9 +695,8 @@ def klang_rain(sr=DEFAULT_SR, intensity=0.5, hiss=1.0, tone=1.0, dur=4.0, seed=1
     """NOT a port: ``procedural/nature/Nature.h`` contains only ``#pragma once`` (README: "Rain
     (work-in-progress)"). Original model in the style of the library, built from klang's
     primitives (white noise, one-pole high-pass, biquad low-pass; klang.h Filters).
-    UNSOURCED, all of it: drop = sine tick 1.5-7 kHz decaying in 1.5-5 ms with amplitude u^3;
-    bed = noise -> one-pole HPF 900 Hz -> LPF 5.5 kHz at 0.02 + 0.1 intensity (Farnell 2010, Practical 15,
-    puts a 900 Hz high-pass on his summed rain clicks, not on a noise bed)."""
+    Drop = sine tick 1.5-7 kHz decaying in 1.5-5 ms with amplitude u^3;
+    bed = noise -> one-pole HPF 900 Hz -> LPF 5.5 kHz at 0.02 + 0.1 intensity."""
     it = float(np.clip(intensity, 0.0, 1.0))
     tn = float(np.clip(tone, 0.25, 3.0))
     n = _kn(dur)
@@ -733,13 +735,13 @@ def _strk(table, fs=1.0, ms=1.0, pos=0.0, **kw):
 
 
 def _panel(y, gin):
-    """Farnell switch panel body: 50 ms delay fed back through bp(700, Q3) x 0.1, dry + body."""
+    """Switch panel body: 50 ms delay fed back through bp(700, Q3) x 0.1, dry + body."""
     from . import foley as FO           # the numba kernels of the click models live there
     return y + FO._panel_k(np.ascontiguousarray(y, dtype=np.float64), S(0.05), 700.0, 3.0, 0.1, float(gin), float(P.SR))
 
 
 def _paper_slide(dur, rng, res=0.5):
-    """Paper friction: STK Sandpaper driven by the Farnell GRF hump as the hand's pressure."""
+    """Paper friction: Sandpaper grains driven by the GRF hump as the hand's pressure."""
     x = np.arange(S(dur)) / max(S(dur) - 1, 1)
     return PT.shaker("Sandpaper", dur, rng, energy_curve=1.5 * 3.3333 * x * (1 - x) ** 2 * (1 + x),
                      resonance_scale=res, energy_mode="level")
@@ -784,7 +786,7 @@ def _ui(kind, rng):
         thud = P.fit(_strk("sy_computertower", 1.0, 35.0, d_scale=10.0), n)
         clunk = _lop(FO._mclick(_hip(rng.uniform(-1, 1, n), 200.0), FO.HAND, 0.0, 3.0), 800.0)
         return thud + clunk * 0.2 * np.max(np.abs(thud)) / (np.max(np.abs(clunk)) + 1e-12)
-    if kind == "toggle":               # Farnell four-click panel switch
+    if kind == "toggle":               # four-click panel switch
         nz = rng.uniform(-1, 1, S(0.11))
         return _panel(FO._switchclick(nz, 1, 50, 3000, 0.0) + FO._switchclick(nz, 1, 20, 4000, 0.0)
                       + FO._switchclick(nz, 1, 20, 5000, 0.010) + FO._switchclick(nz, 1, 50, 7000, 0.010), 10.0)
@@ -830,8 +832,8 @@ UI_KINDS = ("focus", "back", "activate", "refuse", "toggle", "page", "save", "lo
 def ui_tick(sr=DEFAULT_SR, kind="focus", seed=0):
     """Port of the ``ui_*`` recipes of procedural/interface.py (Klang Open License 1.0, (c) 2025
     Chris Nash): modal strikes on the van den Doel measured objects (stick.sy wood, wok.sy iron,
-    computertower.sy sheet-metal box), Farnell click clusters (mclick / clickfactory, switchclick,
-    shortping) and bodies (bodyresonance~, switch panel), STK Sandpaper as paper friction, a
+    computertower.sy sheet-metal box), click clusters (mclick / clickfactory, switchclick,
+    shortping) and bodies (bodyresonance~, switch panel), Sandpaper grains as paper friction, a
     Hertz felt pulse on the Faust big square body as a soft cover, Csound ``mode`` felt-on-wood.
     The click kernels are shared with ``genny.foley``. The game-specific ``c_*`` charter set
     (tuned bell motifs) is not ported."""
@@ -844,9 +846,9 @@ def ui_tick(sr=DEFAULT_SR, kind="focus", seed=0):
 def ui_chime(sr=DEFAULT_SR, kind="discovery", pitch=1.0, seed=0):
     """Port of ``channel_discovery`` / ``channel_achievement`` / ``urgency_alert`` /
     ``channel_spell`` (procedural/interface.py; Klang Open License 1.0, (c) 2025 Chris Nash):
-    Risset's additive bell at 523.25 Hz, 0.9 s; Farnell telephone bells 650 and 653 Hz struck
+    additive bell at 523.25 Hz, 0.9 s; telephone bells 650 and 653 Hz struck
     60 ms apart; Faust englishBell x0.75 (t60 0.7 s, slope 3) hit by strikeModel(10, 3500, 0.25);
-    STK BandedWG glass harmonica bowed at 880 Hz with a rise-hold-lift fingertip curve."""
+    banded waveguide glass harmonica bowed at 880 Hz with a rise-hold-lift fingertip curve."""
     rng = np.random.default_rng(int(seed))
     k = float(np.clip(pitch, 0.25, 4.0))
     if kind == "discovery":
@@ -874,7 +876,7 @@ def _line(n):
 
 
 def _shockwave(T=0.010):
-    """Farnell ``pd shockwave``: 5 cycles sweeping 10/T Hz -> 0, hip 1."""
+    """Shockwave: 5 cycles sweeping 10/T Hz -> 0, hip 1."""
     v = _line(S(T))
     return _hip(np.concatenate([np.cos(2 * np.pi * 5.0 * v * v), np.zeros(S(0.02))]), 1.0)
 
@@ -988,12 +990,12 @@ def _damage(kind, rng):
      kind=("physical", "physical | soul | mental"), seed=(0, "take: body resonances, noise, +-3 % force"))
 def damage(sr=DEFAULT_SR, kind="physical", seed=0):
     """Port of ``impact_physical`` / ``impact_soul`` / ``impact_mental`` (procedural/impacts.py;
-    Klang Open License 1.0, (c) 2025 Chris Nash), themselves ports of Farnell's patches:
+    Klang Open License 1.0, (c) 2025 Chris Nash), themselves ports of Pd patches:
     physical = shockwave chirp + barrel whump + v^8 noise burst + dilated N-wave with ground
     reflection through one bpar8 body bank (Q 10.62), tanh(0.6 x); soul = lovelyheart ``onebeat``
     63 Hz x5 and 42 Hz x3 with ``murmur``, under ``fireball`` rumble and black noise; mental =
     ``boomer`` (200 Hz) through ``combsweep`` (w 13.7) over three band-passes 6 Hz apart at 90 Hz
-    (Farnell's doom tone), low-passed at 800 Hz."""
+    (doom tone), low-passed at 800 Hz."""
     return _fin(_damage(str(kind), np.random.default_rng(int(seed))), sr, src=P.SR, peak=0.8)
 
 
@@ -1004,7 +1006,7 @@ def damage(sr=DEFAULT_SR, kind="physical", seed=0):
 def sniff(sr=DEFAULT_SR, pulls=2, size=1.0, pull=0.09, gap=0.13, seed=0):
     """Port of ``body.sniff`` (procedural/body.py; Klang Open License 1.0, (c) 2025 Chris Nash):
     Pink Trombone with the velum open (nasal 1), glottis unvoiced, turbulence at a constriction
-    at index 22 whose diameter narrows 0.7 -> 0.5 during each pull; Farnell articulation curve."""
+    at index 22 whose diameter narrows 0.7 -> 0.5 during each pull; articulation curve."""
     rng = np.random.default_rng(int(seed))
     k = int(np.clip(pulls, 1, 12))
     pull, gap = float(np.clip(pull, 0.04, 1.0)), float(np.clip(gap, 0.02, 1.0))
@@ -1047,7 +1049,7 @@ def strain(sr=DEFAULT_SR, dur=0.6, freq=110.0, tenseness=0.8, size=1.0, seed=0):
      dur=(0.55, "s"), weight=(1.0, "load on the feet"), seed=(0, "seed"))
 def weight_shift(sr=DEFAULT_SR, ground="sand", dur=0.55, weight=1.0, seed=0):
     """Port of ``body.weight_shift`` (procedural/body.py; Klang Open License 1.0, (c) 2025 Chris
-    Nash): the Farnell ground-reaction-force polynomial with the heel : roll : ball weights
+    Nash): the ground-reaction-force polynomial with the heel : roll : ball weights
     3 : 1.5 : 1 drives the Visell granular ground texture (grains fire while the force rises)."""
     if ground not in PT.GROUNDS:
         raise ValueError(f"weight_shift ground {ground!r}: {'|'.join(PT.GROUNDS)}")
@@ -1064,7 +1066,7 @@ def weight_shift(sr=DEFAULT_SR, ground="sand", dur=0.55, weight=1.0, seed=0):
 
 # ---------------------------------------------------------------------- world.py: item handling
 def _stroke(n, strokes):
-    """Hand-stroke speed curve: half-cosine pushes (start s, length s, peak), Farnell's momentum push."""
+    """Hand-stroke speed curve: half-cosine pushes (start s, length s, peak), momentum push."""
     v = np.zeros(n)
     for at, ln, a in strokes:
         m = S(ln)
@@ -1153,7 +1155,7 @@ def _handle(kind, rng):
     if kind == "don":          # armour put on: a long shrug of cloth, plates settling, two buckles
         L.append((_cloth(1.4, _stroke(S(1.4), [(0.0, 0.6, 0.9), (0.45, 0.5, 0.7)]), rng, 0.6), 0.0, 1.0))
         t, gap, g = 0.35, 0.22, 1.0
-        for _ in range(3):     # Farnell bouncing: the intervals shrink and the hits fall
+        for _ in range(3):     # bouncing: the intervals shrink and the hits fall
             L.append((kn("sy_computertower", f_scale=1.4 * j(0.02), d_scale=2.5, contact_ms=0.5, vel=g, micro=1), t, 0.7 * g))
             t, gap, g = t + gap, gap * 0.6, g * 0.6
         return 1.5, L + [(catch(), 1.05, 0.35), (catch(), 1.2 + rng.uniform(0, 0.05), 0.3)]
@@ -1174,7 +1176,7 @@ def handle(sr=DEFAULT_SR, kind="weapon", seed=0):
     """Port of ``item_pickup`` and ``item_equip`` (procedural/world.py; Klang Open License 1.0,
     (c) 2025 Chris Nash): van den Doel measured bodies knocked with a (1 - cos) or Hertz felt
     contact, Cook's FoleyAutomatic scrape (fractal surface through a reson at v / lambda) driving
-    the same bodies, Farnell stick-slip creaks (leather: several sources), click-factory catch,
+    the same bodies, stick-slip creaks (leather: several sources), click-factory catch,
     shell-casing tinkles, chain momentum, PhISEM Sandpaper/Crunch. Knock, drive and scrape are
     shared with ``genny.foley``. Not carried over: the per-table gain calibration (every layer is
     peak-normalised before mixing anyway)."""
@@ -1216,19 +1218,28 @@ def tide(sr=DEFAULT_SR, kind="rising", dur=1.95, seed=0):
     return _fin(y, sr, src=P.SR, peak=0.6, fade=0.1)
 
 
+BELL_MODEL_D = 0.301
+
+
 @sfx("distant_bell", "A tower bell heard from far away: one toll carried through the air and returned by the buildings.",
      distance=(400.0, "metres: 1/r spreading and air absorption (the highs go first)"),
      size=(1.25, "bell size: bigger = lower (1 = the 301 mm model bell at 452 Hz)"),
-     dur=(2.0, "s"), seed=(0, "strike position and noise"))
-def distant_bell(sr=DEFAULT_SR, distance=400.0, size=1.25, dur=2.0, seed=0):
+     dur=(2.0, "s"), seed=(0, "strike position and noise"),
+     diameter=(0.0, "lip diameter in metres of a cast bronze bell: sets the nominal and overrides `size` (0 = use size)"))
+def distant_bell(sr=DEFAULT_SR, distance=400.0, size=1.25, dur=2.0, seed=0, diameter=0.0):
     """Port of ``week_turn`` (procedural/world.py; Klang Open License 1.0, (c) 2025 Chris Nash):
     Faust churchBell (mesh2faust FEM modes) struck with strikeModel noise, ``space.distance``
-    (JOS air absorption + 1/r) and Farnell's outdoor building echoes (165, 121, 33 ms)."""
+    (air absorption + 1/r) and outdoor building echoes (165, 121, 33 ms)."""
     from .physical import ambience as AMB
     from .physical import space as SP
     rng = np.random.default_rng(int(seed))
     d = float(np.clip(dur, 0.5, 12.0))
-    x = M.strike("churchBell", 1.0 / float(np.clip(size, 0.25, 4.0)) * (1.0 + rng.uniform(-0.01, 0.01)), 1.0,
+    if diameter > 0.0:
+        from .foley import bell_nominal
+        ratio = float(np.clip(bell_nominal(float(diameter)) / bell_nominal(BELL_MODEL_D), 0.05, 8.0))
+    else:
+        ratio = 1.0 / float(np.clip(size, 0.25, 4.0))
+    x = M.strike("churchBell", ratio * (1.0 + rng.uniform(-0.01, 0.01)), 1.0,
                  rng.uniform(0.0, 0.3), rng, exciter="faust", dur=d + 0.2)
     x = AMB.outdoor_echoes(SP.distance(x, float(np.clip(distance, 1.0, 5000.0)), ref=1.0))
     return _fin((x.mean(axis=1) if x.ndim == 2 else x)[:S(d)], sr, src=P.SR, peak=0.5, fade=0.3)
@@ -1240,7 +1251,6 @@ def distant_bell(sr=DEFAULT_SR, distance=400.0, size=1.25, dur=2.0, seed=0):
 # Formant centres from Meyer 2009, "Acoustics and the Performance of Music": viola 220, 350, 600,
 # 1600 Hz (§3.3.2.1); bassoon main 500 Hz, secondary 1150 Hz (§3.2.4.1); cor anglais main formant a
 # whole step below the oboe's 1100 Hz (§3.2.2.1, §3.2.2.4): 1100 x 2^(-2/12) = 980 Hz.
-# UNSOURCED: every width and gain, the cor anglais 2300 Hz and the bass clarinet 1100 Hz formants.
 VIOLA_BODY = [(220, 50, 1.2), (350, 80, 1.5), (600, 300, 0.8), (1600, 450, 0.9)]
 
 
@@ -1255,12 +1265,20 @@ def viola(freq, dur, sr=DEFAULT_SR, vel=1.0, attack=0.08, vibrato=1.0):
 
 
 @instrument("bassoon", "Bassoon: dry, woody double reed; comic in the bass, plaintive in the tenor.",
-            family="wind", span=("Bb1", "E5"))
-def bassoon(freq, dur, sr=DEFAULT_SR, vel=1.0):
+            family="wind", span=("Bb1", "E5"),
+            meyer=(0, "1 = measured attack time per register and dynamic, vibrato amplitude modulation per band "
+                      "and high band that grows with the dynamic"),
+            precursor=(0.0, "0..1: the short level peak at the start of the attack"))
+def bassoon(freq, dur, sr=DEFAULT_SR, vel=1.0, meyer=0, precursor=0.0):
+    from .acoustic import _precursor, attack_ms, band_vibrato_am, dynamic_timbre
     body = [(500, 140, 2.4), (1150, 300, 0.9)]
-    return _blown(freq, dur, sr, vel, dict(tilt=1.2, formants=body, corner=1600.0, slope=3.5),
-                  dict(tilt=0.8, formants=body, corner=2300.0, slope=3.5),
-                  attack=0.035, release=0.09, bloom=0.05, vib=(5.2, 0.07, 0.3)) * 0.43
+    y = _blown(freq, dur, sr, vel, dict(tilt=1.2, formants=body, corner=1600.0, slope=3.5),
+               dict(tilt=0.8, formants=body, corner=2300.0, slope=3.5),
+               attack=attack_ms("bassoon", freq, vel) / 1000.0 if meyer else 0.035,
+               release=0.09, bloom=0.05, vib=(5.2, 0.07, 0.3)) * 0.43
+    if meyer:
+        y = dynamic_timbre(band_vibrato_am(y, sr, "bassoon", rate=5.2), sr, "bassoon", vel)
+    return _precursor(y, sr, "bassoon", precursor) if precursor > 0 else y
 
 
 @instrument("cor_anglais", "Cor anglais (English horn): a darker, rounder oboe a fifth lower (pastoral, mournful solos).",
@@ -1275,10 +1293,75 @@ def cor_anglais(freq, dur, sr=DEFAULT_SR, vel=1.0):
 @instrument("bass_clarinet", "Bass clarinet: hollow, dark odd-harmonic reed an octave below the clarinet.",
             family="wind", span=("D2", "F5"))
 def bass_clarinet(freq, dur, sr=DEFAULT_SR, vel=1.0):
-    even = _kt(freq, 0.06, 0.45, f_lo=130.0, f_hi=1000.0)
+    even = _kt(freq, 0.03, 0.45, f_lo=130.0, f_hi=1000.0)   # low register: even partials > 30 dB under the odd
     return _blown(freq, dur, sr, vel, dict(tilt=1.6, even=even, corner=1100.0, slope=3.0),
                   dict(tilt=1.15, even=even, formants=[(1100, 400, 0.5)], corner=1800.0, slope=3.0),
                   attack=0.045, release=0.09, bloom=0.06, vib=(5.0, 0.03, 0.3)) * 0.44
+
+
+def _clarinet_body(freq, dur, sr, vel, scale):
+    even = _kt(freq, 0.08, 0.5)
+    return _blown(freq, dur, sr, vel, dict(tilt=1.7, even=even, corner=1500.0 * scale, slope=3.0),
+                  dict(tilt=1.2, even=even, formants=[(1500 * scale, 500, 0.5)], corner=2300.0 * scale, slope=3.0),
+                  attack=0.04, release=0.08, bloom=0.05, vib=(5.0, 0.03, 0.3)) * 0.6
+
+
+@instrument("a_clarinet", "Clarinet in A: the B-flat clarinet's tone a little darker, 5 dB less around 1 kHz.",
+            family="wind", span=("Db3", "A5"))
+def a_clarinet(freq, dur, sr=DEFAULT_SR, vel=1.0):
+    return F.peak(_clarinet_body(freq, dur, sr, vel, 1.0), 1000.0, sr, q=1.0, gain_db=-5.0)
+
+
+@instrument("eb_clarinet", "E-flat (sopranino) clarinet: small, bright and piercing, a fourth above the B-flat.",
+            family="wind", span=("G3", "C7"))
+def eb_clarinet(freq, dur, sr=DEFAULT_SR, vel=1.0):
+    return _clarinet_body(freq, dur, sr, vel, 2.0 ** (5.0 / 12.0))
+
+
+@instrument("contrabassoon", "Contrabassoon: the bassoon an octave down, a buzzing, reedy floor under the orchestra.",
+            family="wind", span=("Bb0", "F3"))
+def contrabassoon(freq, dur, sr=DEFAULT_SR, vel=1.0):
+    body = [(250, 90, 2.4), (600, 200, 0.9)]
+    return _blown(freq, dur, sr, vel, dict(tilt=1.3, formants=body, corner=800.0, slope=3.5),
+                  dict(tilt=0.9, formants=body, corner=1200.0, slope=3.5),
+                  attack=0.06, release=0.12, bloom=0.06, vib=(5.0, 0.04, 0.3)) * 0.45
+
+
+@instrument("heckelphone", "Heckelphone: a baritone oboe an octave below the oboe, thick and reedy.",
+            family="wind", span=("A2", "G5"))
+def heckelphone(freq, dur, sr=DEFAULT_SR, vel=1.0):
+    body = [(600, 150, 2.5), (1400, 300, 0.8)]
+    return _blown(freq, dur, sr, vel, dict(tilt=1.1, formants=body, corner=1400.0, slope=3.5),
+                  dict(tilt=0.75, formants=body, corner=2000.0, slope=3.5),
+                  attack=0.04, release=0.09, bloom=0.05, vib=(5.3, 0.08, 0.25)) * 0.5
+
+
+@instrument("bass_trombone", "Bass trombone: a wider-bore trombone, darker and heavier in the low register.",
+            family="brass", span=("Bb1", "Bb4"))
+def bass_trombone(freq, dur, sr=DEFAULT_SR, vel=1.0):
+    body = [(450, 180, 1.3), (1300, 400, 0.4)]
+    return _blown(freq, dur, sr, vel, dict(tilt=2.4, formants=body, corner=1200.0, slope=3.0),
+                  dict(tilt=1.3, formants=body, corner=2000.0, slope=3.0),
+                  attack=0.06, release=0.12, bloom=0.08, vib=(5.0, 0.04, 0.35), top=4500.0) * 0.6
+
+
+@instrument("natural_horn", "Natural (valveless) horn: the horn's round tone, a little rawer, as in baroque and hunting calls.",
+            family="brass", span=("F2", "F5"))
+def natural_horn(freq, dur, sr=DEFAULT_SR, vel=1.0):
+    body = [(450, 150, 1.5)]
+    return _blown(freq, dur, sr, vel, dict(tilt=2.4, formants=body, corner=1100.0, slope=3.0),
+                  dict(tilt=1.5, formants=body, corner=1800.0, slope=3.0),
+                  attack=0.07, release=0.15, bloom=0.08, vib=(5.0, 0.02, 0.4), top=4500.0) * 0.6
+
+
+@instrument("clarino", "Clarino: the baroque natural trumpet high in its harmonic series, sweet, 10-15 dB under a modern trumpet.",
+            family="brass", span=("C5", "D6"))
+def clarino(freq, dur, sr=DEFAULT_SR, vel=1.0):
+    from .acoustic import TRUMPET_BODY
+    y = _blown(freq, dur, sr, vel, dict(tilt=2.6, formants=TRUMPET_BODY, corner=1600.0, slope=3.0),
+               dict(tilt=1.4, formants=TRUMPET_BODY, corner=2600.0, slope=3.0),
+               attack=0.04, release=0.08, bloom=0.05, vib=(5.5, 0.05, 0.3))
+    return y * 0.6 * 10.0 ** (-12.0 / 20.0)
 
 
 def _fipple(freq, dur, sr, vel, breath, chiff, corner, seed, gain):
@@ -1301,7 +1384,7 @@ def piccolo(freq, dur, sr=DEFAULT_SR, vel=1.0, breath=0.15, vibrato=0.0):
             family="wind", span=("C4", "D7"), breath=(0.2, "turbulence on the jet: 0 = none .. 0.4"), chiff=(1.0, "tongued attack 0..2"),
             vibrato=(0.0, "0 = steady .. 1"))
 def recorder(freq, dur, sr=DEFAULT_SR, vel=1.0, breath=0.2, chiff=1.0, vibrato=0.0):
-    """The STK jet model, not STK's Recorder (the Verge, Hirschberg and Causse model): that one is in
+    """The STK jet model, not STK's Recorder (the jet-drive flue model): that one is in
     genny.physical.waveguides.recorder(model="verge") and does not hold a written pitch. It blows every note at one
     pressure, and a scan of 40 pressures per note found at most a few narrow windows where the pipe speaks within
     60 cents of the note (one for C4, one for G4, none for C7), each at a different pressure."""
@@ -1314,7 +1397,7 @@ def recorder(freq, dur, sr=DEFAULT_SR, vel=1.0, breath=0.2, chiff=1.0, vibrato=0
 def hand_chime(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=1.2):
     """Port of ``charter.hand_chime`` (procedural/charter.py; Klang Open License 1.0, (c) 2025 Chris
     Nash): modes 1, 3 (the twelfth) and the untuned free-bar 5.404 at gains 1, 0.25, 0.05 with
-    T60 2.2, 0.9, 0.35 x ``decay``, plus a 2 ms clapper click. UNSOURCED in the source too."""
+    T60 2.2, 0.9, 0.35 x ``decay``, plus a 2 ms clapper click."""
     ring = max(dur, 1.6 * float(decay))
     n = samples(ring, sr)
     tau = float(decay) / 6.91                     # T60 -> time constant
@@ -1436,6 +1519,52 @@ def _repitch(x, sr_in, sr_out, semis):
     return x if fr == 1 else resample_poly(x, fr.numerator, fr.denominator, axis=0)
 
 
+HOLD_XF_S = 0.15
+HOLD_RMS_S = 0.15
+HOLD_SEG = 0.9
+
+
+def _extend(y, sr, need):
+    """Hold a recording to ``need`` samples: loop its stable region in segments aligned by
+    cross-correlation, joined by constant-power crossfades, each segment set to the stable RMS."""
+    n = len(y)
+    if n >= need or n < 8:
+        return y
+    m = y if y.ndim == 1 else y.mean(axis=1)
+    w = max(1, int(HOLD_RMS_S * sr))
+    env = np.sqrt(np.convolve(m * m, np.ones(w) / w, mode="same"))
+    a = int(np.argmax(env))
+    above = np.nonzero(env[a:] >= 0.5 * env[a])[0]
+    b = a + int(above[-1]) + 1
+    span = b - a
+    if span < 64:
+        return y
+    xf = max(4, min(int(HOLD_XF_S * sr), span // 4))
+    L = max(2 * xf, int(HOLD_SEG * span))
+    target = float(np.sqrt(np.mean(m[a:b] ** 2))) + 1e-12
+    ang = np.linspace(0.0, 0.5 * np.pi, xf)
+    fo, fi = np.cos(ang), np.sin(ang)
+    if y.ndim > 1:
+        fo, fi = fo[:, None], fi[:, None]
+    out = [y[:b].copy()]
+    total = b
+    while total < need:
+        tail = out[-1][-xf:]
+        tm = tail if tail.ndim == 1 else tail.mean(axis=1)
+        hi = max(a + 1, b - L + 1)
+        seg_m = m[a:hi + xf - 1]
+        c = np.correlate(seg_m, tm, mode="valid")
+        e = np.sqrt(np.convolve(seg_m * seg_m, np.ones(xf), mode="valid")) + 1e-12
+        s0 = a + int(np.argmax(c / e))
+        seg = y[s0:s0 + L].copy()
+        sm = seg if seg.ndim == 1 else seg.mean(axis=1)
+        seg *= target / (float(np.sqrt(np.mean(sm ** 2))) + 1e-12)
+        out[-1][-xf:] = tail * fo + seg[:xf] * fi
+        out.append(seg[xf:])
+        total += len(seg) - xf
+    return np.concatenate(out)[:need]
+
+
 @layer_type("sampler")
 def sampler_layer(layer: dict, sr: int, q: float) -> np.ndarray:
     """Play a folder of recordings as an instrument:
@@ -1451,13 +1580,15 @@ def sampler_layer(layer: dict, sr: int, q: float) -> np.ndarray:
     default C4), ``steps`` / ``step`` / ``legato`` / ``gap`` / ``transpose`` / ``vel`` as in a
     ``seq`` layer, ``release`` (s, fade after the note length; 0 = let every sample ring out),
     ``tune`` (cents), ``max_shift`` (semitones; farther notes raise an error instead of
-    sounding wrong). Returns mono, or stereo if any file is stereo."""
-    # ponytail: a note longer than its recording just ends with the recording; port
-    # sampler._extend (cross-correlated loop splicing) if sustained libraries need holding.
+    sounding wrong), ``hold`` (true: a note longer than its recording loops the recording's
+    stable part, spliced by cross-correlation with constant-power crossfades of
+    min(0.15 s, span/4), at the stable RMS; default false: the note ends with the recording).
+    Returns mono, or stereo if any file is stereo."""
     from .notes import note_to_midi
     root = layer.get("root", 60)
     zones = sampler_zones(str(layer["dir"]), str(layer.get("pattern", "*")), note_to_midi(root) if isinstance(root, str) else int(root))
     rel = float(layer.get("release", 0.08))
+    hold = bool(layer.get("hold", False))
     legato = float(layer.get("legato", 1.0))
     gap = float(layer.get("gap", 0.0)) * q
     shift = float(layer.get("transpose", 0)) + float(layer.get("tune", 0.0)) / 100.0
@@ -1481,6 +1612,8 @@ def sampler_layer(layer: dict, sr: int, q: float) -> np.ndarray:
             y = np.array(_repitch(x, fs, sr, midi - m), dtype=np.float64)
             if rel > 0:
                 on, rn = samples(d * legato, sr), samples(rel, sr)
+                if hold:
+                    y = _extend(y, sr, on + rn)
                 y = y[:on + rn]
                 if len(y) > on:                    # sampler._release_curve: -60 dB, then exactly 0
                     u = np.linspace(0.0, 1.0, len(y) - on)
@@ -1599,6 +1732,23 @@ def report(rows: list[dict]) -> str:
     bad = sum(not r["ok"] for r in rows)
     out.append(f"{len(rows)} entries, {bad} flagged")
     return "\n".join(out)
+
+
+def cauchy_gh(b):
+    """(G, H) of the Cauchy waveshaper h(x) = 1 / (1 + x^2): h(b sin(w n / 2)) = G (1/2 + H cos wn + H^2 cos 2wn + ...),
+    G = 2 / sqrt(1 + b^2), H = (1 + b^2 / 2 - sqrt(1 + b^2)) / (b^2 / 2); the formant falls 20 log10 H dB per harmonic."""
+    b2 = float(b) ** 2
+    if b2 == 0.0:
+        return 2.0, 0.0
+    return 2.0 / math.sqrt(1.0 + b2), (1.0 + b2 / 2.0 - math.sqrt(1.0 + b2)) / (b2 / 2.0)
+
+
+def cauchy_wave(freq, n, sr, b):
+    """The Cauchy waveshaper driven at ``freq`` (scalar or per sample), its DC G / 2 removed; ``b`` (scalar or per
+    sample) sets the slope."""
+    x = np.asarray(b, float) * np.sin(np.pi * O.phase(freq, n, sr))
+    G = 2.0 / np.sqrt(1.0 + np.asarray(b, float) ** 2)
+    return 1.0 / (1.0 + x * x) - G / 2.0
 
 
 def main(argv=None) -> int:

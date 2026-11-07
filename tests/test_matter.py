@@ -9,7 +9,7 @@ SR = m.SR
 NAMES = ["drip", "drops", "splash", "pour", "babble", "bubbles", "boil", "sizzle", "fizz", "gurgle", "drain",
          "surf", "cave_drips", "waterfall", "underwater_ambience", "steam", "air_leak", "spray", "kettle",
          "balloon", "gust", "flame", "fire", "match", "spark", "arc", "mains_hum", "tesla", "neon",
-         "lightning", "ice_crack", "ice_cubes", "freeze"]
+         "lightning", "ice_crack", "ice_cubes", "freeze", "rain_water"]
 
 
 def _peak_hz(y, sr, lo=0.0, hi=1e9):
@@ -30,15 +30,16 @@ def _inst_freq(y):
 # ---------------------------------------------------------------- bubbles
 
 def test_bubble_damping_table():
-    # findings g07 section 2.2, derived table: r0 mm -> f0 Hz, delta total, beta 1/s
+    # findings g07 section 2.2, derived table: r0 mm -> f0 Hz, delta total, beta 1/s; derived with the
+    # ``legacy`` psi (frozen ricochet take).
     rows = [(0.10, 32776, 0.0782, 8045), (0.25, 13124, 0.0555, 2289), (0.50, 6564, 0.0437, 901),
             (1.00, 3283, 0.0351, 362), (2.50, 1313, 0.0274, 113), (5.00, 657, 0.0234, 48), (10.0, 328, 0.0206, 21)]
     for r_mm, f0, delta, beta in rows:
-        w0, b, wd, d = m.bubble_params(r_mm * 1e-3)
+        w0, b, wd, d = m.bubble_params(r_mm * 1e-3, legacy=True)
         assert abs(w0 / (2 * np.pi) / f0 - 1) < 0.005
         assert abs(d / delta - 1) < 0.01
         assert abs(b / beta - 1) < 0.02
-        assert abs(m._beta_of(float(w0)) / b - 1) < 0.01       # the kernel's damping is the same law
+        assert abs(m._beta_of(float(w0), True) / b - 1) < 0.01       # the kernel's damping is the same law
     assert abs(m.G_TH / 1.60e6 - 1) < 0.01
 
 
@@ -88,7 +89,7 @@ def test_vessel_resonance_rises_with_fill():
     cup = m.vessel_resonance(fill, 0.15, 0.035)
     bottle = m.vessel_resonance(fill, 0.25, 0.04, neck=0.01, neck_len=0.06)
     assert np.all(np.diff(cup) > 0) and np.all(np.diff(bottle) > 0)
-    assert abs(cup[0] - 343.0 / (4 * (0.15 + 0.62 * 0.035))) < 1e-6      # quarter wave + end correction (0.62 R, Farnell)
+    assert abs(cup[0] - 343.0 / (4 * (0.15 + 0.6133 * 0.035))) < 1e-6    # quarter wave + unflanged end correction 0.6133 R
     print(f"cup 15 cm: {cup[0]:.0f} -> {cup[50]:.0f} -> {cup[90]:.0f} Hz; bottle: {bottle[0]:.0f} -> {bottle[90]:.0f} Hz")
 
 
@@ -135,7 +136,7 @@ def test_drops_audio_event_count():
         y = render_sfx("drops", sr, dur=10.0, rate=1.0, jitter=0.0, seed=seed)
         env = np.convolve(np.abs(y), np.ones(240) / 240, mode="same")
         on = np.flatnonzero(env > 0.004 * env.max()) / sr
-        groups = 1 + int(np.sum(np.diff(on) > 0.45))             # rebound droplets fall within 0.35 s
+        groups = 1 + int(np.sum(np.diff(on) > 0.4))              # rebound droplets fall within 0.35 s; drops 0.88-1.12 s apart
         print(f"drops rate 1/s for 10 s, seed {seed}: {groups} drops heard")
         assert abs(groups / 10.0 - 1) <= 0.15
 
@@ -213,7 +214,7 @@ def test_ice_chirp_frequency_falls():
     assert m.ice_chirp(60.0, 0.03, return_freq=True)[1][0] > 2 * m.ice_chirp(60.0, 0.3, return_freq=True)[1][0]
     assert len(m.ice_chirp(200.0, 0.05)) > 2 * len(m.ice_chirp(50.0, 0.05))
     # the sfx itself starts high and ends low
-    out = render_sfx("ice_crack", 48000, cracks=1, brittle=0.0, dur=0.6)
+    out = render_sfx("ice_crack", 48000, cracks=1, brittle=0.0, sing=0.0, dur=0.6)   # the chirp alone
     k = int(np.flatnonzero(np.abs(out) > 0.02)[0])
     zc = lambda s: np.sum(np.diff(np.signbit(s).astype(int)) != 0) / 2 / (len(s) / 48000)
     assert zc(out[k:k + 480]) > 3 * zc(out[k + 2400:k + 4800])
@@ -269,7 +270,7 @@ def test_kinds_and_parameter_extremes():
              ("air_leak", dict(burst=0.15, pressure=1.0, orifice=30, whistle=1.0)),
              ("air_leak", dict(pressure=0.0, orifice=0.3, whistle=1.0)),
              ("steam", dict(pressure=1.0, orifice=0.5, wet=1.0)), ("steam", dict(pressure=0.0, orifice=50, wet=0.0)),
-             ("kettle", dict(tone=4000, onset=0.05, dur=1.0)), ("kettle", dict(tone=600, onset=5.0, dur=1.0, rumble=0)),
+             ("kettle", dict(gap=5, cavity=6, flow=3400, onset=0.05, dur=1.0)), ("kettle", dict(gap=20, cavity=40, flow=1000, onset=5.0, dur=1.0, rumble=0)),
              ("fire", dict(size=1.0, crackle=150, wet=1.0, wind=1.0, dur=1.5)),
              ("fire", dict(size=0.0, crackle=0, wet=0.0, wind=0.0, dur=1.0)),
              ("arc", dict(mains=60, stability=1.0)), ("arc", dict(stability=0.0, dur=0.5)),

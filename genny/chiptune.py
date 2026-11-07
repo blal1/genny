@@ -10,12 +10,8 @@ Two ways to use a chip:
     retro_stylized      the instruments. One channel alone, as many notes at once as the score asks for, in tune,
                         rounded like the other retro voices (`mode: "hardware_accurate"` gives the raw channel).
 
-Sources (pages kept in out/research/chips):
-    nesdev_APU*.wiki          NESdev wiki: APU, Pulse, Triangle, Noise, Envelope, Sweep, Frame Counter, Mixer.
-    pandocs_Audio*.md         Pan Docs: Audio, Audio Registers, Audio details.
-    ymfm_fm.ipp, ymfm_opn.*   ymfm by Aaron Giles (BSD 3-Clause): the OPN FM core, ported below.
-What a music driver does on top of the hardware (a table of volumes, duties or pitch offsets stepped once per
-video frame) is not hardware and has no single source: it is marked UNSOURCED where it is defined.
+The OPN FM core is a port of ymfm (BSD 3-Clause, see THIRD_PARTY_NOTICES.md). Sources of the hardware figures and of
+what a music driver adds on top (tables stepped once per video frame): research/SOURCES.md, section chiptune.
 
 Both cores step the chip's own clock and average blocks of 16 clock ticks; the result is resampled to `sr`.
 """
@@ -108,7 +104,7 @@ def _nes_core(n_out, dec, seg, off, dmc, duty, tri, pulse_tab, tnd_tab):
                     else:
                         tim[c] -= 1
             if vol[2] != 0 and per[2] >= 2:                # the triangle's timer counts CPU cycles; it holds its value when gated off
-                if tim[2] <= 0:                            # UNSOURCED: periods under 2 are held, as emulators do (NESdev APU Triangle: hardware steps at up to fCPU/32 = 55.9 kHz, filtered to about half amplitude)
+                if tim[2] <= 0:                            # periods under 2 are held, as emulators do
                     tim[2] = per[2]
                     step[2] = (step[2] + 1) & 31
                 else:
@@ -214,7 +210,7 @@ def _gb_core(n_out, dec, seg, off, ram, duty, left, right):
     return out
 
 
-GB_WAVES = {     # 32 four-bit samples. UNSOURCED: starting shapes of genny's own, wave RAM has no factory content worth copying
+GB_WAVES = {     # 32 four-bit samples: starting shapes of genny's own
     "triangle": [min(i, 31 - i) for i in range(32)],
     "saw": [i // 2 for i in range(32)],
     "square": [15] * 16 + [0] * 16,
@@ -225,7 +221,19 @@ GB_WAVES = {     # 32 four-bit samples. UNSOURCED: starting shapes of genny's ow
 }
 
 
+def gb_wave_from_spectrum(amps, phases=None) -> list[int]:
+    """32 four-bit samples of sum_k a_k sin(2 pi k (i + 1/2) / 32 + phi_k), k = 1..16, scaled to fill 0..15."""
+    a = np.asarray(amps, float)[:16]
+    ph = np.zeros(len(a)) if phases is None else np.asarray(phases, float)[:len(a)]
+    u = 2.0 * np.pi * (np.arange(32) + 0.5) / 32.0
+    s = sum(a[k] * np.sin((k + 1) * u + ph[k]) for k in range(len(a)))
+    s = s / (np.max(np.abs(s)) + 1e-12)
+    return [int(v) for v in np.clip(np.round(7.5 + 7.5 * s), 0, 15)]
+
+
 def _wave_ram(wave) -> np.ndarray:
+    if isinstance(wave, dict):
+        wave = gb_wave_from_spectrum(wave.get("spectrum", [1.0]), wave.get("phases"))
     if isinstance(wave, str) and wave in GB_WAVES:
         vals = GB_WAVES[wave]
     elif isinstance(wave, str):                            # 32 hex digits, as the bytes of FF30-FF3F read left to right
@@ -233,7 +241,7 @@ def _wave_ram(wave) -> np.ndarray:
     else:
         vals = [int(v) for v in wave]
     if len(vals) != 32 or min(vals) < 0 or max(vals) > 15:
-        raise SpecError(f"wave: 32 values 0..15, a 32-digit hex string or one of {sorted(GB_WAVES)}")
+        raise SpecError(f"wave: 32 values 0..15, a 32-digit hex string, {{'spectrum': [harmonic amplitudes]}} or one of {sorted(GB_WAVES)}")
     return np.array(vals, np.int64)
 
 
@@ -294,11 +302,11 @@ def _note_rows(system, kind, ch, c0, c1, freq, vel, p, region, rows):
                 tab = NES_NOISE[region]
                 if p["period"] != -1:
                     return tab[int(p["period"]) & 15]
-                # UNSOURCED: a note picks the period whose 93-step sequence repeats nearest its pitch (genny's convention)
+                # a note picks the period whose 93-step sequence repeats nearest its pitch
                 return min(tab, key=lambda v: abs(math.log(clk / v / (93.0 * hz))))
             if p["period"] != -1:
                 shift, div = p["period"]
-            else:                                          # UNSOURCED: likewise, with the 127-step sequence of the 7-bit mode
+            else:                                          # likewise, with the 127-step sequence of the 7-bit mode
                 shift, div = min(((s, d) for s in range(14) for d in range(8)),
                                  key=lambda sd: abs(math.log(262144.0 / ((sd[1] or 0.5) * 2 ** sd[0]) / (127.0 * hz))))
             return int(8 * (div or 0.5) * 2 ** shift)     # base ticks per LFSR clock: 2097152 / (262144 / (divider * 2^shift))
@@ -569,7 +577,7 @@ def gb_pulse(freq, dur, sr=DEFAULT_SR, vel=1.0, duty=2, volume=15, vol=None, env
 
 
 @instrument("gb_wave", "Game Boy wave channel: 32 four-bit samples of wave RAM read at the note's rate (bass, leads, any shape).",
-            family="retro", span=("C1", "C6"), wave=("triangle", "32 values 0..15, 32 hex digits, or " + " | ".join(GB_WAVES)),
+            family="retro", span=("C1", "C6"), wave=("triangle", "32 values 0..15, 32 hex digits, {\"spectrum\": [harmonic amplitudes]}, or " + " | ".join(GB_WAVES)),
             level=(1, _H["level"]), arp=(None, _H["arp"]), pitch=(None, _H["pitch"]), vib=(0.0, _H["vib"]), vib_hz=(6.0, _H["vib_hz"]),
             vib_delay=(0.15, _H["vib_delay"]), mode=_MODE, bright=(1.0, _BRIGHT[1]))
 def gb_wave(freq, dur, sr=DEFAULT_SR, vel=1.0, wave="triangle", level=1, arp=None, pitch=None, vib=0.0, vib_hz=6.0, vib_delay=0.15,
@@ -821,7 +829,7 @@ def _op(ar=31, dr=0, sr=0, rr=8, sl=0, tl=0, ks=0, mul=1, dt=0, am=0):
     return dict(ar=ar, dr=dr, sr=sr, rr=rr, sl=sl, tl=tl, ks=ks, mul=mul, dt=dt, am=am)
 
 
-# UNSOURCED: starting patches of genny's own, written from the algorithm diagrams; not taken from any game or bank
+# starting patches of genny's own, written from the algorithm diagrams
 FM_PATCHES = {
     "sine": dict(alg=7, fb=0, ops=[_op(tl=127), _op(tl=127), _op(tl=127), _op(rr=10)]),
     "epiano": dict(alg=4, fb=2, ops=[_op(dr=14, sr=6, rr=7, sl=4, tl=46, mul=14, ks=2), _op(dr=7, sr=3, rr=7, sl=2, tl=4, ks=1),
@@ -919,7 +927,7 @@ def _fm_layer(layer: dict, sr: int, q: float) -> np.ndarray:
     y = render_opn(lanes, max(end, 0.05) + float(layer.get("tail", 0.5)), sr, clock=float(layer.get("clock", OPN_CLOCK)),
                    lfo=layer.get("lfo"), raw_dac=layer.get("mode") != "retro_stylized") * FM_GAIN
     # FM at whole-number ratios carries a DC term that moves with the envelopes; the console's output is AC-coupled.
-    y = lfilter(*butter(1, 20.0, "high", fs=sr), y, axis=0)     # UNSOURCED: the 20 Hz corner is genny's choice
+    y = lfilter(*butter(1, 20.0, "high", fs=sr), y, axis=0)
     return y[:, 0] if np.array_equal(y[:, 0], y[:, 1]) else y
 
 

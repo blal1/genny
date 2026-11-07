@@ -46,6 +46,7 @@ from . import filters as F
 from .core import DEFAULT_SR, to_mono
 from .drums import drum
 from .fx import effect
+from .physical.fdgrid import airy_dst, dst_factors
 from .physics import MATERIALS
 from .sfx import sfx
 
@@ -54,10 +55,14 @@ from .sfx import sfx
 # a requested 4 s came out as 1.9 s. 3 ln10 / T60 makes the requested T60 the real 60 dB time.
 _L10 = 3.0 * math.log(10.0)
 RHO_AIR, C_AIR = 1.2, 343.0          # kg/m^3, m/s: air at room temperature (standard values)
+MYLAR_EH = 4.0e9 * 0.19e-3            # N/m: in-plane stiffness E h of a Mylar head
 HEAD_DENSITY = 0.26                  # kg/m^2: timpani head, 0.262 (Christian et al. 1984, sec. III)
 BRONZE = (8800.0, 1.24e11, 0.33)     # rho, E, nu: E and nu of cymbal bronze (Chadwick et al. 2009, Table 1); rho of bell bronze
                                      # C91300 (Cu 81 Sn 19), 0.318 lb/in3 (Wieland Concast C91300 datasheet, CDA physical data)
 WOOD_K = (36.5, 8.41, 18.1, 1.248)   # kx, ky, kxy, aspect: wooden plate of Table 12.2 (g03 §4.6)
+SNARE_K, SNARE_ALPHA = 1.0e8, 1.3    # N/m^alpha, collision stiffness and exponent of the wires on the head
+SNARE_N, SNARE_MASS = 8, 1.5e-3      # contact points, kg of wire per point
+SNARE_F, SNARE_T60 = 250.0, 0.1      # Hz, s: wire spring and loss
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -159,10 +164,11 @@ def _csr(M):
 
 @lru_cache(maxsize=32)
 def _model(fs, eps=1.0, bc="ssss", kappa=0.0, gamma=0.0, sig0=0.0, sig1=0.0, nu=0.3, ortho=None,
-           circle=False, cav=0.0):
+           circle=False, cav=0.0, wall=None):
     """Grid + update matrices for `u_tt = -kappa^2 BIH u + gamma^2 LAP u - cav*mean(u) - 2 sig0 u_t
     + 2 sig1 LAP u_t` on a unit-area rectangle of aspect `eps` (sides sqrt(eps) x 1/sqrt(eps)).
-    `ortho` = (kx, ky, kxy) replaces kappa (g03 §4.6; supported/clamped edges only)."""
+    `ortho` = (kx, ky, kxy) replaces kappa (g03 §4.6; supported/clamped edges only).
+    `wall` = specific impedances zeta (Z / rho c, 0 = rigid) of the four free edges: u_n = -u_t / (gamma zeta)."""
     k = 1.0 / fs
     if ortho:
         kx, ky, kxy = ortho
@@ -182,7 +188,7 @@ def _model(fs, eps=1.0, bc="ssss", kappa=0.0, gamma=0.0, sig0=0.0, sig1=0.0, nu=
         if min(Nx, Ny) < 5:                                    # too stiff for this rate: clamp the stiffness
             sc = 0.8
             return _model(fs, eps, bc, kappa * sc, gamma * sc, sig0, sig1 * sc, nu,
-                          tuple(v * sc for v in ortho) if ortho else None, circle, cav)
+                          tuple(v * sc for v in ortho) if ortho else None, circle, cav, wall)
         hxx, hyy = math.sqrt(eps) / Nx, 1.0 / (math.sqrt(eps) * Ny)
         K, L, w, idx = _operators(Nx, Ny, hxx, hyy, bc, cxx, cyy, cn, cc, nu, gamma * gamma, circle)
         rho = _rho(k * k * K - 4.0 * sig1 * k * L, w)
@@ -193,6 +199,8 @@ def _model(fs, eps=1.0, bc="ssss", kappa=0.0, gamma=0.0, sig0=0.0, sig1=0.0, nu=
     I = sp.identity(K.shape[0])
     B = a * (2.0 * I - k * k * K + 2.0 * sig1 * k * L)
     C = a * ((1.0 - sig0 * k) * I + 2.0 * sig1 * k * L)
+    if wall and any(wall):
+        B, C = _wall_update(K, L, idx, Nx, Ny, hxx, hyy, gamma, wall, k, sig0, sig1)
     return SimpleNamespace(fs=fs, k=k, eps=eps, Nx=Nx, Ny=Ny, hx=hxx, hy=hyy, n=K.shape[0], K=K, L=L, w=w,
                            idx=idx, a=a, B=_csr(B), C=_csr(C), Lc=_csr(L), kappa=kappa, gamma=gamma,
                            sig0=sig0, sig1=sig1, cav=cav, rho=rho)
@@ -392,6 +400,61 @@ def _bracket(a, b, cc, hx, hy, o):
 
 
 @numba.njit(cache=True)
+def _bracket_adj(a, phi, cc, hx, hy, g):
+    """Gradient over b of sum_p hx hy phi_p l(a, b)_p (phi zero on the edges): the force l(phi, a) carried to every
+    grid node, edges included, so <v, g> = <phi, l(a, v)> and the free-edge von Karman scheme keeps its energy."""
+    Nx, Ny = a.shape[0] - 1, a.shape[1] - 1
+    ixx, iyy, ixy = 1.0 / (hx * hx), 1.0 / (hy * hy), 1.0 / (hx * hy)
+    hh = hx * hy
+    g[:, :] = 0.0
+    for l in range(1, Nx):
+        for m in range(1, Ny):
+            f = hh * phi[l, m]
+            if f == 0.0:
+                continue
+            gy = f * (a[l + 1, m] - 2.0 * a[l, m] + a[l - 1, m]) * ixx * iyy
+            gx = f * (a[l, m + 1] - 2.0 * a[l, m] + a[l, m - 1]) * iyy * ixx
+            g[l, m + 1] += gy
+            g[l, m] -= 2.0 * gy
+            g[l, m - 1] += gy
+            g[l + 1, m] += gx
+            g[l, m] -= 2.0 * gx
+            g[l - 1, m] += gx
+    for l in range(Nx):
+        for m in range(Ny):
+            s = phi[l, m] + phi[l + 1, m] + phi[l, m + 1] + phi[l + 1, m + 1]
+            if s == 0.0:
+                continue
+            c = -0.5 * hh * s * (a[l + 1, m + 1] - a[l + 1, m] - a[l, m + 1] + a[l, m]) * ixy * ixy
+            g[l + 1, m + 1] += c
+            g[l + 1, m] -= c
+            g[l, m + 1] -= c
+            g[l, m] += c
+
+
+@numba.njit(cache=True)
+def _fill(up, u, idx, free, Nx, Ny):
+    if free:
+        for l in range(Nx + 1):
+            for m in range(Ny + 1):
+                up[l, m] = u[idx[l, m]] if idx[l, m] >= 0 else 0.0
+    else:
+        up[1:Nx, 1:Ny] = u.reshape(Nx - 1, Ny - 1)
+
+
+@numba.njit(cache=True)
+def _nl_force(pp, up, cc, hx, hy, nl, free, gg, idx, w):
+    if free:
+        _bracket_adj(up, pp, cc, hx, hy, gg)
+        for l in range(gg.shape[0]):
+            for m in range(gg.shape[1]):
+                if idx[l, m] >= 0:
+                    nl[idx[l, m]] = gg[l, m] / w[idx[l, m]]
+    else:
+        _bracket(pp, up, cc, hx, hy, nl)
+
+
+@numba.njit(cache=True)
 def _chol_solve(ch, x):
     """In-place solve with a banded Cholesky factor, ch[j, i] = L[j+i, j]."""
     n, bw = ch.shape[0], ch.shape[1] - 1
@@ -426,7 +489,7 @@ def _stress_bound(p, hx, hy):
 
 @numba.njit(cache=True)
 def _run_nl(Bd, Bi, Bp, Cd, Ci, Cp, Ld, Li, Lp, u, u1, ji, jw, force, fgain, mode, cnl, hx, hy, Nx, Ny, ch,
-            ulim, idx, pk, out):
+            ulim, idx, pk, out, curv, wq, cav, dst, dS, dlam):
     """Nonlinear simply supported plate; `t` below is the linear update B u - C u- + force.
     mode 1  Berger, eq 13.2 in the explicit form of g03 §6.1.
     mode 2  von Karman, the book's simple scheme (eqs 13.10 + 13.12): BIH Phi = -l(u,u), u+ = t + c l(Phi,u).
@@ -437,14 +500,25 @@ def _run_nl(Bd, Bi, Bp, Cd, Ci, Cp, Ld, Li, Lp, u, u1, ji, jw, force, fgain, mod
             E = |delta_t+ u|^2/2 + kappa^2 <u+, BIH u>/2 + kappa^2 <Phi+, BIH Phi>/4 (checked in the tests).
             Linear in u+, solved by fixed-point iteration, which contracts at rate (c/2) |l(Phi, .)|;
             the Airy function is scaled down when that rate would exceed 0.5 (stress saturation).
+    Free edges (u on every node, n > (Nx-1)(Ny-1)): Phi stays clamped on the border and the force on u is the
+    adjoint of the bracket (`_bracket_adj`), which equals l(Phi, u) inside and carries it onto the edge nodes.
     Returns how many steps a guard (saturation or the amplitude limit `ulim`) acted on."""
     n = u.shape[0]
-    t, q, nl, rhs = np.empty(n), np.empty(n), np.empty(n), np.empty(n)
+    ni = (Nx - 1) * (Ny - 1)
+    free = n != ni
+    t, q, nl, rhs, qa = np.empty(n), np.empty(n), np.empty(n), np.empty(n), np.empty(ni)
     up, pp, cc = np.zeros((Nx + 1, Ny + 1)), np.zeros((Nx + 1, Ny + 1)), np.empty((Nx, Ny))
+    gg = np.zeros((Nx + 1, Ny + 1))
     hh = hx * hy
     hits = 0
     for s in range(out.shape[0]):
         _lin(Bd, Bi, Bp, Cd, Ci, Cp, u, u1, t)
+        if cav != 0.0:
+            mm = 0.0
+            for i in range(n):
+                mm += wq[i] * u[i]
+            for i in range(n):
+                t[i] -= cav * mm
         if force[s] != 0.0:
             f = fgain * force[s]
             for j in range(ji.shape[0]):
@@ -462,14 +536,28 @@ def _run_nl(Bd, Bi, Bp, Cd, Ci, Cp, Ld, Li, Lp, u, u1, ji, jw, force, fgain, mod
             for r in range(n):
                 t[r] += cnl * m * q[r]
         elif mode >= 2:
-            up[1:Nx, 1:Ny] = u.reshape(Nx - 1, Ny - 1)
-            _bracket(up, up, cc, hx, hy, q)
-            for r in range(n):
-                q[r] = -q[r]
-            _chol_solve(ch, q)
-            pp[1:Nx, 1:Ny] = q.reshape(Nx - 1, Ny - 1)
+            _fill(up, u, idx, free, Nx, Ny)
+            _bracket(up, up, cc, hx, hy, qa)
+            for r in range(ni):
+                q[r] = -qa[r]
+            if curv != 0.0:                                    # shell: BIH Phi = -l(u,u) + 2 q Lap u
+                for i in range(1, Nx):
+                    for j in range(1, Ny):
+                        q[(i - 1) * (Ny - 1) + j - 1] += 2.0 * curv * ((up[i + 1, j] - 2.0 * up[i, j] + up[i - 1, j]) / (hx * hx)
+                                                                       + (up[i, j + 1] - 2.0 * up[i, j] + up[i, j - 1]) / (hy * hy))
+            qa[:] = q[:ni]
+            if dst:
+                qa[:] = airy_dst(qa.reshape(Nx - 1, Ny - 1), dS, dlam, hx).ravel()
+            else:
+                _chol_solve(ch, qa)
+            pp[1:Nx, 1:Ny] = qa.reshape(Nx - 1, Ny - 1)
+            if curv != 0.0:                                    # u+ gets -kappa^2 q Lap Phi
+                for i in range(1, Nx):
+                    for j in range(1, Ny):
+                        t[(i - 1) * (Ny - 1) + j - 1] -= cnl * curv * ((pp[i + 1, j] - 2.0 * pp[i, j] + pp[i - 1, j]) / (hx * hx)
+                                                                       + (pp[i, j + 1] - 2.0 * pp[i, j] + pp[i, j - 1]) / (hy * hy))
             if mode == 2:
-                _bracket(pp, up, cc, hx, hy, nl)
+                _nl_force(pp, up, cc, hx, hy, nl, free, gg, idx, wq)
                 for r in range(n):
                     t[r] += cnl * nl[r]
             else:
@@ -478,14 +566,14 @@ def _run_nl(Bd, Bi, Bp, Cd, Ci, Cp, Ld, Li, Lp, u, u1, ji, jw, force, fgain, mod
                 if g > 0.5:
                     pp *= 0.5 / g
                     hits += 1
-                up[1:Nx, 1:Ny] = u1.reshape(Nx - 1, Ny - 1)
-                _bracket(pp, up, cc, hx, hy, nl)
+                _fill(up, u1, idx, free, Nx, Ny)
+                _nl_force(pp, up, cc, hx, hy, nl, free, gg, idx, wq)
                 for r in range(n):
                     rhs[r] = t[r] + c2 * nl[r]
                     q[r] = 2.0 * u[r] - u1[r]                  # predictor
                 for it in range(80):
-                    up[1:Nx, 1:Ny] = q.reshape(Nx - 1, Ny - 1)
-                    _bracket(pp, up, cc, hx, hy, nl)
+                    _fill(up, q, idx, free, Nx, Ny)
+                    _nl_force(pp, up, cc, hx, hy, nl, free, gg, idx, wq)
                     d, mq = 0.0, 0.0
                     for r in range(n):
                         v = rhs[r] + c2 * nl[r]
@@ -518,6 +606,35 @@ _NOMAL = np.zeros(6)
 _NOBOW = np.array([0.0, 0.0, 1.0, 0.0])
 
 
+def wall_damping(idx, Nx, Ny, hx, hy, gamma, wall):
+    """Per-node damping rate db (1/s) of the impedance edges, u_tt = ... - db u_t: the boundary flux
+    gamma^2 u_n = -gamma u_t / zeta over the node's edge length, divided by its trapezoid mass weight,
+    i.e. 2 gamma / (h_normal zeta) on each edge the node lies on."""
+    d = np.zeros((Nx + 1, Ny + 1))
+    for e, (z, h) in enumerate(zip(wall, (hx, hx, hy, hy))):
+        if z > 0:
+            sl = (0, slice(None)) if e == 0 else (Nx, slice(None)) if e == 1 else (slice(None), 0) if e == 2 \
+                else (slice(None), Ny)
+            d[sl] += 2.0 * gamma / (h * z)
+    return d.ravel()[idx.ravel() >= 0]
+
+
+def _wall_update(K, L, idx, Nx, Ny, hx, hy, gamma, wall, k, sig0, sig1):
+    db = wall_damping(idx, Nx, Ny, hx, hy, gamma, wall)
+    a = sp.diags(1.0 / (1.0 + sig0 * k + 0.5 * k * db))
+    I = sp.identity(K.shape[0])
+    B = a @ (2.0 * I - k * k * K + 2.0 * sig1 * k * L)
+    C = a @ (sp.diags(1.0 - sig0 * k - 0.5 * k * db) + 2.0 * sig1 * k * L)
+    return B, C
+
+
+def wall_impedance(alpha):
+    """Specific impedance zeta >= 1 of a resistive wall absorbing a fraction alpha of normal-incidence energy:
+    the larger root of alpha = 4 zeta / (1 + zeta)^2; 0 (rigid) for alpha <= 0."""
+    a = float(np.clip(alpha, 0.0, 1.0))
+    return 0.0 if a <= 0.0 else (2.0 - a + 2.0 * math.sqrt(1.0 - a)) / a
+
+
 def _pickups(mdl, pts, scan=0.0, radius=0.0):
     pk = np.zeros((len(pts), 5))
     for i, (x, y) in enumerate(pts):
@@ -540,6 +657,78 @@ def simulate(mdl, force, exc=(0.5, 0.5, 0.0), pickups=((0.6, 0.3),), scan=0.0, r
     return out
 
 
+@numba.njit(cache=True)
+def _phi(x, kap, al):
+    return kap / (al + 1.0) * x ** (al + 1.0) if x > 0.0 else 0.0
+
+
+@numba.njit(cache=True)
+def collision_step(a0, b, g, kap, al):
+    """Solve r + g (Phi(r + a0) - Phi(a0)) / r + b = 0 by Newton, Phi = kap/(al+1) [eta]+^(al+1).
+    Returns (r, F) with F = (Phi(a0 + r) - Phi(a0)) / r, the energy-conserving collision force."""
+    p0 = _phi(a0, kap, al)
+    r = 0.0
+    q = 0.0
+    for _ in range(50):
+        if abs(r) > 1e-15:
+            q = (_phi(r + a0, kap, al) - p0) / r
+            dq = (kap * max(r + a0, 0.0) ** al * r - (_phi(r + a0, kap, al) - p0)) / (r * r)
+        else:
+            q = kap * max(a0, 0.0) ** al
+            dq = 0.5 * kap * al * max(a0, 0.0) ** (al - 1.0)
+        dr = (r + g * q + b) / (1.0 + g * dq)
+        r -= dr
+        if abs(dr) < 1e-16 + 1e-13 * abs(r):
+            break
+    if abs(r) > 1e-15:
+        q = (_phi(r + a0, kap, al) - p0) / r
+    else:
+        q = kap * max(a0, 0.0) ** al
+    return r, q
+
+
+@numba.njit(cache=True)
+def _run_snare(Bd, Bi, Bp, Cd, Ci, Cp, u, u1, w, ji, jw, force, fgain, cav, sj, sw, sp_, k, idx, pk, out, wout):
+    """Linear head + force pulse, and snare wires under it: one lumped wire mass per node sj, spring to the
+    rest gap, loss, energy-conserving collision with the head. sw rows = [u_w, u_w_prev];
+    sp_ = [kap, alpha, 1/mu, omega^2, sigma, gap]."""
+    n = u.shape[0]
+    t = np.empty(n)
+    kap, al, imu, om2, sg, gap = sp_[0], sp_[1], sp_[2], sp_[3], sp_[4], sp_[5]
+    den = 1.0 + sg * k
+    for s in range(out.shape[0]):
+        _lin(Bd, Bi, Bp, Cd, Ci, Cp, u, u1, t)
+        if cav != 0.0:
+            m = 0.0
+            for i in range(n):
+                m += w[i] * u[i]
+            m *= cav
+            for i in range(n):
+                t[i] -= m
+        if force[s] != 0.0:
+            f = fgain * force[s]
+            for j in range(ji.shape[0]):
+                t[ji[j]] += f * jw[j]
+        vw = 0.0
+        for c in range(sj.shape[0]):
+            j = sj[c]
+            uw, uw1 = sw[c, 0], sw[c, 1]
+            tw = (2.0 * uw - (1.0 - sg * k) * uw1 - k * k * om2 * (uw + gap)) / den
+            a0 = uw1 - u1[j]
+            g = fgain / w[j] + k * k * imu / den
+            r, F = collision_step(a0, a0 - (tw - t[j]), g, kap, al)
+            t[j] += fgain / w[j] * F
+            sw[c, 1] = uw
+            sw[c, 0] = tw - k * k * imu / den * F
+            vw += sw[c, 0] - uw
+        for i in range(n):
+            u1[i] = u[i]
+            u[i] = t[i]
+        wout[s] = vw
+        for p in range(pk.shape[0]):
+            out[s, p] = _read(u, idx, pk[p, 0], pk[p, 1])
+
+
 @lru_cache(maxsize=8)
 def _airy(Nx, Ny, hx, hy):
     """Banded Cholesky factor of the clamped biharmonic for the Airy stress function (eq 13.8)."""
@@ -551,21 +740,64 @@ def _airy(Nx, Ny, hx, hy):
     return np.ascontiguousarray(cholesky_banded(ab, lower=True).T)
 
 
-def simulate_nl(mdl, force, model="vk", exc=(0.5, 0.5, 0.0), pickups=((0.6, 0.3),), ulim=50.0, state=None):
-    """Nonlinear plate (`mdl` must be all-supported, bc "ssss"). `model`: "vk" (energy-conserving von
+@numba.njit(cache=True)
+def apnl(x, a1, a2):
+    """Nonlinear allpass: a first-order allpass whose coefficient is a1 while the input is positive and a2 otherwise
+    (switched at the input's zero crossings); a1 = a2 is the plain allpass."""
+    y = np.empty_like(x)
+    s = 0.0
+    for i in range(x.shape[0]):
+        a = a1 if x[i] > 0.0 else a2
+        v = x[i] - a * s
+        y[i] = a * v + s
+        s = v
+    return y
+
+
+@numba.njit(cache=True)
+def wgr(f, n, sr, r=1.0):
+    """Waveguide resonator: t = C (x1 + x2), x1 <- r (t - x2), x2 <- r (t + x1), C = cos(2 pi f / fs). Returns the
+    quadrature pair (x1, x2 / gi), gi = sqrt((1 + C) / (1 - C)), both of unit amplitude when r = 1."""
+    C = math.cos(2.0 * math.pi * f / sr)
+    gi = math.sqrt((1.0 + C) / (1.0 - C))
+    c = np.empty(n)
+    s = np.empty(n)
+    x1 = 1.0
+    x2 = 0.0
+    for i in range(n):
+        c[i] = x1
+        s[i] = x2 / gi
+        t = C * (x1 + x2)
+        x1, x2 = r * (t - x2), r * (t + x1)
+    return c, s
+
+
+def simulate_nl(mdl, force, model="vk", exc=(0.5, 0.5, 0.0), pickups=((0.6, 0.3),), ulim=50.0, state=None, curv=0.0,
+                cnl=None, airy="chol"):
+    """Nonlinear plate (`mdl` all-supported "ssss", or all-free "ffff" with `curv` 0). `model`: "vk" (energy-conserving von
     Karman, mode 3 of `_run_nl`), "vk_simple" (the book's scheme 13.10), "berger", "linear". Displacement is
     in units of H/sqrt(6(1-nu^2)) for von Karman (eq 13.5) and H/sqrt(6) for Berger (eq 13.1); `ulim` is a
     last-resort amplitude limit in those units (the model itself is only valid to a few thicknesses).
+    `cnl` overrides the nonlinear coefficient (a membrane under Berger tension modulation has kappa = 0).
+    The air cavity of `mdl` acts as in the linear scheme. `airy`: "chol" (banded Cholesky, Phi clamped on the
+    border) | "dst" (two sine-transform Poisson solves, Phi and Lap Phi zero on the border: faster on big grids).
     Returns (out, guard_hits)."""
     mode = {"linear": 0, "berger": 1, "vk_simple": 2}.get(model, 3)
     force = np.ascontiguousarray(force, dtype=np.float64)
     u, u1 = state if state is not None else (np.zeros(mdl.n), np.zeros(mdl.n))
     ji, jw = _spread(mdl, *exc)
-    ch = _airy(mdl.Nx, mdl.Ny, mdl.hx, mdl.hy) if mode >= 2 else np.zeros((1, 1))
+    if airy not in ("chol", "dst"):
+        raise ValueError("simulate_nl airy must be chol or dst")
+    if mdl.n != (mdl.Nx - 1) * (mdl.Ny - 1):
+        curv = 0.0
+    dst = airy == "dst" and mode >= 2
+    ch = _airy(mdl.Nx, mdl.Ny, mdl.hx, mdl.hy) if mode >= 2 and not dst else np.zeros((1, 1))
+    dS, dlam = dst_factors(mdl.Nx, mdl.Ny, mdl.hx, mdl.hy) if dst else (np.zeros((1, 1)), np.zeros(1))
     out = np.zeros((force.shape[0], len(pickups)))
     hits = _run_nl(*mdl.B, *mdl.C, *mdl.Lc, u, u1, ji, jw, force, mdl.a * mdl.k ** 2, mode,
-                   mdl.a * (mdl.kappa * mdl.k) ** 2, mdl.hx, mdl.hy, mdl.Nx, mdl.Ny, ch, ulim, mdl.idx,
-                   _pickups(mdl, pickups)[:, :2].copy(), out)
+                   mdl.a * (mdl.kappa * mdl.k) ** 2 if cnl is None else float(cnl), mdl.hx, mdl.hy, mdl.Nx, mdl.Ny,
+                   ch, ulim, mdl.idx, _pickups(mdl, pickups)[:, :2].copy(), out, float(curv), mdl.w,
+                   mdl.a * mdl.k ** 2 * mdl.cav, dst, dS, dlam)
     return out, hits
 
 
@@ -623,8 +855,14 @@ def _kappa(E, rho, nu, H, L):
 # ---------------------------------------------------------------------------------------------------------
 def membrane(sr=DEFAULT_SR, vel=1.0, tension=1000.0, size=0.33, decay=0.6, damping=0.5, pos=0.35,
              hardness=0.5, air=0.5, depth=0.3, stiffness=0.0, contact=False, scan=0.0, quality=1.0,
-             stereo=False, dur=None):
+             stereo=False, dur=None, berger=False, berger_force=200.0, detune=0.0, snare=False, snare_gap=0.0):
     """Circular drum head on a Cartesian grid with a staircase rim (g03 §2.3, §2.6, §2.7, §2.9, §3.6).
+    `snare`: wires under a diameter (lumped masses on springs) collide with the head through the potential
+    kap/(a+1) [eta]+^(a+1), solved energy-conserving by Newton each step; struck by `berger_force` N at vel 1.
+    `snare_gap` m: rest gap between wires and head (negative = wires pressed in).
+    `berger`: tension modulation, T = T0 + (E h / 2) int |grad u|^2 (Mylar head), driven by a strike of `force`
+    newtons (`berger_force`) at vel 1: hard hits start sharp and settle. `detune`: tension anisotropy +-d (Tx/Ty = (1+d)/(1-d)),
+    which splits each (m >= 1, n) mode into a beating doublet.
     Returns velocity at one pickup (mono) or two (stereo, shape (n, 2))."""
     vel = float(np.clip(vel, 0.02, 1.0))
     size = float(np.clip(size, 0.08, 1.5))
@@ -639,8 +877,9 @@ def membrane(sr=DEFAULT_SR, vel=1.0, tension=1000.0, size=0.33, decay=0.6, dampi
     # Morse cavity term: d^2 = rho c0^2 L^4 / (T0 V0), V0 = disc area * depth, L = D (g03 §2.6)
     d2 = RHO_AIR * C_AIR ** 2 * size ** 2 * 4.0 / (math.pi * (HEAD_DENSITY * (gamma * size) ** 2)
                                                   * float(np.clip(depth, 0.03, 2.0)))
-    mdl = _model(fs, 1.0, "ssss", round(kappa, 6), round(gamma, 4), round(s0, 6), round(s1, 12), 0.3, None,
-                 True, round(float(np.clip(air, 0.0, 1.0)) * d2 * gamma ** 2, 3))
+    d = float(np.clip(detune, 0.0, 0.3))
+    mdl = _model(fs, round(math.sqrt((1.0 + d) / (1.0 - d)), 6), "ssss", round(kappa, 6), round(gamma, 4), round(s0, 6),
+                 round(s1, 12), 0.3, None, True, round(float(np.clip(air, 0.0, 1.0)) * d2 * gamma ** 2, 3))
     dur = float(np.clip(decay * 1.2 + 0.1 if dur is None else dur, 0.05, 10.0))
     n = int(dur * fs)
     exc = (0.5 + 0.46 * pos * math.cos(0.6), 0.5 + 0.46 * pos * math.sin(0.6), 0.3 - 0.22 * hardness)
@@ -652,9 +891,42 @@ def membrane(sr=DEFAULT_SR, vel=1.0, tension=1000.0, size=0.33, decay=0.6, dampi
         mallet = np.array([M, 400.0 * 10.0 ** hardness, 3.0, 0.0, -v0 / fs,
                            1.0 / (mdl.k ** 2 * (1.0 / M + float(np.sum(mdl.w[ji] * jw * jw))))])
     pts = ((0.71, 0.33), (0.25, 0.62)) if stereo else ((0.71, 0.33),)
-    y = _vel(simulate(mdl, force, exc, pts, scan, 0.08 if scan else 0.0, mallet), fs)
+    if berger:
+        T0 = max(tension, 1.0)
+        f = force * (max(float(berger_force), 0.0) * vel / (HEAD_DENSITY * size ** 3))
+        cnl = mdl.a * (mdl.k * gamma) ** 2 * MYLAR_EH / (2.0 * T0)
+        y = _vel(simulate_nl(mdl, f, "berger", exc, pts, ulim=1e9, cnl=cnl)[0], fs)
+    elif snare:
+        f = force * (max(float(berger_force), 0.0) * vel / (HEAD_DENSITY * size ** 3))
+        y = _vel(simulate_snare(mdl, f, exc, pts, size, snare_gap)[0], fs)
+    else:
+        y = _vel(simulate(mdl, force, exc, pts, scan, 0.08 if scan else 0.0, mallet), fs)
     y = _finish(y if stereo else y[:, 0], fs, sr, 0.9 * (0.55 + 0.45 * vel))
     return y
+
+
+def simulate_snare(mdl, force, exc, pickups, size, gap=0.0):
+    """Head driven by `force` (N / (rho D^3)) with SNARE_N wire masses under a diameter. Returns
+    (head displacement at the pickups, summed wire velocity * k)."""
+    force = np.ascontiguousarray(force, dtype=np.float64)
+    u, u1 = np.zeros(mdl.n), np.zeros(mdl.n)
+    ji, jw = _spread(mdl, *exc)
+    sj = []
+    for x in np.linspace(0.2, 0.8, SNARE_N):
+        j = int(_spread(mdl, float(x), 0.5)[0][0])
+        if j not in sj:
+            sj.append(j)
+    sj = np.array(sj, dtype=np.int64)
+    mu = SNARE_MASS / (HEAD_DENSITY * size * size)
+    sp_ = np.array([SNARE_K * size ** SNARE_ALPHA / (HEAD_DENSITY * size ** 3), SNARE_ALPHA, 1.0 / mu,
+                    (2.0 * math.pi * SNARE_F) ** 2, _L10 / SNARE_T60, float(gap) / size])
+    sw = np.zeros((len(sj), 2))
+    sw[:] = -float(gap) / size
+    out = np.zeros((force.shape[0], len(pickups)))
+    wout = np.zeros(force.shape[0])
+    _run_snare(*mdl.B, *mdl.C, u, u1, mdl.w, ji, jw, force, mdl.a * mdl.k ** 2, mdl.a * mdl.k ** 2 * mdl.cav,
+               sj, sw, sp_, mdl.k, mdl.idx, _pickups(mdl, pickups), out, wout)
+    return out, wout
 
 
 @drum("fd_drum", "Finite-difference drum head (2D wave equation, circular, air-loaded): strike position, "
@@ -670,11 +942,24 @@ def membrane(sr=DEFAULT_SR, vel=1.0, tension=1000.0, size=0.33, decay=0.6, dampi
       stiffness=(0.0, "0..1 bending stiffness of the head (stretches upper partials)"),
       contact=(0, "1 = power-law mallet contact instead of a force pulse (brightness follows vel)"),
       scan=(0.0, "Hz: moving-pickup rate (slow phasing), 0 = fixed pickup"),
-      quality=(1.0, "0.25..3 internal sample rate / grid size (cost ~ quality^3)"))
+      quality=(1.0, "0.25..3 internal sample rate / grid size (cost ~ quality^3)"),
+      berger=(0, "1 = tension modulation: a hard hit starts sharp and its pitch settles as it rings"),
+      force=(200.0, "N peak stick force at vel 1 (with berger: how far the pitch is pushed up)"),
+      detune=(0.0, "0..0.3 tension anisotropy: splits the modes into beating doublets (0.07 = a real head)"),
+      under=(0.0, "0..1 level of a second microphone under the drum (hears the head inverted, later, darker)"),
+      flip=(0, "1 = polarity of the under mic flipped back (the lows add up instead of partly cancelling)"),
+      snare=(0, "1 = snare wires under the head: energy-conserving collisions give the buzz (struck by force)"),
+      snare_gap=(0.0, "m rest gap wires-head (negative = wires pressed in, tighter buzz)"))
 def fd_drum(sr=DEFAULT_SR, vel=1.0, tension=1000.0, size=0.33, decay=0.6, damping=0.5, pos=0.35, hardness=0.5,
-            air=0.5, depth=0.3, stiffness=0.0, contact=0, scan=0.0, quality=1.0):
-    return membrane(sr, vel, tension, size, decay, damping, pos, hardness, air, depth, stiffness, bool(contact),
-                    scan, quality)
+            air=0.5, depth=0.3, stiffness=0.0, contact=0, scan=0.0, quality=1.0, berger=0, force=200.0, detune=0.0,
+            under=0.0, flip=0, snare=0, snare_gap=0.0):
+    y = membrane(sr, vel, tension, size, decay, damping, pos, hardness, air, depth, stiffness, bool(contact),
+                 scan, quality, berger=bool(berger), berger_force=force, detune=detune, snare=bool(snare),
+                 snare_gap=snare_gap)
+    if under > 0.0:
+        from .percussion import double_mic
+        y = double_mic(y, sr, under=under, flip=bool(flip), depth=float(depth))
+    return y
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -770,7 +1055,7 @@ def plate_bow(sr=DEFAULT_SR, dur=2.0, size=0.3, thickness=1.7, force=15.0, speed
     ji, jw = _spread(mdl, 0.0, float(np.clip(pos, 0.05, 0.95)))
     j = int(np.argmax(jw))                                         # one node (J0 truncation, g03 §4.5)
     out = np.zeros((n, 1))
-    # sig = 1 puts the friction peak at 0.7 vB for vB = 1  # UNSOURCED: Fig 12.8 gives FB and vB only
+    # sig = 1 puts the friction peak at 0.7 vB for vB = 1  # Fig 12.8 gives FB and vB only
     bow = np.array([float(np.clip(force, 0.5, 200.0)), float(np.clip(speed, 0.05, 5.0)), 1.0, 0.0])
     _run(*mdl.B, *mdl.C, np.zeros(mdl.n), np.zeros(mdl.n), mdl.w, ji[j:j + 1], 1.0 / mdl.w[ji[j:j + 1]], env,
          mdl.a * mdl.k ** 2, 0.0, _NOMAL.copy(), bow, mdl.k, mdl.idx, _pickups(mdl, ((0.7, 0.7),)), out)
@@ -782,16 +1067,23 @@ def plate_bow(sr=DEFAULT_SR, dur=2.0, size=0.3, thickness=1.7, force=15.0, speed
 # ---------------------------------------------------------------------------------------------------------
 def nl_plate(sr=DEFAULT_SR, vel=1.0, size=0.4, thickness=1.0, force=80.0, contact_ms=16.0, pos=(0.2, 0.3),
              decay=10.0, damping=0.005, model="vk", eps=1.0, material=BRONZE, bright=0.6, quality=1.0,
-             dur=2.0, points=900, drive=None, level=0.85, info=None, accel=True, hp=150.0, loss=None, scan=None):
+             dur=2.0, points=900, drive=None, level=0.85, info=None, accel=True, hp=150.0, loss=None, scan=None, dome=0.0,
+             scan_order=1, edges="supported"):
     """Nonlinear plate (g03 §6): `model` = "vk" (von Karman simple scheme, Airy stress solve every step),
+    `edges` "supported" | "free" (free rectangle, Phi clamped on its border; no dome),
     "berger" (tension modulation: glide only) or "linear". `size` is the diameter of the disc of equal
     area, `force` the peak strike force in newtons, converted to the scaled units of eq 13.9 by
     F / (rho H L^2 u0). `drive` (callable n, fs -> force array in N) replaces the single pulse.
     `accel`: acceleration pickup (g03 §4.4; what a small radiator sends to the air) instead of velocity;
     `hp`: output highpass in Hz (the lowest modes of a big thin plate are subsonic flapping).
     `loss` = (T60 at 0 Hz, f_c, T60 at f_c) replaces decay / damping (Bilbao et al. DAFx-23, eq. 48);
+    `dome` (m, 0 = flat): radius of curvature, a shallow spherical shell (Bilbao 13.3): q = L^2 / (Rs u0), and BIH Phi gets 2 q Lap u
+    because the scaling of 13.16 leaves the two couplings unequal; their product gives w^2 = w0^2 + E / (rho Rs^2), which the
+    book's equal q in 13.18 would halve (Chaigne & Kergomard 8.5: chi = 12 (1 - nu^2) a^4 / (R^2 h^2)). Rectangular simply supported
+    edge, not the book's free circle.
     `scan` = (R, f_o): the output moves on their ellipse x = 1/2 + R/2 cos(2 pi f_o t), y = 1/2 + R/2 sin(...)
-    (eq. 7), read from 48 fixed points with linear interpolation along the ellipse."""
+    (eq. 7), read from 48 fixed points with linear interpolation along the ellipse (`scan_order` 3: 4-point
+    Lagrange)."""
     rho, E, nu = material
     L = 0.886 * float(np.clip(size, 0.1, 3.0))                     # sqrt(pi)/2 * diameter
     H = float(np.clip(thickness, 0.2, 20.0)) * 1e-3
@@ -804,7 +1096,7 @@ def nl_plate(sr=DEFAULT_SR, vel=1.0, size=0.4, thickness=1.0, force=80.0, contac
         s0, s1 = loss_coeffs(1.0, loss[0], loss[1], loss[2], kappa, 0.0, fs)
     else:
         s0, s1 = _L10 / decay, float(np.clip(damping, 0.0, 0.05))
-    mdl = _model(fs, eps, "ssss", round(kappa, 5), 0.0, round(s0, 6), round(s1, 10), nu)
+    mdl = _model(fs, eps, "ffff" if edges == "free" else "ssss", round(kappa, 5), 0.0, round(s0, 6), round(s1, 10), nu)
     u0 = H / math.sqrt(6.0 if model == "berger" else 6.0 * (1.0 - nu * nu))
     vel = float(np.clip(vel, 0.02, 1.0))
     n = int(float(np.clip(dur, 0.05, 20.0)) * fs)
@@ -817,17 +1109,32 @@ def nl_plate(sr=DEFAULT_SR, vel=1.0, size=0.4, thickness=1.0, force=80.0, contac
     else:
         th = 2.0 * math.pi * np.arange(48) / 48
         pts = tuple(zip(0.5 + 0.5 * scan[0] * np.cos(th), 0.5 + 0.5 * scan[0] * np.sin(th)))
-    out, hits = simulate_nl(mdl, f / (rho * H * L * L * u0), model, (pos[0], pos[1], 0.0), pts)
+    curv = L * L / (float(dome) * u0) if dome > 0 and model.startswith("vk") else 0.0
+    out, hits = simulate_nl(mdl, f / (rho * H * L * L * u0), model, (pos[0], pos[1], 0.0), pts, curv=curv)
     if scan is not None:                                           # the moving pickup, interpolated along the ellipse
         ph = (np.arange(n) * scan[1] / fs % 1.0) * 48
         i0 = ph.astype(int) % 48
         fr = ph - np.floor(ph)
-        out = ((1.0 - fr) * out[np.arange(n), i0] + fr * out[np.arange(n), (i0 + 1) % 48])[:, None]
+        rows = np.arange(n)
+        if scan_order == 3:
+            w = (-fr * (fr - 1.0) * (fr - 2.0) / 6.0, (fr + 1.0) * (fr - 1.0) * (fr - 2.0) / 2.0,
+                 -(fr + 1.0) * fr * (fr - 2.0) / 2.0, (fr + 1.0) * fr * (fr - 1.0) / 6.0)
+            out = sum(wk * out[rows, (i0 + k - 1) % 48] for k, wk in enumerate(w))[:, None]
+        else:
+            out = ((1.0 - fr) * out[rows, i0] + fr * out[rows, (i0 + 1) % 48])[:, None]
     if info is not None:
         info.update(fs=fs, kappa=kappa, n=mdl.n, guard_hits=hits, peak_u=float(np.max(np.abs(out))))
     y = _vel(_vel(out, fs), fs) if accel else _vel(out, fs)
     return _finish(y[:, 0], fs, sr, level * (0.5 + 0.5 * vel), 1500.0 * 8.0 ** float(np.clip(bright, 0.0, 1.0)),
                    hp, fade=0.03)
+
+
+CYMBAL_LOSS = (6.9, 1000.0, 4.15)    # T60 at 0 Hz, f_c, T60 at f_c of mu = 0.007 w^0.6 + 2
+TAMTAM_LOSS = (75.0, 8000.0, 4.0)    # tam-tam: T60 of the lowest partials and at 8 kHz
+
+
+def _law(decay, law):
+    return (decay, law[1], decay * law[2] / law[0])
 
 
 def _nl_params(size, thickness, force, decay, dur):
@@ -844,11 +1151,19 @@ def _nl_params(size, thickness, force, decay, dur):
 
 
 @drum("plate_crash", "Crash cymbal from a von Karman nonlinear plate: the high-frequency wash builds up after "
-      "the hit, more with `force`.", **_nl_params(0.4, 1.0, 400.0, 5.0, 2.2))
-def plate_crash(sr=DEFAULT_SR, vel=1.0, size=0.4, thickness=1.0, force=400.0, decay=5.0, dur=2.2, bright=0.6,
+      "the hit, more with `force`.", **_nl_params(0.4, 1.0, 400.0, 6.9, 2.2))
+def plate_crash(sr=DEFAULT_SR, vel=1.0, size=0.4, thickness=1.0, force=400.0, decay=6.9, dur=2.2, bright=0.6,
                 model="vk", quality=1.0):
     return nl_plate(sr, vel, size, thickness, force, 12.0, (0.2, 0.3), decay, 0.005, model, 1.0, BRONZE, bright,
-                    quality, dur)
+                    quality, dur, loss=_law(float(np.clip(decay, 0.1, 30.0)), CYMBAL_LOSS))
+
+
+@drum("shell_crash", "Crash cymbal as a shallow spherical shell: the curvature stiffens the low modes and strengthens the crash.",
+      dome=(1.3, "m radius of curvature (default: 15 mm rise on 40 cm)"), **_nl_params(0.4, 1.0, 400.0, 6.9, 2.2))
+def shell_crash(sr=DEFAULT_SR, vel=1.0, dome=1.3, size=0.4, thickness=1.0, force=400.0, decay=6.9, dur=2.2, bright=0.6,
+                model="vk", quality=1.0):
+    return nl_plate(sr, vel, size, thickness, force, 12.0, (0.2, 0.3), decay, 0.005, model, 1.0, BRONZE, bright, quality, dur,
+                    dome=float(dome), loss=_law(float(np.clip(decay, 0.1, 30.0)), CYMBAL_LOSS))
 
 
 @drum("plate_ride", "Ride cymbal: heavier nonlinear plate, short stick contact, clear ping over a light wash.",
@@ -856,7 +1171,7 @@ def plate_crash(sr=DEFAULT_SR, vel=1.0, size=0.4, thickness=1.0, force=400.0, de
 def plate_ride(sr=DEFAULT_SR, vel=1.0, size=0.5, thickness=2.0, force=600.0, decay=7.0, dur=2.2, bright=0.6,
                model="vk", quality=1.0):
     return nl_plate(sr, vel, size, thickness, force, 2.5, (0.33, 0.4), decay, 0.003, model, 1.0, BRONZE, bright,
-                    quality, dur)
+                    quality, dur, loss=_law(float(np.clip(decay, 0.1, 30.0)), CYMBAL_LOSS))
 
 
 @drum("plate_china", "China cymbal: thin plate struck hard near the edge, trashy and short.",
@@ -864,7 +1179,7 @@ def plate_ride(sr=DEFAULT_SR, vel=1.0, size=0.5, thickness=2.0, force=600.0, dec
 def plate_china(sr=DEFAULT_SR, vel=1.0, size=0.45, thickness=0.8, force=400.0, decay=3.0, dur=1.6, bright=0.6,
                 model="vk", quality=1.0):
     return nl_plate(sr, vel, size, thickness, force, 6.0, (0.12, 0.2), decay, 0.006, model, 1.3, BRONZE, bright,
-                    quality, dur)
+                    quality, dur, loss=_law(float(np.clip(decay, 0.1, 30.0)), CYMBAL_LOSS))
 
 
 @drum("plate_gong", "Gong from a nonlinear plate struck at the centre with a soft mallet: pitch glides down "
@@ -876,18 +1191,38 @@ def plate_gong(sr=DEFAULT_SR, vel=1.0, size=0.5, thickness=4.0, force=6000.0, de
 
 
 @drum("tam_tam", "Tam-tam: large thin nonlinear plate, soft off-centre mallet; the shimmer swells for a second "
-      "after the hit.", **_nl_params(1.0, 2.5, 2000.0, 12.0, 5.0))
-def tam_tam(sr=DEFAULT_SR, vel=1.0, size=1.0, thickness=2.5, force=2000.0, decay=12.0, dur=5.0, bright=0.6,
+      "after the hit and the lows ring on for a minute (the file fades out at `dur`).",
+      **_nl_params(1.0, 2.5, 2000.0, 75.0, 8.0))
+def tam_tam(sr=DEFAULT_SR, vel=1.0, size=1.0, thickness=2.5, force=2000.0, decay=75.0, dur=8.0, bright=0.6,
             model="vk", quality=1.0):
     return nl_plate(sr, vel, size, thickness, force, 10.0, (0.38, 0.44), decay, 0.004, model, 1.0, BRONZE,
-                    bright, quality, dur, accel=False, hp=40.0)
+                    bright, quality, dur, accel=False, hp=40.0, loss=_law(float(np.clip(decay, 0.1, 120.0)), TAMTAM_LOSS))
 
 
 # Bilbao, Webb, Wang & Ducceschi, "Real-time gong synthesis", DAFx-23: steel (E 2e11 Pa, rho 7850, nu 0.3), 0.5 mm,
 # aspect 1.4, T60 20 s at 0 Hz and 10 s at 1 kHz; a small plate (0.01 m^2, 2 ms strike) crashes when hit hard, a
 # large one (0.16 m^2, 4 ms) swells; its force at vel 1 is 50 N, the strongest of their Fig. 4 (1-50 N).
-# UNSOURCED: the strike point.
+# the strike point.
 STEEL = (7850.0, 2e11, 0.3)
+
+# rho, E, nu; specific heat C (J/kg K), expansion alpha (1/K), conductivity k (W/m K): the middle of each range
+THERMO = {"steel": (7850.0, 2e11, 0.3, 540.0, 14e-6, 30.0), "aluminium": (2700.0, 7e10, 0.33, 900.0, 22e-6, 180.0),
+          "glass": (2500.0, 7e10, 0.22, 700.0, 8e-6, 1.1), "brass": (8500.0, 1.0e11, 0.34, 380.0, 19e-6, 110.0)}
+ROOM_K = 293.0
+
+
+def thermoelastic(freqs, thickness: float, material: str = "steel", t0: float = ROOM_K):
+    """Zener thermoelastic loss of a thin plate (h in m) at ``freqs`` Hz: (loss factor eta, decay rate d = eta w / 2 in 1/s).
+    eta = Delta w tau / (1 + (w tau)^2), relaxation tau = rho C h^2 / (k pi^2), strength
+    Delta = E alpha^2 T0 / (rho C) (1 + nu) / (1 - nu); the losses peak at f = 1 / (2 pi tau) and move up as 1 / h^2."""
+    rho, E, nu, C, alpha, k = THERMO[material]
+    tau = rho * C * thickness ** 2 / (k * math.pi ** 2)
+    delta = E * alpha ** 2 * t0 / (rho * C) * (1.0 + nu) / (1.0 - nu)
+    w = 2.0 * math.pi * np.asarray(freqs, float)
+    eta = delta * w * tau / (1.0 + (w * tau) ** 2)
+    return eta, 0.5 * eta * w
+
+
 _DAFX23 = dict(eps=1.4, material=STEEL, loss=(20.0, 1000.0, 10.0))
 
 
@@ -936,6 +1271,90 @@ def thunder_sheet(sr=DEFAULT_SR, vel=1.0, size=1.1, thickness=0.6, force=25.0, r
     return nl_plate(sr, vel, size, thickness, force, 16.0, (0.5, 0.12), decay, 0.004, "vk", 1.6,
                     (st.density, st.young_modulus, st.poisson), bright, quality, dur + min(1.5, 0.4 * decay),
                     1500, shake, accel=False, hp=40.0)
+
+
+# ---------------------------------------------------------------------------------------------------------
+# modal von Karman plates and shells (physical/vkmodal.py)
+# ---------------------------------------------------------------------------------------------------------
+@lru_cache(maxsize=8)
+def _vk_model(size, thickness, profile, dome, edges, law, eps, material, modes, airy, basis):
+    from .physical import vkmodal
+    return vkmodal.build(size, thickness, eps, edges, material, profile, dome, modes, airy, basis=basis, law=law)
+
+
+def vk_plate(sr=DEFAULT_SR, vel=1.0, size=0.4, thickness=1.0, profile="uniform", dome=0.0, edges="ffff", law="crash",
+             force=400.0, contact_ms=1.0, pos=(0.3, 0.35), eps=1.0, material=BRONZE, modes=48, airy=24, scheme="sav",
+             basis="grid", dur=2.0, bright=0.6, level=0.85, accel=True, hp=60.0, info=None, radiation=True,
+             distance=0.0):
+    """Modal von Karman plate or shallow shell (`physical.vkmodal`): `profile` = thickness law (a name of
+    vkmodal.PROFILES, a (hc mm, he mm, rb) tuple, or "uniform" = `thickness` mm), `dome` = rise of the spherical cap
+    in m (0 = flat: hardening, the pitch glides down as it rings; curved: softening, it glides up), `edges` 4 letters
+    f/s/c, `law` = modal damping power law (vkmodal.DAMPING_LAWS), `scheme` sav | conservative | linear,
+    `basis` grid | ritz (sine Rayleigh-Ritz basis, supported rectangle only). Force in N, vel^2 scaled like nl_plate.
+    `radiation` adds the radiation loss of each mode (`radiation_damping`); `distance` (m, 0 = far) the dipole near field."""
+    from .physical import vkmodal
+    prof = tuple(profile) if isinstance(profile, (list, tuple)) else str(profile)
+    m = _vk_model(round(float(np.clip(size, 0.05, 2.0)), 4), round(float(np.clip(thickness, 0.1, 20.0)), 4), prof,
+                  round(float(np.clip(dome, 0.0, 0.2)), 5), str(edges), law, round(float(eps), 4), tuple(material),
+                  int(np.clip(modes, 4, 160)), int(np.clip(airy, 2, 80)), basis)
+    if radiation:
+        from copy import copy
+        m = copy(m)
+        h = float(np.mean(m.h))
+        m.mu = m.mu + radiation_damping(m.w / (2.0 * math.pi), h, m.Lx * m.Ly, 2.0 * (m.Lx + m.Ly), material)
+    fs = _rate(2.5 * float(m.w[-1]) / (2.0 * math.pi), 8000, 48000)
+    vel = float(np.clip(vel, 0.02, 1.0))
+    n = int(float(np.clip(dur, 0.05, 30.0)) * fs)
+    f = pulse(n, fs, max(force, 1e-3) * vel * vel, float(np.clip(contact_ms, 0.1, 40.0)) * (1.25 - 0.5 * vel))
+    out = vkmodal.simulate(m, f, fs, pos, ((0.63, 0.41),), scheme)
+    if info is not None:
+        info.update(fs=fs, f_modes=m.w / (2.0 * math.pi), peak_u=float(np.max(np.abs(out))))
+    y = near_field(_vel(_vel(out, fs), fs) if accel else _vel(out, fs), fs, distance)
+    return _finish(y[:, 0], fs, sr, level * (0.5 + 0.5 * vel), 1500.0 * 8.0 ** float(np.clip(bright, 0.0, 1.0)), hp,
+                   fade=0.03)
+
+
+# size m, thickness profile, dome rise m, edges, damping law, contact ms, strike point, force N
+VK_CYMBALS = {
+    "crash": (0.4, "crash", 0.017, "ffff", "crash", 1.0, (0.3, 0.35), 400.0),
+    "ride": (0.5, "ride", 0.017, "ffff", "crash", 0.6, (0.36, 0.4), 300.0),
+    "splash": (0.25, "splash", 0.01, "ffff", "crash", 0.6, (0.3, 0.35), 150.0),
+    "china": (0.45, "nguyen_thin", 0.0, "ffff", "crash", 1.0, (0.15, 0.2), 400.0),
+}
+VK_GONGS = {   # size m, thickness mm, dome rise m, edges, law, contact ms, strike, force N
+    "opera": (0.3, 1.2, 0.0, "ffff", "gong", 4.0, (0.5, 0.5), 300.0),
+    "curved": (0.2, 1.2, 0.02, "ffff", "gong", 4.0, (0.5, 0.5), 300.0),
+    "tam_tam": (0.9, 2.0, 0.0, "ffff", "gong_hand", 8.0, (0.4, 0.45), 1500.0),
+    "rectangle": (0.55, 1.2, 0.0, "ssss", "rectangle", 7.0, (0.38, 0.45), 300.0),
+}
+
+_VK_COMMON = dict(force=(0.0, "peak strike force N at vel 1 (0 = the kind's own)"), dur=(2.5, "rendered length s"),
+                  bright=(0.6, "0..1 output lowpass 1.5 kHz .. 12 kHz"),
+                  modes=(48, "transverse modes kept (more = brighter wash, slower; cost ~ modes^2)"),
+                  scheme=("sav", "sav (explicit, energy-stable) | conservative (energy-conserving, implicit in the "
+                                 "Airy amplitudes) | linear"))
+
+
+@drum("vk_cymbal", "Modal von Karman cymbal: measured thickness profile (thick bell, thin edge), shallow-shell dome, "
+      "free edge, power-law modal damping; the crash wash builds up from the strike.",
+      kind=("crash", "crash | ride | splash | china"), dome=(-1.0, "rise of the cap in m (-1 = the kind's own; 0 = flat)"),
+      **_VK_COMMON)
+def vk_cymbal(sr=DEFAULT_SR, vel=1.0, kind="crash", dome=-1.0, force=0.0, dur=2.5, bright=0.6, modes=48, scheme="sav"):
+    size, prof, d0, edges, law, ms, pos, f0 = VK_CYMBALS.get(str(kind), VK_CYMBALS["crash"])
+    return vk_plate(sr, vel, size, 1.0, prof, d0 if dome < 0 else float(dome), edges, law,
+                    f0 if not force else float(force), ms, pos, modes=modes, scheme=scheme, dur=dur, bright=bright)
+
+
+@drum("vk_gong", "Modal von Karman gong: a flat opera gong glides down after the hit, a small curved gong glides "
+      "up; tam_tam swells into a shimmer; rectangle = the supported test plate.",
+      kind=("opera", "opera | curved | tam_tam | rectangle"), dome=(-1.0, "rise of the cap in m (-1 = the kind's own)"),
+      **_VK_COMMON)
+def vk_gong(sr=DEFAULT_SR, vel=1.0, kind="opera", dome=-1.0, force=0.0, dur=2.5, bright=0.6, modes=48, scheme="sav"):
+    size, h, d0, edges, law, ms, pos, f0 = VK_GONGS.get(str(kind), VK_GONGS["opera"])
+    return vk_plate(sr, vel, size, h, "uniform", d0 if dome < 0 else float(dome), edges, law,
+                    f0 if not force else float(force), ms, pos, eps=1.5 if kind == "rectangle" else 1.0,
+                    material=STEEL if kind == "rectangle" else BRONZE, modes=modes, scheme=scheme, dur=dur,
+                    bright=bright, accel=False, hp=30.0)
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -1007,9 +1426,11 @@ def plate_reverb(x, sr=DEFAULT_SR, mix=0.3, t60_low=3.0, t60_high=1.5, size=1.0,
         aspect=(1.4, "length/width 1..3"), t60=(0.8, "decay time s"),
         damping=(0.5, "0..1 extra high-frequency absorption"), predelay=(0.0, "seconds"),
         width=(1.0, "stereo width 0..1"), tail=(None, "seconds of tail to append (auto if omitted)"),
-        quality=(1.0, "0.5..2 internal rate / grid (cost ~ quality^3)"))
+        quality=(1.0, "0.5..2 internal rate / grid (cost ~ quality^3)"),
+        absorb=(0.0, "wall absorption 0..1 at normal incidence (one value, or 4 for the walls x0, x1, y0, y1); "
+                     "0 = rigid walls"))
 def room2d(x, sr=DEFAULT_SR, mix=0.3, size=5.0, aspect=1.4, t60=0.8, damping=0.5, predelay=0.0, width=1.0,
-           tail=None, quality=1.0):
+           tail=None, quality=1.0, absorb=0.0):
     gamma = C_AIR / float(np.clip(size, 2.0, 15.0))                # gamma = c / L (g03 §2.8)
     q = float(np.clip(quality, 0.5, 2.0))
     fs = _rate(min(8000.0 * q, 150.0 * gamma * q), 2000, 16000)    # <= ~11000 q^2 grid points
@@ -1017,6 +1438,99 @@ def room2d(x, sr=DEFAULT_SR, mix=0.3, size=5.0, aspect=1.4, t60=0.8, damping=0.5
     s0, s1 = loss_coeffs(125.0, t60, 0.2 * fs, t60 * (1.0 - 0.8 * float(np.clip(damping, 0.0, 1.0))), 0.0,
                          gamma, fs)
     key = (float(np.clip(aspect, 1.0, 3.0)), "ffff", 0.0, round(gamma, 4), round(s0, 6), round(s1, 12))
+    ab = np.broadcast_to(np.asarray(absorb, dtype=float), (4,))
+    if np.any(ab > 0):
+        key = key + (0.3, None, False, 0.0, tuple(round(wall_impedance(v), 6) for v in ab))
     tail = float(np.clip(0.9 * t60 if tail is None else tail, 0.05, 8.0))
     return _wet_fx(x, sr, fs, key, (0.23, 0.31, 0.0), ((0.71, 0.62), (0.64, 0.83)), mix, width,
                    float(np.clip(predelay, 0.0, 1.0)), tail)
+
+
+# ---------------------------------------------------------------------------------------------------------
+# plate acoustics helpers: modal density, prestress, Rayleigh damping, radiation, near field, point force
+# ---------------------------------------------------------------------------------------------------------
+# rho, E, nu, loss factor eta at 1 kHz of shell plastics
+PLASTICS = {"abs": (1050.0, 2.3e9, 0.35, 0.02), "polycarbonate": (1200.0, 2.4e9, 0.37, 0.012),
+            "pvc": (1400.0, 3.0e9, 0.38, 0.03), "acrylic": (1180.0, 3.2e9, 0.37, 0.04)}
+
+
+def modal_density(area, thickness, material=BRONZE):
+    """Modes per Hz of a thin plate, independent of frequency: n = sqrt(3) S / (c_L h), c_L = sqrt(E / (rho (1 - nu^2)))."""
+    rho, E, nu = material[:3]
+    return math.sqrt(3.0) * area / (math.sqrt(E / (rho * (1.0 - nu * nu))) * thickness)
+
+
+def prestressed_modes(lx, ly, thickness, material=BRONZE, tx=0.0, ty=0.0, n=6):
+    """Supported rectangular plate under in-plane tensions tx, ty (N/m): w^2 = (D / rho h)(kx^2 + ky^2)^2
+    + (tx kx^2 + ty ky^2) / (rho h), kx = p pi / lx, ky = q pi / ly. Hz, sorted."""
+    rho, E, nu = material[:3]
+    D = E * thickness ** 3 / (12.0 * (1.0 - nu * nu))
+    p, q = np.meshgrid(np.arange(1, 4 * n), np.arange(1, 4 * n), indexing="ij")
+    kx2, ky2 = (p * math.pi / lx) ** 2, (q * math.pi / ly) ** 2
+    w2 = (D * (kx2 + ky2) ** 2 + tx * kx2 + ty * ky2) / (rho * thickness)
+    return np.sort(np.sqrt(np.clip(w2, 0.0, None)).ravel())[:n] / (2.0 * math.pi)
+
+
+def rayleigh_t60(freqs, plastic="abs"):
+    """T60 (s) of the modes of a plastic shell with Rayleigh damping fitted to its loss factor at 1 kHz
+    (stiffness-proportional, zeta = beta w / 2, beta = eta / w_1k): T60 = 6.91 / (zeta w)."""
+    eta = PLASTICS[plastic][3]
+    w = 2.0 * math.pi * np.asarray(freqs, float)
+    beta = eta / (2.0 * math.pi * 1000.0)
+    return 6.91 / (0.5 * beta * w * w)
+
+
+def coincidence(thickness, material=BRONZE):
+    """Coincidence frequency (Hz) of a thin plate in air: c^2 / (2 pi) sqrt(rho h / D)."""
+    rho, E, nu = material[:3]
+    D = E * thickness ** 3 / (12.0 * (1.0 - nu * nu))
+    return C_AIR ** 2 / (2.0 * math.pi) * math.sqrt(rho * thickness / D)
+
+
+def radiation_efficiency(f, thickness, area, perimeter, material=BRONZE, stiffeners=0.0):
+    """Radiation efficiency sigma of a finite plate's resonant modes: 1 above coincidence, edge-mode law
+    P lambda_c / (pi^2 S) sqrt(f / fc) below it (capped at 1). `stiffeners`: total length (m) of ribs
+    fixed on the plate; below fc they multiply sigma by 1 + 2 stiffeners / perimeter."""
+    fc = coincidence(thickness, material)
+    f = np.asarray(f, float)
+    below = perimeter * (C_AIR / fc) / (math.pi ** 2 * area) * np.sqrt(np.clip(f, 0.0, None) / fc)
+    below = below * (1.0 + 2.0 * max(float(stiffeners), 0.0) / perimeter)
+    return np.where(f >= fc, 1.0, np.minimum(below, 1.0))
+
+
+def radiation_damping(f, thickness, area, perimeter, material=BRONZE, stiffeners=0.0):
+    """Radiation loss of the modes, mu_rad = 2 zeta w = rho0 c sigma / (rho h) (1/s); T60 = 13.82 / mu."""
+    rho = material[0]
+    sigma = radiation_efficiency(f, thickness, area, perimeter, material, stiffeners)
+    return RHO_AIR * C_AIR * sigma / (rho * thickness)
+
+
+def near_field(y, sr, distance):
+    """Dipole near field at `distance` m: the pressure rises as 1 / (k r) below c / (2 pi r),
+    H(s) = (s + c / r) / (s + 2 pi 20) (the lift stops at 20 Hz)."""
+    from scipy.signal import bilinear, lfilter
+    if not distance or distance <= 0.0:
+        return y
+    b, a = bilinear([1.0, C_AIR / distance], [1.0, 2.0 * math.pi * 20.0], sr)
+    g = 2.0 * math.pi * 20.0 / (C_AIR / distance)
+    return lfilter(b * g, a, y, axis=0) if g < 1.0 else y
+
+
+def point_force_pressure(force, sr, mass_area, distance=1.0):
+    """On-axis pressure (Pa) of an infinite plate of `mass_area` kg/m^2 driven by a point force (N per sample):
+    p = rho0 F / (2 pi r m) above the fluid-loading corner rho0 c / (2 pi m) Hz (65.7 Hz for 1 kg/m^2), rising
+    as f below it: H(s) = s / (s + rho0 c / m)."""
+    from scipy.signal import bilinear, lfilter
+    b, a = bilinear([1.0, 0.0], [1.0, RHO_AIR * C_AIR / mass_area], sr)
+    return RHO_AIR / (2.0 * math.pi * distance * mass_area) * lfilter(b, a, np.asarray(force, float))
+
+
+@drum("bodhran", "Bodhran (Irish frame drum): a slack goatskin head with no shell cavity, played with a tipper; `pos` "
+      "moves the stroke from the centre (deep thud) to the rim (ringing overtones), `damp` is the left hand pressing "
+      "the back of the skin (shorter, duller, a little higher).",
+      pos=(0.3, "0 centre .. 1 rim"), damp=(0.0, "0 open .. 1 hand pressed hard"), size=(0.46, "head diameter m"),
+      tension=(400.0, "N/m"))
+def bodhran(sr=DEFAULT_SR, vel=1.0, pos=0.3, damp=0.0, size=0.46, tension=400.0):
+    d = float(np.clip(damp, 0.0, 1.0))
+    return membrane(sr, vel, tension * (1.0 + 0.15 * d), size, 1.2 * (1.0 - 0.85 * d) + 0.05, 0.3 + 0.6 * d,
+                    float(np.clip(pos, 0.0, 0.95)), 0.55, 0.0, 0.1, 0.0, False, 0.0, 1.0, dur=1.4 - 0.9 * d)

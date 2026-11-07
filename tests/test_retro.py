@@ -212,7 +212,7 @@ def test_psg_tone_frequency_is_clock_over_16_tp():
     # the divider grid is audible up high: 2000 Hz -> TP 55 -> 2015.2 Hz, 13.1 cents sharp
     assert R.psg_tone_period(2000.0) == 55 and abs(1200 * np.log2(1_773_400 / (16 * 55) / 2000.0) - 13.1) < 0.1
     assert abs(cents_off(R.psg(2000.0, 0.6, SR, bright=1.0), 2000.0) - 13.1) < 1.0
-    x = R._psg_core(4000, 106, 1, 1, -1, 15, 0.0, 0, R.PSG_DAC)      # the raw kernel: exact period in clock/8 samples
+    x = R._psg_core(4000, 106, 1, 1, -1, 15, 0.0, 0, R.PSG_DAC, False, 15, 2, R.PSG_DAC)      # the raw kernel: exact period in clock/8 samples
     assert np.all(np.diff(np.nonzero(np.diff(x) != 0)[0]) == 106), "tone must flip every TP samples at clock/8 (period 16*TP clocks)"
     print(f"  psg: measured pitch within {worst:.2f} cents of clock/(16*TP) (3 clocks x 4 notes x 2 rates)")
 
@@ -222,7 +222,7 @@ def test_psg_dac_envelope_and_noise():
     assert d[0] == 0 and d[15] == 1 and np.allclose(d[2:] / d[1:-1], 2 ** 0.5), "16 log steps, 3 dB each"
 
     def idx(shape, n=80):                                  # DAC index per envelope step (EP = 1: 2 samples per step)
-        return [int(np.argmin(np.abs(d - v))) for v in R._psg_core(n * 2, 10 ** 6, 1, 1, shape, 15, 0.0, 0, d)[::2]]
+        return [int(np.argmin(np.abs(d - v))) for v in R._psg_core(n * 2, 10 ** 6, 1, 1, shape, 15, 0.0, 0, d, False, 15, 2, d)[::2]]
 
     dn, up, z, h = list(range(15, -1, -1)), list(range(16)), [0] * 16, [15] * 16
     want = {0: dn + z * 4, 4: up + z * 4, 8: dn * 5, 9: dn + z * 4, 10: (dn + up) * 2 + dn, 11: dn + h * 4,
@@ -363,6 +363,111 @@ def test_speed():
         dt = time.perf_counter() - t
         assert dt < 2.0 and y.shape[0] > 0.9 * 48000, (name, dt)
         print(f"  {name}: {dt * 1000:.0f} ms for {y.shape[0] / 48000:.2f} s")
+
+
+def test_psg_register7_and_gate():
+    d = R.PSG_DAC
+    k = lambda mix, gate: R._psg_core(40000, 7, 1, 1, -1, 15, mix, 3, d, gate, 15, 2, d)
+    both = k(0.5, True)
+    assert set(np.unique(both)) <= {0.0, 1.0}, "gate output is on/off, not a sum"
+    assert abs(both.mean() - 0.25) < 0.03, both.mean()               # tone (50 %) AND noise (about 50 %)
+    assert np.array_equal(k(0.0, True), k(0.0, False)) and np.array_equal(k(1.0, True), k(1.0, False))
+    assert set(np.round(np.unique(k(0.5, False)), 6)) <= {0.0, 0.5, 1.0}
+    _clean(R.psg(330.0, 0.3, SR, noise=0.5, mixer="and"), "and")
+
+
+def test_psg_ym2149_envelope_32_steps():
+    ru, rd, res, _ = R.PSG_CHIPS["ym2149"]
+    assert len(R.PSG_YM_ENV) == 32 and R.PSG_YM_ENV[1::2] == res, "MAME ym2149_param_env: every odd step is a volume step"
+    e = R._ym_env_levels()
+    assert e[0] == 0 and e[-1] == 1 and np.all(np.diff(e) > 0)
+    d = R.PSG_DAC
+    seq = R._psg_core(64 * 4, 10 ** 6, 1, 1, 8, 15, 0.0, 0, d, False, 31, 1, e)[::1]
+    idx = [int(np.argmin(np.abs(e - v))) for v in seq[:64]]
+    assert idx == list(range(31, -1, -1)) * 2, idx                    # one step per EP sample, 32 per ramp
+    # same ramp time as the AY's 16 steps of 2 EP
+    a = np.abs(R.psg(220.0, 1.0, SR, shape=8, env_hz=10.0, bright=1.0, chip="ym2149"))[:SR]
+    b = a.reshape(-1, 441).max(axis=1)
+    b = b - b.mean()
+    ac = np.correlate(b, b, "full")[b.size - 1:]
+    assert int(np.argmax(ac[5:20])) + 5 == 10
+
+
+def test_psg_mosfet_dac_tracks_westcott_measurement():
+    m = R.psg_mosfet_levels()
+    assert m[0] == 0 and m[15] == 1 and np.all(np.diff(m) > 0)
+    assert np.max(np.abs(m - R.PSG_DACS["westcott"])) < 0.02, "MAME's MOSFET fit lands on the levels measured on a real AY"
+    _clean(R.psg(440.0, 0.2, SR, dac="mosfet", level=9), "mosfet")
+
+
+def test_song_zzfxm_volume_only_cell():
+    inst = [[1, 0, 220, None, 2.0, 0.1, 0]]                       # a held 2 s sine
+    beat = int(44100 / 125 * 60) >> 2
+    held = [[[[0, 0, 13, 0, 0, 0, 0, 0, 0]]], [0]]
+    cell = [[[[0, 0, 13, 0, 0, 0, 0.75, 0, 0]]], [0]]           # 0.75 on row 4: same note at volume 1 - 0.75
+    a, _ = SP.render_layer({"type": "song", "format": "zzfxm", "data": [inst] + held}, SR)
+    b, _ = SP.render_layer({"type": "song", "format": "zzfxm", "data": [inst] + cell}, SR)
+    ev = R._zzfxm_tracks([inst] + cell)[0][0]
+    assert [e[1] for e in ev][1] == -2.0 and abs(ev[1][2] - 0.25) < 1e-12
+    assert np.allclose(a[: 4 * beat], b[: 4 * beat]), "no retrigger, nothing changes before the cell"
+    r = np.max(np.abs(b[5 * beat: 6 * beat])) / np.max(np.abs(a[5 * beat: 6 * beat]))   # pan 0: mono
+    assert abs(r - 0.25) < 1e-6, r
+
+
+def test_bfxr_akwf_waves_read_their_tables():
+    # AKWF.js: granular_0044 starts 32869, fmsynth_0012 33063, hvoice_0012 33078; Bfxr plays table[phase * 256] / 32768 - 1
+    for w, first in (("rasp", 32869), ("fmsyn", 33063), ("voice", 33078)):
+        i = R.SFXR_WAVES.index(w)
+        assert abs(R._wave(i, 0.5 / 256, 0.5, np.zeros(32), 0, 1) - (first / 32768 - 1)) < 1e-12
+        assert R.AKWF.shape == (3, 256) and abs(R.AKWF.mean()) < 0.1
+        y = R.sfxr(SR, wave=w, engine="bfxr", freq=220)
+        assert np.isfinite(y).all() and np.abs(y).max() > 0.1
+    drawn = {R.sfxr_params("hit", seed=s, presets="bfxr")["wave"] for s in range(60)}
+    assert R.SFXR_WAVES.index("voice") in drawn
+    drawn = {R.sfxr_params("jump", seed=s, presets="bfxr")["wave"] for s in range(60)}
+    assert R.SFXR_WAVES.index("fmsyn") in drawn and R.SFXR_WAVES.index("sine") not in drawn
+
+
+def test_zzfxm_instrument_bank_by_name():
+    # tools/convert/lib/instruments.js: 35 entries, 'st-01:nice' twice; korgbass [1,0,22,,.07,.07,2,0,,,.5,.01]
+    assert len(R.ZZFXM_INSTRUMENTS) == 34
+    assert R.ZZFXM_INSTRUMENTS["korgbass"] == [1, 0, 22, None, 0.07, 0.07, 2, 0, None, None, 0.5, 0.01]
+    a = R.zzfx_voice(110.0, 0.3, SR, p="korgbass")
+    b = R.zzfx_voice(110.0, 0.3, SR, p=[1, 0, 22, None, 0.07, 0.07, 2, 0, None, None, 0.5, 0.01])
+    assert np.array_equal(a, b)
+    assert R._resolve("b", {"b": {"zzfx": "korgbass"}})["params"] == {"p": "korgbass"}
+    try:
+        R.zzfx_voice(110.0, 0.3, SR, p="nope")
+        raise AssertionError
+    except ValueError:
+        pass
+
+
+def test_sfxr_physical_units_invert_jsfxr_conversions():
+    # jsfxr sfxr.js sliders/domain: lpf Hz = 8*44100 w/(1-w), w = v^3 * .1; hpf w = v^2 * .1;
+    # slide octaves/s = 44100 log(1 - v^3 * .01) / log(.5); envelope stage s = v^2 * 100000 / 44100
+    v = R._UNITS["lpf_hz"][1](2000.0)
+    w = v ** 3 * 0.1
+    assert abs(8 * 44100 * w / (1 - w) - 2000.0) < 1e-6
+    v = R._UNITS["hpf_hz"][1](300.0)
+    w = v ** 2 * 0.1
+    assert abs(8 * 44100 * w / (1 - w) - 300.0) < 1e-6
+    for o in (-3.0, 2.0):
+        v = R._UNITS["slide_oct"][1](o)
+        assert abs(44100 * np.log(1 - v ** 3 * 0.01) / np.log(0.5) - o) < 1e-6
+    y = R.sfxr(SR, attack_s=0.5, sustain_s=0.1, decay_s=0.2, level=0.8, soften=0.0)
+    assert abs(len(y) / SR - 0.8) < 0.01
+
+
+def test_psg_ay8930_duty_cycles():
+    # MAME ay8910.cpp duty_cycle[9]: 3.125 .. 96.875 %, 32 steps per period, the count advancing by 16 per sample
+    dac = R.PSG_DACS["log"]
+    for k, pct in ((0, 3.125), (3, 25.0), (4, 50.0), (8, 96.875)):
+        x = R._psg_core(12800, 64, 8, 1, -1, 15, 0.0, 1, dac, False, 15, 2, dac, R.PSG_DUTY[k])   # TP/16 = 4 samples a step
+        on = x > 0.5 * x.max()
+        assert abs(on.mean() * 100.0 - pct) < 0.2
+        edges = np.flatnonzero(np.diff(on.astype(int)) == 1)
+        assert np.all(np.diff(edges) == 128)                   # period 2 TP, as the square
 
 
 if __name__ == "__main__":

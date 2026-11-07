@@ -1,0 +1,22 @@
+{
+  "out": "gunshot_indoor.wav",
+  "layers": [
+    {
+      "type": "sfx",
+      "kind": "firearm",
+      "params": {
+        "weapon": "pistol_9mm",
+        "distance": 5.0,
+        "echo": 0.0
+      }
+    }
+  ],
+  "fx": [
+    {
+      "type": "room",
+      "preset": "bathroom",
+      "mix": 0.6
+    }
+  ],
+  "normalize": -1.0
+}

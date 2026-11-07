@@ -50,6 +50,10 @@ held chords, pads of real voices and single stabs.
 | `mode` | `sing` | `sing` `whisper` (no voicing: noise through the vowels) `shout` `falsetto` |
 | `vibrato` | from style | extent in cents, +- peak (0 = straight tone) |
 | `vib_rate` | from style | Hz |
+| `vib_am` | 0 | dB (0-6): level ripple at twice the vibrato rate |
+| `vib_dyn` | false | vibrato follows effort: wider and slower when loud (0.37 → 0.48 semitone, 5.38 → 5.21 Hz from pp to ff) |
+| `vib_cycle` | false | rate and extent drawn anew on each vibrato cycle (sd 0.42 Hz, 24 %) |
+| `peak_stretch` | 0 | cents (0-60): the highest note of each phrase is sung that much sharp |
 | `breath` | from style | 0 clean .. 1 airy |
 | `ring` | from style | singer's formant: 0 untrained .. 1 operatic .. 1.5 |
 | `effort` | 1 | multiplies the dynamics (0.5 softer and darker, 1.3 pressed) |
@@ -58,6 +62,10 @@ held chords, pads of real voices and single stabs.
 | `pan` | 0 | centre of the section, -1..1 |
 | `breaths` | 0 | 0..1: audible breath intake before each phrase (needs 0.3 s of rest or `lead` before it) |
 | `portamento` | 1 | glide time factor between slurred notes |
+| `coloratura` | false | runs of notes of 0.15 s or less are sung as one vibrato-like pitch target per note, without vibrato |
+| `f1_margin` | 0 | semitones (0..4) the first formant is kept above f0 on high notes |
+| `end_boost` | −1 | vibrato speed-up at the end of a long held note: −1 = Prame's measured +15 % over the last 5 cycles; 0 = off; a positive value = Hz added over the last 0.5 s |
+| `vib_arch` | false | vibrato extent arch measured on sung tones: starts at 0.56 of the full extent, reaches it after 4 cycles, falls to 0.73 over the last 4 cycles |
 | `timing` | from style | onset spread between singers in seconds |
 | `lead` | 0 | seconds of pre-roll before beat 1 (room for the first consonant and breath) |
 | `tail` | 0 | seconds after the last beat. 0 = the singers release inside the last note |
@@ -136,6 +144,8 @@ Presets of the same parameters; every one can be overridden per layer.
 | `epic` = `trailer` | +-45 / +-27 cents | 1.15 | pressed, loud, tight; use Latin syllables and `marcato` |
 | `throat` = `overtone` | none | 0.5 | pressed drone |
 | `bulgarian` | none | 0.55 | straight, pressed, bright, raised first formant; write close seconds |
+| `belt` | +-25 / +-12.5 cents, 5.6 Hz, late (0.6 s) | 0.4 | pressed phonation, first formant raised 12 %, scooped onsets (musical-theatre and pop belting) |
+| `amateur` | +-45 cents, 5.3 Hz | 0.4 | `classical` sung by untrained voices: looser pitch scatter |
 
 Sections get 65 % of the style's `ring`: choir singers hold the singer's formant back.
 
@@ -217,7 +227,9 @@ Give the layer `lead` and `tail` so breaths, first consonants and the release ha
   5.0 Hz +-40 cents and 6.2 Hz +-80 cents, got 5.00 Hz +-40.2 and 6.19 Hz +-80.2.
 - **voice type** - the published formant row (F1-F5 and bandwidths for a e i o u) and the tract
   length that goes with it. Above the top of his full voice (bass E4, baritone G4, tenor C5) a man
-  goes into falsetto by himself.
+  goes into falsetto by himself. `sing_phrase(falsetto="break")`: the register is chosen note by note with
+  hysteresis (head voice from 3 semitones under the break up, chest again 4 below that), the change ramped over 0.3 s
+  going up and 0.05 s going down.
 - **formant tuning** - above about G4 a soprano's pitch passes the first formant of the vowel; she
   opens the jaw so F1 follows the pitch. Without it the note is thin: measured on /i/ at 700 Hz,
   the fundamental is 36 dB over the third harmonic with tuning and 0.2 dB without.

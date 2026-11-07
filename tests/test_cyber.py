@@ -136,8 +136,11 @@ def test_harmonoise_rolling_noise_grows_with_speed():
     r50, p50 = c.road_noise_levels(50.0)
     r100, p100 = c.road_noise_levels(100.0)
     k = int(np.argmin(np.abs(c._HN_F - 1000.0)))
-    assert r100[k] - r50[k] == pytest.approx(33.5 * np.log10(2.0), abs=1e-9)      # bR at 1 kHz
-    assert c.road_noise_levels(70.0)[0][k] == pytest.approx(89.9)
+    assert r100[k] - r50[k] == pytest.approx(29.1 * np.log10(2.0), abs=1e-9)      # bR at 1 kHz
+    assert c.road_noise_levels(70.0)[0][k] == pytest.approx(90.6)
+    j = int(np.argmin(np.abs(c._HN_F - 40.0)))
+    assert c.road_noise_levels(70.0)[1][j] == pytest.approx(87.5)                   # aP at 40 Hz
+    assert c.road_noise_levels(140.0)[1][j + 5] - c.road_noise_levels(70.0)[1][j + 5] == pytest.approx(0.0)   # 200 Hz: bP 0
     total = lambda L: 10 * np.log10(np.sum(10 ** (L / 10)))
     assert (total(p50) - total(r50)) - (total(p100) - total(r100)) > 7.0           # the tyres catch up with the engine
 
@@ -373,3 +376,89 @@ def test_identify_names_a_ball_defect_by_its_cage_rate_and_ignores_mains_hum():
     cage = hiss * np.maximum(np.cos(2 * np.pi * 0.4 * 20.0 * t), 0.0) ** 8 + 0.2 * np.sin(2 * np.pi * 20.0 * t)
     r = identify_machine(cage, 44100, rpm=1200.0)
     assert (r["kind"], r["params"]["state"]) == ("bearing", "ball") and abs(r["evidence"]["cage_order"] - 0.4) < 0.01
+
+
+# ---------------------------------------------------------------- pipe_engine: firing, banks, cycles (L05)
+
+def test_even_offsets_render_the_default_firing():
+    a = c.pipe_engine(sr=SR, dur=0.5, rpm=2000.0, cylinders=4, unequal=0.0)
+    b = c.pipe_engine(sr=SR, dur=0.5, rpm=2000.0, unequal=0.0, offsets=[0.0, 0.75, 0.5, 0.25])
+    assert np.array_equal(a, b)
+
+
+def test_offsets_are_firing_times_in_order():
+    # Reversing the order of the same intervals is the time reversal of the firing: 180/540 is 540/180 rotated, so same lines.
+    sp, fr = _spec(c.pipe_engine(sr=SR, dur=4.0, rpm=2400.0, offsets=[0.0, 0.25], unequal=0.0))
+    assert _db(sp, fr, 60.0) > _db(sp, fr, 40.0) + 15
+
+
+def test_lope_law_on_two_cylinders():
+    for lope, off in ((1.0, 0.25), (0.5, 0.375), (0.25, 0.4375)):
+        C = 2
+        offs = (np.arange(C) / C - (np.arange(C) % 2) * 0.5 * lope / C) % 1.0
+        assert offs[1] == pytest.approx(off)
+
+
+def test_curve_of_constant_rpm_matches_the_number():
+    a = c.pipe_engine(sr=SR, dur=0.5, rpm=2000.0)
+    b = c.pipe_engine(sr=SR, dur=0.5, rpm=np.full(50, 2000.0))
+    assert np.allclose(a, b, atol=1e-9)
+
+
+def test_rpm_curve_moves_the_firing_rate():
+    y = c.pipe_engine(sr=SR, dur=2.0, rpm=np.array([1200.0, 4800.0]), cylinders=4, unequal=0.0)
+    sp, fr = _spec(y[-SR // 8:])
+    m = (fr > 60) & (fr < 300)
+    assert abs(fr[m][np.argmax(sp[m])] - 160.0) < 25.0
+
+
+def test_falling_curve_can_backfire():
+    n = c._n(1.0)
+    fall = np.linspace(4000.0, 1500.0, n)
+    assert not np.array_equal(c.pipe_engine(sr=SR, dur=1.0, rpm=fall, backfire=0.9), c.pipe_engine(sr=SR, dur=1.0, rpm=fall))
+    rise = fall[::-1]
+    assert np.array_equal(c.pipe_engine(sr=SR, dur=1.0, rpm=rise, backfire=0.9), c.pipe_engine(sr=SR, dur=1.0, rpm=rise))
+
+
+def test_two_banks_keep_the_firing_rate():
+    assert np.isfinite(c.pipe_engine(sr=SR, dur=0.5, cylinders=8, banks="LRLLRLRR")).all()
+    assert np.isfinite(c.pipe_engine(sr=SR, dur=0.5, cylinders=8, banks=[0, 1] * 4)).all()
+    with pytest.raises(ValueError):
+        c.pipe_engine(sr=SR, dur=0.5, cylinders=8, banks="LRLR")
+    with pytest.raises(ValueError):
+        c.pipe_engine(sr=SR, dur=0.5, cylinders=4, banks="LLLL")
+
+
+def test_headers_per_slot():
+    a = c.pipe_engine(sr=SR, dur=0.5, cylinders=4, headers=[0.958, 0.333, 0.708, 0.958])
+    assert np.isfinite(a).all() and not np.array_equal(a, c.pipe_engine(sr=SR, dur=0.5, cylinders=4))
+    with pytest.raises(ValueError):
+        c.pipe_engine(sr=SR, dur=0.5, cylinders=4, headers=[1.0, 2.0])
+
+
+def test_cycles_set_the_firing_rate():
+    for cycle, rate in ((4, 25.0), (2, 50.0), ("rotary", 100.0)):
+        sp, fr = _spec(c.pipe_engine(sr=SR, dur=4.0, rpm=3000.0, cylinders=1, cycle=cycle, unequal=0.0))
+        f = rate if cycle != "rotary" else 3 * 3000.0 / 180.0
+        assert _db(sp, fr, f) > _db(sp, fr, 1.5 * f) + 15, cycle
+    with pytest.raises(ValueError):
+        c.pipe_engine(sr=SR, dur=0.5, cycle=3)
+
+
+def test_sixteen_cylinders_are_allowed():
+    fire = 16 * 2000.0 / 120.0
+    sp, fr = _spec(c.pipe_engine(sr=SR, dur=2.0, rpm=2000.0, cylinders=16, unequal=0.0))
+    assert _db(sp, fr, fire) > _db(sp, fr, 1.5 * fire) + 15
+
+
+def test_tyre_lateral_force_is_the_brush_tyre():
+    from genny import cyber as C
+    F, mu, k = 4000.0, 1.0, 60e3
+    a = 1e-4
+    assert abs(float(C.tyre_lateral_force(a, F, mu, k)) / np.tan(a) - k) < 0.01 * k
+    sl = np.arctan(3 * mu * F / k)
+    assert abs(float(C.tyre_lateral_force(sl, F, mu, k)) - mu * F) < 1e-6
+    assert abs(float(C.tyre_lateral_force(0.5, F, mu, k)) - mu * F) < 1e-6
+    t = 0.5
+    assert abs(float(C.tyre_lateral_force(np.arctan(t * 3 * mu * F / k), F, mu, k)) - 3 * mu * F * t * (1 - t + t * t / 3)) < 1e-6
+    assert float(C.tyre_lateral_force(-0.05, F, mu, k)) == -float(C.tyre_lateral_force(0.05, F, mu, k))

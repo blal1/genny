@@ -71,6 +71,30 @@ An endless riser as a seamless loop (`dur` is a whole number of cycles of `1 / r
 {"out": "endless_rise.wav", "loop": 0.0, "trim": false, "layers": [{"type": "sfx", "kind": "shepard", "params": {"direction": "up", "rate": 0.25, "dur": 8}}]}
 ```
 
+## Added since 1.2.1
+
+New sfx: `explosion_layers` (Farnell's layered explosion: shock thump, three blasts, an 8 s fireball rumble, a
+squeezed echo), `pulse_dial` (rotary dialling heard down the line, one 40 ms pulse every 100 ms per count),
+`shield_up` (two detuned triangles under a slow ring modulator).
+
+New parameters:
+
+- `gunshot` `ground` (none | hard | grass | snow | asphalt ... or a flow resistivity) and `height` (m of muzzle and
+  ear above it); `explosion` `explosive`, `burst`, `windows` (listener's windows shattering above 1 kPa).
+- `train` `horn` (s at the start), `creep`, `corrugation`, `wavelength`; `transporter activate` (start on the 775 Hz
+  activation buzz); `switch kind=relay` with `coil` (the contact moves 14 / 12 ms after the coil);
+  `buzzer beat` (0 = locked to the mains, the default now; 0.4 = the old hum whose fundamental cancels every 2.5 s).
+- `wind_chime` `tube=square` (measured square tubes 1 : 2.67 : 5.04 : 8), `law=rayleigh` (T60 ~ 1/f^2);
+  `phone_tone line` (through the line and handset); `siren_wail kind=police_rc`; `teleport style=ring`.
+- `dtmf`: a real exchange asks for at least 50 ms tones and 45 ms gaps.
+- `wind_chime dip` (0..1 share of the tube dipped in water: about −3.5 semitones when full, and damped);
+  `church_bell swing` (degrees each side, 0..90: Doppler and the mouth turning to and away, 2 s period);
+  `sword blade` broom | wood_sword; `switch noise=pnoise`; `servo case=1`; new sfx `relay_chatter`.
+
+Sounds that changed since 1.2.1: `servo` (steep attack and stop, no overspin), `buzzer`, `train` horn,
+`switch state=off` (the relay bounces 7 ms on release), `whip` (the tip's crack after Bürger and Krehl), `aeolian_harp`
+(its `length` and `density` are gone: they changed nothing).
+
 ## Sound effects (`{"type": "sfx", "kind": ...}`)
 
 ## Objects and materials
@@ -203,6 +227,8 @@ Stick-slip creak of wood, a door, a floorboard, rope, leather or iron under a fo
 | `level` | `0.8` | 0.3..1 peak force: more force = faster slips, higher creak (nothing slips below 0.3) |
 | `dur` | `1.2` | s |
 | `size` | `1.0` | object size (bigger = lower formants) |
+| `width`, `height` | `0`, `0` | m: door leaf size (0 = off); the leaf rings in its own membrane modes |
+| `wave_speed` | `340` | m/s of bending waves in the leaf (100-3300) |
 | `seed` | `0` | variation |
 
 ### `zipper`
@@ -240,7 +266,8 @@ Paper: rustle, tear, or a page turn.
 
 ### `coin_spin`
 
-A coin spinning down on a table: the wobble accelerates, then stops dead.
+A coin spinning down on a table: the wobble accelerates, then stops dead. Euler's disk losing its energy in the air
+boundary layer under it: the tilt goes as (t0 − t)^(4/9) and the wobble rate as (t0 − t)^(−2/9).
 
 | param | default | meaning |
 |---|---|---|
@@ -251,7 +278,9 @@ A coin spinning down on a table: the wobble accelerates, then stops dead.
 
 ### `dice`
 
-Dice thrown on a table: each die bounces with shrinking intervals and rattles to rest.
+Dice thrown on a table: each die bounces with shrinking intervals and rattles to rest. On `wood` each impact
+lasts the Hertz contact time of an acrylic die corner (`dice_contact_ms(v, surface)`, about 0.2 ms); felt is
+unchanged.
 
 | param | default | meaning |
 |---|---|---|
@@ -263,6 +292,11 @@ Dice thrown on a table: each die bounces with shrinking intervals and rattles to
 ### `cork_pop`
 
 A cork pulled from a bottle: the pressure release rings the bottle's Helmholtz resonance and the neck.
+`helmholtz_hz(volume_ml, neck_d_mm, neck_len_mm)` gives the pitch, f = c/(2π)·√(A/(V·L′)) with L′ = L + (0.8216 +
+0.6133) r (flanged end inside the bottle, free end outside). `guitar_body_modes(top_hz=200, hole_hz=100,
+volume=0.014, top_mass=0.2, top_area=0.0814)` returns the two low modes (Hz) of a box guitar, the top coupled to the
+sound-hole air through the air spring of the box; the nominal 0.014 m³ gives the measured 91 / 192 Hz from
+`acoustic.guitar_uncoupled()` (top 180 Hz, hole 113 Hz uncoupled).
 
 | param | default | meaning |
 |---|---|---|
@@ -327,12 +361,14 @@ Gunshot: detonation chirp, muzzle burst and gas through the weapon body, mechani
 
 | param | default | meaning |
 |---|---|---|
-| `kind` | `rifle` | rifle / pistol / smg / shotgun / silenced / cannon |
+| `kind` | `rifle` | rifle / pistol / smg / shotgun / silenced / silenced_rifle / cannon. The suppressed kinds are about 22 dB down, cut most between 160 and 1000 Hz, with the ejection port heard and a louder first shot |
 | `distance` | `10.0` | m to the shooter: 1/r, air absorption, and the blast lags the crack by d(1/c - 1/v) |
+| `angle` | none | degrees between the line of fire and the listener: the crack is heard only inside the Mach cone (`crack_cone_gain`, fading over 5° outside), its miss distance = distance · sin(angle); default 3 m off the path |
+| `ear` | `center` | center / right / left: the shooter's ear; right = beside the ejection port, its gas +10 dB |
 | `shots` | `1` | rounds |
 | `rate` | `0.0` | rounds per second (0 = the weapon's own) |
 | `action` | `0.6` | 0..1 mechanical recycling (lost beyond 100 m) |
-| `crack` | `1.0` | 0..1 supersonic N-wave of the passing bullet (none for subsonic rounds) |
+| `crack` | `1.0` | 0..1 supersonic N-wave of the passing bullet (none for subsonic rounds); its length follows the projectile, `crack_ms(kind, miss=3)`: 0.18 ms rifle, 0.30 smg, 0.44 pistol, 0.59 shotgun, 2.07 cannon, rising in one sample |
 | `echo` | `0.3` | 0..1 street / treeline echoes |
 | `seed` | `0` | variation |
 
@@ -354,8 +390,13 @@ Spent shell casings (or coins, small brass) bouncing on a hard floor.
 | param | default | meaning |
 |---|---|---|
 | `count` | `1` | casings |
-| `size` | `1.0` | bigger = lower (1 = rifle brass at 4.5-5.5 kHz) |
+| `size` | `1.0` | bigger = lower (1 = rifle brass at 4.5-5.5 kHz); ignored with `caliber` |
 | `spread` | `0.25` | s over which they land |
+| `caliber` | `""` | empty = generic brass, or 9mm / 45acp / 556 / 762 / 50bmg / 12ga / 20mm / 105mm: the modes of that case |
+| `floor` | `concrete` | with `caliber`: concrete / wood / metal / tile / dirt / grass |
+| `height` | `1.2` | m it falls, with `caliber` |
+| `roll` | `false` | true = it rolls away after the bounces (hard floors, with `caliber`) |
+| `ricochet` | `false` | true = the film / game case: a long ring, spinning, bounces speeding up into a rattle (`arms.casing_ricochet`; 556 brass without `caliber`) |
 | `seed` | `0` | variation |
 
 ### `sword`
@@ -364,10 +405,11 @@ A blade or club swung through the air: Aeolian tones of eight sources along the 
 
 | param | default | meaning |
 |---|---|---|
-| `blade` | `sword` | sword / sword2 / golf_club / bat (thin sword, thicker sword, golf club, baseball bat) |
+| `blade` | `sword` | sword / sword2 / golf_club / bat / broom / wood_sword (thin sword, thicker sword, golf club, baseball bat, broom, wooden sword) |
 | `speed` | `1.0` | tip-speed scale (1 = the preset, e.g. 36 m/s) |
 | `thickness` | `1.0` | diameter scale (thicker = lower) |
 | `model` | `loq` | loq (St 0.2, Q 10: rated best)  /  patch (Fey Strouhal, bandwidth Q) |
+| `groove` | `0` | 0..1 level of the fuller groove's cavity tones (Rossiter modes of a 3 mm groove: about 3.2, 7.5, 11.8 kHz at 24 m/s) |
 | `seed` | `0` | variation |
 
 ### `clash`
@@ -383,23 +425,36 @@ Blade on blade: both measured swords ring from one shared steel-on-steel contact
 
 ### `stab`
 
-A blade point driven into flesh, armour or wood (no swing).
+A weapon point driven into flesh, armour, wood, stone or a shell (no swing).
 
 | param | default | meaning |
 |---|---|---|
-| `target` | `flesh` | flesh / armour / wood |
+| `target` | `flesh` | flesh / armour / wood / stone / shell (a creature's chitin) |
 | `force` | `0.7` | 0..1 |
+| `weapon` | `blade` | blade / heavy (mace or axe head) / spear / improvised (a stick or bar): the weapon's own body and speed |
 | `seed` | `0` | variation |
 
 ### `slash`
 
-A sword cut: the swing through the air, then the edge landing on flesh, armour or wood.
+A weapon swing: the swing through the air, then the blow landing on flesh, armour, wood, stone or a shell.
 
 | param | default | meaning |
 |---|---|---|
-| `swing` | `0.5` | 0..1 level of the air swoosh before the cut |
-| `target` | `flesh` | flesh / armour / wood |
+| `swing` | `0.5` | 0..1 level of the air swoosh before the cut (blade and spear swing like swords, heavy and improvised like a bat) |
+| `target` | `flesh` | flesh / armour / wood / stone / shell |
 | `force` | `0.7` | 0..1 |
+| `weapon` | `blade` | blade / heavy / spear / improvised |
+| `seed` | `0` | variation |
+
+### `body_hit`
+
+A blow landing on a creature's body: flesh, stone hide, chitin shell, metal plating or bone. The pitch falls with the
+creature's size as a / size^b (`BODY_LAW`); flesh also lasts longer.
+
+| param | default | meaning |
+|---|---|---|
+| `material` | `flesh` | flesh / stone / shell / metal / bone |
+| `size` | `1.0` | creature size (bigger = lower) |
 | `seed` | `0` | variation |
 
 ### `bow_shot`
@@ -505,6 +560,20 @@ Mechanical switch: every click is one mechanical event, coloured by what it is m
 | `kind` | `toggle` | toggle / rocker / push / relay / slide / rotary |
 | `mount` | `plastic` | plastic / wood / metal: the panel it sits on |
 | `state` | `on` | on / off (latching push button sounds different each way) |
+| `noise` | `band` | band: white noise in each click; pnoise: one shared generator of three crossed phasors, the same level every click |
+| `seed` | `0` | variation |
+
+### `relay_chatter`
+
+A relay switched on and off in a row, each operation a contact click with its bounce. The rate is held to what
+the relay allows: 20 Hz unloaded, 960 an hour under load.
+
+| param | default | meaning |
+|---|---|---|
+| `rate` | `5.0` | operations per second |
+| `loaded` | `0` | 1 = switching a load (at most 960 per hour) |
+| `count` | `8` | operations |
+| `mount` | `plastic` | plastic / wood / metal |
 | `seed` | `0` | variation |
 
 ### `button`
@@ -558,6 +627,7 @@ Servo / stepper moves: a small motor whining up to speed and stopping, in a sequ
 | `dur` | `0.35` | s per move |
 | `speed` | `180.0` | rotor Hz at full speed (pitch) |
 | `gap` | `0.12` | s between moves |
+| `case` | `0` | 1 = the motor shut in its case: a 4 kHz low-pass |
 | `seed` | `0` | variation |
 
 ### `printer`
@@ -753,6 +823,7 @@ Electromechanical buzzer (door entry, game-show wrong answer): an armature rattl
 | `dur` | `0.6` | s |
 | `freq` | `100` | Hz or note name (100 = 50 Hz mains, 120 = 60 Hz) |
 | `harsh` | `0.6` | 0..1 plate rattle |
+| `beat` | `0.0` | Hz between the two phasors: 0 = armature locked to the mains; 0.4 = Farnell's hum, fundamental cancelling every 2.5 s |
 
 ## Sci-fi and game
 
@@ -771,14 +842,32 @@ Shepard tone: a pitch that seems to rise (or fall) forever. Loops exactly when d
 
 ### `transporter`
 
-Sci-fi transporter beam: a shimmering whole-tone cluster of narrow noise bands that swells and dissolves upward.
+Sci-fi transporter beam: a shimmering whole-tone cluster of narrow bands that swells and dissolves upward. The
+source is a two-stage FM of triangles written into a 120 ms buffer read in a loop (its repeats are the shimmer),
+the FM sweeping over 12 s, through ten parallel band-passes a whole tone apart (resonance 1200 to 800, capped at
+4.2 kHz), then a flanger and `jcrev`.
 
 | param | default | meaning |
 |---|---|---|
 | `dur` | `3.0` | s |
-| `freq` | `A4` | lowest band: Hz or note name |
+| `freq` | `466` | lowest band: Hz or note name |
 | `bands` | `10` | whole-tone steps stacked |
+| `activate` | `0` | 1 = start on the activation buzz (775 Hz through three narrow bands) |
 | `seed` | `0` | variation |
+
+### `scifi_fm`, `noizer`, `overblow`, `fm_machine`
+
+- `scifi_fm`: genre-convention FM effects, `kind` `implode` (falling FM, ring modulation and a vent), `fission`
+  (two splitting FM voices), `thrust` (an opening noise jet over a rising FM); `freq` 440 (Hz or note), `dur`
+  (default: the kind's length), `seed`.
+- `noizer`: three-voice noise synth (stepped noise, crunched pink noise, a feedback-FM sine, each through its
+  band-pass and envelope, then a phaser and a swept resonant filter). `preset` `fire2`, `thundery`, `wind_rain`,
+  `woody`, `helicopter`, `steamtrain`, `flamethrower`, `rain`, `surf`, `engine`; `dur` 2, `seed`.
+- `overblow`: a recorder-like flue pipe blown through a pressure swell (`note` G4, `peak` 400 Pa, `dur` 3): it
+  whistles weakly below 224 Pa, sounds its note, jumps to the octave past 311.5 Pa and falls back at 259 Pa; the
+  hysteresis widens for fast swells, Pcorr = (3 |dP/dt| / 2α)^(2/3) (`flue_register`).
+- `fm_machine` (core sfx): an auditory-icon machine, a sine at `size` 180 Hz modulated at `modfreq` 35 Hz with a
+  depth that swings with the work cycle (`work` 60 Hz at `speed` 1.5 Hz); `dur` 2.
 
 ### `robot_babble`
 
@@ -979,6 +1068,7 @@ Metal wind chimes stirred: several tuned tubes struck at random, ringing over ea
 | `tubes` | `7` | strikes in the stir |
 | `spread` | `1.0` | s over which they are struck |
 | `decay` | `3.0` | s ring |
+| `strike` | `-1` | -1: fixed overtone weights 1, 0.5, 0.25, 0.12; 0..1: struck at this fraction of the length, amplitudes \|φn\| of a free bar (`tube_amplitudes`) |
 | `seed` | `0` | variation |
 
 ## Instruments (`synth` / `seq` layers)

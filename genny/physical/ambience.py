@@ -89,7 +89,7 @@ from . import analysis as A
 from . import modal as M
 from . import particles as P
 from . import space as S
-from .core import (SR, DEV_DIR, fit, highpass, lowpass, master, pan_gains, pow_decay, seconds,
+from .core import (SR, DEV_DIR, fit, highpass, lowpass, master, pan_gains, pow_decay, seconds, soft_ends,
                    spectrum_peaks, tv_lowpass, write_wav)
 
 FAMILY_PREFIXES: tuple[str, ...] = ("amb.act.", "amb.place.", "amb.library.")
@@ -288,7 +288,8 @@ def pd_pan(p: float) -> float:
 
 
 def pink(n: int, rng: np.random.Generator) -> np.ndarray:
-    """rjlib ``s_pinknoise`` (Kellet/RBJ 3-pole filter, research 09 A1.1), x0.17."""
+    """Pink (1/f) noise: white noise through a 3-pole / 3-zero filter (poles 0.995728, 0.947906, 0.535675;
+    zeros 0.984436, 0.833923, 0.0756836), flat to about 1/f within +-0.3 dB over the audio band, x0.17."""
     from scipy.signal import lfilter
     b = np.poly([0.984436, 0.833923, 0.0756836])
     a = np.poly([0.995728, 0.947906, 0.535675])
@@ -376,7 +377,8 @@ class Dom:
             return x
         if self.loop:
             return np.roll(x, d, axis=0)
-        return np.concatenate([np.full((d,) + x.shape[1:], x[0]), x[:-d]], axis=0)
+        d = min(d, len(x))
+        return np.concatenate([np.full((d,) + x.shape[1:], x[0]), x[:len(x) - d]], axis=0)
 
     def osc(self, f_m: np.ndarray) -> np.ndarray:
         """osc~ with a frequency signal. Loop mode: phase advance per period rounded to whole
@@ -435,7 +437,43 @@ WIND_SOURCES = {
     "wire1": dict(delay=500.0, pan=0.28),
     "wire2": dict(delay=900.0, pan=0.68),
     "leaves": dict(delay=3000.0, pan=0.5),
+    "atoms": dict(delay=0.0, pan=0.5),
 }
+
+# Spectral wind atoms: [alpha (1/Hz), B (Hz), A, tau (s), C (Hz per unit A), F (Hz)] for the two wind types
+WIND_ATOM_PRESETS = {"whistle": (4e-3, 60.0, 1.0, 0.3, 800.0, 400.0), "rush": (8e-4, 1500.0, 1.0, 0.0, 600.0, 300.0)}
+WIND_ATOM_FFT = (2048, 512)
+
+
+def wind_atom_gain(f, A: float, F: float, B: float, alpha: float):
+    """Spectral envelope of one wind atom: A within B/2 of F, A exp(-alpha (|f - F| - B/2)) outside."""
+    d = np.abs(np.asarray(f, float) - F) - 0.5 * B
+    return A * np.where(d <= 0.0, 1.0, np.exp(-alpha * np.maximum(d, 0.0)))
+
+
+def wind_atom_params(wind_type: float) -> tuple:
+    """[alpha, B, A, tau, C, F] interpolated between the ``whistle`` (0) and ``rush`` (1) presets (alpha, B log-linear)."""
+    t = float(np.clip(wind_type, 0.0, 1.0))
+    a, b = WIND_ATOM_PRESETS["whistle"], WIND_ATOM_PRESETS["rush"]
+    return tuple(x * (y / x) ** t if i in (0, 1) else x + (y - x) * t for i, (x, y) in enumerate(zip(a, b)))
+
+
+def wind_atoms(w: np.ndarray, rng: np.random.Generator, wind_type: float = 0.5) -> np.ndarray:
+    """Noise shaped frame by frame by ``wind_atom_gain``, the atom driven by the windspeed w (per sample):
+    A = A_i w(t - tau_i), F = C_i A + F_i."""
+    alpha, B, Ai, tau, Ci, Fi = wind_atom_params(wind_type)
+    n = len(w)
+    nf, hop = WIND_ATOM_FFT
+    wd = np.concatenate([np.full(seconds(tau), w[0]), w])[:n]
+    win = np.hanning(nf)
+    f = np.fft.rfftfreq(nf, 1.0 / SR)
+    out = np.zeros(n + nf)
+    x = rng.standard_normal(n + nf)
+    for i in range(0, n, hop):
+        A = Ai * float(wd[min(i + nf // 2, n - 1)])
+        spec = np.fft.rfft(x[i:i + nf] * win) * wind_atom_gain(f, A, Ci * A + Fi, B, alpha)
+        out[i:i + nf] += np.fft.irfft(spec, nf) * win
+    return out[:n] * (hop / (0.375 * nf))
 
 
 def windspeed(dom: Dom, rng: np.random.Generator, *, control: str = "walk", scale: float = 1.0,
@@ -445,9 +483,9 @@ def windspeed(dom: Dom, rng: np.random.Generator, *, control: str = "walk", scal
     control="pd": base = 0.25 (1 + osc~ 0.1 Hz), exactly as the patch (a 10 s swell).
     control="walk": base = the patch's 0..0.5 range driven by Farnell's AM07 "slow random walk"
       shared control (research 09 D2.3; rjlib c_drunk reflected walk, A7).
-      # UNSOURCED: walk step (1 s knots, +-0.12 per step, lop~ 0.1 Hz smoothing); neither source
+      Chosen: walk step (1 s knots, +-0.12 per step, lop~ 0.1 Hz smoothing); neither source
       # gives the walk rate for wind.
-    scale / offset: # UNSOURCED scene intensity (calm places < 1), applied to the base only.
+    scale / offset: Chosen: scene intensity (calm places < 1), applied to the base only.
     Gust and squall are the patch's, each from its own noise (Farnell: independence is required).
     """
     m = dom.m
@@ -481,7 +519,7 @@ def windspeed(dom: Dom, rng: np.random.Generator, *, control: str = "walk", scal
 
 
 def wind_kind(scale: float) -> str:
-    """Which recorded gust statistics a scene follows. # UNSOURCED: the 1.05 split."""
+    """Which recorded gust statistics a scene follows. Chosen: the 1.05 split."""
     return "gale" if scale >= 1.05 else "calm"
 
 
@@ -493,7 +531,7 @@ def _windspeed_measured(dom: Dom, rng: np.random.Generator, base: np.ndarray, sc
     deviation of that amplitude - the bed's level then fluctuates with the recorded depth - and
     scaled by Farnell's square law ((b + 0.5)^2 - 0.125) normalised at b = 0.25 ("steady at low
     speed, strong gusts above half speed"). The squall stays the patch's.
-    UNSOURCED: the dB mapping and the normalisation point."""
+    the dB mapping and the normalisation point."""
     stats = A.wind_stats(wind_kind(scale))
     name, st = stats[int(rng.integers(len(stats)))]
     _WIND_USED.append(name)
@@ -508,7 +546,7 @@ def _windspeed_measured(dom: Dom, rng: np.random.Generator, base: np.ndarray, sc
 
 
 _WIND_USED: list = []
-_WIND_TEX_GAIN = 1.0          # UNSOURCED: recorded grains vs the Farnell static rush
+_WIND_TEX_GAIN = 1.0          # recorded grains vs the Farnell static rush
 
 
 def _recorded_wind(dom: Dom, wd: np.ndarray, rng: np.random.Generator, kind: str) -> np.ndarray:
@@ -525,7 +563,7 @@ def _recorded_wind(dom: Dom, wd: np.ndarray, rng: np.random.Generator, kind: str
     y = dom.tile(y) if dom.loop else y
     # Farnell (research 02 §13): the rush brightens with speed. The recorded grains carry the
     # recordist's microphone brightness, so a speed-driven low-pass sets it procedurally
-    # (circular: runs over the tiled domain). # UNSOURCED: 900 + 7000 w Hz.
+    # (circular: runs over the tiled domain). Chosen: 900 + 7000 w Hz.
     fc = np.clip(900.0 + 7000.0 * wd, 300.0, 16000.0)
     q = np.full(len(fc), 0.707)
     return np.stack([tv_lowpass(np.ascontiguousarray(y[:, c]), fc, q) for c in (0, 1)], axis=1)
@@ -535,14 +573,15 @@ def wind_scene(dur: float, rng: np.random.Generator, *, loop: bool = False,
                sources=("static", "howl1", "howl2", "wire1", "wire2", "leaves"),
                w: np.ndarray | None = None, control: str = "walk", scale: float = 1.0,
                offset: float = 0.0, wire_scale: float = 1.0, return_speed: bool = False,
-               kind: str | None = None):
+               kind: str | None = None, wind_type: float = 0.5):
     """Farnell's wind scene (main-wind4_mod.pd): causally delayed emitters reading one windspeed.
 
     Returns stereo (n, 2). ``w`` may be a windspeed already made over ``Dom(dur, loop).m``;
     ``return_speed`` also returns the windspeed over the output period (for causally driven
     creaks, research 02 §13 / §4). ``wire_scale`` multiplies the wire centres (thinner or thicker
-    obstruction, f ~ v / d; # UNSOURCED per-scene value).
+    obstruction, f ~ v / d; Chosen: per-scene value).
     The static layer uses an independent noise per channel (a spread, mono-safe source).
+    The ``atoms`` source (not in the default list) is ``wind_atoms`` with ``wind_type`` 0 (whistling) .. 1 (rush).
     """
     dom = Dom(dur, loop)
     if w is None:
@@ -568,6 +607,8 @@ def wind_scene(dur: float, rng: np.random.Generator, *, loop: bool = False,
             s = vcf(dom.noise(rng), (600.0 + 400.0 * wd) * wire_scale, 60.0) * (wd + 0.12) ** 2 * 1.2
         elif name == "wire2":
             s = vcf(dom.noise(rng), (1000.0 + 1000.0 * wd) * wire_scale, 60.0) * wd ** 2 * 2.0
+        elif name == "atoms":
+            s = wind_atoms(wd, rng, wind_type) * 0.2
         else:  # leaves
             L = lop(wd + 0.3, 0.07)
             T = 1.0 - 0.4 * L
@@ -578,7 +619,7 @@ def wind_scene(dur: float, rng: np.random.Generator, *, loop: bool = False,
         y[:, 1] += s * gr
     if A.enabled("wind") and "static" in sources:
         # Hybrid: recorded wind grains under the same windspeed, level set to the static rush
-        # (# UNSOURCED: 1:1 balance; the Farnell emitters keep their own balances).
+        # (chosen: 1:1 balance; the Farnell emitters keep their own balances).
         tex = _recorded_wind(dom, w, rng, kind or wind_kind(scale))
         tex = tex / (_rms(dom.out(tex)) + 1e-12) * static_rms * _WIND_TEX_GAIN
         y = y * np.array([1.0, 1.0]) + tex
@@ -594,6 +635,7 @@ def wind_scene(dur: float, rng: np.random.Generator, *, loop: bool = False,
 
 DOOR_FORMANTS = ((62.5, 1.0), (125.0, 1.0), (250.0, 2.0), (395.0, 2.0), (560.0, 3.0), (790.0, 3.0))
 PANEL_MS = (4.52, 5.06, 6.27, 8.0, 5.48, 7.14, 10.12, 16.0)
+SLIP_RISE = 0.0005                                          # s. Farnell's line jumps in one sample
 
 
 def stickslip_pulses(force: np.ndarray, rng: np.random.Generator, *, periodic: bool = False,
@@ -614,6 +656,7 @@ def stickslip_pulses(force: np.ndarray, rng: np.random.Generator, *, periodic: b
     last = -1e9
     times = []
     fs_ms = SR / 1000.0
+    rise = seconds(SLIP_RISE)
     while t < n:
         i = int(t)
         fi = f[i]
@@ -623,8 +666,9 @@ def stickslip_pulses(force: np.ndarray, rng: np.random.Generator, *, periodic: b
         since = (t - last) / fs_ms if last > -1e8 else 100.0
         x = min(since, 100.0) / 100.0
         a = math.sqrt(math.sqrt(x) + 0.1)
-        dn = max(2, int(math.sqrt(x) * fs_ms))
+        dn = max(2 * rise, int(math.sqrt(x) * fs_ms))    # a fast slip lasts twice the rise, so that it keeps its height
         pulse = (a * (1.0 - np.arange(dn) / dn)) ** 2
+        pulse[:rise] *= np.sin(0.5 * np.pi * np.arange(1, rise + 1) / (rise + 1)) ** 2
         out[i:i + dn] += pulse[: len(out) - i]
         times.append(i)
         last = t
@@ -641,9 +685,9 @@ def creak(force: np.ndarray, rng: np.random.Generator, *, loop: bool = False, ma
     "wood" - Farnell's door: formant bank + panel resonator (research 02 §4).
     "pine" - the same with every formant/panel frequency divided by ``size`` (Farnell: "for
              different sized doors ... recalculate the resonator and formant characteristics";
-             # UNSOURCED: the size factor per object).
+             Chosen: the size factor per object).
     "iron" - the stick-slip train through the measured sheet-metal box (computertower.sy)
-             scaled by 1/size (# UNSOURCED mapping: Farnell says metal needs a different body).
+             scaled by 1/size (chosen: mapping: Farnell says metal needs a different body).
     loop=True treats the force as one period of a loop (seamless).
     """
     n = len(force)
@@ -667,24 +711,89 @@ def creak(force: np.ndarray, rng: np.random.Generator, *, loop: bool = False, ma
     return dom.out(y)
 
 
-def sway_force(w: np.ndarray, rng: np.random.Generator, *, sway_hz: float = 0.35, lag_ms: float = 3000.0,
-               gain: float = 1.6, loop: bool = False) -> np.ndarray:
-    """Force on a tree / wagon from the (delayed, inertial) windspeed.
+STONE_SCRAPE_BANK = ((62.5, 1.0), (125.0, 1.0), (250.0, 2.0), (395.0, 2.0), (560.0, 3.0), (790.0, 3.0))
+BODY_SET_A = (2225.0, 647.0, 1278.0, 1329.0, 2615.0, 500.0, 1682.0, 2243.0)
+TEAR_BAND, TEAR_DECAY = (0.05, 0.12), 0.5
 
-    Research 02 §13/§4: "drive the force from the wind speed (delayed like the leaves) to get
-    causally linked creaking pines" - leaves use a 3 s read delay and lop~ 0.07.
-    Sway as narrow-band noise at ``sway_hz``: 0.35 Hz confirmed, Scots pine natural sway frequency
-    0.35 (sd 0.04, range 0.29-0.42) Hz (16 trees, Mayhead et al. 1975), conifers 0.24-1.39 Hz (Moore & Maguire 2004, Trees 18:195-203,
-    Table 1); the callers' 0.3-0.45 Hz sit inside it. Q 3 = damping ratio 0.17, the high end of
-    the measured whole-tree damping (Table 2: Douglas-fir 0.154, Sitka spruce up to 0.25); pines
-    alone are ~0.06 (Q ~8), kept at 3 because a Q 8 resonator (amplitude time constant ~7 s)
+
+def sine_noise(n: int, rng: np.random.Generator, band=TEAR_BAND, decay: float = TEAR_DECAY) -> np.ndarray:
+    """A sinusoid whose frequency jumps every sample to U(band) x SR (a fibre giving way), decaying with
+    time constant ``decay`` s."""
+    f = rng.uniform(band[0], band[1], n)
+    return np.cos(2.0 * np.pi * np.cumsum(f)) * np.exp(-np.arange(n) / (decay * SR))
+
+
+def tear(force: np.ndarray, rng: np.random.Generator, *, size: float = 1.0) -> np.ndarray:
+    """Tearing (cloth, hide, sheet metal): three stick-slip trains at force 0.32 + 0.66 e through the
+    sheet-metal box at 0.5 / sqrt(size), plus three sine-noise bursts x 0.35 (mono)."""
+    e = np.clip(np.asarray(force, float), 0.0, 1.0)
+    n = len(e)
+    x = sum(stickslip_pulses(0.32 + 0.66 * e, rng) for _ in range(3))
+    y = M.render_modes(x, M.resolve("sy_computertower", f_scale=0.5 / math.sqrt(size)))[:n]
+    y = y / (np.max(np.abs(y)) + 1e-12)
+    for _ in range(3):
+        i = int(rng.integers(0, max(n // 2, 1)))
+        y[i:] += 0.35 * sine_noise(n - i, rng)
+    return y
+
+
+def stone_scrape(force: np.ndarray, rng: np.random.Generator, *, size: float = 1.0) -> np.ndarray:
+    """Bone or stone scraping: two stick-slip trains (0.31 + 0.25 e, 0.31 + 0.2 e) through the low band
+    bank `STONE_SCRAPE_BANK` x 1 / sqrt(size) and the body set A at Q 3 x 0.5 (mono)."""
+    e = np.clip(np.asarray(force, float), 0.0, 1.0)
+    x = stickslip_pulses(0.31 + 0.25 * e, rng) + stickslip_pulses(0.31 + 0.2 * e, rng)
+    k = 1.0 / math.sqrt(size)
+    y = sum(bp(x, f * k, q) for f, q in STONE_SCRAPE_BANK)
+    y = y + 0.5 * sum(bp(x, f * k, 3.0) for f in BODY_SET_A)
+    return y / (np.max(np.abs(y)) + 1e-12)
+
+
+TREE_DRAG = {"sitka": (18.330, 1.416), "corsican_pine": (15.978, 1.383), "lodgepole_pine": (24.171, 1.297),
+             "scots_pine": (15.751, 1.377), "douglas_fir": (23.467, 1.247), "hemlock": (13.065, 1.253),
+             "grand_fir": (24.624, 1.247)}
+SNOW_SWAY = 0.7
+
+
+def tree_sway_hz(dbh_cm: float, height_m: float, pine: bool | None = None, snow: bool = False) -> float:
+    """First natural sway frequency of a conifer from its trunk diameter at breast height and its height:
+    0.0766 + 3.1219 DBH/H^2, or with ``pine`` given the genus fit 0.0948 + (3.4317 - 0.7765 I_pine) DBH/H^2.
+    ``snow``: 1-2 cm in the crown, 30 % lower."""
+    x = float(dbh_cm) / max(float(height_m), 1.0) ** 2
+    f = 0.0766 + 3.1219 * x if pine is None else 0.0948 + (3.4317 - 0.7765 * bool(pine)) * x
+    return f * (SNOW_SWAY if snow else 1.0)
+
+
+SWAY_F_DROP, SWAY_DAMP_RISE = 0.1, 1.0
+
+
+def sway_params(load, sway_hz: float = 0.35, q: float = 3.0, amplitude: float = 1.0):
+    """Sway frequency and Q under a wind load 0..1: the frequency falls by ``SWAY_F_DROP`` and the damping
+    grows by ``SWAY_DAMP_RISE`` (x 2) at full load and ``amplitude`` 1 (leaf drag, stick-slip in the crown)."""
+    a = np.clip(np.asarray(load, float), 0.0, 1.0) * float(amplitude)
+    return sway_hz * (1.0 - SWAY_F_DROP * a), q / (1.0 + SWAY_DAMP_RISE * a)
+
+
+def sway_force(w: np.ndarray, rng: np.random.Generator, *, sway_hz: float = 0.35, lag_ms: float = 3000.0,
+               gain: float = 1.6, loop: bool = False, species: str | None = None,
+               tree: tuple | None = None, amplitude: float = 0.0) -> np.ndarray:
+    """Force on a tree / wagon from the windspeed, delayed and smoothed like the leaves (3 s, lop~ 0.07),
+    swaying as narrow-band noise at ``sway_hz``, Q 3: a Q 8 pine
     would not reach steady state within the one-period warm-up of short loops (Dom).
-    # UNSOURCED: ``gain``; the research notes give no tree-sway model, only the lag.
-    """
+    ``tree``: (dbh_cm, height_m[, pine[, snow]]) replaces ``sway_hz`` by ``tree_sway_hz(*tree)``.
+    ``species`` (a TREE_DRAG key): the wind load grows as U^n of that species instead of linearly.
+    ``amplitude`` > 0: the sway slows and is damped more as the load grows (`sway_params`)."""
+    if tree is not None:
+        sway_hz = tree_sway_hz(*tree)
     dom = Dom(len(w) / SR, loop)
     wm = dom.tile(w)
     L = lop(dom.delay(wm, lag_ms), 0.07)
-    sw = bp(dom.noise(rng), sway_hz, 3.0)
+    if species is not None:
+        L = np.maximum(L, 0.0) ** TREE_DRAG[species][1]
+    if amplitude > 0:
+        fq, qq = sway_params(np.clip(L * gain, 0.0, 1.0), sway_hz, 3.0, amplitude)
+        sw = bp(dom.noise(rng), fq, qq)
+    else:
+        sw = bp(dom.noise(rng), sway_hz, 3.0)
     sw = sw / (np.std(sw[dom.m // 4:]) + 1e-12)
     f = np.clip(L * gain * (0.55 + 0.35 * sw), 0.0, 1.0)
     return dom.out(f)
@@ -713,7 +822,7 @@ def fire(dur: float, rng: np.random.Generator, *, loop: bool = False, units: int
     units=4: Farnell's big fire (each generator through bp 600 Q0.2 / bp 1200 Q0.6 / bp 2600 Q0.4
       / hip 1000, x0.2).
     wood_crackle: fraction of crackles centred 100-1000 Hz ("good for burning wood") instead of the
-      patch's 1.5-16.5 kHz. # UNSOURCED mixture ratio.
+      patch's 1.5-16.5 kHz. Chosen: mixture ratio.
     crackle_lp: cutoff (Hz) of the slow noise whose env~ window fires crackles (patch: 1 Hz;
       Farnell: density is set by this cutoff).
     """
@@ -729,7 +838,7 @@ def fire(dur: float, rng: np.random.Generator, *, loop: bool = False, units: int
         # hiss: noise x (lop~1 noise)^4 x10, hip~ 1000
         lp1 = lop(w, 1.0) * PDN
         sd = np.std(lp1[dom.m - n:]) + 1e-12
-        # UNSOURCED: pre-gain 1/(3 sigma). The published pre/post gains (600/10 in the patch,
+        # pre-gain 1/(3 sigma). The published pre/post gains (600/10 in the patch,
         # 2.0/2000 in the text) give levels 60 dB apart at any rate; this puts a 3-sigma excursion
         # of the modulator at the published x10 make-up, keeping Farnell's 4th-power expansion.
         hiss = hip(w * (lp1 / (3.0 * sd)) ** 4 * 10.0, 1000.0)
@@ -874,7 +983,7 @@ def stream(dur: float, rng: np.random.Generator, *, loop: bool = False, d=None, 
 
     d: dynamics 0.001-0.9 (scalar or per-sample over dur); None = the patch's automation.
     instances: 420 in the patch (lower = sparser, cheaper; a distant stream needs fewer).
-    ice: water under an ice lid. # UNSOURCED: Farnell says under ice the stream "should also be
+    ice: water under an ice lid. Chosen: Farnell says under ice the stream "should also be
       low-passed" with no numbers; a 2nd-order low-pass at 900 Hz plus the lid's 1 kHz dip is used.
     voices: number of Farnell flowing-water voices added (thesis: "use 3-4 instances").
     """
@@ -933,14 +1042,24 @@ def farnell_water_voice(dur: float, rng: np.random.Generator, *, loop: bool = Fa
 # ==========================================================================================
 
 RAIN_GENERATORS = ((50.0, 12.0, 0.15), (60.0, 12.0, 0.2), (70.0, 12.0, 0.4))   # (rate ms, spread, base)
+RAIN_FLUX = 200.0                            # drops / s / m2
+
+
+def rain_rate(intensity: float = 1.0, area_m2: float = 1.0) -> float:
+    """Drops per second on ``area_m2``."""
+    return RAIN_FLUX * max(float(intensity), 0.0) * max(float(area_m2), 0.0)
+
+
+def drop_spikes(noise: np.ndarray) -> np.ndarray:
+    """``drops`` spikes; same as ``nature.drop_spikes``."""
+    return hip(np.clip((np.maximum(bp(noise, 7.7, 0.013), 0.16) - 0.16) * 3.0, 0.0, 1.0) ** 4, 2000.0)
 
 
 def rain(dur: float, rng: np.random.Generator, *, loop: bool = False, intensity: float = 1.0,
-         n_generators: int = 12, on_water: float = 0.5, comfort: float = 0.5) -> np.ndarray:
+         n_generators: int = 12, on_water: float = 0.5, comfort: float = 0.5, spikes: float = 0.3) -> np.ndarray:
     """Rain bed, stereo: Poisson parabolic clicks (10-15 generators, the thesis's three settings
     repeated with rates scaled by 1/intensity), pink comfort noise + a 300 Hz band, drops on water
-    as Moss bubbles (alpha 2.9). # UNSOURCED: the relative layer levels ``on_water``/``comfort``.
-    Farnell's ``drops`` spike layer is omitted (its figure-only parameters are ambiguous)."""
+    as bubbles (radius power law, alpha 2.9), and ``drops`` spikes (``spikes``)."""
     dom = Dom(dur, loop)
     n = dom.n
     y = np.zeros((n + seconds(0.05), 2))
@@ -970,12 +1089,15 @@ def rain(dur: float, rng: np.random.Generator, *, loop: bool = False, intensity:
             # noise, smaller bubbles making its upper roll-off (Prosperetti, Crum & Pumphrey, JGR 94:3255, 1989);
             # larger drops fill in below 7 kHz. The 0.20-0.25 mm spread (median 0.22 mm, 15 kHz) lies inside the 13-25 kHz
             # "sound of drizzle" of small drops (Nystuen, NASA "Listening to raindrops", Table 1; 0.13-0.25 mm by
-            # f r = 3.29 m/s), its top at the band's 13 kHz edge. UNSOURCED: the 3:1 rate split.
+            # f r = 3.29 m/s), its top at the band's 13 kHz edge. the 3:1 rate split.
             b = P.bubble_field(dur + 0.3, rng, rate=300.0 * intensity, alpha=2.9, r_range=(0.20e-3, 0.25e-3))
             b = b + P.bubble_field(dur + 0.3, rng, rate=100.0 * intensity, alpha=2.9, r_range=(0.25e-3, 1.5e-3))
             bw.append(dom.tile(dom.fold(b)))
         bw = np.stack(bw, axis=1)
         out = out + _norm(bw) * on_water
+    if spikes > 0:
+        sp = np.stack([drop_spikes(dom.noise(rng)) for _ in (0, 1)], axis=1)
+        out = out + _norm(sp) * spikes
     if comfort > 0:
         cn = []
         for c in (0, 1):
@@ -985,14 +1107,162 @@ def rain(dur: float, rng: np.random.Generator, *, loop: bool = False, intensity:
     return dom.out(out)
 
 
+# ------------------------------------------------------------------------------------------
+# Rain on water by drop class, rain on a window
+# ------------------------------------------------------------------------------------------
+
+# N(D) = N0 exp(-L D) per m3 per mm, L = 4.1 R^-0.21 per mm (R in mm/h).
+MP_N0, MP_L = 8000.0, (4.1, -0.21)
+RAIN_D_SILENT, RAIN_D_TYPE1, RAIN_D_TYPE2 = 0.8, 1.1, 2.2
+RAIN_P2 = ((0.5, 0.65), (0.70, 0.73))
+RAIN_T1_DELAY = (0.010, 0.020)
+RAIN_T1_E_BUB, RAIN_T1_E_IMP = (0.5e-12, 5e-12), (0.008e-12, 0.016e-12)
+RAIN_IMP_EFF = 0.012e-12 / 2.74e-6           # impact energy / kinetic energy, every drop
+RAIN_T1_BAND = (9800.0, 23400.0)
+RAIN_T1_R, RAIN_T1_ALPHA = (0.20e-3, 0.25e-3), 1.0
+RAIN_T2_DELAY, RAIN_T2_E = (0.065, 0.005), 1.209e-9
+RAIN_T2_F = ((2.2, 4.6), (10000.0, 2000.0))  # top of the bubble band vs D; bottom = 0.8 x top
+RAIN_WIND_OFF = 9.0
+RAIN_OBLIQUE_DEG, RAIN_OBLIQUE_P, RAIN_OBLIQUE_BAND = (0.0, 20.0), (1.0, 0.05), (8700.0, 16600.0)
+
+
+def _v_term(d_mm):
+    """Terminal speed m/s of a raindrop of diameter ``d_mm``."""
+    return np.maximum(9.65 - 10.3 * np.exp(-0.6 * np.asarray(d_mm, float)), 0.1)
+
+
+def rain_drops(dur: float, rng: np.random.Generator, rate_mm_h: float = 5.0, area_m2: float = 1.0,
+               d_min: float = RAIN_D_SILENT, d_max: float = 6.0):
+    """Onset times (s) and diameters (mm) of the drops of ``d_min``..``d_max`` mm hitting ``area_m2``:
+    flux N(D) v(D) dD, Poisson in time."""
+    lam = MP_L[0] * max(float(rate_mm_h), 1e-3) ** MP_L[1]
+    d = np.linspace(d_min, d_max, 600)
+    flux = MP_N0 * np.exp(-lam * d) * _v_term(d)                  # drops / m2 / s / mm
+    cdf = np.cumsum(flux) * (d[1] - d[0])
+    k = int(rng.poisson(cdf[-1] * area_m2 * dur))
+    D = np.interp(rng.random(k) * cdf[-1], cdf, d)
+    return np.sort(rng.uniform(0.0, dur, k)), D
+
+
+def _grain(rng, lo: float, hi: float, ms: float = 1.0) -> np.ndarray:
+    """An impact: Hann-windowed noise band-passed to lo..hi Hz, unit energy (sum x^2 / SR = 1)."""
+    from scipy.signal import butter, sosfilt
+    m = max(16, int(ms * 1e-3 * SR))
+    x = sosfilt(butter(2, (lo, min(hi, 0.45 * SR)), "bandpass", fs=SR, output="sos"), rng.standard_normal(m + 64))[64:]
+    x = x * np.hanning(m)
+    return x / math.sqrt(float(np.sum(x * x)) / SR)
+
+
+def rain_on_water(dur: float, rng: np.random.Generator, *, rate_mm_h: float = 5.0, area_m2: float = 1.0,
+                  wind: float = 0.0, rough: bool = False, return_info: bool = False):
+    """Rain on a water surface, mono 48 kHz, drop by drop, each drop sounding by its class (RAIN_*).
+    Amplitude = sqrt(acoustic energy in J) x 1e6, not normalised by the drop count."""
+    from ..matter import bubble_params
+    n = seconds(dur)
+    y = np.zeros(n + seconds(0.2))
+    times, D = rain_drops(dur, rng, rate_mm_h, area_m2)
+    k = len(D)
+    kin = 0.5 * 1000.0 * (math.pi / 6.0) * (D * 1e-3) ** 3 * _v_term(D) ** 2
+    t1 = (D < RAIN_D_TYPE1)
+    t2 = (D > RAIN_D_TYPE2)
+    w = float(np.clip(wind, 0.0, 50.0))
+    inc = np.degrees(np.arctan(w / _v_term(D)))
+    p1 = np.interp(inc, RAIN_OBLIQUE_DEG, RAIN_OBLIQUE_P) * max(0.0, 1.0 - w / RAIN_WIND_OFF)
+    p2 = rng.uniform(*RAIN_P2[1 if rough else 0], k)
+    e_imp = np.where(t1, np.exp(rng.uniform(*np.log(RAIN_T1_E_IMP), k)), RAIN_IMP_EFF * kin)
+    bank = dict(t1=[_grain(rng, *RAIN_T1_BAND) for _ in range(16)],
+                big=[_grain(rng, 1000.0, 30000.0) for _ in range(16)])
+    if w > 0:
+        bank["obl"] = [_grain(rng, *RAIN_OBLIQUE_BAND) for _ in range(16)]
+    starts, f0s, amps, betas = [], [], [], []
+    n_b1 = n_b2 = 0
+    for i in range(k):
+        s = int(times[i] * SR)
+        g = bank[("obl" if inc[i] >= RAIN_OBLIQUE_DEG[1] / 2 else "t1") if t1[i] else "big"][int(rng.integers(16))]
+        _place(y, g, s, 1e6 * math.sqrt(e_imp[i]))
+        if t1[i] and rng.random() < p1[i]:
+            r = P._powerlaw(rng, 1, RAIN_T1_R[0], RAIN_T1_R[1], RAIN_T1_ALPHA)[0] * math.exp(0.1 * w / RAIN_WIND_OFF * rng.standard_normal())
+            e, s_b = math.exp(rng.uniform(*np.log(RAIN_T1_E_BUB))), s + int(rng.uniform(*RAIN_T1_DELAY) * SR)
+            n_b1 += 1
+        elif t2[i] and rng.random() < p2[i]:
+            top = float(np.interp(D[i], *RAIN_T2_F))
+            r = P.MINNAERT_FR / rng.uniform(0.8 * top, top)
+            e = RAIN_T2_E * kin[i] / (0.5 * 1000.0 * (math.pi / 6.0) * 4.6e-3 ** 3 * float(_v_term(4.6)) ** 2)
+            s_b = s + int(max(rng.normal(*RAIN_T2_DELAY), 0.0) * SR)
+            n_b2 += 1
+        else:
+            continue
+        w0, b = bubble_params(r)[:2]
+        starts.append(s_b)
+        f0s.append(float(w0) / (2 * math.pi))
+        betas.append(float(b))
+        amps.append(1e6 * math.sqrt(4.0 * float(b) * e))
+    if starts:
+        y += P._bubble_sum(len(y), np.array(starts, np.int64), np.array(f0s), np.array(betas), np.array(amps), 0.0)
+    rate = float(rate_mm_h)
+    if rate > 100.0:
+        mix = min((rate - 100.0) / 100.0, 1.0)
+        y = (1.0 - mix) * y + mix * lowpass(y, 10000.0)
+    y = y[:n]
+    if return_info:
+        return y, dict(n=k, D=D, type1=int(t1.sum()), type2=int(t2.sum()), bubbles1=n_b1, bubbles2=n_b2)
+    return y
+
+
 # ==========================================================================================
 # Thunder (Farnell main-thunder4.pd)
 # ==========================================================================================
 
+FB_AFTER_S, FB_AFTER_GAIN, FB_DEEP_S, FB_DEEP_HP = 14.0, 0.4, 18.5, 30.0
+
+
+def fb_afterimage(n: int, rng: np.random.Generator) -> np.ndarray:
+    """Afterimage: clip(LP(noise) x 80 x noise) through bp 333 Hz Q4, the low-pass 33 -> 0 Hz and the
+    gain 2 -> 0 over 14 s, x0.4."""
+    ramp = np.clip(1.0 - np.arange(n) / SR / FB_AFTER_S, 0.0, 1.0)
+    g = tv_lowpass(rng.uniform(-1, 1, n), np.maximum(33.0 * ramp, 0.5), np.full(n, 0.7071)) * 80.0
+    g = bp(np.clip(g * rng.uniform(-1, 1, n), -1.0, 1.0), 333.0, 4.0)
+    return g * 2.0 * ramp * FB_AFTER_GAIN
+
+
+def fb_deepener(n: int, rng: np.random.Generator) -> np.ndarray:
+    """Deepener: hp 30 (lp 60 (noise)) x3.5, clipped, lp 80 (all Q3), gain 6 -> 0 over 18.5 s."""
+    dn = highpass(lowpass(rng.uniform(-1, 1, n), 60.0, 3.0), FB_DEEP_HP, 3.0) * 3.5
+    dn = lowpass(np.clip(dn, -1.0, 1.0), 80.0, 3.0)
+    return dn * 6.0 * np.clip(1.0 - np.arange(n) / SR / FB_DEEP_S, 0.0, 1.0)
+
+
+FB_STRIKE_MS, FB_STRIKE_Q, FB_ENVELOPES = 240.0, 7.0, 4
+
+
+def fineberg_strike(v: float, rng: np.random.Generator) -> np.ndarray:
+    """One strike of Fineberg's multi-impact layer: i ~ U[1, 6) sub-impacts of white noise, each with gain 2 -> 0
+    over 240 (1.4 - v)^5 ms, through a bank of 2 m + 1 band-passes (m = 4, Q 7) spread from 100 + 1200 v Hz down
+    to half of it less 20 Hz."""
+    T = max(2, seconds(FB_STRIKE_MS * (1.4 - v) ** 5 / 1000.0))
+    fc = 100.0 + 1200.0 * v
+    bank = np.linspace(fc, max(fc / 2.0 - 20.0, 20.0), 2 * FB_ENVELOPES + 1)
+    out = np.zeros(2 * T)
+    for _ in range(int(rng.integers(1, 6))):
+        s = rng.uniform(-1, 1, T) * 2.0 * (1.0 - np.arange(T) / T)
+        s = sum(bp(s, f, FB_STRIKE_Q) for f in bank) / len(bank)
+        i = int(rng.integers(0, T))
+        out[i:i + T] += s
+    return out
+
+
+THUNDER_DELAY, THUNDER_FEEDBACK = 0.6, 0.15
+THUNDER_COMP = (-20.0, 12.0, 0.0, 0.5, 20.0)
+
+
 def thunder(rng: np.random.Generator, *, dur: float = 24.0, distance: float = 0.0,
-            return_info: bool = False) -> np.ndarray:
+            return_info: bool = False, fineberg: bool = False, post: bool = False) -> np.ndarray:
     """Farnell's 8-layer thunder, stereo. distance in [0, 1] is the start of the patch's travelling
-    distance ramp d (0 -> 1 over 12 s); distance > 0.6 drops the close strike clatter (a far storm)."""
+    distance ramp d (0 -> 1 over 12 s); distance > 0.6 drops the close strike clatter (a far storm).
+    fineberg=True: multi-impact strikes (`fineberg_strike`), afterimage (low-pass 33 -> 0 Hz and gain 2 -> 0 over 14 s, x0.4) and deepener
+    (high-pass 30 Hz, x3.5, clipped, low-pass 80 Hz, gain 6 -> 0 over 18.5 s).
+    post=True: the strike goes through a feedback delay (``THUNDER_DELAY`` s, feedback ``THUNDER_FEEDBACK``) and the
+    mix through a compressor (``THUNDER_COMP``: threshold dB, ratio, attack s, release s, knee dB), no make-up gain."""
     n = seconds(dur)
     y = np.zeros((n, 2))
     # 1. strike pattern
@@ -1005,7 +1275,10 @@ def thunder(rng: np.random.Generator, *, dur: float = 24.0, distance: float = 0.
         c += 1
     # 2. strike sounds (0.3)
     strike = np.zeros(n)
-    if distance <= 0.6:
+    if distance <= 0.6 and fineberg:
+        for t_ms, _, v in events:
+            _place(strike, fineberg_strike(v, rng), seconds(t_ms / 1000.0))
+    elif distance <= 0.6:
         for t_ms, _, v in events:
             T = max(2, seconds(200.0 * (1.4 - v) ** 5 / 1000.0))
             e = 1.0 - np.arange(T) / T
@@ -1036,18 +1309,24 @@ def thunder(rng: np.random.Generator, *, dur: float = 24.0, distance: float = 0.
     rumble = rumble * renv * 0.3
     # 4. afterimage (after 200 ms, x0.9)
     after = np.zeros(n)
-    k0 = seconds(0.2)
-    m = n - k0
-    ta = np.arange(m) / SR
-    cut = 30.0 * np.clip(1.0 - ta / 0.6, 0.0, 1.0) + 3.0
-    g = lop(rng.uniform(-1, 1, m), cut) * 80.0 * PDN * rng.uniform(-1, 1, m)
-    g = bp(np.clip(g, -1.0, 1.0), 333.0, 4.0) * np.clip(1.0 - ta / 6.0, 0.0, 1.0) * 0.9
-    after[k0:] = g
+    if fineberg:
+        after = fb_afterimage(n, rng)
+    else:
+        k0 = seconds(0.2)
+        m = n - k0
+        ta = np.arange(m) / SR
+        cut = 30.0 * np.clip(1.0 - ta / 0.6, 0.0, 1.0) + 3.0
+        g = lop(rng.uniform(-1, 1, m), cut) * 80.0 * PDN * rng.uniform(-1, 1, m)
+        g = bp(np.clip(g, -1.0, 1.0), 333.0, 4.0) * np.clip(1.0 - ta / 6.0, 0.0, 1.0) * 0.9
+        after[k0:] = g
     # 5. deep noise
-    dn = lop(lop(rng.uniform(-1, 1, n), 80.0), 80.0)
-    dn = lop(lop(np.clip(hip(dn, 15.0) * 12.0 * PDN, -1, 1), 80.0), 80.0)
-    de = np.where(tt < 1.0, 0.0, np.where(tt < 3.0, (tt - 1.0) / 2.0, np.clip(1.0 - (tt - 3.0) / 20.0, 0, 1)))
-    deep = dn * de ** 2 * 0.5
+    if fineberg:
+        deep = fb_deepener(n, rng)
+    else:
+        dn = lop(lop(rng.uniform(-1, 1, n), 80.0), 80.0)
+        dn = lop(lop(np.clip(hip(dn, 15.0) * 12.0 * PDN, -1, 1), 80.0), 80.0)
+        de = np.where(tt < 1.0, 0.0, np.where(tt < 3.0, (tt - 1.0) / 2.0, np.clip(1.0 - (tt - 3.0) / 20.0, 0, 1)))
+        deep = dn * de ** 2 * 0.5
     # 6. distance filter on rumble + deep
     d = np.clip(distance + (1.0 - distance) * tt / 12.0, 0.0, 1.0)
     cutd = (1.0 - d) * 6000.0 + 50.0
@@ -1062,9 +1341,18 @@ def thunder(rng: np.random.Generator, *, dur: float = 24.0, distance: float = 0.
         tap = bp(rd, 400.0 + 400.0 * gg, 2.0) * gg
         _place(y, tap, seconds(D), 1.0, pd_pan(gg))
     # 8. mix
+    if post:
+        from scipy.signal import lfilter
+        a = np.zeros(seconds(THUNDER_DELAY) + 1)
+        a[0], a[-1] = 1.0, -THUNDER_FEEDBACK
+        strike = lfilter([1.0], a, strike)
     direct = (strike * 0.3 + after) if distance <= 0.6 else after * (1.0 - distance)
     y[:, 0] += direct + rd
     y[:, 1] += direct + rd
+    if post:
+        from ..fx import compressor
+        th, ra, at, re, kn = THUNDER_COMP
+        y = compressor(y, SR, threshold=th, ratio=ra, attack=at, release=re, knee=kn, makeup=0.0, auto_makeup=False)
     fade = seconds(1.0)
     y[-fade:] *= pow_decay(fade, 2.0)[:, None]
     if return_info:
@@ -1073,53 +1361,109 @@ def thunder(rng: np.random.Generator, *, dur: float = 24.0, distance: float = 0.
 
 
 C_AIR = 343.0
-THUNDER_PEAK_HZ = 60.0   # ground flashes peak at 40-80 Hz after wind-noise correction (Holmes et al. 1971, McCrory 1971)
-# a bolt "can be 2km long" and "changes direction about every 10m" (Farnell, Designing Sound, Practical 17
-# "Tortuosity", p. 459). UNSOURCED: the 16 degrees rms turn per segment (nearest: Ribner & Roy 1982, JASA 72(6),
-# p. 1919, 3-D walk p ~ sin(T) exp(-T^2/25deg^2), i.e. 17.7 deg per axis, but on 3 m segments with 5-segment memory).
+THUNDER_PEAK_HZ = 60.0
 CHANNEL_M, SEGMENT_M, TURN_DEG = 2000.0, 10.0, 16.0
+RIBNER_SEGMENT_M, RIBNER_TURN_DEG, MEMORY, VERTICAL_BIAS = 3.0, 25.0, 5, 0.0008
+STRETCH_A, STRETCH_R0 = 10.0, 1000.0
+STROKE_E, STROKE_A, STROKE_DT = (1.0, 0.5, 0.25), (1.0, 0.6, 0.35), (0.0, 0.06, 0.12)
+
+
+def nwave_stretch(r) -> np.ndarray:
+    """Factor on an N-wave's duration after r m of travel, 1 at 1 km; its amplitude takes the inverse."""
+    r = np.maximum(np.asarray(r, float), 2.0 * STRETCH_A)
+    return np.sqrt(np.log(r / STRETCH_A) / math.log(STRETCH_R0 / STRETCH_A))
+
+
+def wm_wave(T: float, half: float, sin_psi: float) -> np.ndarray:
+    """Wave of a straight segment of half-length ``half`` m made of N-waves of duration 2T, seen at
+    ``sin_psi`` from its normal: a positive then a negative parabolic pulse, apart when half |sin psi| > cT.
+    Per unit A/r, from the first arrival; broadside it is the N-wave times the length."""
+    s = max(abs(float(sin_psi)), 1e-3)
+    ct, ls = C_AIR * T, half * s
+    u = np.arange(-(ct + ls), ct + ls, C_AIR / SR)
+    F = lambda x: np.maximum(ct * ct - x * x, 0.0) / (2.0 * ct)  # noqa: E731
+    return (F(u + ls) - F(u - ls)) / s
+
+
+def _deflect(rng, b: np.ndarray) -> np.ndarray:
+    dt = math.radians(RIBNER_TURN_DEG)
+    while True:
+        th = dt * math.sqrt(-math.log(1.0 - rng.random()))
+        if th < math.pi and rng.random() < math.sin(th) / th:
+            break
+    e1 = np.cross(b, [1.0, 0.0, 0.0] if abs(b[0]) < 0.9 else [0.0, 1.0, 0.0])
+    e1 /= np.linalg.norm(e1)
+    e2 = np.cross(b, e1)
+    ph = rng.uniform(0.0, 2 * math.pi)
+    return math.cos(th) * b + math.sin(th) * (math.cos(ph) * e1 + math.sin(ph) * e2)
+
+
+def farnell_channel(rng: np.random.Generator, length: float = CHANNEL_M, segment: float = SEGMENT_M) -> np.ndarray:
+    """Segment vectors: fixed ``segment`` m, a Gaussian turn per axis, always climbing."""
+    d = np.array([0.0, 0.0, 1.0])
+    s = math.radians(TURN_DEG)
+    vecs = []
+    for _ in range(int(length / segment)):
+        d = d + rng.normal(0.0, s, 3)
+        d[2] = abs(d[2]) + 0.2
+        d /= np.linalg.norm(d)
+        vecs.append(segment * d)
+    return np.array(vecs)
+
+
+def ribner_channel(rng: np.random.Generator, length: float = CHANNEL_M, segment: float = RIBNER_SEGMENT_M) -> np.ndarray:
+    """Segment vectors of a 3-D tortuous channel rising from the origin: lengths exponential around ``segment``,
+    each turned by a polar angle of density sin T exp(-T^2/25deg^2), uniform azimuth, from the mean direction of
+    the last 5 segments pulled 0.0008 theta^2 degrees towards the vertical."""
+    z = np.array([0.0, 0.0, 1.0])
+    vecs, total = [], 0.0
+    while total < length:
+        a = np.sum(vecs[-MEMORY:], axis=0) if vecs else z
+        a = a / (np.linalg.norm(a) + 1e-12)
+        th = math.acos(float(np.clip(a[2], -1.0, 1.0)))
+        h = a - a[2] * z
+        if np.linalg.norm(h) > 1e-9:
+            th2 = th - min(math.radians(VERTICAL_BIAS * math.degrees(th) ** 2), th)
+            b = math.sin(th2) * h / np.linalg.norm(h) + math.cos(th2) * z
+        else:
+            b = z
+        seg = max(rng.exponential(segment), 0.05)
+        vecs.append(seg * _deflect(rng, b))
+        total += seg
+    return np.array(vecs)
 
 
 def thunder_channel(rng: np.random.Generator, *, dur: float = 12.0, distance_m: float = 1000.0,
-                    peak_hz: float = THUNDER_PEAK_HZ) -> np.ndarray:
-    """Few's "string of pearls" thunder (Few 1969, as reviewed by Gutjahr & Holmes, ONR report ADA051954, 1977):
-    the tortuous channel is a chain of cylindrical segments, each radiating an N-wave as it relaxes; the listener
-    hears them in order of distance, so the thunder lasts as long as the channel's range spread over c and the
-    tortuosity sets the clicks and the ripples of the spectrum. A segment seen broadside sends its N-wave at
-    once, one seen end-on smears it over its length l cos(psi) / c (Wright & Medendorp's finite line source);
-    1/r spreading and ISO 9613-1 air absorption at each segment's range. Mono, at SR, peak 1, starting at the
-    first arrival.
-
-    The N-wave lasts T = 0.66 / peak_hz (an N-wave's spectrum peaks at 0.66 / T), +-30 % from segment to segment
-    (UNSOURCED spread, it keeps the peaks inside the measured 40-80 Hz)."""
+                    peak_hz: float = THUNDER_PEAK_HZ, strokes: int = 1, walk: str = "farnell") -> np.ndarray:
+    """Thunder as a "string of pearls": a tortuous channel of segments, each sending its ``wm_wave``,
+    heard in order of distance with 1/r spreading, the N-waves stretched by the distance travelled and
+    air absorption at each segment's range. ``strokes`` 1..3 return strokes down the same channel, later ones
+    shorter and weaker. ``walk`` "farnell" (10 m segments) or "ribner" (3 m, 3-D statistics: its spectral peak
+    wanders 19-55 Hz from seed to seed, under the measured 40-80 Hz). Mono, at SR, peak 1, starting at the first
+    arrival. N-wave 2T = 0.66 / peak_hz at 1 km, +-30 % from segment to segment."""
     n = seconds(dur)
-    m = int(CHANNEL_M / SEGMENT_M)
-    # random walk upward from the strike point, x towards the listener
-    d = np.array([0.0, 0.0, 1.0])
-    pts, dirs = [np.zeros(3)], []
-    s = math.radians(TURN_DEG)
-    for _ in range(m):
-        d = d + rng.normal(0.0, s, 3)
-        d[2] = abs(d[2]) + 0.2                         # keep climbing (a ground flash goes up to the cloud)
-        d /= np.linalg.norm(d)
-        dirs.append(d)
-        pts.append(pts[-1] + SEGMENT_M * d)
-    mid = (np.array(pts[:-1]) + np.array(pts[1:])) / 2
-    ear = np.array([float(distance_m), 0.0, 1.5])
-    los = mid - ear
+    vecs = (ribner_channel if walk == "ribner" else farnell_channel)(rng, CHANNEL_M)
+    m = len(vecs)
+    lens = np.linalg.norm(vecs, axis=1)
+    pts = np.vstack([np.zeros(3), np.cumsum(vecs, axis=0)])
+    mid = (pts[:-1] + pts[1:]) / 2
+    los = mid - np.array([float(distance_m), 0.0, 1.5])
     r = np.maximum(np.linalg.norm(los, axis=1), 1.0)
-    cospsi = np.abs(np.sum(np.array(dirs) * los, axis=1)) / r
-    # range bands for the absorption: 16 log-spaced bins
+    sin_psi = np.abs(np.sum(vecs / lens[:, None] * los, axis=1)) / r
+    st = nwave_stretch(r)
+    T0 = 0.66 / peak_hz / 2.0 * rng.uniform(0.7, 1.3, m)
     edges = np.geomspace(r.min() * 0.999, r.max() * 1.001, 17)
     band = np.clip(np.searchsorted(edges, r) - 1, 0, 15)
     bufs = np.zeros((16, n))
-    for i in range(m):
-        T = 0.66 / peak_hz * rng.uniform(0.7, 1.3)
-        nw = np.linspace(1.0, -1.0, max(4, seconds(T)))
-        w = max(1, seconds(SEGMENT_M * cospsi[i] / C_AIR))
-        pulse = np.convolve(nw, np.full(w, 1.0 / w)) / r[i]
-        _place(bufs[band[i]], pulse, seconds((r[i] - r.min()) / C_AIR))   # t = 0 at the first arrival
-    nf = n + seconds(1.0)                              # room for the zero-phase absorption, no wrap-around
+    lead = lens / 2.0 * np.maximum(sin_psi, 1e-3)
+    first = float(np.min((r - lead - C_AIR * T0 * st) / C_AIR))
+    for k in range(int(np.clip(strokes, 1, 3))):
+        e = math.sqrt(STROKE_E[k])
+        for i in range(m):
+            T = T0[i] * st[i] * e
+            p = wm_wave(T, lens[i] / 2.0, sin_psi[i]) * STROKE_A[k] / (r[i] * st[i])
+            _place(bufs[band[i]], p, seconds((r[i] - lead[i] - C_AIR * T) / C_AIR - first + STROKE_DT[k]))
+    nf = n + seconds(1.0)
     f = np.fft.rfftfreq(nf, 1.0 / SR)
     a = S.air_db_per_m(np.maximum(f, 1.0))
     out = np.zeros(n)
@@ -1137,12 +1481,12 @@ def thunder_channel(rng: np.random.Generator, *, dur: float = 12.0, distance_m: 
 SIGMA_W, RHO_W, MU_W = 0.0728, 998.0, 1.0e-3   # water: surface tension N/m, density, dyn. viscosity
 
 
-def tube_bubble(r: float, rng: np.random.Generator, n_modes: int = 8) -> np.ndarray:
+def tube_bubble(r: float, rng: np.random.Generator, n_modes: int = 8, soft: bool = True) -> np.ndarray:
     """Moss §3.2 non-spherical bubble: zonal modes f_n^2 = (n-1)(n+1)(n+2) sigma / (4 pi^2 rho r^3),
     radiating at 2 f_n, weight (n-1)(n+2)(4n-1)/(2n+1) * w_n^2 / sqrt((4w_n^2-w_b^2)^2+(4 b_n w_n)^2),
     viscous decay b_n = (n+2)(2n+1) mu / (rho r^2); the 8 strongest kept (Table I: 8-10 suffice),
     plus the radial Minnaert mode.
-    # UNSOURCED: equal shape amplitudes c_n, the radial:shape balance 1:0.5, and the decay floor at
+    Chosen: equal shape amplitudes c_n, the radial:shape balance 1:0.5, and the decay floor at
     # the radial mode's beta0 (Moss prints no radiation damping for shape modes)."""
     fb = P.MINNAERT_FR / r
     b0 = math.pi * fb * (P.DELTA_RAD + P.DELTA_TH)
@@ -1163,17 +1507,16 @@ def tube_bubble(r: float, rng: np.random.Generator, n_modes: int = 8) -> np.ndar
     for k, j in enumerate(order):
         shape += Wk[k] * np.cos(2 * wn[j] * t + rng.uniform(0, 2 * np.pi)) * np.exp(-max(bn[j], b0) * t)
     shape /= (np.max(np.abs(shape)) + 1e-12)
-    return (y + 0.5 * shape) * r * 1e3
+    rise = max(seconds(1.0 / fb), seconds(0.005))
+    return (y + 0.5 * shape) * r * 1e3 * (soft_ends(L, rise, L // 10) if soft else 1.0)
 
 
 def _wave_env(n: int, rng: np.random.Generator, period=(8.0, 13.0), loop: bool = True, single: bool = False):
     """Wave crest envelopes and their start times over one period.
-    # UNSOURCED: swell period 8-13 s, crest rise 1-2 s (square law), wash decay 3-6 s (quartic);
-    # no source gives a surf timing model. Deane 1997 (JASA 102(5), p. 2673) logs a single condition,
-    # significant height 0.9 m and period 7 s at La Jolla, just under this range."""
+    Swell period 8-13 s, crest rise 1-2 s (square law), wash decay 3-6 s (quartic)."""
     env = np.zeros(n + seconds(8.0))
     starts = []
-    t = 0.3 if single else rng.uniform(0.0, period[0])
+    t = 0.3 if single else rng.uniform(0.0, min(period[0], 1.0))
     dur = n / SR
     while t < dur - (1.0 if loop else 3.0):
         tr, td = rng.uniform(1.0, 2.0), rng.uniform(3.0, 6.0)
@@ -1193,18 +1536,45 @@ def _wave_env(n: int, rng: np.random.Generator, period=(8.0, 13.0), loop: bool =
 
 
 _SEA_USED: list = []
-_SEA_MIX = (0.7, 0.4, 1.5)      # UNSOURCED: bubbles, noise wash, recorded wash (RMS-normalised)
+_SEA_MIX = (0.7, 0.4, 1.5)      # bubbles, noise wash, recorded wash (RMS-normalised)
+
+
+SURF_EPS = 12.0                                # W/kg, turbulence under a breaking wave
+SURF_PUFF = 0.05                               # s: one air injection under a breaking wave
+SURF_PUFF_RATE = 20.0                          # injections/s at full crest, above which they merge
+ACTIVE_LAB = ((0.3, 0.8), 0.25)                # s of bubble activity of a laboratory breaker; its wavelength m
+
+
+def puff_gate(env, rng, puffs: float = SURF_PUFF_RATE) -> np.ndarray:
+    """0/1 gate: Poisson air injections at puffs x crest^2 per second, each open SURF_PUFF s."""
+    n = len(env)
+    lam = float(puffs) * np.clip(env, 0.0, None) ** 2
+    hits = np.flatnonzero(rng.random(n) < lam / SR)
+    g = np.zeros(n)
+    w = seconds(SURF_PUFF)
+    for h in hits:
+        g[h:h + w] = 1.0
+    return g
+
+
+def active_window(period: float):
+    """Bubble activity (s) after a crest for a swell of ``period`` s: the laboratory window scaled by
+    Froude similarity, sqrt(L / L_lab) with deep-water L = g T^2 / (2 pi)."""
+    (a, b), lab = ACTIVE_LAB
+    s = math.sqrt(9.81 * float(period) ** 2 / (2.0 * math.pi) / lab)
+    return a * s, b * s
 
 
 def surf(dur: float, rng: np.random.Generator, *, loop: bool = False, distance: float = 120.0,
          period=(8.0, 13.0), bubble_rate: float = 3000.0, single: bool = False,
-         state: str | None = None) -> np.ndarray:
+         state: str | None = None, sizes: str = "breaking", plume: float = 0.0, puffs: float = 0.0,
+         active: bool = False) -> np.ndarray:
     """Breaking surf on a shore, stereo, as a line source ``distance`` m away.
 
     Per wave: bubble formation rate ~ crest^2 (Moss Gamma = u^2 kappa), radius law alpha drawn in
     the breaking-wave range 1.5-3.3 per wave, r 0.3-20 mm; at each break a few large tube bubbles
     (Moss §3.2); the broadband wash is noise shaped by the crest (Farnell: a stormy sea is close to
-    white noise), brighter at the break. # UNSOURCED: bubble_rate, the wash low-pass law
+    white noise), brighter at the break. Chosen: bubble_rate, the wash low-pass law
     (400 + 5000 c Hz) and the wash:bubble balance.
 
     Hybrid (SFX_HYBRID.md, ``state`` "calm" or "storm"): the crest timing comes from wave-cycle
@@ -1212,7 +1582,13 @@ def surf(dur: float, rng: np.random.Generator, *, loop: bool = False, distance: 
     intervals, rise and decay times, crest-level spread, crest-trough depth), and the wash is a
     level-matched grain cloud of such a recording under that procedural timing (Farnell §9.7:
     granular "textures such as water"; the grains of a crest come from the recording's crests),
-    two independent clouds for L/R; Moss bubbles stay on top. # UNSOURCED: layer balance.
+    two independent clouds for L/R; Moss bubbles stay on top. Chosen: layer balance.
+
+    sizes: ``breaking`` (r 0.3-20 mm, Hinze break) or ``plume`` (surf-zone plume, ``particles.plume_radii``).
+    plume: m of bubble plume the sound crosses (``bubble_field(plume=)``).
+    puffs: air injections per second at full crest (x crest^2); each opens the bubble rate for
+      SURF_PUFF s, so the bubbles come in bursts (0 = continuous).
+    active: bubbles only within ``active_window`` of each crest.
     """
     dom = Dom(dur, loop)
     n = dom.n
@@ -1230,6 +1606,8 @@ def surf(dur: float, rng: np.random.Generator, *, loop: bool = False, distance: 
     ys = []
     for ch in (0, 1):
         rate = bubble_rate * np.maximum(env - 0.15, 0.0) ** 2
+        if puffs > 0:
+            rate = rate * puff_gate(env, rng, puffs)
         b = np.zeros(n + seconds(10.5))
         for (i0, tr, a) in starts:
             seg_len = min(n - i0, seconds(9.0)) if not loop else seconds(9.0)
@@ -1237,8 +1615,11 @@ def surf(dur: float, rng: np.random.Generator, *, loop: bool = False, distance: 
             k = np.arange(seg_len)
             idx = (i0 + k) % n if loop else np.clip(i0 + k, 0, n - 1)
             rr[:] = rate[idx]
-            # breaking-wave bubble sizes: r^-3/2 below the 1 mm Hinze scale, r^-10/3 above (Deane & Stokes 2002)
-            bb = P.bubble_field(seg_len / SR, rng, rate=rr, alpha=(1.5, 10.0 / 3.0, 1e-3), r_range=(0.3e-3, 20e-3))
+            if active:
+                rr[tr + seconds(rng.uniform(*active_window(0.5 * (period[0] + period[1])))):] = 0.0
+            al, rg = ((P.PLUME_ALPHA[0], P.PLUME_ALPHA[1], P.PLUME_R[1]), (P.PLUME_R[0], P.PLUME_R[2])) if sizes == "plume" \
+                else ((1.5, 10.0 / 3.0, P.hinze_radius(SURF_EPS)), (0.3e-3, 20e-3))
+            bb = P.bubble_field(seg_len / SR, rng, rate=rr, alpha=al, r_range=rg, plume=plume)
             _place(b, bb, i0)
             for _ in range(int(rng.integers(2, 5))):              # large tube bubbles at the break
                 tb = tube_bubble(rng.uniform(5e-3, 40e-3), rng)
@@ -1253,7 +1634,7 @@ def surf(dur: float, rng: np.random.Generator, *, loop: bool = False, distance: 
             rec = A.recorded_texture("sea", A.SEA_KINDS[kind], pick, env, rng, loop=loop,
                                      grain_s=(0.15, 0.4), overlap=3.0, used=_SEA_USED,
                                      file=name if not single else None)
-            rec = rec * (0.45 + 0.55 * env / (env.max() + 1e-12))   # crest emphasis (UNSOURCED)
+            rec = rec * (0.45 + 0.55 * env / (env.max() + 1e-12))   # crest emphasis 
             rec = dom.tile(rec) if loop else rec
             ys.append(_SEA_MIX[0] * bub_n + _SEA_MIX[1] * wash_n + _SEA_MIX[2] * rec / (_rms(rec) + 1e-12))
         else:
@@ -1283,25 +1664,34 @@ def bubble_burst(dur: float, rng: np.random.Generator, *, size: float = 0.5) -> 
     return y[:n]
 
 
+CAVE_DRIP_PERIODS = dict(fast=(1.6, 9.0), medium=(9.0, 90.0), slow=(90.0, 900.0))   # s
+
+
 def cave_drips(dur: float, rng: np.random.Generator, *, loop: bool = False, sources: int = 5,
-               reverb: str | None = "cave", wet: float = 0.6) -> np.ndarray:
+               reverb: str | None = "cave", wet: float = 0.6, regime: str = "fast",
+               drop_ml: float = 0.0) -> np.ndarray:
     """Drips in a cave, stereo. Each source is a quantised flow (a relaxation oscillator: surface
-    tension vs weight, thesis T p.80-81), so it drips nearly periodically with jitter; each drop is
-    ``particles.drip`` (STK waterDrop + Farnell impact click). Space: zita_rev1 "cave".
-    Drip periods 1.6-9 s: the "fast" drip class, > 100 drops per 15 min, fastest site 550 per 15 min
-    (Mahmud, Mariethoz, Baker & Treble 2017, HESS Discuss. hess-2017-127, Golgotha Cave, sec. 3 / Fig. 2f).
-    # UNSOURCED: jitter +-12 %, and the wet level."""
+    tension vs weight), so it drips nearly periodically with jitter; each drop is
+    ``particles.drip`` (waterDrop voice + impact click). Space: zita_rev1 "cave".
+    ``regime``: drip period class in ``CAVE_DRIP_PERIODS``.
+    ``drop_ml`` > 0: drops of that volume (a cave drip is ``matter.CAVE_DROP_VOLUME``, 0.1433 ml) landing
+    at terminal speed; the impact click lasts the contact time D / v instead of a random width."""
     dom = Dom(dur, loop)
     n = dom.n
     y = np.zeros((n + seconds(0.5), 2))
+    click_ms = None
+    if drop_ml > 0:
+        from ..matter import terminal_speed
+        D = 2e3 * (3.0 * drop_ml * 1e-6 / (4.0 * math.pi)) ** (1.0 / 3.0)
+        click_ms = D / float(terminal_speed(D))
     for s in range(sources):
-        per = rng.uniform(1.6, 9.0)
+        per = rng.uniform(*CAVE_DRIP_PERIODS[regime])
         f0 = rng.uniform(450.0, 1200.0)
         pan = rng.uniform(-0.8, 0.8)
         g = rng.uniform(0.3, 1.0)
         t = rng.uniform(0, per)
         while t < dur:
-            d = P.drip(rng, f0=f0 * rng.uniform(0.97, 1.03), dur=0.35)
+            d = P.drip(rng, f0=f0 * rng.uniform(0.97, 1.03), dur=0.35, click_ms=click_ms)
             _place(y, d, seconds(t), g * rng.uniform(0.8, 1.0), pan)
             t += per * rng.uniform(0.88, 1.12)
     dry = np.stack([dom.fold(y[:, 0]), dom.fold(y[:, 1])], axis=1)
@@ -1325,7 +1715,8 @@ def tinkle(rng: np.random.Generator, *, f_scale: float = 1.0, gain: float = 1.0)
     f1 = f0 + (700.0 + rng.random() * 100.0) * f_scale
     f2 = f1 + (300.0 + rng.random() * 100.0) * f_scale
     s = (bp(x, f0, 800.0) + bp(x, f1, 800.0) + bp(x, f2, 800.0)) * 100.0
-    return np.clip(s, -0.9, 0.9) * gain
+    # tanh for the patch's clip +-0.9, whose corners click at low f_scale (a heavy chain); the buffer's end closes for the same reason.
+    return 0.9 * np.tanh(s / 0.9) * gain * soft_ends(len(s), seconds(0.0005), seconds(0.05))
 
 
 def clunk(rng: np.random.Generator, *, f_scale: float = 1.0, gain: float = 1.0) -> np.ndarray:
@@ -1350,7 +1741,7 @@ def chain_shift(dur: float, rng: np.random.Generator, *, pushes: int = 2, f_scal
     at a rate ~ speed, amplitude ~ sqrt(speed) (root law: the chain saturates); each contact is a
     shell-casing tinkle, some also a click-factory clunk (link on link). The chain comes to rest
     with the shell-casing bounce pattern (75, +170-344, +75-149 ms; gains 0.416, 0.257, 0.05).
-    # UNSOURCED: contacts_per_s, f_scale (heavier links than a casing: lower), clunk_p, lop 1.5 Hz."""
+    Chosen: contacts_per_s, f_scale (heavier links than a casing: lower), clunk_p, lop 1.5 Hz."""
     n = seconds(dur)
     push = np.zeros(n)
     hc = np.sin(np.pi * np.arange(seconds(0.5)) / seconds(0.5))
@@ -1385,7 +1776,7 @@ def keys_jingle(rng: np.random.Generator, *, hits: int = 3, sep_ms: float = 10.0
                 q: float = 217.0) -> np.ndarray:
     """Farnell ``pd tamb`` jingles (research 09 C8.2) for a ring of keys: noise -> bp~ Q217 at
     1700 (decay d), 3149 (2d), 2330 (4d), 1511 (8d) Hz -> ring-mod by 6300 Hz -> x0.6; each hit is
-    a pair 3*sep ms apart. # UNSOURCED: several hits 60-250 ms apart for a hanging bunch."""
+    a pair 3*sep ms apart. Chosen: several hits 60-250 ms apart for a hanging bunch."""
     n = seconds(0.6 + 0.25 * hits)
     y = np.zeros(n + seconds(0.6))
     t = 0
@@ -1422,7 +1813,7 @@ def dark_ambience(dur: float, rng: np.random.Generator, *, loop: bool = False, n
     """sonic-pi dark_ambience (atmos.clj defaults: note 52, detunes +12/+24, ring 0.2, room 70,
     reverb_time 100, cutoff 110, res 0.7 -> rq 0.3, pink noise x0.005), stereo.
     GVerb is not ported (space.py): zita_rev1 with t60 = reverb_time stands in, mixed as GVerb's
-    defaults dry 1 / tail 0.5. # UNSOURCED: that substitution."""
+    defaults dry 1 / tail 0.5. Chosen: that substitution."""
     dom = Dom(dur, loop)
     src = dom.pink(rng) * 0.005
     f1 = 440.0 * 2 ** ((note - 69) / 12)
@@ -1449,7 +1840,7 @@ def hum(dur: float, rng: np.random.Generator, *, loop: bool = False) -> np.ndarr
     # Band-limit the naive phasors (they alias, and their hard edges are re-coded unevenly by
     # Vorbis at the loop wrap, which made a seam): zero-phase, circular, 4th-order 4 kHz
     # magnitude, so the loop stays exactly periodic. A mains hum heard through a room has no
-    # content above that anyway. # UNSOURCED: the 4 kHz corner.
+    # content above that anyway. Chosen: the 4 kHz corner.
     if loop:
         Y = np.fft.rfft(y)
         fr = np.fft.rfftfreq(len(y), 1 / SR)
@@ -1495,7 +1886,7 @@ def _stereo(x):
 
 def _mix(layers):
     """layers: list of (stereo signal, dB). Each layer is normalised to unit RMS, then set in dB
-    (# UNSOURCED: scene mix levels are design choices; the emitters inside each layer keep the
+    (chosen: scene mix levels are design choices; the emitters inside each layer keep the
     sources' own balances)."""
     out = None
     for sig, db in layers:
@@ -1598,7 +1989,7 @@ def tide_swell(dur: float, rng: np.random.Generator, *, loop: bool = True) -> np
     """The Dark Sea's Tide sub swell (AUDIO_CHARTER §8.7, §3.4 M4 "the same b2 as a filtered sub
     swell"): a narrow noise band at Eb1 (Pd bp~ Q 12) with its sine core and the 2nd partial at
     -12 dB, swelling like M4 (rise 5, crest 6, fall 4 beats) once per 20-40 s wave group,
-    circular. Mono in both channels (sub). # UNSOURCED: Q, group period, the sine:noise mix."""
+    circular. Mono in both channels (sub). Chosen: Q, group period, the sine:noise mix."""
     dom = Dom(dur, loop)
     nz = bp(dom.noise(rng), TIDE_HZ, 12.0)
     nz = nz / (_rms(nz) + 1e-12)
@@ -1613,7 +2004,7 @@ def tide_swell(dur: float, rng: np.random.Generator, *, loop: bool = True) -> np
 def room_tone(dur: float, rng: np.random.Generator, *, loop: bool = True) -> np.ndarray:
     """The place's air (AUDIO_CHARTER §8.7 bed = far field + mid field + room tone): rjlib pink
     noise through two lop~ 300, independent per channel (spread, mono-safe), with a 0.05 Hz
-    breathing of +-15 %. # UNSOURCED: corner and drift."""
+    breathing of +-15 %. Chosen: corner and drift."""
     dom = Dom(dur, loop)
     ch = []
     for k in (0, 1):
@@ -1624,7 +2015,7 @@ def room_tone(dur: float, rng: np.random.Generator, *, loop: bool = True) -> np.
 
 def bed_generic(rng, text: str, dur=BED_SECONDS):
     """Keyword recipe for acts/library beds without a hand-built scene. Each keyword group adds the
-    sourced emitter that the description calls for. # UNSOURCED: the keyword mapping and levels."""
+    sourced emitter that the description calls for. Chosen: the keyword mapping and levels."""
     t = text.lower()
     has = lambda *ws: any(re.search(r"\b" + w, t) for w in ws)
     layers = []
@@ -1685,9 +2076,13 @@ BED_MODIFIERS = ("night", "dawn", "high_tide", "dark")        # AUDIO_CHARTER §
 def render_bed(row: dict, rng: np.random.Generator, dur: float = BED_SECONDS) -> np.ndarray:
     """A bed; with the charter on, proposed variant ids ``<bed id>.<modifier>`` (modifiers in
     ``BED_MODIFIERS``) render the same place under ``bed_modifier``."""
-    from . import charter
+    try:
+        from . import charter
+        on = charter.enabled()
+    except ImportError:
+        on = False
     parts = row["id"].split(".")
-    mods = [p for p in parts[2:] if p in BED_MODIFIERS] if charter.enabled() else []
+    mods = [p for p in parts[2:] if p in BED_MODIFIERS] if on else []
     base_id = ".".join(p for p in parts if p not in mods)
     name = base_id.split(".")[-1]
     if base_id.startswith("amb.act.") and name in ACT_BEDS:
@@ -1761,7 +2156,7 @@ def _in_cave(y: np.ndarray, wet: float = 0.5, preset: str = "cave") -> np.ndarra
 def d_fire_flare(rng):
     """Wood spits then an upsurge (Farnell exercise: smoulder -> crackle + lap -> flare): one fire
     generator whose crackle density rises (crackle_lp 1 -> 4 Hz) under a rise-and-fall envelope.
-    # UNSOURCED: the flare envelope (0.6 s rise, quartic 3 s fall)."""
+    Chosen: the flare envelope (0.6 s rise, quartic 3 s fall)."""
     dur = rng.uniform(4.0, 6.5)
     y = _mono(fire(dur, rng, units=1, crackle_lp=3.0, wood_crackle=0.6))
     n = len(y)
@@ -1772,7 +2167,7 @@ def d_fire_flare(rng):
 
 def d_fire_pop(rng):
     """Popping / spitting wood: a cluster of Farnell crackles (square-law noise bursts 0-30 ms through
-    bp~ Q1, 100-1000 Hz and 1.5-16.5 kHz) at a low fire's crackle density. # UNSOURCED: cluster
+    bp~ Q1, 100-1000 Hz and 1.5-16.5 kHz) at a low fire's crackle density. Chosen: cluster
     timing (3-9 crackles within 1.5 s)."""
     dur = rng.uniform(2.0, 3.5)
     n = seconds(dur)
@@ -1792,7 +2187,7 @@ def d_fire_pop(rng):
 def d_log_settle(rng):
     """Fuel settling (Farnell's 'clattering'): a burnt log drops - measured wood stick modes
     (modalpaper stick.sy, lower by size) struck with shrinking bounce intervals (monotonicity,
-    research 01 §2.6), then a crackle upsurge. # UNSOURCED: log size factor 0.35-0.5, bounce law."""
+    research 01 §2.6), then a crackle upsurge. Chosen: log size factor 0.35-0.5, bounce law."""
     dur = rng.uniform(3.5, 5.5)
     n = seconds(dur)
     y = np.zeros(n + seconds(1.0))
@@ -1831,7 +2226,7 @@ def d_keys(rng):
 
 
 def _gesture_force(dur: float, rng, peak=(0.6, 0.95)) -> np.ndarray:
-    """A load that rises and falls (a body shifting weight). # UNSOURCED gesture shape."""
+    """A load that rises and falls (a body shifting weight). Chosen: gesture shape."""
     n = seconds(dur)
     t = np.arange(n) / n
     c = rng.uniform(0.35, 0.6)
@@ -1845,6 +2240,16 @@ def d_iron_creak(rng):
     return _shape(y, dur)
 
 
+def d_tear(rng):
+    dur = rng.uniform(0.8, 1.6)
+    return _shape(tear(_gesture_force(dur, rng), rng, size=rng.uniform(0.8, 1.5)), dur)
+
+
+def d_stone_scrape(rng):
+    dur = rng.uniform(1.0, 2.5)
+    return _shape(stone_scrape(_gesture_force(dur, rng), rng, size=rng.uniform(0.8, 1.5)), dur)
+
+
 def d_wood_creak(rng, size=1.0):
     dur = rng.uniform(2.5, 4.5)
     mat = "pine" if size != 1.0 else "wood"
@@ -1854,7 +2259,7 @@ def d_wood_creak(rng, size=1.0):
 
 def d_breath(rng):
     """Sleepers breathing in the cold, a few metres off: slow whispered-vowel breaths
-    (voice.breath: Cook whispered formants + Farnell articulation). # UNSOURCED: sleep breathing
+    (voice.breath: Cook whispered formants + Farnell articulation). Chosen: sleep breathing
     timing (exhale 1.4-2 s, inhale 1.1-1.5 s, pause 0.8-1.6 s)."""
     from . import voice as V
     y = []
@@ -1893,7 +2298,7 @@ def d_drip(rng, cave=True):
 def d_gurgle(rng, ice=False):
     """A surge in running water: Reshetnikov grains (all 420 instances) at a fixed dynamics under a
     swell envelope. (In the patch a larger d makes the stream denser but quieter: (1-d)^2.)
-    # UNSOURCED: d range 0.2-0.4 and the sin^0.5 swell."""
+    Chosen: d range 0.2-0.4 and the sin^0.5 swell."""
     dur = rng.uniform(3.0, 5.5)
     n = seconds(dur)
     tt = np.arange(n) / n
@@ -1904,7 +2309,7 @@ def d_gurgle(rng, ice=False):
 def d_bubbles(rng, under_ice=False):
     """A burst of surfacing bubbles. The prime selector fires at most 8 times per 3 s counter
     cycle and culls half, so a short burst can come out empty: the burst is redrawn (up to 6
-    times) until it holds at least 3 bubbles, and runs 3-4.5 s. # UNSOURCED: the minimum."""
+    times) until it holds at least 3 bubbles, and runs 3-4.5 s. Chosen: the minimum."""
     dur = rng.uniform(3.0, 4.5)
     for _ in range(6):
         y = bubble_burst(dur, rng, size=rng.uniform(0.4, 0.8))
@@ -1956,7 +2361,7 @@ def d_thunder_far(rng):
 
 def d_gust_howl(rng):
     """One gust through a gap: the wind scene with a single rise/fall of windspeed through the howl
-    windows. # UNSOURCED: gust gesture."""
+    windows. Chosen: gust gesture."""
     dur = rng.uniform(4.0, 7.0)
     dom = Dom(dur, False)
     t = np.arange(dom.m) / dom.m
@@ -1969,7 +2374,7 @@ DETAIL_KINDS = {
     "fire_flare": d_fire_flare, "fire_pop": d_fire_pop, "log_settle": d_log_settle,
     "chain_shift": d_chain_shift, "chain_light": lambda r: d_chain_shift(r, heavy=False),
     "chain_drag": d_chain_drag, "keys": d_keys, "iron_creak": d_iron_creak, "wood_creak": d_wood_creak,
-    "beam_creak": lambda r: d_wood_creak(r, size=1.4), "breath": d_breath,
+    "tear": d_tear, "stone_scrape": d_stone_scrape, "beam_creak": lambda r: d_wood_creak(r, size=1.4), "breath": d_breath,
     "drip_cave": d_drip, "drip": lambda r: d_drip(r, cave=False), "gurgle": d_gurgle,
     "gurgle_ice": lambda r: d_gurgle(r, ice=True), "bubbles": d_bubbles,
     "bubbles_ice": lambda r: d_bubbles(r, under_ice=True), "pebbles": d_pebbles,
@@ -2028,7 +2433,7 @@ def place_palette(row: dict) -> tuple[str, ...]:
     # Widen to 6 different kinds (QA 2026-10-02: 480 places had only 3 kinds, so their six details
     # repeated): first the siblings of the kinds the text named, then a pool chosen by the kind of
     # place (indoor / cave / water / outdoor). Never a creature voice or footsteps (docs/07 §5.2).
-    # UNSOURCED: the sibling and pool tables.
+    # the sibling and pool tables.
     indoor = any(re.search(r"\b" + w, t) for w in ("hall\\b", "inside", "interior", "chamber", "house", "hut\\b", "inn\\b",
                                                    "tavern", "temple", "lodge", "tower", "castle", "library",
                                                    "pod", "lounge", "shop", "barracks", "cell", "wagon"))
@@ -2230,6 +2635,56 @@ def selftest():
                   f"{20 * np.log10(np.max(np.abs(y)) + 1e-12):.1f} dBFS LUFS {_lufs(y):.1f} "
                   f"main peaks {[round(f) for f, _ in pk]} Hz")
     del rng0
+
+
+def stand_density_index(tph: float, qmd_cm: float) -> float:
+    """Reineke stand density index: trees per hectare ``tph`` at quadratic mean diameter ``qmd_cm``,
+    expressed at the 25.4 cm reference: SDI = TPH (QMD / 25.4)^1.605."""
+    return float(tph) * (float(qmd_cm) / 25.4) ** 1.605
+
+
+def stand_level_db(sdi: float, qmd_cm: float = 25.4, ref_tph: float = 400.0) -> float:
+    """Level (dB) of a stand's wind-in-the-crowns noise against a stand of ``ref_tph`` trees per hectare:
+    the crowns are independent sources, so their powers add: 10 log10(TPH / ref), TPH = SDI / (QMD / 25.4)^1.605."""
+    return 10.0 * math.log10(max(float(sdi) / (float(qmd_cm) / 25.4) ** 1.605, 1e-9) / ref_tph)
+
+
+def _fft_conv(a, b):
+    m = len(a) + len(b) - 1
+    k = 1 << (m - 1).bit_length()
+    return np.fft.irfft(np.fft.rfft(a, k) * np.fft.rfft(b, k), k)[:m]
+
+
+def diffuse_field(sources, rng: np.random.Generator, *, n_waves: int = 8, width: float = 1.0,
+                  t60: float = 0.0, wet: float = 0.5) -> np.ndarray:
+    """Ambient sources as a diffuse field, stereo (n, 2) at 48 kHz: each mono source is split into ``n_waves``
+    decorrelated copies (random-phase all-pass, 1024 taps) arriving from azimuths uniform in +-90 x ``width``
+    degrees, panned equal-power, summed at 1/sqrt(n_waves) so the power is kept. ``t60`` > 0 adds a
+    reverberant tail: independent exponentially decaying noise per channel, exp(-6.91 t / t60), mixed at ``wet``."""
+    srcs = [np.asarray(s, float).mean(axis=1) if np.ndim(s) == 2 else np.asarray(s, float) for s in sources]
+    n = max(len(s) for s in srcs)
+    y = np.zeros((n + 1024, 2))
+    k = max(int(n_waves), 1)
+    for s in srcs:
+        for _ in range(k):
+            ph = rng.uniform(-np.pi, np.pi, 513)
+            ph[0] = ph[-1] = 0.0
+            h = np.fft.irfft(np.exp(1j * ph), 1024)
+            x = _fft_conv(s, h)
+            th = np.radians(rng.uniform(-90.0, 90.0) * float(np.clip(width, 0.0, 1.0)))
+            a = 0.25 * np.pi * (1.0 + th / (0.5 * np.pi))
+            y[:len(x), 0] += x * np.cos(a) / math.sqrt(k)
+            y[:len(x), 1] += x * np.sin(a) / math.sqrt(k)
+    y = y[:n]
+    if t60 > 0:
+        L = seconds(t60)
+        t = np.arange(L) / SR
+        dry_rms = _rms(y)
+        for ch in (0, 1):
+            ir = rng.standard_normal(L) * np.exp(-6.91 * t / t60)
+            r = _fft_conv(y[:, ch], ir)[:n]
+            y[:, ch] = (1.0 - wet) * y[:, ch] + wet * r / (_rms(r) + 1e-12) * dry_rms
+    return y
 
 
 if __name__ == "__main__":

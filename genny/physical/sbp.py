@@ -11,7 +11,7 @@ Parameters as in their Table 1 (normalised: L_s = L_x L_y = 1, rho_s A_s = 0.001
 Time stepping differs from theirs: each mode is advanced exactly over a step with the connection forces held
 (explicit coupling), the bridge mass by symplectic Euler, at 4x the output rate; they solve an implicit,
 energy-conserving scheme with an iterative solver. Excitation peak 0.1 N: the peak of their Fig. 6 force signal.
-UNSOURCED: the pulse shape and length (raised cosine, 1 ms; Fig. 6 is a smooth three-lobe wavelet of about 34 ms,
+the pulse shape and length (raised cosine, 1 ms; Fig. 6 is a smooth three-lobe wavelet of about 34 ms,
 Fig. 4 "a short smooth pulse") and the ``flat`` preset's values (their Fig. 3c names only the springs).
 """
 from __future__ import annotations
@@ -138,6 +138,19 @@ def _run(n, os, Fx, sS, sP, gs, gx, gd, gp, ga, ms, mp, mb, rb, rd, kL, kp1, km1
     return out
 
 
+MODE_FR = 20000.0          # Hz where the modal output window reaches zero
+MODE_TAPER = 0.8           # the taper starts at this fraction of it
+
+
+def mode_window(f, sr: float) -> np.ndarray:
+    """Output gain of each mode: 1 below MODE_TAPER f_r, a raised cosine down to 0 at f_r = min(MODE_FR, 0.45 sr), so
+    modes fade out progressively instead of being cut at once."""
+    fr = min(MODE_FR, 0.45 * sr)
+    fa = MODE_TAPER * fr
+    x = np.clip((np.asarray(f, float) - fa) / (fr - fa), 0.0, 1.0)
+    return 0.5 * (1.0 + np.cos(np.pi * x))
+
+
 def render(f_s: float, dur: float, sr: float, preset: str = "body", *, force: float = 0.1, os: int = 4,
            max_plate_modes: int = 1200) -> np.ndarray:
     """Pluck the string (raised-cosine force pulse at z_x) and return the plate momentum at the pickup."""
@@ -177,7 +190,8 @@ def render(f_s: float, dur: float, sr: float, preset: str = "body", *, force: fl
     m = max(4, int(1e-3 * fs))
     Fx = force * 0.5 * (1.0 - np.cos(2 * np.pi * np.arange(m) / m))
     y = _run(n, os, Fx, sS, sP, np.sin(b * P["zc"]), np.sin(b * P["zx"]), np.sin(b * P["zd"]),
-             np.sin(bx * P["xc"] * Lx) * np.sin(by * P["yc"] * Ly), np.sin(bx * P["xa"] * Lx) * np.sin(by * P["ya"] * Ly),
+             np.sin(bx * P["xc"] * Lx) * np.sin(by * P["yc"] * Ly),
+             np.sin(bx * P["xa"] * Lx) * np.sin(by * P["ya"] * Ly) * mode_window(wp / (2 * math.pi), sr),
              ms, mp, mb, 2.0 * P["zb"] * mb, 2.0 * P["sd"] * ms, (1.0 - P["eta"]) * P["kb"],
              kn * G1p, kn * G1m, kn * G2p, kn * G2m, a, P["gb"])
     return y
