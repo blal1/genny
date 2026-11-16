@@ -118,15 +118,13 @@ def dx7_rate_db_per_s(q):
 
 
 def dx7_key_scale(note, bp, ld, rd, lc, rc):
-    """Keyboard level scaling in 0.75 dB units: breakpoint bp 0..99 is the note bp + 21 (39 = C3 = MIDI 60); groups of 3 semitones;
-    curves 0 -LIN, 1 -EXP, 2 +EXP, 3 +LIN."""
-    d = int(note) - (int(bp) + 21)
-    if d == 0:
-        return 0
-    depth, curve = (rd, rc) if d > 0 else (ld, lc)
-    g = (abs(d) + 2) // 3
-    raw = g if curve in (0, 3) else EXP_SCALE[min(g, 32)]
-    s = (raw * int(depth) * 329) >> 12
+    """Keyboard level scaling in 0.75 dB units: offset = note - bp - 17, groups of 3 semitones ((offset + 1) // 3 to the right,
+    (1 - offset) // 3 to the left); curves 0 -LIN, 1 -EXP, 2 +EXP, 3 +LIN; the exponential table is read with a shift of 15, the
+    linear one of 12."""
+    d = int(note) - int(bp) - 17
+    depth, curve = (rd, rc) if d >= 0 else (ld, lc)
+    g = (d + 1) // 3 if d >= 0 else (1 - d) // 3
+    s = (g * int(depth) * 329) >> 12 if curve in (0, 3) else (EXP_SCALE[min(g, 32)] * int(depth) * 329) >> 15
     return -s if curve < 2 else s
 
 

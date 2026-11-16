@@ -271,7 +271,8 @@ Examples: `examples/chiptune/nes_overworld.json`, `examples/chiptune/gb_cave.jso
   E4 / E7 waveforms (sine, ramp, square; bit 4 = no retrig), E5, E6 pattern loop, E9 retrigger, EA, EB, EC, ED, EE
   pattern delay, F. Finetune comes from the original 16 x 36 period tables (`PT_PERIODS`) and the vibrato from
   `PT_VIBRATO`; the vibrato reads its position before advancing (the first tick has no offset). `hw_limit=True` clamps the
-  period at 124 (NTSC hardware limit) instead of 113.
+  period at 123 (PAL) or 124 (NTSC), what the DMA can fetch, instead of 113 (the ProTracker slide limit); `paula` notes
+  take the same floor with `dma=True` (`paula_period(..., dma=True)`).
 - `opl2` / `opl3`: two-operator FM with the chip's log-sine and exponential tables and its accumulator (`patch` sine,
   organ, bell, bass, brass, pluck, wow4 or a dict, `fb`, `wave`, `mod_wave`, `trem`, `vib_lfo`); layer systems `opl2` and
   `opl3` (`rhythm`, `pan`).
@@ -287,8 +288,13 @@ the 8-tap `fir`, delay rounded to 16 ms; the echo only runs when `echo_ms` > 0),
 Checked against the sources (verification round): `opl2` / `opl3` / `opll` `ksl` 1 is 3 dB per octave and 2 is 1.5 dB per
 octave (they were exchanged: patches using them changed); `snes` decay has the time constant table time / 2.3 (it was
 / 4.6, twice too fast); `saa1099` noise is the 18-bit LFSR with taps 17 and 10 (periods 256 / 512 / 1024); `wonderswan`
-noise is the XNOR LFSR of the hardware taps (`WS_NOISE_TAPS`). Open: the SAA1099 frequency has a factor of 2 between the
-formula used and one reference; SNES GAIN modes are not modelled; the PPG Wave table size is unsettled.
+noise is the XNOR LFSR of the hardware taps (`WS_NOISE_TAPS`). The SAA1099 frequency `clock / 512 * 2^oct / (511 - n)` is
+confirmed (MAME's formula is the half period). `snes` takes `gain`, the VxGAIN byte (0..127 fixed level 16 N; 128 + 32 mode +
+rate: 0 linear decrease -32, 1 exponential decrease, 2 linear increase +32, 3 bent increase +32 then +8 from 0x600; the level
+starts at 0, one step per `SNES_RATE_PERIOD[rate]` samples at 32 kHz) instead of the ADSR. `sid` takes `chip`: the 8580 cutoff is
+linear to 12.5 kHz, the 6581 follows the curve of `SID_F0_6581` (220 Hz at register 0, 1.6 kHz at 768, 6 kHz at 1023, 4.6 kHz at
+1024, 18 kHz at 2047). `ppg_wave` tables are 64 waves of 64 8-bit samples (the Wave 2.2 EPROM); the oscillator sample rate is
+not published in any source found. `ondes_martenot` spans C1-C8. DX7 key scaling reads the breakpoint as `note - bp - 17`.
 
 DX7 (`synth_s`): the 32 algorithms match the published table; detune is 0.9 cent per step (fixed-frequency voices
 detune only above 7); LFO speed, delay, pitch depth and pitch envelope use the published tables. The four shipped

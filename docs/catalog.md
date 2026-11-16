@@ -2052,7 +2052,7 @@ Ocarina: round clay flute, almost a sine with a soft chiff (adventure themes, lu
 | `level3k` | `0.0` | 0..1 pulls the 2.5-3.5 kHz peak toward the level measured under the spectral maximum at forte (20 dB in general, 30-50 on low notes, 12 for a high oboe, 10 for a high violin); 0 = as voiced |
 | `valve` | `0.0` | 0..1 valve or piston click at the onset (a 20 ms noise burst around 2 kHz) |
 
-### `ondes_martenot` — synth, range C2-C7
+### `ondes_martenot` — synth, range C1-C8
 
 Ondes Martenot: the beat of two radio-frequency oscillators, a near-sine wave with its timbre switch, the ribbon's vibrato, and one of three diffusers.  *(module `instruments_extra`)*
 
@@ -2411,11 +2411,11 @@ Atari POKEY channel: an 8-bit divider that toggles (pure tone) or samples the ch
 
 ### `ppg_wave` — synth, range C2-C6
 
-PPG Wave wavetable voice: 64 waves of 128 8-bit samples read without interpolation, the wave number swept over the note (stepped, as the digital oscillator does), analogue low-pass behind.  *(module `chiptune_p2`)*
+PPG Wave wavetable voice: 64 waves of 64 8-bit samples read without interpolation, the wave number swept over the note (stepped, as the digital oscillator does), analogue low-pass behind.  *(module `chiptune_p2`)*
 
 | param | default | meaning |
 |---|---|---|
-| `table` | `'resonant'` | resonant / harmonics / pulse / formant / organ / sync, or a 64 x 128 array of -1..1 |
+| `table` | `'resonant'` | resonant / harmonics / pulse / formant / organ / sync, or a 64 x 64 array of -1..1 |
 | `pos` | `0.0` | first wave 0..63 |
 | `pos_end` | `32.0` | wave reached after `sweep_s` |
 | `sweep_s` | `0.6` | s to sweep from pos to pos_end |
@@ -2938,6 +2938,7 @@ MOS 8580 SID voice (Commodore 64): triangle, sawtooth, variable pulse or noise, 
 | `res` | `8` | filter resonance 0..15 |
 | `filter` | `'lp'` | lp / bp / hp / notch / lp+bp / bp+hp |
 | `fc_max` | `12500.0` | cutoff in Hz at register 2047: every chip lot filtered differently, so lower it for a darker chip |
+| `chip` | `'8580'` | 8580 (cutoff linear to 12.5 kHz) / 6581 (measured curve: 220 Hz floor, knee near 800 Hz, step at register 1024, 18 kHz at 2047) |
 | `arp` | `None` | driver table: semitone offsets, one per 1/60 s, cycling (a chord on one channel: [0, 4, 7]) |
 | `pitch` | `None` | driver table: semitone offsets, one per 1/60 s, the last one held (a drum: [12, 7, 3, 0]) |
 | `vib` | `0.0` | vibrato depth in semitones, applied to the timer once per 1/60 s |
@@ -3106,6 +3107,7 @@ Super Nintendo S-DSP voice: a looped BRR sample (4-bit blocks of 16 samples with
 | `echo_fb` | `0.4` | EFB: the filtered echo fed back |
 | `echo_mix` | `0.35` | EVOL: the filtered echo in the output |
 | `fir` | `'echo'` | echo / lowpass / none, or the 8 signed FIR coefficients (128 = unity) |
+| `gain` | `None` | VxGAIN byte replacing the ADSR: 0..127 fixed level (16 N / 2048); 128..255 = 128 + 32 mode + rate, mode 0 linear decrease, 1 exponential decrease, 2 linear increase, 3 bent increase (from level 0) |
 | `mode` | `'retro_stylized'` | retro_stylized = in tune and rounded / hardware_accurate = the chip's timer pitch, raw |
 | `bright` | `0.5` | retro_stylized: 0 = dull .. 0.5 = default .. 1 = unfiltered |
 | `warmth` | `0.5` | 0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB) |

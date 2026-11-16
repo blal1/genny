@@ -350,7 +350,8 @@ def fds(freq, dur, sr=DEFAULT_SR, vel=1.0, wave="sine", master=0, mod_gain=0, mo
 
 # ============================================================================ Commodore Amiga Paula
 PAULA_CLOCK = {"pal": 3546895.0, "ntsc": 3579545.0}
-PAULA_MIN_PERIOD = 113
+PAULA_MIN_PERIOD = 113                          # ProTracker slide floor (B-3), the default clamp
+PAULA_DMA_MIN = {"pal": 123, "ntsc": 124}       # shortest period the four-voice DMA can fetch
 PAULA_NAMES = ("ch1", "ch2", "ch3", "ch4")
 PAULA_SIDE = (0, 1, 1, 0)                      # channels 0 and 3 left, 1 and 2 right
 PAULA_GAIN = 0.5
@@ -367,14 +368,15 @@ PAULA_WAVES = {
 PAULA_PATCH = dict(_PATCH, volume=64, wave="saw", modulates=None, loop=True)
 
 
-def paula_period(hz: float, length: int = 32, system: str = "pal") -> int:
+def paula_period(hz: float, length: int = 32, system: str = "pal", dma: bool = False) -> int:
     """Period register, in colour clocks: one sample byte every `period` cycles, so a `length`-byte cycle plays at
-    clock / (period * length)."""
-    return int(min(max(round(PAULA_CLOCK[system] / (max(hz, 1e-3) * length)), PAULA_MIN_PERIOD), 65535))
+    clock / (period * length). `dma=True` floors the period at what the DMA can fetch (123 PAL, 124 NTSC) instead of 113."""
+    pmin = PAULA_DMA_MIN[system] if dma else PAULA_MIN_PERIOD
+    return int(min(max(round(PAULA_CLOCK[system] / (max(hz, 1e-3) * length)), pmin), 65535))
 
 
-def paula_hz(hz: float, length: int = 32, system: str = "pal") -> float:
-    return PAULA_CLOCK[system] / (paula_period(hz, length, system) * length)
+def paula_hz(hz: float, length: int = 32, system: str = "pal", dma: bool = False) -> float:
+    return PAULA_CLOCK[system] / (paula_period(hz, length, system, dma) * length)
 
 
 @nb.njit(cache=True)
@@ -439,7 +441,7 @@ def render_paula(lanes, dur, sr, system="pal", filter="a500", led=False):
             mode = p.get("modulates")
             if mode not in (None, "am", "fm"):
                 raise SpecError("paula: modulates is am | fm")
-            tr = _note_track(t0, t1, hz, vel, p, clk, lambda f: paula_period(f, ln, system), rate)
+            tr = _note_track(t0, t1, hz, vel, p, clk, lambda f: paula_period(f, ln, system, bool(p.get("dma"))), rate)
             if tr is None:
                 continue
             s, per, vol = tr
@@ -520,7 +522,6 @@ PT_VIBRATO = (0, 24, 49, 74, 97, 120, 141, 161, 180, 197, 212, 224, 235, 244, 25
 _PT_BASE = PT_PERIODS[0]
 _PT_SINE = np.array(PT_VIBRATO)
 _MOD_CH = {b"M.K.": 4, b"M!K!": 4, b"FLT4": 4, b"4CHN": 4, b"6CHN": 6, b"8CHN": 8, b"FLT8": 8, b"CD81": 8, b"OKTA": 8}
-PAULA_HW_LIMIT = 124
 
 
 def _pt_table(ft):
@@ -582,11 +583,11 @@ def render_mod(src, sr=DEFAULT_SR, system="pal", seconds=None, filter="a500", le
     A volume slide, B position jump, C set volume, D pattern break, F speed / tempo, E1 / E2 fine slides, E3 glissando control,
     E4 / E7 vibrato / tremolo waveform (0 sine, 1 ramp, 2 square, +4 no retrigger), E5 finetune, E6 pattern loop, E8 pan,
     E9 retrigger, EA / EB fine volume, EC note cut, ED note delay, EE pattern delay. Finetune uses the 16 period tables; periods are
-    held between 113 and 856 by the slides, and the output period is limited to 113, or to 124 with `hw_limit` (what the four-voice
+    held between 113 and 856 by the slides, and the output period is limited to 113, or to 123 (PAL) / 124 (NTSC) with `hw_limit` (what the four-voice
     DMA of the real chip can fetch). `separation` 1 = hard left / right, 0 = mono; a 8xx / E8x channel is panned freely."""
     m = src if isinstance(src, dict) else mod_parse(src)
     clk = PAULA_CLOCK[system]
-    pmin = PAULA_HW_LIMIT if hw_limit else PAULA_MIN_PERIOD
+    pmin = PAULA_DMA_MIN[system] if hw_limit else PAULA_MIN_PERIOD
     nch, smp = m["nch"], m["samples"]
     limit = float(seconds) if seconds else 300.0
     speed, tempo = 6, 125
@@ -1252,6 +1253,36 @@ def opll(freq, dur, sr=DEFAULT_SR, vel=1.0, patch="violin", volume=15, vol=None,
 SNES_RATE = 32000.0
 SNES_ATTACK_S = (4.1, 2.6, 1.5, 1.0, 0.64, 0.38, 0.26, 0.16, 0.096, 0.064, 0.040, 0.024, 0.016, 0.010, 0.006, 0.0)
 SNES_DECAY_S = (1.2, 0.74, 0.44, 0.29, 0.18, 0.11, 0.074, 0.037)
+SNES_RATE_PERIOD = (0, 2048, 1536, 1280, 1024, 768, 640, 512, 384, 320, 256, 192, 160, 128, 96, 80,
+                    64, 48, 40, 32, 24, 20, 16, 12, 10, 8, 6, 5, 4, 3, 2, 1)       # samples at 32 kHz per envelope step, by 5-bit rate
+
+
+def snes_gain_env(gain, m):
+    """The VxGAIN envelope over m samples, level / 2048: 0..127 direct (level = 16 N); 128 + 32 mode + rate with mode 0 linear
+    decrease (-32), 1 exponential decrease (-(((L - 1) >> 8) + 1)), 2 linear increase (+32), 3 bent increase (+32 below 0x600, else +8);
+    the level starts at 0 and stays within 0..0x7FF."""
+    g = int(gain) & 255
+    if not g & 128:
+        return np.full(m, (g & 127) * 16 / 2048.0)
+    p, mode = SNES_RATE_PERIOD[g & 31], (g >> 5) & 3
+    out = np.zeros(m)
+    if p == 0:
+        return out
+    lv = 0
+    for i in range(0, m, p):
+        if mode == 0:
+            lv -= 32
+        elif mode == 1:
+            lv -= ((lv - 1) >> 8) + 1
+        elif mode == 2:
+            lv += 32
+        else:
+            lv += 32 if lv < 0x600 else 8
+        lv = min(max(lv, 0), 0x7FF)
+        out[i:i + p] = lv
+    return out / 2048.0
+
+
 SNES_GAUSS_HEX = (
     "000000000000000000000000000000000000000000000000001001001001001001001001001001001002002002002002"
     "00200200300300300300300400400400400400500500500500600600600600700700700800800800900900900A00A00A"
@@ -1329,7 +1360,7 @@ def snes_gauss(frac):
 
 
 def render_snes(freq, dur, sr, wave="saw", blocks=2, gauss=True, attack=15, decay=7, sustain=7, sustain_s=0.0,
-                release_s=0.05, echo_ms=0.0, echo_fb=0.4, echo_mix=0.35, fir="echo"):
+                release_s=0.05, echo_ms=0.0, echo_fb=0.4, echo_mix=0.35, fir="echo", gain=None):
     n0 = 16 * int(np.clip(blocks, 1, 64))
     if isinstance(wave, (list, tuple, np.ndarray)):
         cyc = np.asarray(wave, float)
@@ -1356,7 +1387,9 @@ def render_snes(freq, dur, sr, wave="saw", blocks=2, gauss=True, attack=15, deca
     sl = (int(np.clip(sustain, 0, 7)) + 1) / 8.0
     d = np.maximum(t - at, 0.0)
     env = np.where(t < at, t / at, np.maximum(sl, np.exp(-d / (SNES_DECAY_S[int(np.clip(decay, 0, 7))] / 2.3))))
-    if sustain_s > 0:
+    if gain is not None:
+        env = snes_gain_env(gain, m)
+    elif sustain_s > 0:
         env = env * np.exp(-d / sustain_s)
     env = env * np.where(t > dur, np.exp(-(t - dur) / (max(release_s, 1e-3) / 4.6)), 1.0)
     y = y * env
@@ -1393,10 +1426,12 @@ def snes_echo(y, edl, efb, evol, fir="echo"):
             sustain_s=(0.0, "s the sustained level takes to fall by 1/e (0 = held)"), release_s=(0.05, "s"),
             echo_ms=(0.0, "echo delay in ms, 0 = none (rounded to EDL x 16 ms, up to 240)"), echo_fb=(0.4, "EFB: the filtered echo fed back"),
             echo_mix=(0.35, "EVOL: the filtered echo in the output"),
-            fir=("echo", "echo | lowpass | none, or the 8 signed FIR coefficients (128 = unity)"), mode=CT._MODE, bright=CT._BRIGHT)
+            fir=("echo", "echo | lowpass | none, or the 8 signed FIR coefficients (128 = unity)"),
+            gain=(None, "VxGAIN byte replacing the ADSR: 0..127 fixed level (16 N / 2048); 128..255 = 128 + 32 mode + rate, mode 0 linear decrease, 1 exponential decrease, 2 linear increase, 3 bent increase (from level 0)"),
+            mode=CT._MODE, bright=CT._BRIGHT)
 def snes(freq, dur, sr=DEFAULT_SR, vel=1.0, wave="saw", blocks=2, gauss=True, attack=15, decay=7, sustain=7, sustain_s=0.0,
-         release_s=0.05, echo_ms=0.0, echo_fb=0.4, echo_mix=0.35, fir="echo", mode="retro_stylized", bright=0.5):
-    y = render_snes(freq, dur, sr, wave, blocks, gauss, attack, decay, sustain, sustain_s, release_s, float(echo_ms), echo_fb, echo_mix, fir)
+         release_s=0.05, echo_ms=0.0, echo_fb=0.4, echo_mix=0.35, fir="echo", gain=None, mode="retro_stylized", bright=0.5):
+    y = render_snes(freq, dur, sr, wave, blocks, gauss, attack, decay, sustain, sustain_s, release_s, float(echo_ms), echo_fb, echo_mix, fir, gain)
     return _finish(y, freq, sr, vel, mode, bright, release_s, dur)
 
 

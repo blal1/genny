@@ -98,7 +98,11 @@ def test_envelope_rates_and_levels():
 
 def test_velocity_and_key_scaling():
     assert S.dx7_velocity(127, 0) == 0 and S.dx7_velocity(127, 7) > S.dx7_velocity(40, 7)
-    assert S.dx7_key_scale(60, 39, 99, 99, 0, 0) == 0
+    assert all(S.dx7_key_scale(n, 39, 99, 99, 0, 0) == 0 for n in (55, 56, 57))
+    assert S.dx7_key_scale(58, 39, 99, 99, 0, 0) == -((1 * 99 * 329) >> 12) == S.dx7_key_scale(54, 39, 99, 99, 0, 0)
+    assert S.dx7_key_scale(39 + 17 + 59, 39, 0, 99, 3, 3) == (20 * 99 * 329) >> 12
+    assert S.dx7_key_scale(39 + 17 + 59, 39, 0, 99, 2, 2) == (66 * 99 * 329) >> 15
+    assert S.dx7_key_scale(39 + 17 - 59, 39, 99, 0, 1, 1) == -((66 * 99 * 329) >> 15)
     assert S.dx7_key_scale(84, 39, 0, 99, 0, 0) < 0 < S.dx7_key_scale(84, 39, 0, 99, 3, 3)
     assert S.dx7_key_scale(36, 39, 99, 0, 2, 0) > 0
     v1 = _solo(1, kvs=7)

@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.3.1 (2026-11-17)
+
+V-C verification round (each uncertain value looked up in open sources; lines tagged `web` with URL in `research/SOURCES.md`, section
+"V-C").
+
+- **Default sound changed** - DX7 keyboard level scaling (`synth_s.dx7_key_scale`): the breakpoint is read as the published
+  implementations do (`note - bp - 17`, groups of 3 semitones, `(offset + 1) // 3` to the right and `(1 - offset) // 3` to the left; it
+  was `note - (bp + 21)`, four semitones higher), and the exponential curves use the published shift of 15 (the old code used 12, eight
+  times too strong). Voices with a key-scaling depth above 0 change; the four shipped presets are unchanged.
+- **Default sound changed** - `ppg_wave`: the table is 64 waves of 64 8-bit samples (the Wave 2.2 EPROM stores 64-sample waveforms),
+  not 128; waves carry at most 31 harmonics. A custom `table` is now 64 x 64.
+- `render_mod(hw_limit=True)` floors the period at 123 on PAL and 124 on NTSC (the DMA fetch limit, it was 124 whatever the system).
+  `paula_period` / `paula_hz` take `dma=True` for the same floor, and the `paula` patch has a `dma` key; the default floor stays at 113 (the
+  ProTracker slide limit).
+- `snes`: new `gain` (the VxGAIN byte: direct level, linear decrease, exponential decrease, linear increase, bent increase, with the
+  hardware rate table `SNES_RATE_PERIOD`) replaces the ADSR when given; `snes_gain_env`. Without `gain` the sound is unchanged.
+- `sid`: new `chip` 8580 | 6581 (layer key `chip` of the filter). The 6581 follows the published cutoff curve in Hz
+  (`SID_F0_6581`: 220 Hz floor, 1.6 kHz at register 768, 6 kHz at 1023, step down to 4.6 kHz at 1024, 18 kHz at 2047); `sid_cutoff_hz`.
+  The default 8580 (linear to 12.5 kHz) is unchanged.
+- `ondes_martenot`: range C1-C8 (seven octaves, as the instrument), it was C2-C7. Sound unchanged.
+- Checked, no change: SAA1099 frequency `clock / 512 * 2^oct / (511 - n)` (the factor 2 was a misreading of MAME's half-period comment:
+  the counter reload is a half period); SID 8580 cutoff linear to 12.5 kHz (reSID 1.0); `AMS_DB` AM depth, Trautonium formants and the
+  PPG sample rate stay unsourced (see SOURCES.md); Trautonium: four dividers, ratios 1 to 24, sawtooth-like outputs confirmed.
+
 ## 1.3.0 (2026-11-16)
 
 Catalog: 241 instruments (was 144 in 1.2.1), 64 drums (was 50), 580 sound effects (was 242), 192 effects (was 98), 15

@@ -74,7 +74,7 @@ def test_new_voices_render_and_behave():
     z = y[2000:2000 + 16384]; k = np.argmax(np.abs(np.fft.rfft(z * np.hanning(len(z)))))
     assert abs(k * 44100 / len(z) - 440.0) < 5.0
     tab = R.chiptune_p2.ppg_table("harmonics")
-    assert tab.shape == (64, 128) and np.allclose(tab * 127, np.round(tab * 127))
+    assert tab.shape == (64, 64) and np.allclose(tab * 127, np.round(tab * 127))
     assert np.abs(np.fft.rfft(tab[40])[10:30]).max() > 5 * np.abs(np.fft.rfft(tab[3])[10:30]).max()
     a = f["chamberlin"]["fn"](330.0, 12.0, 8000, 1.0)
     assert len(a) < 8.2 * 8000

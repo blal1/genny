@@ -596,7 +596,23 @@ SID_MODES = {"off": 0, "lp": 1, "bp": 2, "hp": 4, "notch": 5, "lp+bp": 3, "bp+hp
 SID_RELEASE_S = (0.006, 0.024, 0.048, 0.072, 0.114, 0.168, 0.204, 0.240, 0.300, 0.750, 1.5, 2.4, 3.0, 9.0, 15.0, 24.0)
 
 
-def render_sid(lanes, dur, sr, region="pal", cutoff=1024, res=0, mode="off", routed=(1, 2, 3), fc_max=12500.0):
+SID_F0_6581 = ((0, 220), (128, 230), (256, 250), (384, 300), (512, 420), (640, 780), (768, 1600), (832, 2300), (896, 3200), (960, 4300),
+               (992, 5000), (1008, 5400), (1016, 5700), (1023, 6000), (1024, 4600), (1032, 4800), (1056, 5300), (1088, 6000),
+               (1120, 6600), (1152, 7200), (1280, 9500), (1408, 12000), (1536, 14500), (1664, 16000), (1792, 17100), (1920, 17700),
+               (2047, 18000))      # 6581 cutoff in Hz by register: the measured curve, with the jump at 1023 / 1024
+
+
+def sid_cutoff_hz(reg, chip="8580"):
+    """Filter cutoff in Hz of the 11-bit register: the 8580 is linear to 12.5 kHz, the 6581 follows SID_F0_6581 (a 220 Hz floor, a knee
+    near 800 and a step down at the register's bit 10)."""
+    reg = np.clip(np.asarray(reg, np.float64), 0, 2047)
+    if str(chip) == "6581":
+        x, y = zip(*SID_F0_6581)
+        return np.interp(reg, x, y)
+    return 12500.0 * (reg + 1.0) / 2048.0
+
+
+def render_sid(lanes, dur, sr, region="pal", cutoff=1024, res=0, mode="off", routed=(1, 2, 3), fc_max=12500.0, chip="8580"):
     """`dur` seconds of a SID. lanes: voice name -> notes (t0, t1, hz, vel, patch). `cutoff` 0..2047 or a list of
     values, one per 1/60 s (the last one held): a filter sweep."""
     clk = SID_CLOCK[region]
@@ -631,7 +647,7 @@ def render_sid(lanes, dur, sr, region="pal", cutoff=1024, res=0, mode="off", rou
             rows.append((c1, rows[-1][1], rows[-1][2], wave, 0, *adsr, fl))
         off.append(len(rows))
     seg = np.array(rows, np.int64).reshape(-1, 10)
-    cut = (np.atleast_1d(np.asarray(cutoff, np.float64)).clip(0, 2047) + 1.0) * float(fc_max) / 12500.0 - 1.0   # chips differ by lot
+    cut = sid_cutoff_hz(np.atleast_1d(np.asarray(cutoff, np.float64)), chip) * float(fc_max) / 12500.0 * 2048.0 / 12500.0 - 1.0   # chips differ by lot
     mask = sum(1 << (int(v) - 1) for v in routed) if SID_MODES[mode] else 0
     dec = 16
     x = _sid_core(int(dur * clk / dec) + 1, dec, seg, np.array(off, np.int64), SID_RATE, SID_Q, cut, frame, int(min(max(res, 0), 15)),
@@ -651,7 +667,7 @@ def _sid_layer(layer: dict, sr: int, q: float) -> np.ndarray:
         raise SpecError(f"chip layer: sid filter mode must be one of {sorted(SID_MODES)}")
     tail = float(layer.get("tail", 0.5))
     return render_sid(lanes, end + tail, sr, region=str(layer.get("region", "pal")).lower(), cutoff=flt.get("cutoff", 1024),
-                      res=int(flt.get("res", 0)), mode=mode, routed=flt.get("voices", (1, 2, 3)), fc_max=float(flt.get("fc_max", 12500.0)))
+                      res=int(flt.get("res", 0)), mode=mode, routed=flt.get("voices", (1, 2, 3)), fc_max=float(flt.get("fc_max", 12500.0)), chip=str(flt.get("chip", "8580")))
 
 
 CT.SYSTEM_LAYERS["sid"] = _sid_layer
@@ -666,14 +682,15 @@ CT.SYSTEMS["sid"] = SID_NAMES
             cutoff=(None, "filter cutoff register 0..2047 (linear to 12.5 kHz), or a list one per 1/60 s for a sweep; null = filter off"),
             res=(8, "filter resonance 0..15"), filter=("lp", "lp | bp | hp | notch | lp+bp | bp+hp"),
             fc_max=(12500.0, "cutoff in Hz at register 2047: every chip lot filtered differently, so lower it for a darker chip"),
+            chip=("8580", "8580 (cutoff linear to 12.5 kHz) | 6581 (measured curve: 220 Hz floor, knee near 800 Hz, step at register 1024, 18 kHz at 2047)"),
             arp=(None, _H["arp"]), pitch=(None, _H["pitch"]), vib=(0.0, _H["vib"]), vib_hz=(6.0, _H["vib_hz"]), vib_delay=(0.15, _H["vib_delay"]),
             mode=CT._MODE, bright=CT._BRIGHT)
 def sid(freq, dur, sr=DEFAULT_SR, vel=1.0, wave="pulse", pw=0.5, a=0, d=9, s=0, r=4, cutoff=None, res=8, filter="lp", arp=None, pitch=None,
-        vib=0.0, vib_hz=6.0, vib_delay=0.15, mode="retro_stylized", bright=0.5, fc_max=12500.0):
+        vib=0.0, vib_hz=6.0, vib_delay=0.15, mode="retro_stylized", bright=0.5, fc_max=12500.0, chip="8580"):
     tail = min(SID_RELEASE_S[int(min(max(r, 0), 15))] + 0.02, 1.5)
     p = dict(SID_PATCH, wave=wave, pw=pw, a=a, d=d, s=s, r=r, arp=arp, pitch=pitch, vib=vib, vib_hz=vib_hz, vib_delay=vib_delay)
     y = render_sid({"voice1": [(0.0, dur, float(freq), 1.0, p)]}, dur + tail, sr, cutoff=1024 if cutoff is None else cutoff, res=res,
-                   mode="off" if cutoff is None else str(filter).lower(), routed=(1,), fc_max=fc_max)
+                   mode="off" if cutoff is None else str(filter).lower(), routed=(1,), fc_max=fc_max, chip=chip)
     y = F.dc_block(y, sr)
     if str(mode) != "hardware_accurate":
         if str(wave).lower() != "noise":

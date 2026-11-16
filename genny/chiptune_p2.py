@@ -77,11 +77,11 @@ def wonderswan(freq, dur, sr=DEFAULT_SR, vel=1.0, channel="wave", wave="saw", vo
 
 
 # ============================================================================ PPG Wave
-PPG_WAVES, PPG_LEN = 64, 128
+PPG_WAVES, PPG_LEN = 64, 64
 
 
 def _ppg_wave(kind, k):
-    h = np.arange(1, 64)
+    h = np.arange(1, PPG_LEN // 2)
     x = np.arange(PPG_LEN) / PPG_LEN
     f = k / (PPG_WAVES - 1.0)
     if kind == "resonant":
@@ -97,7 +97,7 @@ def _ppg_wave(kind, k):
         a = (np.exp(-(((h - c1) / 1.5) ** 2)) + 0.6 * np.exp(-(((h - c2) / 2.0) ** 2))) / np.sqrt(h) + 0.05 / h
     elif kind == "organ":
         bars = (1, 2, 3, 4, 6, 8)
-        a = np.zeros(63)
+        a = np.zeros(len(h))
         for b, hh in enumerate(bars):
             if (k >> b) & 1:
                 a[hh - 1] = 1.0 / np.sqrt(hh)
@@ -116,15 +116,15 @@ PPG_TABLES = ("resonant", "harmonics", "pulse", "formant", "organ", "sync")
 
 
 def ppg_table(kind="resonant"):
-    """A 64 x 128 wavetable of 8-bit values in -1..1 (steps of 1/127), each wave of the kind scaled to full range."""
+    """A 64 x 64 wavetable of 8-bit values in -1..1 (steps of 1/127), each wave of the kind scaled to full range."""
     tab = np.stack([_ppg_wave(kind, k) for k in range(PPG_WAVES)])
     tab = tab / (np.max(np.abs(tab), axis=1, keepdims=True) + 1e-12)
     return np.round(tab * 127.0) / 127.0
 
 
-@instrument("ppg_wave", "PPG Wave wavetable voice: 64 waves of 128 8-bit samples read without interpolation, the wave number swept over the note (stepped, as the digital oscillator does), analogue low-pass behind.",
+@instrument("ppg_wave", "PPG Wave wavetable voice: 64 waves of 64 8-bit samples read without interpolation, the wave number swept over the note (stepped, as the digital oscillator does), analogue low-pass behind.",
             family="synth", span=("C2", "C6"),
-            table=("resonant", "resonant | harmonics | pulse | formant | organ | sync, or a 64 x 128 array of -1..1"),
+            table=("resonant", "resonant | harmonics | pulse | formant | organ | sync, or a 64 x 64 array of -1..1"),
             pos=(0.0, "first wave 0..63"), pos_end=(32.0, "wave reached after `sweep_s`"), sweep_s=(0.6, "s to sweep from pos to pos_end"),
             smooth=(False, "interpolate between neighbouring waves (the stepped sweep is the PPG's)"),
             cutoff=(9000.0, "Hz of the analogue low-pass after the oscillator"), release=(0.15, "s"))
@@ -133,7 +133,7 @@ def ppg_wave(freq, dur, sr=DEFAULT_SR, vel=1.0, table="resonant", pos=0.0, pos_e
     from . import filters as F
     tab = ppg_table(table) if isinstance(table, str) else np.asarray(table, float)
     if tab.shape != (PPG_WAVES, PPG_LEN):
-        raise SpecError("ppg_wave: a table is 64 x 128")
+        raise SpecError("ppg_wave: a table is 64 x 64")
     n = samples(dur + release, sr)
     t = np.arange(n) / sr
     w = np.clip(pos + (pos_end - pos) * np.minimum(t / max(sweep_s, 1e-3), 1.0), 0, PPG_WAVES - 1)

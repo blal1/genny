@@ -1986,12 +1986,17 @@ that, and the sample-and-hold at the playback rate, is the sound of NES samples.
 
 
 
-### `render_sid(lanes, dur, sr, region='pal', cutoff=1024, res=0, mode='off', routed=(1, 2, 3), fc_max=12500.0)`
+### `sid_cutoff_hz(reg, chip='8580')`
+
+Filter cutoff in Hz of the 11-bit register: the 8580 is linear to 12.5 kHz, the 6581 follows SID_F0_6581 (a 220 Hz floor, a knee
+near 800 and a step down at the register's bit 10).
+
+### `render_sid(lanes, dur, sr, region='pal', cutoff=1024, res=0, mode='off', routed=(1, 2, 3), fc_max=12500.0, chip='8580')`
 
 `dur` seconds of a SID. lanes: voice name -> notes (t0, t1, hz, vel, patch). `cutoff` 0..2047 or a list of
 values, one per 1/60 s (the last one held): a filter sweep.
 
-### `sid(freq, dur, sr=44100, vel=1.0, wave='pulse', pw=0.5, a=0, d=9, s=0, r=4, cutoff=None, res=8, filter='lp', arp=None, pitch=None, vib=0.0, vib_hz=6.0, vib_delay=0.15, mode='retro_stylized', bright=0.5, fc_max=12500.0)`
+### `sid(freq, dur, sr=44100, vel=1.0, wave='pulse', pw=0.5, a=0, d=9, s=0, r=4, cutoff=None, res=8, filter='lp', arp=None, pitch=None, vib=0.0, vib_hz=6.0, vib_delay=0.15, mode='retro_stylized', bright=0.5, fc_max=12500.0, chip='8580')`
 
 
 
@@ -2071,7 +2076,7 @@ Registers
 
 ### `ppg_table(kind='resonant')`
 
-A 64 x 128 wavetable of 8-bit values in -1..1 (steps of 1/127), each wave of the kind scaled to full range.
+A 64 x 64 wavetable of 8-bit values in -1..1 (steps of 1/127), each wave of the kind scaled to full range.
 
 ### `ppg_wave(freq, dur, sr=44100, vel=1.0, table='resonant', pos=0.0, pos_end=32.0, sweep_s=0.6, smooth=False, cutoff=9000.0, release=0.15)`
 
@@ -2221,12 +2226,12 @@ codes (0, +1, +2, +4, reset, -4, -2, -1) steps a 7-bit counter at `mod_hz` cycle
 
 
 
-### `paula_period(hz: 'float', length: 'int' = 32, system: 'str' = 'pal') -> 'int'`
+### `paula_period(hz: 'float', length: 'int' = 32, system: 'str' = 'pal', dma: 'bool' = False) -> 'int'`
 
 Period register, in colour clocks: one sample byte every `period` cycles, so a `length`-byte cycle plays at
-clock / (period * length).
+clock / (period * length). `dma=True` floors the period at what the DMA can fetch (123 PAL, 124 NTSC) instead of 113.
 
-### `paula_hz(hz: 'float', length: 'int' = 32, system: 'str' = 'pal') -> 'float'`
+### `paula_hz(hz: 'float', length: 'int' = 32, system: 'str' = 'pal', dma: 'bool' = False) -> 'float'`
 
 
 
@@ -2256,7 +2261,7 @@ slides, 3 tone portamento, 4 vibrato, 5 and 6 (portamento / vibrato with volume 
 A volume slide, B position jump, C set volume, D pattern break, F speed / tempo, E1 / E2 fine slides, E3 glissando control,
 E4 / E7 vibrato / tremolo waveform (0 sine, 1 ramp, 2 square, +4 no retrigger), E5 finetune, E6 pattern loop, E8 pan,
 E9 retrigger, EA / EB fine volume, EC note cut, ED note delay, EE pattern delay. Finetune uses the 16 period tables; periods are
-held between 113 and 856 by the slides, and the output period is limited to 113, or to 124 with `hw_limit` (what the four-voice
+held between 113 and 856 by the slides, and the output period is limited to 113, or to 123 (PAL) / 124 (NTSC) with `hw_limit` (what the four-voice
 DMA of the real chip can fetch). `separation` 1 = hard left / right, 0 = mono; a 8xx / E8x channel is panned freely.
 
 ### `opl_note(hz: 'float')`
@@ -2290,6 +2295,12 @@ rectify bits and the feedback, bytes 4-7 the attack-decay and sustain-release pa
 
 
 
+### `snes_gain_env(gain, m)`
+
+The VxGAIN envelope over m samples, level / 2048: 0..127 direct (level = 16 N); 128 + 32 mode + rate with mode 0 linear
+decrease (-32), 1 exponential decrease (-(((L - 1) >> 8) + 1)), 2 linear increase (+32), 3 bent increase (+32 below 0x600, else +8);
+the level starts at 0 and stays within 0..0x7FF.
+
 ### `brr_predict(filt, p1, p2)`
 
 
@@ -2308,7 +2319,7 @@ BRR blocks back to samples (full scale 2.0 = 16384): (nibble << range) >> 1 plus
 Four interpolation taps (oldest, older, old, newest sample) for a fractional position 0..1, read from the S-DSP's 512-entry
 table at index int(frac * 256) and normalised to sum 1 (the table's four values sum to 2047..2049).
 
-### `render_snes(freq, dur, sr, wave='saw', blocks=2, gauss=True, attack=15, decay=7, sustain=7, sustain_s=0.0, release_s=0.05, echo_ms=0.0, echo_fb=0.4, echo_mix=0.35, fir='echo')`
+### `render_snes(freq, dur, sr, wave='saw', blocks=2, gauss=True, attack=15, decay=7, sustain=7, sustain_s=0.0, release_s=0.05, echo_ms=0.0, echo_fb=0.4, echo_mix=0.35, fir='echo', gain=None)`
 
 
 
@@ -2318,7 +2329,7 @@ The S-DSP echo: a ring buffer of EDL x 16 ms (512 samples a step) read, filtered
 a name of SNES_FIR or eight values) and written back as the input plus the FIR output x `efb`; the output is the input plus the FIR
 output x `evol`.
 
-### `snes(freq, dur, sr=44100, vel=1.0, wave='saw', blocks=2, gauss=True, attack=15, decay=7, sustain=7, sustain_s=0.0, release_s=0.05, echo_ms=0.0, echo_fb=0.4, echo_mix=0.35, fir='echo', mode='retro_stylized', bright=0.5)`
+### `snes(freq, dur, sr=44100, vel=1.0, wave='saw', blocks=2, gauss=True, attack=15, decay=7, sustain=7, sustain_s=0.0, release_s=0.05, echo_ms=0.0, echo_fb=0.4, echo_mix=0.35, fir='echo', gain=None, mode='retro_stylized', bright=0.5)`
 
 
 
@@ -16275,7 +16286,7 @@ Inappropriate argument value (of correct type).
 Base class for warnings generated by user code.
 
 
-### `F(type: Any = <class 'float'>, lo: float | None = None, hi: float | None = None, unit: str = '', required: bool | None = None, default: Any = <object object at 0x000001A4DD6169C0>, choices: Any = None, ref: str | None = None, items: Any = None, of: Any = None, max_len: int = 64)`
+### `F(type: Any = <class 'float'>, lo: float | None = None, hi: float | None = None, unit: str = '', required: bool | None = None, default: Any = <object object at 0x000001EEA2E169C0>, choices: Any = None, ref: str | None = None, items: Any = None, of: Any = None, max_len: int = 64)`
 
 
 
@@ -18432,8 +18443,9 @@ Decay speed of a 0..63 quantized rate in dB / s: 0.2819 2^(q div 4) (1 + 0.25 (q
 
 ### `dx7_key_scale(note, bp, ld, rd, lc, rc)`
 
-Keyboard level scaling in 0.75 dB units: breakpoint bp 0..99 is the note bp + 21 (39 = C3 = MIDI 60); groups of 3 semitones;
-curves 0 -LIN, 1 -EXP, 2 +EXP, 3 +LIN.
+Keyboard level scaling in 0.75 dB units: offset = note - bp - 17, groups of 3 semitones ((offset + 1) // 3 to the right,
+(1 - offset) // 3 to the left); curves 0 -LIN, 1 -EXP, 2 +EXP, 3 +LIN; the exponential table is read with a shift of 15, the
+linear one of 12.
 
 ### `dx7_velocity(vel, sens)`
 

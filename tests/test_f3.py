@@ -233,12 +233,12 @@ def test_mod_hw_limit():
     rows = [(1, 113, 0, 0)] * 3
     a = R.render_mod(_song(rows), SR, filter="none")[:, 0]
     b = R.render_mod(_song(rows), SR, filter="none", hw_limit=True)[:, 0]
-    assert abs(_tick_period(a, 2) - 113) < 1.0 and abs(_tick_period(b, 2) - 124) < 1.0
+    assert abs(_tick_period(a, 2) - 113) < 1.0 and abs(_tick_period(b, 2) - 123) < 1.0
     sl = [(1, 428, 0, 0), (0, 0, 1, 0xFF)] + [(0, 0, 1, 0xFF)] * 6
     a = R.render_mod(_song(sl), SR, filter="none")[:, 0]
     b = R.render_mod(_song(sl), SR, filter="none", hw_limit=True)[:, 0]
     k = 7 * 6 + 2
-    assert abs(_tick_period(a, k) - 113) < 1.0 and abs(_tick_period(b, k) - 124) < 1.0
+    assert abs(_tick_period(a, k) - 113) < 1.0 and abs(_tick_period(b, k) - 123) < 1.0
 
 
 def _vib_dev(y, rows, first_k):

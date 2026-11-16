@@ -489,7 +489,7 @@ MARTENOT_WAVES = {"sine": (1.0, 0.0, 0.0), "triangle": (0.2, 0.8, 0.0), "square"
 
 
 @instrument("ondes_martenot", "Ondes Martenot: the beat of two radio-frequency oscillators, a near-sine wave with its timbre switch, the ribbon's vibrato, and one of three diffusers.",
-            family="synth", span=("C2", "C7"),
+            family="synth", span=("C1", "C8"),
             wave=("sine", "sine | triangle | square | saw: the timbre selector"),
             diffuser=("principal", "principal (the plain speaker) | palme (a lyre-shaped set of strings ringing in sympathy) | metallique (a gong behind the cone)"),
             vib=(0.25, "ribbon vibrato depth in semitones"), vib_hz=(5.5, "Hz"))
