@@ -370,13 +370,21 @@ def woodblock(sr=DEFAULT_SR, vel=1.0, tune=1100):
     return y * .8
 
 # v0.7 physical membrane / plate migration ------------------------------------
+TOM_AIR = (1.0, 2.16, 3.14, 3.58, 4.02, 4.65, 4.78)
+
+
 @drum("tom", "Physical circular-membrane tom with air-cavity coupling.", tune=(120,"Hz"), decay=(0.35,"s"),
       under=(0.0, "0..1 level of a second mic under the drum (head seen from below: inverted, later, darker)"),
-      flip=(0, "1 = bottom mic polarity flipped back (full lows); 0 = raw, lows partly cancel"))
-def tom(sr=DEFAULT_SR, vel=1.0, tune=120, decay=.35, under=0.0, flip=0):
+      flip=(0, "1 = bottom mic polarity flipped back (full lows); 0 = raw, lows partly cancel"),
+      head=("ideal", "ideal: membrane in vacuum | air: measured 30 cm tom, modes 1 : 2.16 : 3.14 : 3.58 : 4.02 : 4.65 : 4.78 (the air lowers the first mode)"),
+      bend=(0.06, "fraction the pitch starts sharp on a hard hit (0.08 plain head, 0.22 head with a Mylar ring)"))
+def tom(sr=DEFAULT_SR, vel=1.0, tune=120, decay=.35, under=0.0, flip=0, head="ideal", bend=0.06):
     from .physics import MembraneDrum
     from .percussion import double_mic
-    y = MembraneDrum(float(tune), .16, damping=1.15/max(float(decay),.08), air_coupling=.42).strike(
+    if head not in ("ideal", "air"):
+        raise ValueError("tom: head ideal|air")
+    y = MembraneDrum(float(tune), .16, damping=1.15/max(float(decay),.08), air_coupling=.42, bend=float(np.clip(bend, 0.0, 0.5)),
+                     ratios=TOM_AIR if head == "air" else ()).strike(
         max(.25,float(decay)+.12),velocity=vel,position=.26,stroke="tone",sr=sr,seed=8)
     return double_mic(y, sr, under, bool(flip))
 
@@ -388,10 +396,19 @@ def taiko(sr=DEFAULT_SR, vel=1.0, tune=60, decay=.9):
         max(.55,float(decay)+.25),velocity=vel,position=.12,stroke="bass",sr=sr,seed=15)
 
 
-@drum("crash", "Physical nonlinear cymbal plate / crash.", decay=(1.5,"s"))
-def crash(sr=DEFAULT_SR, vel=1.0, decay=1.5):
+CRASH_HZ = (41.0, 81.2, 133.5, 191.9, 255.3, 365.0, 438.1, 456.1, 514.2, 536.0, 584.0, 640.1, 662.7, 682.4, 688.0, 731.8, 793.1, 846.1,
+            868.0, 912.9, 969.7, 1044.2, 1135.1, 1199.0, 1248.0, 1315.0, 1376.0, 1428.0, 1489.0, 1543.0, 1611.0, 1660.0, 1756.0, 1837.0,
+            1894.0, 1969.0, 2035.0, 2104.0, 2178.0, 2271.0, 2352.0, 2474.0, 2568.0, 2656.0, 2744.0, 2862.0, 2979.0, 3095.0, 3189.0,
+            3297.0, 3421.0, 3551.0, 3687.0, 3826.0, 4004.0, 4184.0, 4366.0, 4517.0, 4734.0, 4928.0, 5121.0, 5315.0, 5512.0, 5741.0, 5933.0)
+
+
+@drum("crash", "Physical nonlinear cymbal plate / crash.", decay=(1.5,"s"),
+      series=("measured", "measured: the modes of a 46 cm crash (41 Hz ... 1.1 kHz, then the Chladni law) | reduced: the older idealised series"))
+def crash(sr=DEFAULT_SR, vel=1.0, decay=1.5, series="measured"):
     from .physics import CymbalPlate
-    return CymbalPlate(205,1.0,damping=1.0,profile="crash").strike(max(.4,float(decay)),velocity=vel,sr=sr,seed=10)
+    if series not in ("measured", "reduced"):
+        raise ValueError("crash: series measured|reduced")
+    return CymbalPlate(205,1.0,damping=1.0,profile="crash",modes_hz=CRASH_HZ if series == "measured" else ()).strike(max(.4,float(decay)),velocity=vel,sr=sr,seed=10)
 
 
 @drum("ride", "Physical nonlinear ride cymbal with bell coupling.", decay=(1.0,"s"))
@@ -400,16 +417,35 @@ def ride(sr=DEFAULT_SR, vel=1.0, decay=1.0):
     return CymbalPlate(235,1.12,damping=.82,profile="ride").strike(max(.4,float(decay)),velocity=vel,bell=.65,sr=sr,seed=12)
 
 
-@drum("hihat", "Physical short-decay cymbal pair model.", decay=(0.08,"s"), tone=(8000,"legacy brightness Hz"))
-def hihat(sr=DEFAULT_SR, vel=1.0, decay=.08, tone=8000):
+FARNELL_HAT = (7435.29, 3717.65, (8262.75, 583.137, 1433.73), 0.23, 0.05, 0.2)  # carrier Hz, index Hz, modulators Hz, gain, closed s, open s
+
+
+def farnell_hat(sr=DEFAULT_SR, vel=1.0, length=FARNELL_HAT[4]):
+    """FM hi-hat: carrier frequency fc + I (sum of three sines), linear decay 1 -> 0 over ``length``."""
+    fc, idx, mods, g, _, _ = FARNELL_HAT
+    t = np.arange(samples(length, sr)) / sr
+    inst = fc + idx * sum(np.cos(2.0 * np.pi * m * t) for m in mods)
+    y = np.cos(2.0 * np.pi * np.cumsum(inst) / sr)
+    return g * (1.0 - t / length) * y * (0.6 + 0.4 * vel)
+
+
+_HAT_MODEL = ("physical", "physical | farnell (three-sine FM spectrum, 50 ms closed / 200 ms open linear decay; ignores decay/tone)")
+
+
+@drum("hihat", "Physical short-decay cymbal pair model.", decay=(0.08,"s"), tone=(8000,"legacy brightness Hz"), model=_HAT_MODEL)
+def hihat(sr=DEFAULT_SR, vel=1.0, decay=.08, tone=8000, model="physical"):
+    if str(model) == "farnell":
+        return farnell_hat(sr, vel, FARNELL_HAT[4])
     from .physics import CymbalPlate
     fund=230+120*np.clip((float(tone)-6000)/5000,0,1)
     return CymbalPlate(fund,.65,damping=max(.8,.10/max(float(decay),.025)),profile="hihat").strike(
         max(.055,float(decay)+.02),velocity=vel,sr=sr,seed=6)
 
 
-@drum("openhat", "Physical open hi-hat / cymbal pair.", decay=(0.4,"s"))
-def openhat(sr=DEFAULT_SR, vel=1.0, decay=.4):
+@drum("openhat", "Physical open hi-hat / cymbal pair.", decay=(0.4,"s"), model=_HAT_MODEL)
+def openhat(sr=DEFAULT_SR, vel=1.0, decay=.4, model="physical"):
+    if str(model) == "farnell":
+        return farnell_hat(sr, vel, FARNELL_HAT[5])
     from .physics import CymbalPlate
     return CymbalPlate(245,.68,damping=.85,profile="hihat").strike(max(.18,float(decay)),velocity=vel,sr=sr,seed=7)
 
@@ -484,3 +520,17 @@ def tom808(sr=DEFAULT_SR, vel=1.0, size="mid", knob=0.5, noise=0.3, dur=0.8):
       size=("mid", "low | mid | high"), knob=(0.5, "tuning knob 0..1"), dur=(0.5, "s"))
 def conga808(sr=DEFAULT_SR, vel=1.0, size="mid", knob=0.5, dur=0.5):
     return _block_voice(sr, vel, (size if size in ("low", "mid", "high") else "mid") + "_conga", knob, dur, 0.0)
+
+
+@drum("cymbal808", "TR-808 cymbal: the six square oscillators of the hi-hat through a band that opens lower, ringing for a second or more.",
+      decay=(1.6, "s to -60 dB"), tone=(0.5, "0..1 weight of the 3.5 kHz band against the 7 kHz one"),
+      detune=(0.0, "semitones on the 540 and 800 Hz oscillators"))
+def cymbal808(sr=DEFAULT_SR, vel=1.0, decay=1.6, tone=0.5, detune=0.0):
+    d = float(np.clip(decay, 0.2, 6.0))
+    n = samples(d + 0.01, sr)
+    k = 2.0 ** (float(detune) / 12.0)
+    x = sum(O.pulse(f, n, sr, 0.4798) for f in (205.3, 304.4, 369.6, 522.7, 540.0 * k, 800.0 * k)) / 6.0
+    t = float(np.clip(tone, 0.0, 1.0))
+    y = t * F.bandpass(x, 3500.0, sr, 1.0) + (1.0 - t) * F.highpass(x, 7000.0, sr)
+    e = np.exp(-6.9 * np.arange(n) / (d * sr)) * (1.0 - np.exp(-np.arange(n) / (0.004 * sr)))
+    return 2.5 * y * e * (0.5 + 0.5 * vel)

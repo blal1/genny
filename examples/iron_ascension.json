@@ -1,0 +1,244 @@
+{
+  "name": "iron_ascension",
+  "sr": 48000,
+  "bpm": 160,
+  "beats": 192,
+  "normalize": -3.0,
+  "layers": [
+    {
+      "type": "seq",
+      "inst": "muted_guitar",
+      "at": 0,
+      "steps": "E2:0.5 E2:0.5 E2:0.5 E2:0.5 E2:0.5 E2:0.5 E2:0.5 E2:0.5",
+      "repeat": 4,
+      "gain": 0.7,
+      "fx": [
+        {"type": "distortion", "drive": 6.0, "tone": 3500, "mix": 0.9},
+        {"type": "lowpass", "cutoff": 5000}
+      ]
+    },
+    {
+      "type": "seq",
+      "inst": "muted_guitar",
+      "at": 16,
+      "steps": "E2:0.25 E2:0.25 E2:0.5 E2:0.25 E2:0.25 E2:0.5 E2:0.25 E2:0.25 E2:0.5 E2:0.25 E2:0.25 E2:0.5",
+      "repeat": 8,
+      "gain": 0.85,
+      "fx": [
+        {"type": "distortion", "drive": 8.0, "tone": 3200, "mix": 0.95},
+        {"type": "eq", "freq": 800, "gain": 2.0, "q": 1.2},
+        {"type": "lowpass", "cutoff": 5500}
+      ]
+    },
+    {
+      "type": "seq",
+      "inst": "dist_guitar",
+      "at": 48,
+      "steps": "[E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5",
+      "repeat": 2,
+      "gain": 0.7,
+      "params": {"drive": 8.0, "tone": 3400},
+      "fx": [
+        {"type": "eq", "freq": 400, "gain": -2.0, "q": 1.0},
+        {"type": "eq", "freq": 2000, "gain": 1.5, "q": 1.0}
+      ]
+    },
+    {
+      "type": "seq",
+      "inst": "muted_guitar",
+      "at": 80,
+      "steps": "E2:0.25 E2:0.25 E2:0.5 E2:0.25 E2:0.25 E2:0.5 E2:0.25 E2:0.25 E2:0.5 E2:0.25 E2:0.25 E2:0.5",
+      "repeat": 8,
+      "gain": 0.85,
+      "fx": [
+        {"type": "distortion", "drive": 8.0, "tone": 3200, "mix": 0.95},
+        {"type": "eq", "freq": 800, "gain": 2.0, "q": 1.2},
+        {"type": "lowpass", "cutoff": 5500}
+      ]
+    },
+    {
+      "type": "seq",
+      "inst": "dist_guitar",
+      "at": 80,
+      "steps": "E4:0.5 G4:0.5 A4:0.5 B4:0.5 D5:0.5 B4:0.5 A4:0.5 G4:0.5 | E4:0.5 G4:0.5 A4:0.5 B4:0.5 D5:0.5 E5:0.5 D5:0.5 B4:0.5 | E5:0.5 D5:0.5 B4:0.5 A4:0.5 G4:0.5 A4:0.5 B4:0.5 D5:0.5 | E5:1.0 D5:1.0 B4:1.0 A4:1.0",
+      "repeat": 2,
+      "gain": 0.4,
+      "params": {"drive": 6.0, "tone": 3000}
+    },
+    {
+      "type": "seq",
+      "inst": "dist_guitar",
+      "at": 112,
+      "steps": "[E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5",
+      "repeat": 3,
+      "gain": 0.5,
+      "params": {"drive": 8.0, "tone": 3400},
+      "fx": [
+        {"type": "eq", "freq": 400, "gain": -3.0, "q": 1.0}
+      ]
+    },
+    {
+      "type": "seq",
+      "inst": "dist_guitar",
+      "at": 112,
+      "steps": "E4:0.5 G4:0.5 B4:0.5 E5:0.5 D5:0.5 B4:0.5 G4:0.5 E4:0.5 | C4:0.5 E4:0.5 G4:0.5 C5:0.5 B4:0.5 G4:0.5 E4:0.5 C4:0.5 | G4:0.5 B4:0.5 D5:0.5 G5:0.5 F#5:0.5 D5:0.5 B4:0.5 G4:0.5 | D4:0.5 F#4:0.5 A4:0.5 D5:0.5 C5:0.5 A4:0.5 F#4:0.5 D4:0.5 | E5:0.5 F#5:0.5 G5:0.5 A5:0.5 B5:0.5 A5:0.5 G5:0.5 F#5:0.5 | E5:0.5 D5:0.5 C5:0.5 B4:0.5 A4:0.5 B4:0.5 C5:0.5 D5:0.5 | B5:0.5 A5:0.5 G5:0.5 F#5:0.5 G5:0.5 A5:0.5 B5:0.5 D6:0.5 | A5:0.5 G5:0.5 F#5:0.5 E5:0.5 D5:0.5 C5:0.5 A4:0.5 F#4:0.5 | E5:1.0 G5:1.0 B5:1.0 E6:1.0 | C6:1.0 B5:1.0 A5:1.0 G5:1.0 | G5:1.0 A5:1.0 B5:1.0 D6:1.0 | E6:2.0 D6:1.0 A5:1.0",
+      "gain": 0.8,
+      "params": {"drive": 9.0, "tone": 3800},
+      "fx": [
+        {"type": "eq", "freq": 2500, "gain": 2.0, "q": 1.0},
+        {"type": "delay", "time": 0.1875, "feedback": 0.25, "mix": 0.15, "damp": 0.4}
+      ]
+    },
+    {
+      "type": "seq",
+      "inst": "dist_guitar",
+      "at": 160,
+      "steps": "[E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [E2,B2,E3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [C2,G2,C3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [G2,D3,G3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5 [D2,A2,D3]:0.5",
+      "repeat": 2,
+      "gain": 0.75,
+      "params": {"drive": 8.0, "tone": 3400}
+    },
+    {
+      "type": "compose",
+      "role": "bass",
+      "inst": "finger_bass",
+      "progression": "i VI III VII",
+      "key": "E",
+      "scale": "minor",
+      "bars": 48,
+      "pattern": "root_fifth",
+      "seed": 42,
+      "gain": 0.6,
+      "fx": [
+        {"type": "overdrive", "drive": 3.0, "shape": "tube", "tone": 2500, "mix": 0.7},
+        {"type": "eq", "freq": 100, "gain": 3.0, "q": 1.0}
+      ]
+    },
+    {
+      "type": "compose",
+      "role": "drums",
+      "at": 0,
+      "kit": {
+        "kick": "x---x---x---x---",
+        "hihat": "x-x-x-x-x-x-x-x-"
+      },
+      "bars": 4,
+      "seed": 42,
+      "gain": 0.5,
+      "humanize": 0.1
+    },
+    {
+      "type": "compose",
+      "role": "drums",
+      "at": 16,
+      "kit": {
+        "kick": "x-x-x-x-x-x-x-x-",
+        "snare": "----x-------x---",
+        "hihat": "xxxxxxxxxxxxxxxx"
+      },
+      "bars": 8,
+      "fill_every": 8,
+      "seed": 42,
+      "gain": 0.65,
+      "humanize": 0.15
+    },
+    {
+      "type": "compose",
+      "role": "drums",
+      "at": 48,
+      "kit": {
+        "kick": "xxxxxxxxxxxxxxxx",
+        "snare": "----x-------x---",
+        "hihat": "x-x-x-x-x-x-x-x-"
+      },
+      "bars": 8,
+      "fill_every": 4,
+      "seed": 42,
+      "gain": 0.7,
+      "humanize": 0.15
+    },
+    {
+      "type": "compose",
+      "role": "drums",
+      "at": 80,
+      "kit": {
+        "kick": "x-x-x-x-x-x-x-x-",
+        "snare": "----x-------x---",
+        "hihat": "xxxxxxxxxxxxxxxx"
+      },
+      "bars": 8,
+      "fill_every": 8,
+      "seed": 42,
+      "gain": 0.65,
+      "humanize": 0.15
+    },
+    {
+      "type": "compose",
+      "role": "drums",
+      "at": 112,
+      "kit": {
+        "kick": "xxxxxxxxxxxxxxxx",
+        "snare": "----x-------x---",
+        "hihat": "x-x-x-x-x-x-x-x-"
+      },
+      "bars": 12,
+      "fill_every": 4,
+      "seed": 42,
+      "gain": 0.7,
+      "humanize": 0.15
+    },
+    {
+      "type": "compose",
+      "role": "drums",
+      "at": 160,
+      "kit": {
+        "kick": "xxxxxxxxxxxxxxxx",
+        "snare": "----x-------x---",
+        "hihat": "x-x-x-x-x-x-x-x-"
+      },
+      "bars": 8,
+      "fill_every": 2,
+      "seed": 42,
+      "gain": 0.75,
+      "humanize": 0.15
+    },
+    {
+      "type": "seq",
+      "inst": "vocal_choir",
+      "at": 48,
+      "steps": "[E3,G3,B3]:4 [C3,E3,G3]:4 [G3,B3,D4]:4 [D3,F#3,A3]:4",
+      "repeat": 2,
+      "gain": 0.3,
+      "params": {"singers": 10, "vowel": "ah", "style": "epic", "spread": 0.8, "breath": 0.4, "vibrato": 25},
+      "fx": [
+        {"type": "reverb", "mix": 0.4, "size": 0.9, "damp": 0.4}
+      ]
+    },
+    {
+      "type": "seq",
+      "inst": "vocal_choir",
+      "at": 160,
+      "steps": "[E3,G3,B3]:4 [C3,E3,G3]:4 [G3,B3,D4]:4 [D3,F#3,A3]:4",
+      "repeat": 2,
+      "gain": 0.4,
+      "params": {"singers": 14, "vowel": "ah", "style": "epic", "spread": 0.9, "breath": 0.5, "vibrato": 30},
+      "fx": [
+        {"type": "reverb", "mix": 0.5, "size": 0.92, "damp": 0.4}
+      ]
+    },
+    {"type": "drum", "kind": "crash", "at": 0, "gain": 0.4},
+    {"type": "drum", "kind": "crash", "at": 16, "gain": 0.5},
+    {"type": "drum", "kind": "crash", "at": 48, "gain": 0.55},
+    {"type": "drum", "kind": "crash", "at": 80, "gain": 0.5},
+    {"type": "drum", "kind": "crash", "at": 112, "gain": 0.55},
+    {"type": "drum", "kind": "crash", "at": 160, "gain": 0.65}
+  ],
+  "fx": [
+    {"type": "eq", "freq": 80, "gain": 2.5, "q": 1.0},
+    {"type": "eq", "freq": 400, "gain": -1.5, "q": 1.0},
+    {"type": "eq", "freq": 2500, "gain": 1.5, "q": 1.2},
+    {"type": "compressor", "threshold": -18, "ratio": 3.5, "attack": 0.008, "release": 0.15, "makeup": 1.5},
+    {"type": "reverb", "mix": 0.15, "size": 0.7, "damp": 0.5},
+    {"type": "limiter", "ceiling": -0.8}
+  ]
+}

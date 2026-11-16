@@ -19,10 +19,16 @@ harmonics, so nothing turns piercing as it climbs.
 
 
 
-### `clav(freq, dur, sr=44100, vel=1.0, decay=0.9, bright=1.0, release_drop=1.0, flux=False, model='ks', pickup='A', magnetic=0, tone='', beat=0.0)`
+### `clav(freq, dur, sr=44100, vel=1.0, decay=0.9, bright=1.0, release_drop=1.0, flux=False, model='ks', pickup='A', magnetic=0, tone='', beat=0.0, knock=0.0)`
 
 Hohner D6: pickup comb with notches every 4.67 partials, 3-semitone drop at key-off, amplifier
 shelves -3 dB at 130 Hz and +3 dB at 4 kHz.
+
+### `clav_knock(y, sr, amount, seed)`
+
+The tangent's knock: noise decaying in CLAV_KNOCK_TAU through three modes (Q 4) drawn under a low-pass whose corner is
+drawn per note between 500 Hz and CLAV_KNOCK_MAX_HZ, added to the first CLAV_KNOCK_MS ms at ``amount`` x half the string's
+peak there.
 
 ### `clav_tone(y, sr, tone)`
 
@@ -49,7 +55,7 @@ K[n] = 10^(depth |cos(2 pi f_b n / fs)| / 20), f_b drawn in CLAV_BEAT_HZ for eac
 Tangent pulse: the fitted ramp from its rising zero to its peak, then reversed, N = fs d / v
 samples with v from 1 to 4 m/s over the velocity range.
 
-### `rhodes(freq, dur, sr=44100, vel=1.0, voicing=0.35, bell=1.0, decay=1.0, sustain=0.0, onset='hammer', tremolo=0.0, tonebar='fork', tonebar_cents=0.0, tuning_mass=0.0)`
+### `rhodes(freq, dur, sr=44100, vel=1.0, voicing=0.35, bell=1.0, decay=1.0, sustain=0.0, onset='hammer', tremolo=0.0, tonebar='fork', tonebar_cents=0.0, tuning_mass=0.0, hysteresis=0.0)`
 
 Tine: cantilever modes 1, 6.267, 17.55 (clamped-free Euler-Bernoulli; the lowest keys, without tonebar, at the
 measured 7.11 and 20.25) excited by a felt hammer at RHODES_STRIKE of the tine: each overtone's level is the mode
@@ -79,10 +85,11 @@ Tine length m: 18-157 mm over the keyboard, ~ 1 / sqrt(f) as a cantilever.
 Overtone ratios of the tine: ideal clamped-free beam above an octave over the lowest key, the measured lowest-key
 ratios at it, log-interpolated between.
 
-### `rhodes_contact_time(v: 'float') -> 'float'`
+### `rhodes_contact_time(v: 'float', mu: 'float' = 0.0) -> 'float'`
 
-Contact time s of a power-law hammer F = k x^alpha of mass m hitting at v m/s (elastic part of Hunt-Crossley):
-2 (x_m / v) sqrt(pi) Gamma(1 + 1/n) / Gamma(1/2 + 1/n), n = alpha + 1, x_m = (n m v^2 / (2 k))^(1/n).
+Contact time s of a power-law hammer F = k x^alpha (1 + mu v) of mass m hitting at v m/s. mu = 0 (elastic part
+of Hunt-Crossley): 2 (x_m / v) sqrt(pi) Gamma(1 + 1/n) / Gamma(1/2 + 1/n), n = alpha + 1,
+x_m = (n m v^2 / (2 k))^(1/n); mu > 0: the dissipative integral of ``contact.hc_contact_time``.
 
 ### `rhodes_overtones(f0: 'float', tc: 'float') -> 'tuple[float, float]'`
 
@@ -111,7 +118,7 @@ shift 0.
 
 Ripple delay ratio aimed at partial k_max: 1 / k_max when r >= 0, 1 / (2 k_max) when r < 0.
 
-### `harpsichord(freq, dur, sr=44100, vel=1.0, octave=0.3, soundboard=0.35, stops=1, lid=1.0, pluck=0.0, phantom=0.0, ripple_partial=0)`
+### `harpsichord(freq, dur, sr=44100, vel=1.0, octave=0.3, soundboard=0.35, stops=1, lid=1.0, pluck=0.0, phantom=0.0, ripple_partial=0, plectrum=0, timbre=0.0)`
 
 
 
@@ -127,16 +134,30 @@ Commuted waveguide clavichord: two coupled strings, tangent knock, key-pressure 
 
 
 
-### `church_organ(freq, dur, sr=44100, vel=1.0, sub=0.35, mixture=0.5, chiff='classic')`
+### `church_organ(freq, dur, sr=44100, vel=1.0, sub=0.35, mixture=0.5, chiff='classic', mouth=-1.0, voicing='default')`
 
 
 
-### `grey_chiff(n, sr, freq, steady_rms, length=0.03, level_db=-20.0, seed=31)`
+### `unison_strings(freq, dur, sr=44100, vel=1.0, strings=3, detune=1.6)`
+
+
+
+### `grey_chiff(n, sr, freq, steady_rms, length=0.03, level_db=-20.0, seed=31, ping=0)`
 
 Onset noise of a flue pipe: noise in the band CHIFF_BAND x f0, rising in 2 ms and dying over `length` s,
-its RMS over `length` set `level_db` under `steady_rms`.
+its RMS over `length` set `level_db` under `steady_rms`. ``ping`` = 3 or 5: instead an almost periodic burst at that
+harmonic of f0 (xylophone-like attack of a stopped pipe).
 
-### `accordion(freq, dur, sr=44100, vel=1.0, musette=9.0)`
+### `flue_harmonics(mouth: 'float' = 0.5)`
+
+Pressure amplitudes of harmonics 1-4 of an open flue pipe relative to the fundamental, for a mouth height
+from 0 (low: rich in the second harmonic) to 1 (high).
+
+### `harmonium(freq, dur, sr=44100, vel=1.0)`
+
+
+
+### `accordion(freq, dur, sr=44100, vel=1.0, musette=9.0, bend=0.0, pressure=1.0)`
 
 
 
@@ -156,7 +177,7 @@ its RMS over `length` set `level_db` under `steady_rms`.
 
 
 
-### `gamelan(freq, dur, sr=44100, vel=1.0, ombak=3.0)`
+### `gamelan(freq, dur, sr=44100, vel=1.0, ombak=3.0, bar='saron')`
 
 
 
@@ -233,11 +254,11 @@ Plucked string with the clipper inside its loop: delay, one-pole loss, cubic sof
 
 
 
-### `koto(freq, dur, sr=44100, vel=1.0, glide=0.0)`
+### `koto(freq, dur, sr=44100, vel=1.0, glide=0.0, loss='guitar')`
 
 
 
-### `sitar(freq, dur, sr=44100, vel=1.0, buzz=0.45, glide=0.0, model='waveguide')`
+### `sitar(freq, dur, sr=44100, vel=1.0, buzz=0.45, glide=0.0, model='waveguide', loss='guitar')`
 
 
 
@@ -257,15 +278,15 @@ Plucked string with the clipper inside its loop: delay, one-pole loss, cubic sof
 
 
 
-### `violin(freq, dur, sr=44100, vel=1.0, attack=0.07, vibrato=1.0, sordino=0, lifted=0, open_string=0, model='waveguide', direction=0.0)`
+### `violin(freq, dur, sr=44100, vel=1.0, attack=0.07, vibrato=1.0, sordino=0, lifted=0, open_string=0, model='waveguide', direction=0.0, torsion=0.0, wolf=0.0)`
 
 
 
-### `cello(freq, dur, sr=44100, vel=1.0, attack=0.1, vibrato=1.0, model='waveguide', sordino=0, lifted=0, open_string=0, body_am=0)`
+### `cello(freq, dur, sr=44100, vel=1.0, attack=0.1, vibrato=1.0, model='waveguide', sordino=0, lifted=0, open_string=0, body_am=0, torsion=0.0, wolf=0.0)`
 
 
 
-### `clarinet(freq, dur, sr=44100, vel=1.0, model='waveguide', embouchure=0.5, reed='guillemain', stiffening=0, lip_force=0.0, meyer=0, precursor=0.0)`
+### `clarinet(freq, dur, sr=44100, vel=1.0, model='waveguide', embouchure=0.5, reed='guillemain', stiffening=0, lip_force=0.0, meyer=0, precursor=0.0, lattice=0)`
 
 
 
@@ -291,7 +312,7 @@ vibrato rate, faded in over `onset` s.
 
 Attack time in ms, interpolated in log f over the three registers and between soft (vel 0) and dry (vel 1).
 
-### `trumpet(freq, dur, sr=44100, vel=1.0, mute=0.0, model='formant', lip_q=0.0, meyer=0, precursor=0.0, bell_up=0.0)`
+### `trumpet(freq, dur, sr=44100, vel=1.0, mute=0.0, model='formant', lip_q=0.0, meyer=0, precursor=0.0, bell_up=0.0, mute_kind='')`
 
 
 
@@ -330,11 +351,20 @@ of noise laid over the note: it passes through the pipe's odd modes and follows 
 
 
 
-### `flute(freq, dur, sr=44100, vel=1.0, breath=0.15, vibrato=0.0, flutter=0.0, noise_peaks=0.0, precursor=0.0, meyer=0, expert=0, novice=0)`
+### `flute(freq, dur, sr=44100, vel=1.0, breath=0.15, vibrato=0.0, flutter=0.0, noise_peaks=0.0, precursor=0.0, meyer=0, expert=0, novice=0, jet_peak=0.0)`
 
 It used to be a mix of three sources that did not agree: the jet model under-blown (an octave low, up to
 80 cents flat), a 60.7 Hz `jet_bore` buzz, and a sine stack with band-passed white noise added on top (the
 `fffff` over a sinusoid). Their beating measured as a 31 % flutter in loudness on a held E5.
+
+### `violin_sordino(y, sr)`
+
+Mute clamped on the bridge: the bridge-hill band (1-2.5 kHz) loses most, the low register almost nothing.
+
+### `jet_peak_hz(amp: 'float') -> 'float'`
+
+Centre of the jet-noise peak, f = St Uj / h, for a blowing pressure 400 Pa x ``amp`` (Uj = sqrt(2 p / rho), h = 1 mm):
+St falls from 0.08 to 0.03 as the pressure goes up to 750 Pa.
 
 ### `novice_reynolds(freq)`
 
@@ -343,6 +373,11 @@ Jet Reynolds number of a novice flutist: 3000 at C4, x1.6 per octave, at most 70
 ### `flute_noise_factor(Re)`
 
 Breath noise scale once the jet leaves the laminar range: Re / FLUTE_RE_LAMINAR above it, 1 below.
+
+### `trumpet_mute(y, sr, kind, floor_db=-14.0)`
+
+Radiation of a trumpet bell through a mute: only what the mute passes is left near its level (straight: above 1800 Hz, cup:
+800-1200 Hz, harmon: 1500-2000 Hz), the rest ``floor_db`` down.
 
 ### `double_bass(freq, dur, sr=44100, vel=1.0, attack=0.4, vibrato=1.0, lifted=0, open_string=0)`
 
@@ -390,7 +425,7 @@ follows the partials near HARP_PITCH_HZ, at least the third) land on the note, c
 
 
 
-### `guitar(freq, dur, sr=44100, vel=1.0, glide=0.0, body=0, body_size=0.5, radiation=0, air_q=0.0, pluck='nail', rattle=0.0, cloth=0.0, glide_mm=0.0)`
+### `guitar(freq, dur, sr=44100, vel=1.0, glide=0.0, body=0, body_size=0.5, radiation=0, air_q=0.0, pluck='nail', rattle=0.0, cloth=0.0, glide_mm=0.0, glide_couple=0.0)`
 
 
 
@@ -567,12 +602,18 @@ perpendicular (``direction`` 1), partials 7 and 9 swing at twice the rate; the o
 
 Physical propagation and room acoustics for Genny.
 
-### `Room(volume: 'float' = 100.0, surfaces: 'dict[str, float]' = <factory>) -> None`
+### `Room(volume: 'float' = 100.0, surfaces: 'dict[str, float]' = <factory>, absorbers: 'list' = <factory>) -> None`
 
 
 
 - `.t60_bands(self) -> 'np.ndarray'`
 - `.reverberate(self, x: 'np.ndarray', *, sr: 'int' = 44100, mix: 'float' = 0.25) -> 'np.ndarray'`
+
+### `absorber(kind: 'str', area: 'float' = 1.0, **kw)`
+
+An (area, alpha(f)) pair for ``Room(absorbers=[...])``.
+``layer`` (sigma, thickness): porous layer on a rigid wall. ``helmholtz`` (f0, n, q=5): n resonators, each with its maximum
+absorption area, a resonance of quality q. ``panel`` (mass, depth_cm, filled=False, q=2, peak=0.5): a panel on an air gap.
 
 ### `Propagation(humidity: 'int' = 50, reference_distance: 'float' = 1.0) -> None`
 
@@ -676,9 +717,17 @@ Zeppelin NT: Lycoming IO-360, about 147 kW = 197 hp (ZEP). 3 engines, 2700 rpm, 
 
 TBL-TE peak: St = f delta* / U, St1 = 0.02 M^-0.6 (BPM, NASA RP-1218). U = 30 m/s, delta* 5 mm: about 518 Hz.
 
-### `airframe(sr=44100, speed=70.0, delta=0.005, flaps=0.0, gear=0, dur=3.0, seed=0)`
+### `flap_spectrum_db(x, triple=False)`
 
-U^5 (BPM, FK). Gear and flaps dominate (FK); their bands and +dB are estimated, FAA-RD-77-29 not read.
+Normalised 1/3-octave flap-noise level G(f c_F / V) in dB (single/double slotted, or triple slotted).
+
+### `gear_spectrum_db(x, h_over_d=1.0, phi=90.0, wheels=2)`
+
+Landing-gear 1/3-octave level per Strouhal x = f D / V at V = 100 m/s and D / r = 1: sum of a broadband term and a strut side-force term in sin^2(phi).
+
+### `airframe(sr=44100, speed=70.0, delta=0.005, flaps=0.0, gear=0, flap_angle=0.0, flap_chord=1.0, triple=0, gear_diameter=0.0, gear_wheels=2, gear_strut=1.0, gear_angle=90.0, dur=3.0, seed=0)`
+
+U^5 (BPM, FK). Gear and flaps dominate (FK); the gear +10 dB and the no-angle flap band are estimated.
 
 ### `glider(sr=44100, speed=30.0, delta=0.005, dur=4.0, seed=0)`
 
@@ -699,6 +748,10 @@ St = f De / Ue = 0.02 (SP-8072).
 ### `rocket_spectrum_noise(n, fp, rng)`
 
 Unit-RMS noise on ``ROCKET_SPECTRUM``, its 0.02 peak moved to ``fp`` Hz.
+
+### `rocket_directivity_db(angle)`
+
+``ROCKET_DI`` at ``angle`` degrees, relative to its value at 50 degrees; held below 20 degrees.
 
 ### `turbulence_sequence(dur: 'float', tau0: 'float', rng) -> 'tuple'`
 
@@ -772,6 +825,21 @@ examples/level_match.py (which level-matches the instruments).
 
 K-weighted level (dB, LUFS-like) of the loudest `window` seconds.
 
+### `duration_loudness_offset(dur: 'float') -> 'float'`
+
+dB by which a burst of `dur` s is heard below the same level held long: -7 dB at 20 ms, -2.5 at 100 ms, -1 at 200 ms,
+nothing from 0.5 s. Linear in log time between the points, the 20-100 ms slope carried below 20 ms (floor -30 dB).
+
+### `short_loudness(y: 'np.ndarray', sr: 'int') -> 'float'`
+
+`loudness` of the whole sound, with the ear's shortfall for a short burst taken off (gunshots, casings, clicks).
+
+### `maxima_slope(y: 'np.ndarray', sr: 'int', f0: 'float | None' = None, periods: 'float' = 4.0) -> 'float'`
+
+Decay in dB/s read on the maxima: the sound is cut in windows of about `periods` periods of f0 (found by
+`estimate_f0` when not given), the largest |y| of each window gives a point (time, dB), a straight line through them
+is the slope (negative for a decay). A plain envelope follower smooths the beating between partials; the maxima do not.
+
 ### `ear_loudness(y: 'np.ndarray', sr: 'int', window: 'float' = 0.2) -> 'float'`
 
 Ear-weighted level (dB re full scale) of the loudest `window` seconds. Sounds shorter than the
@@ -829,19 +897,20 @@ end by Peeters' weakest-effort method: times t_i where the envelope first reache
 its maximum; efforts w_i = t_{i+1} - t_i; start = first level whose effort is below a * mean effort,
 end = last such level (a = 3).
 
-### `periodicity(y: 'np.ndarray', sr: 'int', floor: 'float' = 75.0, ceiling: 'float' = 600.0, periods: 'float' = 4.5, step: 'float' = 0.01, silence: 'float' = 0.1) -> 'dict'`
+### `periodicity(y: 'np.ndarray', sr: 'int', floor: 'float' = 75.0, ceiling: 'float' = 600.0, periods: 'float | None' = None, step: 'float' = 0.01, silence: 'float' = 0.1, window: 'str' = 'hann') -> 'dict'`
 
 Boersma's (1993) accurate autocorrelation: Hann frames ``periods`` / ``floor`` long every ``step`` s, mean
 removed, ACF divided by the window's ACF, maximum over lags 1/ceiling .. 1/floor sinc-interpolated. Praat
 defaults for "To Harmonicity (ac)": step 0.01 s, pitch floor 75 Hz, silence threshold 0.1 (frames whose
-peak is under 0.1 of the global peak are silent), 4.5 periods per window (manual page Sound: To Harmonicity
-(ac)). Per frame HNR = 10 log10(r / (1 - r)) (Praat manual, Harmonicity: 99 % periodic = 20 dB).
+peak is under 0.1 of the global peak are silent). ``periods`` default: 6 for Hann (article, Table 1), 4.5 for
+``window="gauss"``, the Gaussian window of the article's postscript (Praat's value), ``periods`` effective
+periods inside a physical length twice as long. Per frame HNR = 10 log10(r / (1 - r)) (Praat manual, Harmonicity: 99 % periodic = 20 dB).
 
 Returns {"hnr": mean dB over the non-silent frames with r > 0, "r": median r, "f0": median Hz,
 "frames_hnr": per-frame dB (nan when silent or r <= 0)}. Simplification: Praat's Viterbi path over pitch
 candidates is not ported; the strongest ACF peak in the range is taken.
 
-### `hnr(y: 'np.ndarray', sr: 'int', floor: 'float' = 75.0, periods: 'float' = 4.5) -> 'float'`
+### `hnr(y: 'np.ndarray', sr: 'int', floor: 'float' = 75.0, periods: 'float | None' = None) -> 'float'`
 
 Harmonics-to-noise ratio in dB, Praat "To Harmonicity (ac)" defaults (see ``periodicity``).
 Finger et al. 2009 (women, Praat): 19.3 +- 3.7 dB, range 12.6-26.5.
@@ -943,6 +1012,13 @@ Vassilakis roughness of sine partials (lot B58, eq. 10-13): sum over pairs of
 0.5 (Am An)^0.1 (2 min / (Am + An))^3.11 (e^(-3.5 s |df|) - e^(-5.75 s |df|)), s = 0.24 / (0.0207 f_min + 18.96).
 A pair is roughest at s |df| = ln(5.75 / 3.5) / 2.25.
 
+### `sethares_dissonance(freqs, amps, alpha: 'float | None' = None) -> 'float'`
+
+Sethares' sensory dissonance of sine partials: the sum over pairs of
+min(a_i, a_j) (e^(-b1 s df) - e^(-b2 s df)), s = x* / (s1 f_low + s2). With `alpha`, the dissonance of the
+sound with itself transposed by alpha (both copies' pairs and the cross pairs): sweep alpha for a dissonance curve,
+whose minima are the intervals the timbre wants.
+
 ### `annoyance(n5: 'float', sharpness_acum: 'float', fluctuation_vacil: 'float' = 0.0, roughness_asper: 'float' = 0.0) -> 'float'`
 
 PA = N5 (1 + sqrt(wS^2 + wFR^2)); wS = (S - 1.75) 0.25 lg(N5 + 10) for S > 1.75 acum, else 0;
@@ -1024,10 +1100,20 @@ falling to 1.4 at 80 phon, and the ears add as (NL^k + NR^k)^(1/k) with 2^(1/k) 
 Loudness level drop (phon) of a short sound against the same sound held: 10 lg(dur / 100 ms) below
 100 ms (-7 at 20 ms, -10 at 10 ms, -20 at 1 ms), 0 from 100 ms.
 
-### `yin(y: 'np.ndarray', sr: 'int', fmin: 'float' = 60.0, fmax: 'float' = 1000.0, threshold: 'float' = 0.1, frame: 'float' = 0.04, hop: 'float' = 0.01) -> 'np.ndarray'`
+### `yin(y: 'np.ndarray', sr: 'int', fmin: 'float' = 60.0, fmax: 'float' = 1000.0, threshold: 'float' = 0.1, frame: 'float' = 0.04, hop: 'float' = 0.01, local: 'bool' = False) -> 'np.ndarray'`
 
 F0 track (Hz, 0 = unvoiced) by YIN: cumulative-mean-normalised difference, first dip under ``threshold``,
-parabolic interpolation of the lag.
+parabolic interpolation of the lag on the raw difference function (the normalised one is slightly biased).
+``local``: best local estimate, each frame takes the estimate of the frame with the lowest dip within +-1/(2 fmin) of it.
+
+### `pyin(y: 'np.ndarray', sr: 'int', fmin: 'float' = 60.0, fmax: 'float' = 1000.0, frame: 'float' = 0.04, hop: 'float' = 0.01, thresholds: 'int' = 100, beta: 'tuple' = (2.0, 18.0), no_trough: 'float' = 0.01, bins_per_semitone: 'int' = 10, max_rate: 'float' = 35.92, switch: 'float' = 0.01, return_prob: 'bool' = False)`
+
+Probabilistic YIN: instead of one threshold, ``thresholds`` of them weighted by a Beta(``beta``) law give each frame a set
+of pitch candidates with probabilities (a frame with no dip under a threshold counts its deepest dip at ``no_trough`` of
+the weight); a Viterbi path over voiced pitch bins (``bins_per_semitone`` per semitone, fmin..fmax) and unvoiced states then
+picks one per frame, the pitch moving at most ``max_rate`` octaves/s and a voiced/unvoiced switch costing ``switch``. For melodic
+voices; the track is smoother than ``yin`` and an unvoiced frame is 0. Returns f0 (Hz), and the voiced probability of each frame
+with ``return_prob``.
 
 ### `bark_flux(y: 'np.ndarray', sr: 'int', win: 'float' = 0.0232, hop: 'float' = 0.0058) -> 'np.ndarray'`
 
@@ -1037,10 +1123,32 @@ Positive spectral flux on 24 critical bands (Bark), per frame: sum of the rises 
 
 Mel-frequency cepstral coefficients per frame: DCT-II (orthonormal) of the log-mel frames.
 
+### `mfcc_davis(y: 'np.ndarray', sr: 'int', n: 'int' = 10, win: 'float' = 0.0256, hop: 'float' = 0.0064) -> 'np.ndarray'`
+
+Mel-frequency cepstrum of Davis & Mermelstein: 20 triangular filters on the magnitude spectrum below 5 kHz (centres every
+100 Hz to 1 kHz, then log-spaced to 4 kHz, each triangle running to its neighbours' centres), c_i = sum_k X_k cos(i (k - 1/2) pi / 20)
+on the log-energies X_k, i = 1..``n``; Hamming frames of 25.6 ms every 6.4 ms.
+
+### `lfcc_davis(y: 'np.ndarray', sr: 'int', n: 'int' = 10, win: 'float' = 0.0256, hop: 'float' = 0.0064) -> 'np.ndarray'`
+
+Linear-frequency cepstrum of Davis & Mermelstein (eq. 2): c_i = sum_{k=0}^{K-1} Y_k cos(pi i k / K), Y_k the log10 magnitude
+of the DFT up to Nyquist (K bins), i = 1..``n``; same frames as ``mfcc_davis``.
+
+### `lpc_cepstrum(a, n: 'int' = 10) -> 'np.ndarray'`
+
+Cepstrum of the LPC polynomial 1 + a_1 z^-1 + ... + a_p z^-p, ``a`` = (a_1..a_p), in Davis & Mermelstein's sign (eq. 3):
+c_i = a_i + sum_{k=1}^{i-1} (k - i) / i c_{i-k} a_k, i = 1..``n``.
+
 ### `jitter_shimmer(periods, amps) -> 'dict'`
 
 Local jitter (%) and shimmer (%, dB) from successive periods and peak amplitudes, as Praat defines them:
 mean |T_i - T_i+1| / mean T, mean |A_i - A_i+1| / mean A, mean |20 log10(A_i+1 / A_i)|.
+
+### `cycle_periods(y: 'np.ndarray', sr: 'int', f0: 'float', search: 'float' = 0.2) -> 'np.ndarray'`
+
+Successive periods (s) of a voiced signal by cross-correlating each cycle with the next one, the lag searched within
++-``search`` of the nominal 1 / ``f0`` and refined by a parabola through the peak. Breath noise moves a zero-crossing or a peak
+picker by whole samples; it barely moves the correlation maximum, so ``jitter_measures`` of these periods is not inflated by it.
 
 ### `tempo_from_loudness(y: 'np.ndarray', sr: 'int', lo: 'float' = 40.0, hi: 'float' = 240.0) -> 'float'`
 
@@ -1130,12 +1238,22 @@ noise, pitches drawn in MIDI 24-84.
 Phase of the fundamental per ``frame`` s: lowpass at 1.5 f0, analytic signal, phase relative to a sinusoid
 at f0, one value per frame (circular mean).
 
-### `wichern_features(y: 'np.ndarray', sr: 'int', frame: 'int' = 1024) -> 'dict'`
+### `goldstein_harmonicity(freqs, kmax: 'int | None' = None, c: 'float' = 0.0070710678118654745, fmin: 'float' = 50.0) -> 'tuple'`
 
-Six frame-wise descriptors (medians): loudness (dB RMS), spectral centroid (Hz), spectral sparsity
-(max / sum of the magnitude spectrum), harmonicity (peak of the normalised autocorrelation, 50-1000 Hz),
-temporal sparsity (max / sum of the frame energies over 10 frames), transient index (spectral flux of the
-mel-like log spectrum).
+Likelihood that two of the spectral peaks ``freqs`` (Hz) are harmonics k1 < k2 <= kmax of a fundamental (Goldstein's
+optimum-processor likelihood, the pairwise approximation): the product of two Gaussians centred on k f0 with sd c k f0,
+f0 = ((f1 / k1)^2 + (f2 / k2)^2) / (f1 / k1 + f2 / k2); the maximum over pairs, harmonic numbers, with f0 > ``fmin``. ``kmax``
+defaults to twice the number of peaks. Returns (likelihood, f0), (0, 0) for fewer than two peaks.
+
+### `wichern_features(y: 'np.ndarray', sr: 'int', frame: 'int' = 1024, legacy: 'bool' = False, harmonicity: 'str' = 'autocorr', peaks: 'int' = 6) -> 'dict'`
+
+Six descriptors (medians) after Wichern et al.: Hamming frames of 40 ms every 20 ms; loudness 20 log10 of the frame rms; spectral
+centroid in Bark, weighted by the Bark width of each bin and |X|^2 (zero-padded STFT); spectral sparsity max |X| / sum |X|;
+temporal sparsity max / sum of the frame rms over 49 frames; transient index the sum over 49 frames of the Euclidean distance between
+successive 15-coefficient MFCC vectors; harmonicity the peak of the normalised autocorrelation, 50-1000 Hz (the paper's Goldstein
+likelihood is not reproduced). ``legacy``: 1024-sample frames, centroid in Hz, temporal sparsity on 10 frame energies, transient index
+the spectral flux of the log spectrum. ``harmonicity="goldstein"``: the `goldstein_harmonicity` likelihood of the ``peaks`` strongest
+spectral peaks of each frame (above 5 % of the frame's maximum) instead of the autocorrelation peak.
 
 ### `wichern_distance(a: 'np.ndarray', b: 'np.ndarray', sr: 'int') -> 'float'`
 
@@ -1169,6 +1287,11 @@ window, divided by the Gaussian value erfc(1/sqrt 2) = 0.3173. 1 = a diffuse lat
 
 First time (s) the normalised echo density reaches 1; nan if never.
 
+### `kurtosis_echo_density(ir: 'np.ndarray', sr: 'int', win: 'float' = 0.02) -> 'tuple[np.ndarray, np.ndarray]'`
+
+Echo density from the fourth moment: sigma / ((1/3) sum w h^4)^(1/4) over a Hann-weighted ``win`` window,
+1 for a Gaussian late field, smoother there than `normalized_echo_density` but with less range on sparse echoes.
+
 ### `ratio_pitch_mel(f) -> 'np.ndarray'`
 
 Ratio pitch in mel = 100 x critical-band rate (Zwicker's arctangent form): 125 Hz ~ 125 mel,
@@ -1180,10 +1303,51 @@ Virtual pitch of a set of partials by subharmonic coincidence: every audible par
 votes for its subharmonics f/m (m <= 20), weighted by its level above threshold and by its distance
 (in octaves) from the 600 Hz dominance region; candidates within ``tol`` pool their votes. Hz.
 
+### `tonal_components(spectrum_db, df: 'float', bump_db: 'float' = 7.0, level_add_db: 'float' = 2.0)`
+
+Tonal components of a Hann-windowed spectrum in dB: a sample higher than both neighbours and more than
+``bump_db`` above the samples 2 and 3 bins away; frequency interpolated by 0.46 Hz/dB (L+ - L-) at 12.5 Hz spacing
+(scaled to ``df``), level + ``level_add_db``. Returns (freqs, levels).
+
+### `tonal_noise_db(spectrum_db, df: 'float', freqs) -> 'np.ndarray'`
+
+Noise intensity (dB) around each tonal component for ``spl_excess(noise_db=)``: the sum of the intensities of the
+spectrum samples within +-0.5 Bark of the component, the five samples centred on each tonal component left out.
+
+### `spl_excess(freqs, levels_db, noise_db=None) -> 'np.ndarray'`
+
+SPL excess LX of tonal components (Terhardt, Stoll & Seewann): level minus the masking of the others, 27 dB/Bark
+below a masker and -24 - 0.23 kHz/f + 0.2 L above it, the amplitudes of the maskers added, with the noise
+intensity (dB, one value or per component) and the threshold in quiet. Positive = aurally relevant.
+
+### `spectral_pitch_weight(freqs, lx) -> 'np.ndarray'`
+
+Terhardt's spectral-pitch weight: (1 - exp(-LX / 15 dB)) / sqrt(1 + 0.07 (f / 700 - 700 / f)^2), 0 for LX < 0.
+
+### `spectral_pitch_shift(freqs, levels_db) -> 'np.ndarray'`
+
+Pitch shift v of each component (fraction of its frequency) by the level and the neighbours: 2e-4 (L - 60)(f - 2)
++ 1.5e-2 exp(-LX' / 20) (3 - ln f) + 3e-2 exp(-LX'' / 20) (0.36 + ln f), f in kHz, LX' / LX'' the excess against the lower / higher components.
+
+### `terhardt_pitch(freqs, levels_db, m_max: 'int' = 12, delta: 'float' = 0.08, true_pitch: 'bool' = False, noise_db=None, top: 'int' = 5) -> 'dict'`
+
+Spectral-pitch and virtual-pitch patterns of tonal components (Terhardt, Stoll & Seewann 1982). Components sorted by
+``spectral_pitch_weight``; those within 70 % of the heaviest each offer their subharmonics f / m (m <= ``m_max``);
+its weight is beta = 1 / (1 + (H / 800)^4) times the sum over the other components of
+sqrt(WS_i WS_j / (m n)) (1 - gamma / delta), n = round(m f_j / f_i), gamma = |n f_i / (m f_j) - 1| <= ``delta``, n <= 20.
+``true_pitch`` applies the pitch shifts and the subharmonic stretch. Returns {"spectral": [(Hz, weight)],
+"virtual": [(Hz, weight)] heaviest ``top`` pitches, one per pitch within 2 %}.
+
 ### `spectral_descriptors(y: 'np.ndarray', sr: 'int') -> 'dict'`
 
 Median over STFT frames (Hamming 23.2 ms, hop 5.8 ms, the frames of ``spectral_flux``) of the spectral
 centroid, spread (Hz), skewness and kurtosis of the magnitude spectrum; silent frames are left out.
+
+### `estimate_f0(y: 'np.ndarray', sr: 'int', fmin: 'float' = 40.0, fmax: 'float' = 2000.0, H: 'int' = 8, refine: 'bool' = True) -> 'float'`
+
+Fundamental by the product of spectral magnitudes at the first H multiples (harmonic product, in the log domain so a
+missing partial costs but does not zero the score), over a 1 Hz grid; then parabolic interpolation of the score peak.
+Half-bin accuracy of a plain FFT peak is 23 cents at 400 Hz with N=4096; the refinement removes most of it.
 
 ### `hnr_ma(y: 'np.ndarray', sr: 'int', f0: 'float', H: 'int' = 10) -> 'float'`
 
@@ -1235,22 +1399,62 @@ log10 of the standard deviation of the harmonic amplitudes from their 3-harmonic
 
 Spectral centroid in harmonic numbers: sum n P_n / sum P_n (1 = all in the fundamental).
 
+### `sine_peaks(y: 'np.ndarray', sr: 'int', start: 'int' = 0, npts: 'int' = 1024, npeak: 'int' = 20, passes: 'int' = 2, maxfreq: 'float | None' = None) -> 'dict'`
+
+Sinusoids of one Hann-windowed frame: freq (Hz), amp (linear), phase (radians at the frame start), by
+descending frequency. Greedy picking: the strongest bin above a mask that falls as 1 / (1 + d^4) over +-50 bins
+around each pick (twice the peak within 2 bins), which must beat 0.6 x the sum of the bins two away; stop under
+1e-10 of the total power. Each pick is refined by a parabola through the log magnitudes, then `passes` times
+again after subtracting the Hann leakage of every other pick within 8 bins (close partials separate).
+
+### `multi_pitch(y: 'np.ndarray', sr: 'int', start: 'int' = 0, npts: 'int' = 2048, npitch: 'int' = 3, npeaks: 'int' = 12, fmin: 'float' = 40.0, tol: 'float' = 0.023, nharm: 'int' = 16, min_quality: 'float' = 0.3) -> 'list[dict]'`
+
+Up to `npitch` simultaneous pitches of one frame by a harmonic sieve. The `npeaks` strongest sinusoids vote,
+on a 48-per-octave axis, for their subharmonics 1..nharm (weight 30 (4 l / sum l) / (j + 7), l = sqrt(amp), a
+parabolic bump 2 bins wide). Local maxima in decreasing order become pitches unless they are an integer ratio of
+a stronger one or explain mostly partials that one already claimed; partials within `tol` of a harmonic confirm it and the pitch is their mean of f / h weighted by
+amp h. Per pitch: freq, quality (share of the loudness the pitch explains), evenness (share of that on the even
+harmonics: about 0 for a clarinet, high for a saw), level_db (100 = amplitude 1).
+
+### `band_energies(y: 'np.ndarray', sr: 'int', npts: 'int' = 256, hop: 'int' = 128, nbands: 'int' = 11) -> 'np.ndarray'`
+
+(frames, nbands) power in constant-Q bands (a half-octave apart, at least 1.5 bins of npts wide, centres
+from 1 to 64 bins of sr / npts). Each band is a complex sine-windowed kernel of npts 0.75 / bw samples, its
+squared output averaged over the quarter-length shifts that fit in the frame; a unit sine at a band centre
+reads 0.25.
+
+### `band_attacks(y: 'np.ndarray', sr: 'int', npts: 'int' = 256, hop: 'int' = 128, grow_on: 'float' = 5.0, grow_off: 'float' = 2.5, minvel: 'float' = 7.0, mask_decay: 'float' = 0.7, mask_hold: 'int' = 4, wait: 'int' = 4, debounce_decay: 'float' = 0.9) -> 'list[dict]'`
+
+Percussive attacks from the 11 band energies. growth = sum over bands of max(0, P / mask - 1), the mask the
+held maximum of each band that decays by `mask_decay` per frame after `mask_hold` frames. growth over `grow_on`
+arms the detector; the attack is reported when growth falls under `grow_off` or after `wait` frames, with the
+band energies held since. velocity = 0.5 x the mean of 100 P^(1/4) over the bands (1 = amplitude 1 -> about 50);
+temperature = centroid of that spectrum in band index; attacks under `minvel` are dropped, and one has to beat
+the previous velocity decayed by `debounce_decay` per frame. Returns dicts: time (s), velocity,
+temperature, spectrum (100 P^(1/4) per band, for matching against templates).
+
+### `equal_loudness_spl(phon, f=None)`
+
+Sound pressure level (dB SPL) of a pure tone as loud as ``phon`` phon (20..90) at each frequency ``f`` (Hz, 20..12500; default the 29
+standard third-octave centres): ISO 226 equal-loudness contours, interpolated in log frequency between the tabulated centres.
+
+### `phon_of_tone(spl, f)`
+
+Loudness level in phon of a pure tone of ``spl`` dB at ``f`` Hz: the inverse of ``equal_loudness_spl`` (bisection on 0..130 phon,
+the contours extended beyond 20..90 by the same formula).
+
 ## `genny.arms`
 
 Firearms and everything around them: named weapons, handling, spent brass, bullet impacts, ricochets, passing bullets.
 
-The shot keeps Farnell's Practical 30 layers (`foley._gunshot`), adds a Friedlander pressure wave and a gas tail (`_body_blast`), and mixes in pascals, on measured levels:
-- muzzle blast, peak on axis at 3 m and front/back directivity: Maher 2019 (AES, shot-to-shot), Maher & Shaw 2010 (AES 39);
-- N-wave: Whitham's far field as in Flamme & Murphy, Int. J. Audiology 2019, eq. 1 (coefficients 0.53 and 1.82);
-- arrival of the shock: t = x/V + y cos(theta_M)/c, Maher 2006 (IEEE DSP), Tables 1-2;
-- suppressor: Murphy et al., POMA 33, 2019 (15-30 dB, mostly 160-1000 Hz, shock untouched).
-Bullet lengths, the levels of rounds nobody measured, and all handling times except two (see MECH) are
-estimates where no published measurement exists. Spec with every source: reports/sons/armes_feu.md, rechargement_douilles.md.
+A weapon is a preset (cartridge, barrel, action, muzzle device); the sound is computed in pascals from `ballistics` (interior
+ballistics, muzzle blast, N-wave, suppressor, ground, recorder) and `brass` (spent cases). Nothing is normalised to a common peak:
+the recorder is a parameter and the file level follows the pressure at the listener. Sources: research/SOURCES.md.
 
 ### `n_wave_pa(v: 'float', d_mm: 'float', l_mm: 'float', miss: 'float', c: 'float' = 343.0)`
 
-Whitham N-wave of a bullet: ``(peak Pa, duration s)`` at distance ``miss`` m from the trajectory, or
-``(0, 0)`` when subsonic. Far field only (miss > 1000 d); unreliable close to Mach 1.
+N-wave of a bullet: ``(peak Pa, duration s)`` at distance ``miss`` m from the trajectory, or ``(0, 0)`` when subsonic.
+Far-field law (miss > 1000 d); `ballistics.n_wave_pa` adds the near-field law.
 
 ### `drag_length(cal: 'str') -> 'float'`
 
@@ -1261,16 +1465,24 @@ Metres over which a bullet loses 1/e of its speed under quadratic drag, 2 m / (r
 Seconds from the shot until the Mach cone reaches a listener ``x`` m along the trajectory and ``y`` m
 off it; ``None`` when subsonic or when the listener is behind the cone (it never gets there).
 
-### `firearm(sr=44100, weapon='ar15', distance=10.0, azimuth=30.0, miss=0.0, shots=1, rate=0.0, suppressor=0.0, subsonic=False, action=0.6, crack=1.0, echo=0.0, first_pop=3.0, pov=False, ring=1.0, weight=0.0, level='relative', render='heard', place='street', seed=0)`
+### `env_ir(env, r: 'float', seed: 'int' = 0, azimuth: 'float' = 30.0) -> 'np.ndarray'`
+
+Impulse response of a place for a listener ``r`` m from the source, first sample = the direct sound (1). An early dense
+part (``body_*``), a low one (``boom_*``), discrete echoes, then a late tail that builds up over ``tail_ms`` and decays with
+``t60`` below 2 kHz and ``t60_hf`` above. Energies are given re the direct sound at 10 m and 30 degrees off the bore; they
+grow as r^2 (direct ~ 1/r^2, the field of the place does not) and as the muzzle's directivity takes the direct sound
+away from ``azimuth``, at most +20 dB.
+
+### `firearm(sr=44100, weapon='ar15', distance=10.0, azimuth=30.0, miss=0.0, shots=1, rate=0.0, suppressor=0.0, subsonic=False, action=0.6, crack=1.0, echo=0.0, first_pop=3.0, pov=False, ring=1.0, weight=0.0, barrel=0.0, ground='asphalt', treeline=0.0, flash=0.0, barrel_ring=0.0, k_t0=1.0, brass=0.0, recorder='field', clip_db=0.0, level='relative', render='heard', env='open_field', place='none', seed=0)`
 
 
 
-### `minigun(sr=44100, dur=3.0, rate=50.0, spin=0.4, fire=True, distance=10.0, azimuth=30.0, level='relative', render='heard', place='street', seed=0)`
+### `minigun(sr=44100, dur=3.0, rate=50.0, spin=0.4, fire=True, distance=10.0, azimuth=30.0, whine_ratio=24.0, brass=1.0, ground='asphalt', recorder='field', clip_db=0.0, level='relative', render='heard', env='open_field', place='none', seed=0)`
 
-Six barrels: one bolt per round, so the rotor runs at rate/6 (5.6-16.7 Hz). The electric motor whine
-(24 x rotor) and its gain are estimated; both it and the bolts fall with distance like the shots.
+Six barrels: one bolt per round, so the rotor runs at rate/6 (5.6-16.7 Hz). The rounds are the ordinary shot of the
+preset, summed; the motor whine, the bolts and the cases are in pascals at 1 m over the distance.
 
-### `gun_mech(sr=44100, action='slide_rack', weapon='rifle', speed=1.0, floor='concrete', mag='plastic', rounds=6, seed=0)`
+### `gun_mech(sr=44100, action='slide_rack', weapon='rifle', speed=1.0, floor='concrete', mag='plastic', rounds=6, finish='steel', spread=0.0, seed=0)`
 
 Same recipe as `reload` (R03 §5.3): every click and the slide through the shot's body, "so the shots and
 the reload sound are automatically aligned".
@@ -1281,30 +1493,181 @@ Inextensional modes n = 2, 3, 4 of a thin cylinder: f_n = (1/2 pi) (h/R^2) c n (
 parallel. With ``length_mm`` (free ends) the tilting set is appended, a little higher:
 f_n sqrt((1 + 24 (1 - nu) R^2 / (n^2 l^2)) / (1 + 12 R^2 / (n^2 (n^2 + 1) l^2))).
 
-### `casing_physical(sr, caliber, floor, height, count, spread, roll, seed) -> 'np.ndarray'`
+### `casing_physical(sr, caliber, floor, height, count, spread, roll, seed, size=1.0) -> 'np.ndarray'`
 
-Brass modes (spec table A), struck at each bounce with a new mix of modes (it lands lip, base or flank)
-on a surface that rings too, or on soft ground where it just stops.
+Brass modes, struck at each bounce with a new mix of modes (it lands lip, base or flank)
+on a surface that rings too, or on soft ground where it just stops. ``size`` scales the case: pitch follows 1 / size.
+``caliber`` is a case name or any cartridge name (resolved through ``case_of``).
 
-### `casing_ricochet(sr=44100, caliber='556', floor='concrete', height=1.2, count=1, spread=0.25, ring=2.0, spin=40.0, lively=0.45, seed=0)`
+### `casing_ricochet(sr=44100, caliber='556', floor='concrete', height=1.2, count=1, spread=0.25, ring=1.0, spin=40.0, lively=0.0, spin_depth=0.5, rattle_law='v', wobble=True, air=0.25, wall_scale=1.0, seed=0)`
 
-`shell_modes` (spec table A) with a constant Q, so d grows with f and the top dies first (Q 800 at 5 kHz, Farnell, kept over the
-band: estimated); a split doublet on each mode, the air column closed at the base (c / 4L), and the mode's lobes passing the
-ear as the case turns, an amplitude modulation at n x spin that runs through flights and rings. Depth 0.5, split 0.2 %,
-amplitude in sqrt(v) so the final rattle stays audible (true law: v): estimated.
 
-### `bullet_impact(sr=44100, material='metal', caliber='556', distance=5.0, debris=1.0, level='relative', seed=0)`
 
-Same recipe as before, then what the bullet's size changes: the struck area grows as
-sqrt(calibre), which lowers the modes; the force lasts length / v instead of being one sample; soft targets close down.
+### `bullet_impact(sr=44100, material='metal', caliber='556', distance=5.0, debris=1.0, level='relative', gain_db=0.0, law='impulse', env='open_field', seed=0)`
+
+
 
 ### `ricochet(sr=44100, surface='metal', variant='whine', f0=1343.0, speed=199.0, closest=5.0, dur=0.8, seed=0)`
 
 
 
-### `bullet_pass(sr=44100, caliber='556', miss=3.0, speed=0.0, range=0.0, spin_tone=True, render='heard', place='street', seed=0)`
+### `bullet_pass(sr=44100, caliber='556', miss=3.0, speed=0.0, range=0.0, spin_tone=True, level='peak', recorder='field', clip_db=0.0, render='heard', env='open_field', place='none', seed=0)`
 
 
+
+## `genny.ballistics`
+
+Interior ballistics, muzzle blast, bullet shock wave, suppressor, ground and recording chain, in absolute pascals.
+
+Pure functions, no effect registration. A cartridge is a row of ``CARTRIDGES``; a weapon is a cartridge and a barrel length.
+Nothing here is normalised to a peak: every amplitude is a pressure that a microphone would read.
+
+### `Cartridge(d_mm: 'float', l_mm: 'float', m_g: 'float', v_ref: 'float', l_ref: 'float', v_c_cm3: 'float', m_c_g: 'float', p_max_mpa: 'float', trim_db: 'float' = 0.0, supp_db: 'float | None' = None, bore_mm: 'float' = 0.0, pellets: 'int' = 1, b: 'float' = 0.88, t_flame: 'float' = 2800.0) -> None`
+
+
+
+
+### `muzzle_velocity(cart: 'str', barrel_m: 'float') -> 'float'`
+
+Speed at the muzzle for a barrel length, from the adiabatic expansion of the burnt gas, calibrated on ``v_ref`` at ``l_ref``.
+
+### `muzzle_state(cart: 'str', barrel_m: 'float') -> 'dict'`
+
+Gas state when the bullet leaves: ``v``, ``p_m`` (Pa), ``u_m`` (J), ``e_b`` (J), ``w_tnt`` (kg), ``r0`` (m),
+``tau_b`` (s, time to empty the barrel), ``f_jet`` (Hz), ``t_gas`` (K), ``e_gas`` (J, kinetic energy of the gas).
+
+### `blast_at(state: 'dict', cart: 'str', r: 'float', azimuth: 'float', a_db: 'float' = 30.0, k_t0: 'float' = 1.0, trim: 'bool' = True) -> 'tuple[float, float, float]'`
+
+``(peak Pa, T0 s, b)`` of the Friedlander muzzle wave at ``r`` m and ``azimuth`` degrees from the bore axis.
+Up to 3 m the free-air blast table at the muzzle energy; beyond, the weak-shock law p r sqrt(ln r) = const with the
+positive phase growing as sqrt(ln r). ``a_db``: front-to-back spread of the directivity; ``k_t0``: scale of T0;
+``trim``: the per-cartridge correction on the axis level.
+
+### `friedlander(peak: 'float', t0: 'float', b: 'float', n: 'int | None', rate: 'int' = 48000) -> 'np.ndarray'`
+
+p = peak (1 - t/t0) exp(-b t/t0), first sample at the peak. ``n`` None: up to t0 (1 + 8/b).
+
+### `precursor(state: 'dict', cart: 'str', r: 'float', azimuth: 'float', barrel_m: 'float', v: 'float', rate: 'int' = 48000) -> 'tuple[np.ndarray, float]'`
+
+The column of air pushed out ahead of the bullet: ``(signal Pa, lead s)``; the pulse arrives ``lead`` before the main blast.
+
+### `gas_jet(state: 'dict', peak: 'float', rng: 'np.random.Generator', rate: 'int' = 48000) -> 'np.ndarray'`
+
+Turbulent jet leaving the barrel: band noise at the jet Strouhal peak, e^(-t/tau_b) over 5 tau_b, rms 3 % of ``peak``.
+
+### `brake_pulses(peak: 'float', t0: 'float', b: 'float', rate: 'int' = 48000) -> 'list[tuple[np.ndarray, float]]'`
+
+Two port pulses of a muzzle brake: ``[(signal, delay s), ...]`` at +0.15 and +0.30 ms, gains 0.4 and 0.25.
+
+### `brake_boost_db(azimuth: 'float') -> 'float'`
+
+A brake sends 3 dB more sideways and back (90 to 165 degrees); use with ``a_db=BRAKE_A_DB``.
+
+### `flash_pulse(peak: 'float', t0: 'float', b: 'float', amount: 'float', rate: 'int' = 48000) -> 'tuple[np.ndarray, float]'`
+
+Secondary flash: a second Friedlander, 2 ms later, 0.5 ``amount`` of the peak, twice as long.
+
+### `suppress(peak: 'float', t0: 'float', cart: 'str', reduction_db: 'float | None' = None, ejection_port: 'bool' = False) -> 'tuple[float, float]'`
+
+Peak and T0 after a suppressor: the peak drops by D, T0 grows as 10^(D/40) (half the impulse is kept), capped at 10 ms.
+``ejection_port``: gas leaves through the open action, D limited to 14 dB.
+
+### `can_warmup_db(k: 'int') -> 'float'`
+
+Extra level of the first (+3 dB) and second (+1.5 dB) shot through a cold suppressor.
+
+### `helmholtz_freq(area: 'float', volume: 'float', l_eff: 'float', t_gas: 'float' = 1200.0) -> 'float'`
+
+Frequency of the last suppressor chamber seen as a resonator: c/(2 pi) sqrt(A / (V L)).
+
+### `can_tone(peak: 'float', rng: 'np.random.Generator', rate: 'int' = 48000, f: 'float' = 1100.0, q: 'float' = 4.0) -> 'np.ndarray'`
+
+Ring of the suppressor chamber after the shot, its peak 12 dB under ``peak`` (the treated blast peak).
+
+### `ground(x: 'np.ndarray', r: 'float', h_s: 'float', h_l: 'float', ground: 'str', rate: 'int' = 48000, temp_c: 'float' = 20.0) -> 'np.ndarray'`
+
+Direct plus ground-reflected path for a source and a listener ``r`` m apart at heights ``h_s`` and ``h_l``
+(``ground``: a name of ``reverbs`` or a flow resistivity; "none" returns ``x``). Returns ``x`` padded by 50 ms.
+
+### `air_absorb(x: 'np.ndarray', r: 'float', rate: 'int' = 48000, ref: 'float' = 3.0, rh: 'float' = 50.0, temp_c: 'float' = 20.0) -> 'np.ndarray'`
+
+Absorption of the air between ``ref`` and ``r`` metres only (minimum phase, no 1/r: the pressures already carry the distance).
+
+### `recorder(x_pa: 'np.ndarray', kind: 'str', clip_db: 'float | None' = None, rate: 'int' = 48000) -> 'np.ndarray'`
+
+Pressure as a recording chain gives it back, still in pascals: ``none`` (bare), ``field`` (measurement microphone, high-pass 5 Hz),
+``camera`` (high-pass 80 Hz, soft clip at ``clip_db`` dB SPL, coupling-capacitor lock, limiter 1 ms / 300 ms), ``phone``
+(200 Hz to 7 kHz, same clip and limiter). Nothing is scaled to the file's peak.
+
+### `half_sine_force(impulse: 'float', t_c: 'float', n: 'int', rate: 'int' = 48000) -> 'np.ndarray'`
+
+Force (N) of a half-sine contact of impulse ``impulse`` (N s) lasting ``t_c`` s, each sample the mean over its interval
+(spectrum J cos(pi f t_c) / (1 - (2 f t_c)^2), first zero at 1.5 / t_c); the samples add up to ``impulse * rate`` whatever ``t_c``.
+
+### `n_wave_pa(v: 'float', d_mm: 'float', l_mm: 'float', miss: 'float', c: 'float' = 343.2, near: 'bool' = True) -> 'tuple[float, float]'`
+
+``(peak Pa, duration s)`` of the N-wave of a supersonic bullet ``miss`` m from its path; ``(0, 0)`` when subsonic.
+Closer than 1000 diameters the peak follows miss^-0.87 from its value there (``near=False``: the far-field law throughout).
+
+### `emission_speed(v0: 'float', x: 'float', y: 'float', lam: 'float', c: 'float' = 343.2) -> 'tuple[float, float]'`
+
+Speed and position ``(v_e, x_e)`` of the bullet where it emitted the cone that reaches a listener ``x`` m down the path and ``y`` m off it,
+for a speed decaying as v0 e^(-x/lam). ``(0, 0)`` when the cone never gets there or the bullet is subsonic by then.
+
+### `n_wave_shape(dur: 'float', rate: 'int' = 48000) -> 'np.ndarray'`
+
+Rise in one sample, linear down to -1, back in one sample.
+
+### `n_wave(v0: 'float', d_mm: 'float', l_mm: 'float', x: 'float', y: 'float', lam: 'float', rate: 'int' = 48000, c: 'float' = 343.2) -> 'tuple[np.ndarray, float | None]'`
+
+N-wave at a listener ``x`` m along the path and ``y`` m off it, with the bullet slowing down: ``(signal Pa, arrival s after the shot)``,
+``(zeros(1), None)`` outside the cone.
+
+## `genny.brass`
+
+Spent brass: shell modes, per-mode damping, air column, bounce kinematics and the ringing case as a parametric engine.
+
+Pure functions, numpy only. A case is a key of ``CASE_GEOM``; a floor is a key of ``FLOORS``. Every constant that is a
+choice of ear is a keyword argument of ``render_case``; sources are in research/SOURCES.md (section `brass.py`).
+
+### `half_sine_spectrum(f, t_c)`
+
+Signed spectrum, per unit impulse, of a half-sine force lasting ``t_c`` (phase delay t_c/2 left out).
+
+### `half_sine_force(impulse, t_c, n, rate=48000)`
+
+Half-sine force in N, ``n`` samples, whose sum times 1/rate equals ``impulse`` (N.s).
+
+### `case_modes(case, wall_scale=1.0, plastic_c=330.0) -> 'np.ndarray'`
+
+Frequencies Hz: Rayleigh n = 2, 3, 4, then the same with the free-ends tilting correction, then (50 BMG, 7.62) the beam mode.
+
+### `mode_decay(f, h_mm, material='brass', state='free', ring=1.0) -> 'np.ndarray'`
+
+Decay rate d (1/s; T60 = 6.91 / d) of modes at ``f``: internal loss + Zener thermoelastic loss (brass), or a polymer loss (pe);
+``state`` rest adds the floor contact loss. ``ring`` divides the internal loss.
+
+### `air_mode(case, c=343.0) -> 'tuple'`
+
+(f Hz, d 1/s) of the air column: quarter-wave for a straight case, two-section resonance (body closed, neck open) otherwise.
+
+### `hertz_tc(m, v, floor, edge=True, r_flank=0.0048) -> 'float'`
+
+Hertz contact time s of a mass ``m`` kg at ``v`` m/s on ``floor``: 2.87 (m^2 / (R E*^2 v))^(1/5); R 1 mm at an edge.
+
+### `restitution(v, floor, lively=0.0) -> 'float'`
+
+e = min(0.85, e_ref v^(-1/4)); ``lively`` gives that fraction of (1 - e_ref) back to e_ref.
+
+### `bounce_schedule(case, floor, height, rng, lively=0.0, spin=40.0, ending='auto', wobble=True, wobble_hz=60.0) -> 'dict'`
+
+Kinematics of one case. 'hits' (t s, J N.s, tc s, face 0 flank|1 rim|2 base, v, e), 'omega' (rev/s after each bounce, built from
+the off-centre impact), 'rest' (instant it stops flying) and the 'ending': roll (round the cone apex) | wobble (Euler disc) | none.
+
+### `render_case(case, floor, height, rng, ring=1.0, spin=40.0, spin_depth=0.5, air=0.25, wobble=True, rattle_law='v', rate=48000, lively=0.0, wall_scale=1.0, split=0.001, roll_mod=1.0, floor_gain=0.15, ending='auto', schedule=None, plastic_c=330.0) -> 'np.ndarray'`
+
+One case falling and bouncing on ``floor`` then rolling or wobbling to rest, peak 1. ``spin`` rev/s at ejection (0 = no tumbling);
+``ring`` multiplies the internal ringing time; ``air`` the air column gain; ``rattle_law`` v (physical) | sqrt_v.
 
 ## `genny.calibrate`
 
@@ -1340,9 +1703,22 @@ rank 2 n_modes, poles z from its shift invariance, f = arg z sr / 2 pi, decay = 
 amplitudes by least squares. Returns freqs, decays, amps (strongest first) and ``residual``: the energy
 left in each octave band (centres 63 Hz .. 16 kHz) as a share of the segment's energy in that band.
 
+### `esprit_benchmark(n_modes: 'int' = 20, sr: 'int' = 48000, dur: 'float' = 0.1, seed: 'int' = 0, gap: 'float' = 100.0) -> 'dict'`
+
+Mean relative error (percent) of ``esprit`` on synthetic exponentially decaying sinusoids with frequencies uniform in
+200 Hz .. 0.45 sr (at least ``gap`` Hz apart), decays log-uniform in 0.1 .. 1000 1/s and random phases: each true mode
+is matched to the nearest estimated frequency. Returns f_err, d_err (percent) and ``found`` (modes matched within 1 % of
+a gap).
+
 ### `rayleigh_fit(freqs, decays) -> 'tuple[float, float]'`
 
 (alpha, beta) >= 0 of d = (alpha + beta w^2) / 2 fitted to mode decays (1/s) in least squares.
+
+### `rayleigh_modes(freqs, alpha: 'float', beta: 'float') -> 'tuple[np.ndarray, np.ndarray]'`
+
+(damped frequencies Hz, decays 1/s) of undamped modes ``freqs`` under Rayleigh damping C = alpha M + beta K:
+d = (alpha + beta lam) / 2 and f = sqrt(lam - d^2) / 2 pi with lam = w^2; a mode with d >= w is overdamped and
+comes out at 0 Hz. For the usual d << w this is the undamped frequency.
 
 ### `emg_fit(freqs, decays) -> 'tuple[float, float, float, float]'`
 
@@ -1360,14 +1736,17 @@ correlations, C1, C2) and their mean: McDermott & Simoncelli's measure of how we
 
 ### `roughness(x: 'np.ndarray', sr: 'int', *, level_db: 'float' = 60.0) -> 'float'`
 
-Daniel & Weber roughness (asper), the median over 200 ms frames, of ``x`` played at ``level_db`` SPL
-(its RMS); needs ``pip install genny[eval]`` (MoSQITo).
+Roughness in asper (1 asper = a 1 kHz tone at 60 dB, 100 % AM at 70 Hz), the median over 200 ms frames of ``x``
+played at ``level_db`` SPL (its RMS). MoSQITo's Daniel and Weber model when installed (``genny[eval]``); else a
+numpy model of the same structure (``_rough_frame``) scaled so that the reference tone reads 1 asper.
 
-### `webmushra(reference: 'str', conditions: 'dict', out_dir: 'str', *, name: 'str' = 'genny listening test', question: 'str' = 'Rate how close each sound is to the reference.', anchors: 'bool' = True) -> 'Path'`
+### `webmushra(reference, conditions: 'dict', out_dir: 'str', *, name: 'str' = 'genny listening test', question: 'str' = 'Rate how close each sound is to the reference.', anchors: 'bool' = True) -> 'Path'`
 
 Write ``out_dir/configs/<test>.yaml`` and copy the audio to ``out_dir/configs/resources/audio/``: one
 MUSHRA page (hidden reference, the conditions, the 3.5 and 7 kHz low-pass anchors unless ``anchors`` is
 false) and a finish page that writes the results. ``conditions``: label -> wav path.
+Several references: ``reference`` is item -> wav path and ``conditions`` item -> (label -> wav path); each item gets
+its own page, trial1, trial2... (a page has one reference), its files named ``<item>_<label>``.
 
 ### `align_stimuli(paths: 'dict', out_dir: 'str', lufs: 'float' = -23.0) -> 'dict'`
 
@@ -1442,10 +1821,15 @@ Euclidean distance of their mean descriptor vectors, each axis divided by the po
 The measure suited to a sound class (``CLASS_METRIC``): ``allamanche`` for rain and wind,
 McDermott-Simoncelli statistics (``texture_snr``, negated mean SNR) for a stream, PSD RMSE (``compare``) for fire.
 
-### `multiscale_spectral_distance(a: 'np.ndarray', b: 'np.ndarray', ffts=(2048, 1024, 512, 256, 128, 64), overlap: 'float' = 0.75, w_mag: 'float' = 1.0, w_log: 'float' = 0.0) -> 'float'`
+### `multiscale_spectral_distance(a: 'np.ndarray', b: 'np.ndarray', ffts=(2048, 1024, 512, 256, 128, 64), overlap: 'float' = 0.75, w_mag: 'float' = 1.0, w_log: 'float' = 1.0) -> 'float'`
 
 Multi-scale spectral distance: sum over FFT sizes of w_mag |S - S~|_1 + w_log |log S - log S~|_1
 (means over bins and frames), Hann frames with ``overlap``. The shorter signal is zero-padded.
+
+### `esr(estimate: 'np.ndarray', target: 'np.ndarray') -> 'float'`
+
+Error-to-signal ratio sum (y - y~)^2 / sum y^2 of an emulation against its target (0 = identical, 1 = silence).
+The shorter signal is zero-padded.
 
 ### `spectral_flux_error(x: 'np.ndarray', ref: 'np.ndarray', sr: 'int', win: 'float' = 0.0232, hop: 'float' = 0.0058) -> 'float'`
 
@@ -1472,6 +1856,19 @@ Rayleigh fit of the decays: g0 = exp(-alpha/2 D) the loop gain at DC, ``beta`` i
 
 The Frechet-audio-distance validation grid: yields (label, distorted copy) for white noise of each SD,
 each low-pass and high-pass cutoff (4th-order Butterworth) and each quantisation depth.
+
+### `double_slope(ir: 'np.ndarray', sr: 'int', knee_db: 'float' = -10.0, floor_db: 'float' = -35.0) -> 'dict'`
+
+Early and late decay of an impulse response on Schroeder's backward-integrated curve: ``t_early`` the slope from 0 dB to
+``knee_db``, ``t_late`` the slope from ``knee_db`` to ``floor_db``, both extrapolated to 60 dB, in s; ``ratio`` = late / early
+(about 1 for an exponential decay, well above 1 for coupled or poorly diffuse rooms). A part the decay never reaches gives nan.
+
+### `match(render, target: 'np.ndarray', start: 'dict', bounds: 'dict', *, steps: 'int' = 60, seed: 'int' = 0) -> 'dict'`
+
+Sound matching by search: the parameters of ``render(**params) -> signal`` that bring its multiscale spectral
+distance to ``target`` down. ``start`` holds the first values, ``bounds`` a (low, high) per parameter to tune; a
+coordinate search with a shrinking step (Gaussian perturbations of one parameter at a time, kept when the
+distance falls), ``steps`` renders at most. Returns {"params", "distance", "start_distance", "renders"}.
 
 ## `genny.chiptune`
 
@@ -1638,6 +2035,7 @@ The TX81Z output stage: one-pole bilinear lowpass at 4.4 kHz then highpass at 9.
 
 Ratios to the note; bell, drum and wood_drum ring for their own time and ignore attack and release.
 soprano: a second carrier on the harmonic nearest 2100 Hz shares the modulator (sung formant).
+Winds: the index follows the amplitude through the attack and the held note, then stays put while it dies away.
 
 ### `stk_fmvoice(freq, dur, sr=44100, vel=1.0, vowel='ah', tilt=0.9, vib=0.005)`
 
@@ -1648,6 +2046,291 @@ soprano: a second carrier on the harmonic nearest 2100 Hz shares the modulator (
 SuperDuper DSP: 16 harmonics with golden phases (0.137, step 0.6180339885), sum x 0.25, tanh; formants as tabled, attack 2 ms. Khomus's bandwidths are not given: Bashkir's are used.
 
 ### `glitch_saw(freq, dur, sr=44100, vel=1.0, freq2=1.0, comparator=2.0, hysteresis=10, lowlim=0.5, uplim=0.3, bright=0.5)`
+
+
+
+## `genny.chiptune_p2`
+
+Retro chips and tape instruments, lot P2: Bandai WonderSwan, PPG Wave wavetables, Optigan optical disc, Chamberlin tape keyboard.
+
+Registers
+    instruments   `wonderswan`, `ppg_wave`, `optigan`, `chamberlin`
+    functions     `ws_period`, `ws_hz`, `ppg_table`, `PPG_TABLES`
+
+### `ws_period(hz: 'float') -> 'int'`
+
+11-bit frequency register: the wave steps at clock / (2048 - N), 32 steps a cycle.
+
+### `ws_hz(hz: 'float') -> 'float'`
+
+
+
+### `wonderswan(freq, dur, sr=44100, vel=1.0, channel='wave', wave='saw', volume=15, sweep=0, taps=0, mode='retro_stylized', bright=0.5)`
+
+
+
+### `ppg_table(kind='resonant')`
+
+A 64 x 128 wavetable of 8-bit values in -1..1 (steps of 1/127), each wave of the kind scaled to full range.
+
+### `ppg_wave(freq, dur, sr=44100, vel=1.0, table='resonant', pos=0.0, pos_end=32.0, sweep_s=0.6, smooth=False, cutoff=9000.0, release=0.15)`
+
+
+
+### `optigan(freq, dur, sr=44100, vel=1.0, sound='organ', disc_s=1.1, wow=0.25, flutter=0.15, photocell=4500.0, noise=-46.0, seed=0)`
+
+
+
+### `chamberlin(freq, dur, sr=44100, vel=1.0, sound='flute', tape_s=8.0, wow=0.35, flutter=0.3, start_ms=60.0, seed=0)`
+
+
+
+## `genny.chiptune_q`
+
+Retro chips, first batch: Konami SCC, Namco WSG and NEC HuC6280 (PC Engine).
+
+Registers
+    chip systems  `scc` (ch1 .. ch5), `wsg` (v1 .. v3), `huc6280` (ch1 .. ch6) for the `chip` layer of genny.chiptune
+    instruments   `scc`, `namco_wsg`, `huc6280`
+The Atari TIA lives in genny.chiptune2.
+
+### `scc_period(hz: 'float') -> 'int'`
+
+12-bit frequency register: the tone is clock / (32 * (N + 1)).
+
+### `scc_hz(hz: 'float') -> 'float'`
+
+The pitch the chip plays for a written note (0 when the register is 8 or less: the channel is stopped).
+
+### `render_scc(lanes, dur, sr, plus=False)`
+
+`dur` seconds of an SCC. lanes: ch1..ch5 -> notes (t0, t1, hz, vel, patch). Without `plus` channel 5 plays channel 4's wave.
+
+### `scc(freq, dur, sr=44100, vel=1.0, wave='saw', volume=15, vol=None, arp=None, pitch=None, vib=0.0, vib_hz=6.0, vib_delay=0.15, mode='retro_stylized', bright=0.5)`
+
+
+
+### `wsg_period(hz: 'float', voice: 'str' = 'v1') -> 'int'`
+
+20-bit frequency word: the tone is word * 96 kHz / 2**20. Voices 2 and 3 only have the upper 16 bits.
+
+### `wsg_hz(hz: 'float', voice: 'str' = 'v1') -> 'float'`
+
+
+
+### `render_wsg(lanes, dur, sr, prom=None, generic=False)`
+
+`dur` seconds of the 3-voice WSG at its native 96 kHz. The `wave` of a note is one of the PROM's eight 32-step blocks
+(0..7), a name, or 32 values 0..15; `prom` replaces the whole 256-nibble ROM; `generic` numbers the named generic waves instead.
+
+### `namco_wsg(freq, dur, sr=44100, vel=1.0, wave=0, generic=False, volume=15, vol=None, arp=None, pitch=None, vib=0.0, vib_hz=6.0, vib_delay=0.15, mode='retro_stylized', bright=0.5)`
+
+
+
+### `hu_period(hz: 'float') -> 'int'`
+
+12-bit frequency register: the tone is clock / (32 * N); 0 acts as 4096.
+
+### `hu_hz(hz: 'float') -> 'float'`
+
+
+
+### `hu_noise_bits()`
+
+One period of the 18-bit noise register (taps 0, 1, 11, 12, 17).
+
+### `render_hu(lanes, dur, sr, lfo_mode=0, lfo_freq=1, master=(15, 15))`
+
+`dur` seconds of a HuC6280, stereo (n, 2). Channels 5 and 6 can play noise (`noise`, `noise_freq` 0..31). With `lfo_mode`
+1..3 channel 2's wave steps every `period * lfo_freq` clocks and its sample (shifted by 0, 2 or 4 bits) is added to
+channel 1's period; a note written on ch2 then sets that rate as `hz / lfo_freq`. The channel balance is `bal` (left, right nibbles 0..15, 3 dB a step) or `pan` L | C | R;
+`master` is the master balance nibbles. A note with `dda` (values 0..31 played at `dda_hz`) bypasses the wave buffer.
+
+### `huc6280(freq, dur, sr=44100, vel=1.0, wave='square', volume=15, noise=False, noise_freq=16, lfo_mode=0, lfo_hz=6.0, vol=None, arp=None, pitch=None, vib=0.0, vib_hz=6.0, vib_delay=0.15, mode='retro_stylized', bright=0.5)`
+
+
+
+## `genny.chiptune_r`
+
+Retro chips, second batch: NES expansions (Konami VRC6, Namco 163, Famicom Disk System), Commodore Amiga Paula with a
+ProTracker MOD player, Yamaha OPL2 (YM3812) and OPL3 (YMF262).
+
+Registers
+    chip systems  `vrc6` (p1, p2, saw), `n163` (ch1 .. ch8), `fds` (fds), `paula` (ch1 .. ch4), `opl2` (ch1 .. ch9, rhythm
+                  lanes bd sd tom tc hh with `rhythm`), `opl3` (ch1 .. ch18, same)
+    instruments   `vrc6`, `n163`, `fds`, `paula`, `opl2`, `opl3`
+    functions     `render_mod`, `mod_parse` (ProTracker file player, offline)
+
+### `vrc6_period(hz: 'float', voice: 'str' = 'p1', shift: 'int' = 0) -> 'int'`
+
+12-bit period register: the pulses run at cpu / (16 (P + 1)), the saw at cpu / (14 (P + 1)); `shift` 4 or 8 is the
+frequency scaling register (x16, x256).
+
+### `vrc6_hz(hz: 'float', voice: 'str' = 'p1', shift: 'int' = 0) -> 'float'`
+
+
+
+### `render_vrc6(lanes, dur, sr, shift=0)`
+
+`dur` seconds of a VRC6. Pulses: 16-step sequencer, high for duty + 1 steps (duty 0..7, 4-bit volume); saw: 14 steps,
+a 6-bit rate added to an 8-bit accumulator on every even step (6 adds, then reset), top 5 bits out. The driver volume of
+the saw sets that rate (0..42, the largest that does not wrap).
+
+### `vrc6(freq, dur, sr=44100, vel=1.0, wave='pulse', duty=4, volume=15, vol=None, arp=None, pitch=None, vib=0.0, vib_hz=6.0, vib_delay=0.15, mode='retro_stylized', bright=0.5)`
+
+
+
+### `n163_freq_reg(hz: 'float', n: 'int' = 1, length: 'int' = 32) -> 'int'`
+
+18-bit frequency register: the wave repeats at cpu * F / (15 * 65536 * n * length) with `n` channels active.
+
+### `n163_hz(hz: 'float', n: 'int' = 1, length: 'int' = 32) -> 'float'`
+
+
+
+### `render_n163(lanes, dur, sr, n=None)`
+
+`dur` seconds of an N163. Each channel is updated once every 15 * n cycles (n = channels in use, default the lanes
+given) by a 24-bit phase accumulator; wave RAM holds 4-bit samples, `length` 4..256 (multiple of 4) per channel.
+The channels are time-multiplexed, so the output is the mean of the channel outputs (level falls as 1 / n).
+
+### `n163(freq, dur, sr=44100, vel=1.0, wave='sine', length=32, channels=1, volume=15, vol=None, arp=None, pitch=None, vib=0.0, vib_hz=6.0, vib_delay=0.15, mode='retro_stylized', bright=0.5)`
+
+
+
+### `fds_freq_reg(hz: 'float') -> 'int'`
+
+12-bit frequency register: the 64-step wave repeats at cpu * F / 2**22.
+
+### `fds_hz(hz: 'float') -> 'float'`
+
+
+
+### `fds_mod_pitch(f: 'int', counter: 'int', gain: 'int') -> 'int'`
+
+The pitch the modulation unit hands the accumulator: counter (-64..63) times the 6-bit gain, scaled, then F * that / 64.
+
+### `render_fds(lanes, dur, sr)`
+
+`dur` seconds of the FDS channel: 64-step 6-bit wave, 12-bit frequency, volume envelope 0..32 (the driver volume,
+doubled) with the master volume (`master` 0..3 = 100 / 67 / 50 / 40 %), and the modulator: a 32-entry table of 3-bit
+codes (0, +1, +2, +4, reset, -4, -2, -1) steps a 7-bit counter at `mod_hz` cycles per second, and counter * `mod_gain`
+(0..63) bends the pitch.
+
+### `fds(freq, dur, sr=44100, vel=1.0, wave='sine', master=0, mod_gain=0, mod_hz=5.0, mod_counter=0, mod_table='tri', volume=15, vol=None, arp=None, pitch=None, vib=0.0, vib_hz=6.0, vib_delay=0.15, mode='retro_stylized', bright=0.5)`
+
+
+
+### `paula_period(hz: 'float', length: 'int' = 32, system: 'str' = 'pal') -> 'int'`
+
+Period register, in colour clocks: one sample byte every `period` cycles, so a `length`-byte cycle plays at
+clock / (period * length).
+
+### `paula_hz(hz: 'float', length: 'int' = 32, system: 'str' = 'pal') -> 'float'`
+
+
+
+### `paula_filter(y, sr, kind='a500', led=False)`
+
+The Paula output stage on `y` (axis 0): the model's fixed RC low-pass (a500 4.9 kHz, a1200 34 kHz), then the LED filter.
+
+### `render_paula(lanes, dur, sr, system='pal', filter='a500', led=False)`
+
+`dur` seconds of Paula, stereo (n, 2). A note's `wave` is a name or a list of signed bytes (8-bit samples); its period
+register holds the pitch, `volume` 0..64 the level. `modulates` "am" or "fm" on a channel feeds its data, as 16-bit words,
+into the volume or the period of the next channel (the ADKCON bits); the modulating channel itself is silent.
+
+### `paula(freq, dur, sr=44100, vel=1.0, wave='saw', volume=64, clock='pal', filter='a500', led=False, vol=None, arp=None, pitch=None, vib=0.0, vib_hz=6.0, vib_delay=0.15, mode='retro_stylized', bright=0.5)`
+
+
+
+### `mod_parse(src)`
+
+A ProTracker file (bytes or path) -> dict(title, nch, order, patterns [n][64][nch] of (sample, period, effect, param),
+samples [dict(name, data, volume, finetune, loop_start, loop_len)]).
+
+### `render_mod(src, sr=44100, system='pal', seconds=None, filter='a500', led=False, separation=1.0, hw_limit=False)`
+
+Offline render of a ProTracker MOD to stereo (n, 2), at most `seconds` long (default 300). Effects: 0 arpeggio, 1 and 2
+slides, 3 tone portamento, 4 vibrato, 5 and 6 (portamento / vibrato with volume slide), 7 tremolo, 8 panning, 9 sample offset,
+A volume slide, B position jump, C set volume, D pattern break, F speed / tempo, E1 / E2 fine slides, E3 glissando control,
+E4 / E7 vibrato / tremolo waveform (0 sine, 1 ramp, 2 square, +4 no retrigger), E5 finetune, E6 pattern loop, E8 pan,
+E9 retrigger, EA / EB fine volume, EC note cut, ED note delay, EE pattern delay. Finetune uses the 16 period tables; periods are
+held between 113 and 856 by the slides, and the output period is limited to 113, or to 124 with `hw_limit` (what the four-voice
+DMA of the real chip can fetch). `separation` 1 = hard left / right, 0 = mono; a 8xx / E8x channel is panned freely.
+
+### `opl_note(hz: 'float')`
+
+(fnum, block) for a pitch: f = fnum * 49716 / 2**(20 - block), the smallest block that keeps fnum below 1024.
+
+### `opl_hz(fnum: 'int', block: 'int', mult: 'float' = 1.0) -> 'float'`
+
+
+
+### `opl_wave_table(w: 'int') -> 'np.ndarray'`
+
+One 1024-step cycle of waveform w (0..7) at full level, 13-bit signed (+-4084).
+
+### `render_opl(lanes, dur, sr, chip='opl2', rhythm=False)`
+
+`dur` seconds of an OPL2 (YM3812, 9 two-operator voices, waveforms 0..3, mono) or OPL3 (YMF262, 18 voices, waveforms 0..7,
+4-operator voices, `pan` L | C | R per voice, stereo (n, 2)), at the chip's 49716 Hz sample rate. Note patches: `patch` a
+name (see OPL_PATCHES) or dict(ops [dict(mult ksl tl ar dr sl rr sus ksr wave am vib)], fb, cnt); `wave` and `mod_wave` override
+the carrier and modulator waveform, `trem` / `vib_lfo` switch both operators' tremolo / vibrato, `deep_trem` 4.8 dB else 1 dB
+and `deep_vib` 14 else 7 cents. 4-operator patches have `cnt` (first pair bit, second pair bit) and occupy the lane. With
+`rhythm` the lanes bd sd tom tc hh are drum notes (the pitch sets the F-number of voices 6, 7, 8) and ch6..ch9 are not used.
+
+### `opll_patch(name_or_bytes)`
+
+A YM2413 instrument (the ROM name, 1..15, or 8 register bytes 0x00..0x07) as an OPL2 patch: byte 0 and 1 the modulator and
+carrier AM / vibrato / sustain / KSR / multiple, byte 2 the modulator's KSL and level, byte 3 the carrier's KSL, the two
+rectify bits and the feedback, bytes 4-7 the attack-decay and sustain-release pairs. The carrier level is the channel volume.
+
+### `opll(freq, dur, sr=44100, vel=1.0, patch='violin', volume=15, vol=None, arp=None, pitch=None, vib=0.0, vib_hz=6.0, vib_delay=0.15, mode='retro_stylized', bright=0.5)`
+
+
+
+### `brr_predict(filt, p1, p2)`
+
+
+
+### `brr_encode(pcm)`
+
+Samples in -1..1 (a multiple of 16 long) to BRR blocks: per 16 samples the range (0..12) and predictive filter (0..3) with the
+smallest error, 4-bit residues, the encoder following the decoder's own history. Returns a list of (range, filter, nibbles).
+
+### `brr_decode(blocks)`
+
+BRR blocks back to samples (full scale 2.0 = 16384): (nibble << range) >> 1 plus the filter's prediction from the two previous samples.
+
+### `snes_gauss(frac)`
+
+Four interpolation taps (oldest, older, old, newest sample) for a fractional position 0..1, read from the S-DSP's 512-entry
+table at index int(frac * 256) and normalised to sum 1 (the table's four values sum to 2047..2049).
+
+### `render_snes(freq, dur, sr, wave='saw', blocks=2, gauss=True, attack=15, decay=7, sustain=7, sustain_s=0.0, release_s=0.05, echo_ms=0.0, echo_fb=0.4, echo_mix=0.35, fir='echo')`
+
+
+
+### `snes_echo(y, edl, efb, evol, fir='echo')`
+
+The S-DSP echo: a ring buffer of EDL x 16 ms (512 samples a step) read, filtered by the 8-tap FIR (signed coefficients, 128 = unity;
+a name of SNES_FIR or eight values) and written back as the input plus the FIR output x `efb`; the output is the input plus the FIR
+output x `evol`.
+
+### `snes(freq, dur, sr=44100, vel=1.0, wave='saw', blocks=2, gauss=True, attack=15, decay=7, sustain=7, sustain_s=0.0, release_s=0.05, echo_ms=0.0, echo_fb=0.4, echo_mix=0.35, fir='echo', mode='retro_stylized', bright=0.5)`
+
+
+
+### `saa_register(hz: 'float')`
+
+(octave 0..7, note 0..255) for a pitch: f = clock / 512 x 2**octave / (511 - note).
+
+### `saa_hz(hz: 'float') -> 'float'`
+
+
+
+### `saa1099(freq, dur, sr=44100, vel=1.0, noise=0.0, noise_rate=0, volume=15, decay=0.0, mode='retro_stylized', bright=0.5)`
 
 
 
@@ -1776,7 +2459,7 @@ brk - 3 semitones going up and back to chest 4 semitones lower going down, the q
 0.3 s before an upward break and 0.05 s before a downward one),
 total (buffer seconds), overtone ((times, harmonic numbers)), sub 0..0.6 (kargyraa).
 
-### `voice(freq, dur, sr=44100, vel=1.0, voice='auto', vowel='ah', vibrato=-1.0, vib_rate=-1.0, breath=-1.0, effort=1.0, ring=-1.0, mode='sing', style='classical', lang='la', bright=1.0, seed=0)`
+### `voice(freq, dur, sr=44100, vel=1.0, voice='auto', vowel='ah', vibrato=-1.0, vib_rate=-1.0, breath=-1.0, effort=1.0, ring=-1.0, mode='sing', style='classical', lang='la', bright=1.0, seed=0, ra_bw=False, mech_rd=False)`
 
 
 
@@ -1810,6 +2493,11 @@ total (buffer seconds), overtone ((times, harmonic numbers)), sub 0..0.6 (kargyr
 "lyrics": "A-ve Ma-ri-a", "singers": 8, "legato": true, "dynamics": "mp<f>p", "style": "cathedral",
 "seed": 1}. One glottal source and one moving tract per singer across the whole phrase; stereo.
 The buffer is exactly `lead` + the steps' length (+ `tail` seconds): beat 1 is at `lead`.
+
+### `parallel_perfects(prev, cur) -> 'int'`
+
+Pairs of voices moving in parallel unisons, fifths or octaves (same perfect interval class, both voices
+moving the same way), plus an outer-voice hidden octave or fifth reached by similar motion with both voices leaping.
 
 ### `voice_lead(chords: 'list[list[float]]') -> 'list[list[float]]'`
 
@@ -1857,6 +2545,10 @@ genny command line interface.
 
 
 ### `cmd_list(args)`
+
+
+
+### `cmd_presets(args)`
 
 
 
@@ -1990,6 +2682,21 @@ Returns the values of the string after `steps` rewrites.
 
 Distance in beats of a rhythm (divisor, multiplier, note 1 / rest 0) to the target: 0 = the target.
 
+### `riff_energy(i: 'int', nbars: 'int') -> 'float'`
+
+Chance (%) that a riff note is played: high at the start, lowest in the middle third, rising to the end.
+
+### `riffology(nbars: 'int', rng, meter: 'float' = 4.0, transpose: 'float' = 0.0, vel: 'float' = 0.5) -> 'list'`
+
+Riffs of 8 notes strung end to end: each bar plays 1, 2 or 4 riffs (a random walk of the speed), each riff
+the best of three draws, the one starting nearest the last note (a repeat counts as a tritone); a note is
+skipped when energy + beat weight < U(0, 100), and then becomes a rest or a hold.
+
+### `write_midi(events, path, bpm: 'float' = 120.0, ppq: 'int' = 480, channel: 'int' = 0) -> 'bytes'`
+
+Standard MIDI File, format 0, one track: events {"t", "dur"} in beats, "pitch" MIDI, "vel" 0..1.
+Writes ``path`` when given and returns the bytes.
+
 ### `ga_rhythm(fit, gens: 'int', rng, n: 'int' = 20, pc: 'float' = 0.8, pm: 'float' = 0.18, elite: 'float' = 0.16) -> 'list'`
 
 Best rhythm of each generation of a genetic algorithm that evolves random rhythms toward `fit`.
@@ -2021,10 +2728,10 @@ One update of a decaying tension 0..100: minus (tension + 20) // 10 from 2 up, m
 Step string -> [(step, velocity)]. x hit, X accent, o ghost, ? = a hit with probability 1/2
 (Farnell's `random 2 -> sel 1` gate, g15 s1.3); `gate_steps` {step: probability} gates more.
 
-### `voss(n: 'int', rng, generators: 'int' = 4) -> 'np.ndarray'`
+### `voss(n: 'int', rng, generators: 'int | None' = None) -> 'np.ndarray'`
 
 1/f ("pink") sequence in 0..1, Voss-McCartney: generator g is re-rolled every 2^g steps and
-the generators are summed (MIT 21M.380: gamma about 1 for melodic walks, 12-music s3.5).
+the generators are summed; default about log2(n) generators (at least 4) so the whole length stays 1/f.
 
 ### `gamma_noise(n: 'int', gamma: 'float', rng) -> 'np.ndarray'`
 
@@ -2088,6 +2795,11 @@ Soloist's lag on the beats in ms, measured over 90-210 bpm (held flat outside).
 Long:short ratio of the ride cymbal's swung eighths: 2.4:1 at 132 bpm, straight (1:1) at 300,
 linear in between and beyond, capped at 3.5:1.
 
+### `ride_ratio_pickup(bpm: 'float') -> 'float'`
+
+Long:short ratio of the ride's swung eighths from the share g of the beat that the short tap leaves before the next
+beat (20 % at 60 bpm, 25 % at 120, 33 % at 180-240): (1 - g) / g, 4:1 at 60 bpm, 3:1 at 120, 2:1 from 180.
+
 ### `ritard_map(rit, total: 'float', meter: 'float' = 4.0, end: 'float | None' = None)`
 
 Final ritardando over the `beats` (default one bar) before `end`, the onset of the last note
@@ -2110,6 +2822,10 @@ tuning; None for drums), "vel": 0..1}, drums add "drum" (kind), a chromatic appr
 "approach": true, acid notes add "slide"/"accent"/"tuple303". Same layer -> same events.
 `bpm` (or the layer's own "bpm") only matters for `humanize` (ms) and `drift`.
 
+### `genre_styles(genre: 'str') -> 'tuple'`
+
+Styles of the palette that suit a game genre, the usual one first (`GENRE_STYLES`).
+
 ### `to_spec(layer: 'dict', bpm: 'float | None' = None, sr: 'int' = 44100) -> 'dict'`
 
 Convert a generator layer into ordinary layers the user can edit: a `group` of `seq` layers
@@ -2118,6 +2834,11 @@ own at / gain / fx / repeat. It renders to the same samples as the generator lay
 Pass the spec's `bpm` when the layer has none of its own and uses `humanize`, `drift`, or is an
 arrangement. `scatter` becomes a group of placed children; `arrangement` a group of its parts
 with their gains, pans (`automix`, analysed at `sr`) and master fx.
+
+### `interval_affect(cents: 'float') -> 'dict'`
+
+Ratings (1..7) of anger, happiness, pleasantness and sadness for a melodic interval of ``cents`` (positive up,
+negative down) taken to its nearest semitone class; larger intervals fold by octaves.
 
 ### `stinger_mood(layer) -> 'dict | None'`
 
@@ -2297,6 +3018,12 @@ tan delta = 10^-A (E'/gamma)^-B, (A, B) per ``group``; ``kind`` compression wood
 
 The wood ContactMaterial of a species (`material="wood:<species>"`): density = 1000 gamma, E = gamma E'/gamma, fd = 1/(pi tan delta).
 
+### `wood_from_density(density: 'float', group: 'str' = 'softwood') -> 'dict'`
+
+Clear straight-grained wood from its density (kg/m^3): Young's modulus along the grain E (Pa; the correlation
+gives MPa), side hardness (N), speed of sound c = sqrt(E/rho), characteristic impedance z = c rho and sound
+radiation coefficient R = c/rho.
+
 ### `get_material(name) -> 'ContactMaterial'`
 
 
@@ -2413,6 +3140,7 @@ authors' fix for the divergent delta strike, g06 A3). Damping: `material_damping
 ``excitation="plucked"`` adds the extra 1/n of a displacement-initialised body (g06 A6).
 
 - `.residual_compliance(self, n_total: 'int' = 400) -> 'float'` — Static compliance (m/N) at the contact point of the modes the bank drops, sum phi^2 / (m w^2) over the next modes up to ``n_total``: below them the dropped modes act as a spring in series with the bank.
+- `.radiation(self, size: 'float', thickness: 'float | None' = None) -> 'tuple[np.ndarray, np.ndarray]'` — (sigma_mn, zeta_rad) of every mode of the body, ``size`` m as in `from_size`. Stiff shapes (bar, plates, any ``circ_plate``) radiate as a finite plate (`plates.radiation_efficiency`: edge modes below coincidence, 1 above); membranes and strings, with no bending stiffness, as a baffled piston of the same area, 1 - 2 J1(2ka)/(2ka). zeta = rho0 c sigma / (2 w m'') with m'' the mass per area: add zeta w to the decays to include the radiation loss.
 - `.monopole_share(self) -> 'np.ndarray'` — Per mode |int phi dS| / int |phi| dS: 1 for a mode that only breathes, 0 when its parts cancel.
 - `.row(self, position=None) -> 'np.ndarray'` — Mode shapes (unit mean square over the body) sampled at ``position``.
 
@@ -2708,12 +3436,13 @@ Contact radius of a sphere pushed with force p0 into a viscous layer (mud): a^3 
 
 psi = (E*/H) sqrt(sigma kappa), sigma the asperity height spread, kappa their curvature (Greenwood-Williamson; Johnson §13.4).
 
-### `hertz_elliptic(p: 'float', r1: 'float', r2: 'float', es: 'float') -> 'tuple[float, float, float, float]'`
+### `hertz_elliptic(p: 'float', r1: 'float', r2: 'float', es: 'float', fit: 'str' = 'simple') -> 'tuple[float, float, float, float]'`
 
 Contact of two bodies with principal relative radii ``r1``, ``r2`` (gap z = x^2/2r1 + y^2/2r2) under load p:
 (a, b, delta, p0), a and b the semi-axes, a along the larger radius, delta the approach, p0 = 3P/(2 pi a b).
 With al = Ry/Rx: ellipticity k = al^(2/pi), elliptic integrals E = 1 + (pi/2 - 1)/al, F = pi/2 + (pi/2 - 1) ln al
-(exact Hertz at al = 1).
+(exact Hertz at al = 1). ``fit="regression"``: k = 1.0339 al^0.636, E = 1.0003 + 0.5968/al, F = 1.5277 + 0.6023 ln al
+(fitted for 1 < al <= 35, ellipticity up to 10; the circular case al = 1 is exact: k = 1, E = F = pi / 2).
 
 ### `hertz_k_elliptic(es: 'float', r1: 'float', r2: 'float') -> 'float'`
 
@@ -2739,14 +3468,15 @@ Under load control it snaps off at -3 pi gamma R; under displacement control it 
 
 ### `elastoplastic_mean_pressure(a: 'float', r: 'float', y: 'float', es: 'float') -> 'float'`
 
-Mean pressure under a sphere at contact radius a: Hertz 4E*a/(3 pi R) until the first yield (1.07 Y),
-then the expanding-cavity law (2/3) Y (1 + ln(E* a/(3 Y R))) once it exceeds 1.07 Y, capped at the full plastic 3 Y.
+Mean pressure under a sphere at contact radius a, x = E* a/(Y R): Hertz 4x/(3 pi) up to x = 4, where it meets
+the expanding-cavity law pm/Y = 1.52 + (2/3) ln(x/3) (cavity pressure + 2Y/3, sphere constant), capped at the
+full plastic 3 Y (x ~ 28).
 
 ### `elastoplastic_contact(delta: 'float', delta_max: 'float', r: 'float', y: 'float', es: 'float') -> 'tuple[float, float]'`
 
 Force at approach ``delta`` after a largest approach ``delta_max`` (loading if delta >= delta_max), and the
-crater depth left. Loading: P = pi a^2 pm(a), a^2 = R delta. Unloading is elastic, Hertz on the recovered depth
-3 Pmax/(4 E* amax): P = Pmax ((delta - d_res)/(delta_max - d_res))^1.5, d_res the crater.
+crater depth left. Loading: P = pi a^2 pm(a), a^2 = R delta elastic to 2 R delta fully plastic. Unloading is
+elastic, Hertz on the recovered depth 3 Pmax/(4 E* amax): P = Pmax ((delta - d_res)/(delta_max - d_res))^1.5.
 
 ### `matthews_alpha(n: 'float') -> 'float'`
 
@@ -2760,15 +3490,22 @@ P = pi a^2 pm, pm = 3 sigma0 (eps_R/eps0)^(1/n), representative strain eps_R = 0
 
 ### `layer_k(e: 'float', nu: 'float', thickness: 'float', r: 'float', bonded: 'bool' = False) -> 'tuple[float, float]'`
 
-(k, alpha) of F = k d^alpha for a sphere on a thin layer (felt, rubber pad, paint, coating) on a rigid base.
+(k, alpha) of F = k d^alpha for a sphere on a thin layer (felt, rubber pad, paint, coating) on a rigid base,
+the layer a bed of columns p = K (d - r^2/2R)/b: P = pi K R d^2/b, alpha 2, K = E (frictionless base) or the
+confined E (1 - nu)/((1 + nu)(1 - 2 nu)) (bonded). Bonded and incompressible (nu >= 0.499), squeezed out under a
+smooth sphere: P = (2 pi/3) E R^2 d^3/b^3, alpha 3.
+
+### `layer_line_k(e: 'float', nu: 'float', thickness: 'float', r: 'float', bonded: 'bool' = False) -> 'tuple[float, float]'`
+
+(k, alpha) of F = k d^alpha per unit length for a cylinder on a thin layer on a rigid base (plane strain).
 Compressible, frictionless: P = (2/3) E a^3/((1 - nu^2) R b), d = a^2/2R; bonded x (1 - nu)^2/(1 - 2 nu).
 Bonded and incompressible (nu >= 0.499): P = 2 E a^5/(45 R b^3), d = a^2/6R, alpha 2.5.
 
 ### `wavy_contact(p: 'float', es: 'float', amp: 'float', wavelength: 'float', two_d: 'bool' = False) -> 'float'`
 
 Fraction of a wavy surface (amplitude amp, wavelength l) in contact under mean pressure p. 1-D: p* = pi E* amp/l,
-2a/l = (2/pi) asin(sqrt(p/p*)); 2-D: p* = 2 pi E* amp/l, pi a^2/l^2 = pi (3p/(8 pi p*))^(2/3) at light load,
-1 - (3/(2 pi))(1 - p/p*) near full contact, the two joined linearly between p/p* 0.3 and 0.8. 1 when p >= p*.
+2a/l = (2/pi) asin(sqrt(p/p*)); 2-D: p* = 2 pi E* amp/l, pi a^2/l^2 = pi (3p/(8 pi p*))^(2/3) at light load
+(p/p* <= 0.05), then the numerical solution `WAVY_2D`. 1 when p >= p*.
 
 ### `gw_contact(p: 'float', es: 'float', sigma_s: 'float', kappa_s: 'float') -> 'tuple[float, float]'`
 
@@ -2811,7 +3548,9 @@ Hertz normal spring, incremental Mindlin tangential spring kappa x the normal ta
 mu x normal force. kappa = 2(1 - nu)/(2 - nu), chi = kappa (1 + 1/gyration)/2 (gyration = k^2/R^2, 0.4 solid),
 psi = kappa vx/(mu vz). Returns kappa, chi, psi, the regime (stick if psi <= 1, gross slip if psi >= 4 chi - 1,
 partial slip between) and the tangential velocity of the contact point after the impact, ``vt_out`` (negative:
-the spin turned it back).
+the spin turned it back); ``psi_out`` = kappa vt_out / (mu vz), the angle of reflexion in the units of psi (it goes
+negative between 1 and 4 chi), ``psi_out_rigid`` that of rigid-body impact: 0 up to psi = 4 chi (rolling at exit), then
+psi - 4 chi.
 
 ### `rayleigh_speed(c2: 'float', nu: 'float') -> 'float'`
 
@@ -2822,6 +3561,16 @@ alpha 0.919 at nu 0.25, 0.955 at nu 0.5.
 
 Mean power an oscillating point force P* cos(wt) sends into an elastic half-space as waves (nu 0.25):
 W = 0.074 P*^2 w^2/(G c2), 7 % P waves, 26 % S, 67 % Rayleigh.
+
+### `surface_source_directivity(theta, poisson: 'float' = 0.25) -> 'tuple[np.ndarray, np.ndarray]'`
+
+Far-field amplitudes (P, S) of a vertical point force on an elastic half-space at the angle ``theta`` (rad) from the
+vertical, mu = sqrt(2 (1 - nu) / (1 - 2 nu)): mu^2 |T1| and mu^(9/2) |T2|, in common units (P at the vertical = 1).
+
+### `rayleigh_depth_intensity(kz) -> 'np.ndarray'`
+
+Intensity of the surface wave of an oscillating point force at depth z relative to the surface (nu 0.25, k1 = w / c1,
+kz = k1 z): X = 1.5383 e^(-1.482 kz) - 3.1192 e^(-2.3376 kz) + 1.8131 e^(-3.1932 kz), divided by X(0).
 
 ### `johnson_regime(rho: 'float', v: 'float', sigma_s: 'float') -> 'str'`
 
@@ -2914,11 +3663,16 @@ Mass a contact at offset r (m, from the centre of mass) feels along the normal n
 
 Any signal as the force on a modal body ("audio signal processor", g06 B6/B11).
 
-### `cavity(x, sr=44100, shape='box', size=0.5, wall=1.0, mix=0.6, seed=0, tail=0.5)`
+### `cavity(x, sr=44100, shape='box', size=0.5, wall=1.0, mix=0.6, seed=0, tail=0.5, aspect_y=1.0, aspect_z=1.0)`
 
 
 
-### `impact(sr=44100, material='wood', shape='bar', size=0.3, position=0.28, position2=0.37, striker_mass=0.02, hardness=0.6, velocity=1.5, hollow=0.0, damping=2.0, bright=0.5, freq=0.0, modes=24, dur=0.0, seed=0, law='friction', material_angle=-1.0, material_radius=1.0, thickness=0.0, tip='ball', tip_size=0.0, tip_angle=60.0, mount=0.0, rest_force=0.0, ice_temp=1.0, dilate=0.0, dilate_r=0.0, radiation='sphere', moisture=0.0, azimuth=-1.0, rough=0.0, freq_factor=1.0, decay_factor=1.0, uneven=0.0, accel=0.0)`
+### `wood_moisture_factors(pct: 'float') -> 'tuple[float, float]'`
+
+(frequency factor, loss factor) of spruce at water content `pct` (%) against 6 %: sqrt of the ratio of E'/gamma,
+and the ratio of tan delta, interpolated in the measured table (0-28.1 %).
+
+### `impact(sr=44100, material='wood', shape='bar', size=0.3, position=0.28, position2=0.37, striker_mass=0.02, hardness=0.6, velocity=1.5, hollow=0.0, damping=2.0, bright=0.5, freq=0.0, modes=24, dur=0.0, seed=0, law='friction', material_angle=-1.0, material_radius=1.0, thickness=0.0, tip='ball', tip_size=0.0, tip_angle=60.0, mount=0.0, rest_force=0.0, ice_temp=1.0, dilate=0.0, dilate_r=0.0, radiation='sphere', moisture=0.0, azimuth=-1.0, rough=0.0, freq_factor=1.0, decay_factor=1.0, uneven=0.0, accel=0.0, assembly='', radius2=0.0, radiate=0.0, foundation=0.0)`
 
 
 
@@ -2935,26 +3689,39 @@ band above 2 kHz loses 25 ``amount`` /s more.
 
 
 
-### `roll(sr=44100, dur=1.0, speed=0.5, radius=0.03, roughness=0.5, material='steel', surface='wood', surface_size=1.0, joints=0.0, dents=0.0, asymmetry=0.0, feedback=0.18, body='', patch=0.0, bright=0.4, seed=0)`
+### `roll(sr=44100, dur=1.0, speed=0.5, radius=0.03, roughness=0.5, material='steel', surface='wood', surface_size=1.0, joints=0.0, dents=0.0, asymmetry=0.0, feedback=0.18, body='', patch=0.0, slip=0.0, rest_force=0.0, bright=0.4, seed=0)`
 
 
 
-### `scrape(sr=44100, dur=0.8, speed=0.3, force=1.0, roughness=0.5, texture='', grain=0.1, body='rect_plate', material='wood', size=0.4, position=0.3, level='force', model='profile', scraper_mass=0.02, height=2e-05, bright=0.5, stroke=0.0, stroke_len=0.1, stroke_angle=30.0, mu=0.6, gate=0, variation=0.0, seed=0)`
+### `scrape(sr=44100, dur=0.8, speed=0.3, force=1.0, roughness=0.5, texture='', grain=0.1, body='rect_plate', material='wood', size=0.4, position=0.3, level='force', model='profile', scraper_mass=0.02, height=2e-05, bright=0.5, stroke=0.0, stroke_len=0.1, stroke_angle=30.0, mu=0.6, gate=0, rest_force=0.0, variation=0.0, seed=0)`
 
 
+
+### `play_events(dur: 'float', rate: 'float' = 1.3714285714285714, hit_fraction: 'float' = 0.69, min_gap: 'float' = 0.25, seed: 'int' = 0) -> 'list[tuple[float, str]]'`
+
+Strike/scrape actions of a drumstick on a surface over ``dur`` s: Poisson arrivals at ``rate`` per second, never
+closer than ``min_gap``, each a ``hit`` with probability ``hit_fraction`` and a ``scrape`` otherwise.
 
 ### `conan_weights(angle: 'float' = 0.0, radius: 'float' = 1.0) -> 'np.ndarray'`
 
 (rub, scratch, roll) weights at ``angle`` degrees (0 rub, 120 scratch, 240 roll) and ``radius`` 0..1
 (0 = the centre, an equal mix): T(theta) of DAFx-13 eq. 7 around the rim, eq. 8 inwards.
 
-### `conan_force(n: 'int', sr: 'int', weights, roughness: 'float' = 0.5, size: 'float' = 0.5, speed: 'float' = 0.3, seed: 'int' = 0, sharpness: 'float' = 1.0, radius: 'float' = 0.0) -> 'np.ndarray'`
+### `conan_series(n: 'int', sr: 'int', weights, roughness: 'float' = 0.5, seed: 'int' = 0, scratch_dt: 'float' = 0.012, ar2: 'float' = 0.0, ar_free: 'float' = 0.0)`
+
+The amplitude series A and interval series dT (s) of ``conan_force`` for (rub, scratch, roll) ``weights``.
+Table I gives the 1-pole 1-zero ARMA of rolling only: ``ar_free`` (0..0.95) gives the rub and scratch series the
+same kind of correlation (AR pole -ar_free, 0 = white, as Conan's rubbing and scratching), ``ar2`` (0..0.95) adds
+a second pole a2 = ar2 a1^2 to every series at unchanged variance, ``scratch_dt`` is the mean scratch interval.
+
+### `conan_force(n: 'int', sr: 'int', weights, roughness: 'float' = 0.5, size: 'float' = 0.5, speed: 'float' = 0.3, seed: 'int' = 0, sharpness: 'float' = 1.0, radius: 'float' = 0.0, scratch_dt: 'float' = 0.012, ar2: 'float' = 0.0, ar_free: 'float' = 0.0) -> 'np.ndarray'`
 
 The interaction force (before the speed low-pass) for (rub, scratch, roll) ``weights``. roughness 0..1 is
 Table I's rho, size the normalised ball radius S (0.1..1), speed in m/s (number or per-sample) sets the rolling
-modulation: once per turn, v/(2 pi radius), when the ball's ``radius`` (m) is given, else 3 V/S.
+modulation: once per turn, v/(2 pi radius), when the ball's ``radius`` (m) is given, else 3 V/S. ``scratch_dt``,
+``ar2`` and ``ar_free`` act on the A and dT series (``conan_series``); the defaults are Table I as it was.
 
-### `interaction(sr=44100, dur=1.0, action=0.0, blend=1.0, speed=0.3, roughness=0.5, ball=0.5, body='rect_plate', material='wood', size=0.4, position=0.3, sharpness=1.0, prefilter=0.0, radius=0.0, gamma=1, bright=0.5, seed=0)`
+### `interaction(sr=44100, dur=1.0, action=0.0, blend=1.0, speed=0.3, roughness=0.5, ball=0.5, body='rect_plate', material='wood', size=0.4, position=0.3, sharpness=1.0, prefilter=0.0, radius=0.0, gamma=1, bright=0.5, seed=0, scratch_dt=0.012, ar2=0.0, ar_free=0.0)`
 
 
 
@@ -2966,10 +3733,11 @@ modulation: once per turn, v/(2 pi radius), when the ball's ``radius`` (m) is gi
 
 
 
-### `hail_impulses(dur, sr, rate=80.0, size=0.0067, decay=1.0, hardness=1.0, seed=0)`
+### `hail_impulses(dur, sr, rate=80.0, size=0.0067, decay=1.0, hardness=1.0, seed=0, measured=False)`
 
 Force (N) of a hail shower on one surface: Poisson stones, exponential diameters (median ``size`` m),
-each a Lane triangle of area (1 + eta) m v. Returns ``(force, diameters, times)``.
+each a force ramp of area (1 + eta) m v over tau. ``measured``: the measured law HAIL_D0 + exponential(HAIL_DE)
+scaled to the median (few stones over 3 x size) and Lane's constant force over tau. Returns ``(force, diameters, times)``.
 
 ### `hail(sr=44100, dur=6.0, rate=80.0, size=6.7, decay=1.0, hardness=1.0, body='rect_plate', material='metal', surface_size=1.2, bright=0.6, seed=0)`
 
@@ -3108,10 +3876,12 @@ The fade-in is only applied when the first sample is not already near zero, and 
 
 Remove a near-silent tail (e.g. reverb that decayed to nothing).
 
-### `write_wav(path: 'str | Path', x: 'np.ndarray', sr: 'int' = 44100, bits: 'int' = 16, dither=None, seed: 'int' = 0) -> 'Path'`
+### `write_wav(path: 'str | Path', x: 'np.ndarray', sr: 'int' = 44100, bits: 'int' = 16, dither='auto', seed: 'int' = 0, loop=None) -> 'Path'`
 
-dither: None (plain truncation, the default) or a `dsp.quantize` mode (tpdf, gauss, shaped,
-fweighted, lipshitz) applied at the output word length with a fixed seed.
+dither: "auto" (tpdf at 16 bits, none at 24), None (plain truncation) or a `dsp.quantize` mode (tpdf, gauss,
+shaped, fweighted, lipshitz) applied at the output word length with a fixed seed; digital silence stays silent.
+loop: True (the whole file) or (first, last) sample: a `smpl` chunk with one forward loop, read by samplers and
+game engines.
 
 ### `read_wav(path: 'str | Path') -> 'tuple[np.ndarray, int]'`
 
@@ -3132,11 +3902,11 @@ heartbeat, applause, whistle). Kernels run at 48 kHz (``voice.SR``); every entry
 boundary (``scipy.signal.resample_poly``), removes DC, fades both ends and peak-normalises.
 Sources: ``research/SOURCES.md``.
 
-### `roar(sr=44100, size=1.0, aggression=0.7, dur=2.5, species='lion', seed=0)`
+### `roar(sr=44100, size=1.0, aggression=0.7, dur=2.5, species='lion', seed=0, formants='')`
 
 
 
-### `growl(sr=44100, size=1.0, aggression=0.6, pitch=70.0, dur=1.5, seed=0)`
+### `growl(sr=44100, size=1.0, aggression=0.6, pitch=70.0, dur=1.5, seed=0, mass=0.0)`
 
 
 
@@ -3169,18 +3939,38 @@ Vocal tract length (m) of a dog of `mass` kg: VTL cm = 3.15 + 11.53 log10 m.
 
 Breath cycle, +1 at mid-expiration and -1 at mid-inspiration; expiration lasts `expiration` of the period.
 
-### `purr(sr=44100, rate=26.3, size=1.0, dur=3.0, seed=0, voice=0.0)`
+### `purr(sr=44100, rate=26.3, size=1.0, dur=3.0, seed=0, voice=0.0, inhale=0.0, breath=0.0)`
 
 
+
+### `formant_spacing(formants) -> 'float'`
+
+Formant spacing dF (Hz) of a vocal tract that is a quarter-wave resonator: F_n = k_n dF, k_n = (2n - 1) / 2,
+dF the slope through the origin of the formants F_1, F_2, ... against k_n.
+
+### `apparent_vocal_tract_length(spacing_hz: 'float', c: 'float' = 350.0) -> 'float'`
+
+Length (m) of the closed-open tube whose formants are `spacing_hz` apart: c / (2 dF), c = 350 m/s in warm humid air.
+
+### `kuramoto_threshold(spread: 'float', density: 'str' = 'gauss') -> 'float'`
+
+Coupling above which phase oscillators with frequency spread `spread` (rad/s) lock partly: Kc = 2 / (pi g(0)),
+sqrt(8 / pi) sigma for a Gaussian density, 2 gamma for a Lorentzian of half-width gamma.
+
+### `kuramoto_order(k: 'float', kc: 'float') -> 'float'`
+
+Order parameter of the locked state of a Lorentzian population, r = sqrt(1 - Kc / K) above Kc, 0 below (a
+square-root rise for any smooth density, with another coefficient).
 
 ### `tube_formants(tubes, c: 'float' = 350.0, fmax: 'float' = 8000.0) -> 'np.ndarray'`
 
 Resonances of lossless cylinders (diameter cm, length cm) closed at the source end, p = 0 at the mouth.
 
-### `diana_alarm(seed: 'int' = 0, calls: 'int' = 0) -> 'np.ndarray'`
+### `diana_alarm(seed: 'int' = 0, calls: 'int' = 0, predator: 'str' = 'leopard') -> 'np.ndarray'`
 
-Male Diana monkey leopard alarm series at 48 kHz: glottal pulses through the tube model moving
-from configuration 4 (onset) to 7 (middle) to 8 (end) within each call.
+Male Diana monkey alarm series at 48 kHz: glottal pulses through the tube model. leopard: configuration 4
+(onset) to 7 (middle) to 8 (end) within each syllable, 4 syllables; eagle: no onset transition (configuration 7
+throughout), a longer series.
 
 ### `moo(sr=44100, size=1.0, pitch=115.0, dur=1.8, seed=0)`
 
@@ -3215,7 +4005,7 @@ energy x 0.5 per bounce (amplitude x sqrt 0.5).
 
 
 
-### `stridulation(sr=44100, kind='grasshopper', rate=0.0, dur=2.0, seed=0)`
+### `stridulation(sr=44100, kind='grasshopper', rate=0.0, dur=2.0, seed=0, pulse=0.0)`
 
 
 
@@ -3257,6 +4047,14 @@ rho_e + amp cos(2 pi rate t) stands for the periodic forcing of the HVC-RA-brain
 E' = k(-E + S(rho_e(t) + a E - b I)), I' = k(-I + S(rho_i + c E - d I)), S = logistic. Returns E (0..~0.9)
 at WC["fs"]: slow forcing gives separate pulses, fast forcing a sustained pressure with pulses on top.
 
+### `tmg_pressure(dur: 'float', rate: 'float', **kw) -> 'np.ndarray'`
+
+Air-sac pressure from the driven respiratory model: m x'' + k x + mu x' = 2 i1 - i2,
+tau i1' = -i1 + S(E1 - i2 - f(x)), tau i2' = -i2 + S(E2 - i1 + A cos(w t)), S logistic, f(x) = 9 x^3 / (1 + x^3);
+pressure = -x. Model time is scaled so the forcing runs at ``rate`` Hz (w = TMG["omega"], A = TMG["amp"]).
+Returns the pressure shifted and scaled to 0..0.9 at TMG["fs"]. Larger ``omega`` or smaller ``amp`` moves between
+period-1, period-2 and period-3 patterns.
+
 ### `spectral_content_index(y, sr, f0=None)`
 
 SCI = mean spectral frequency / fundamental (f0 from the autocorrelation peak, 100 Hz..10 kHz, if not given).
@@ -3284,7 +4082,7 @@ Helmholtz resonance of the oropharyngeal-esophageal cavity, 1 / (2 pi sqrt(Lg Ch
 
 Trachea input Pi -> Pt = (1 - r) Pi(t - T/2) (T = 1 / (2 tf1), quarter-wave trachea) -> OEC and beak.
 
-### `birdsong(sr=44100, species='robin', repeats=1, syllables=0, pitch=1.0, tempo=1.0, two_voice=0.0, bright=1.0, source='fm', seed=0, tract='bands', coupling=0.0, gestures=0.0)`
+### `birdsong(sr=44100, species='robin', repeats=1, syllables=0, pitch=1.0, tempo=1.0, two_voice=0.0, bright=1.0, source='fm', seed=0, tract='bands', coupling=0.0, gestures=0.0, model='wc', centre=0.0)`
 
 
 
@@ -3300,7 +4098,7 @@ so each phonates above p_th = 1 kPa; bronchi of radius a / 2^(1/3) (Murray), 2 c
 at a 3-port junction; ``coupling`` scales the back-pressure that lets the two lock or beat. Radiated
 pressure = d/dt of the wave leaving the beak. Arrays at 48 kHz.
 
-### `bird_call(sr=44100, freq=450.0, freq_end=0.0, pressure=3.0, attack=0.3, two_voice=5.0, species='raven', dur=0.5, source='valve', coupling=0.5, latex=0.0, membrane='sweep', radiation='lowpass')`
+### `bird_call(sr=44100, freq=450.0, freq_end=0.0, pressure=3.0, attack=0.3, two_voice=5.0, species='raven', dur=0.5, source='valve', coupling=0.5, latex=0.0, membrane='sweep', radiation='lowpass', ring=0.5)`
 
 
 
@@ -3357,6 +4155,11 @@ isovolumic contraction.
 
 
 
+### `clap_rise(t: 'np.ndarray', rise: 'str' = 'fast') -> 'np.ndarray'`
+
+Onset gain of a clap burst: fast = 0.4 ms linear ramp; exp = exponential growth over CLAP_EXP_RISE
+with time constant CLAP_EXP_TAU, reaching 1 at its end.
+
 ### `clap_resonator(kind: 'str', rng) -> 'tuple[float, float, float]'`
 
 (fc, Q, gain) of one clap of hand configuration `kind`, each drawn around its mean with its deviation.
@@ -3373,12 +4176,14 @@ Claps per second per person: 2.5 Hz bored .. 4.17 Hz enthusiastic.
 
 Kuramoto order parameter q = |mean exp(i phi)| over the second half, phases interpolated between claps.
 
-### `applause_plan(crowd: 'int' = 30, enthusiasm: 'float' = 0.6, dur: 'float' = 4.0, seed: 'int' = 0, sync: 'float' = 0.0) -> 'list[np.ndarray]'`
+### `applause_plan(crowd: 'int' = 30, enthusiasm: 'float' = 0.6, dur: 'float' = 4.0, seed: 'int' = 0, sync: 'float' = 0.0, warm: 'float' = 1.0, ritard: 'float' = 0.0) -> 'list[np.ndarray]'`
 
 Clap times (s) of each individually rendered clapper: own rate (sd 10 %), phase and 2.7 % jitter.
 `sync` > 0 is Mode II: period doubled, relative rate spread / 1.3, coupling K = sync * 0.8/(2 pi) * w.
+`warm` multiplies the jitter of the claps before 2 s; `ritard` slows each clapper's last third, every clap
+that much longer than the one before (0.02 = +2 % of the interval per clap).
 
-### `applause(sr=44100, crowd=30, enthusiasm=0.6, dur=4.0, sync=0.0, clap_type='', seed=0)`
+### `applause(sr=44100, crowd=30, enthusiasm=0.6, dur=4.0, sync=0.0, clap_type='', warm=1.0, ritard=0.0, seed=0)`
 
 
 
@@ -3398,11 +4203,18 @@ Clap times (s) of each individually rendered clapper: own rate (sd 10 %), phase 
 
 Footfalls per minute of a quadruped of `mass` kg at its preferred trot / gallop: 4 x 60 x a M^b.
 
-### `footsteps_plan(gait: 'str' = 'walk', pace: 'float' = 0.0, steps: 'int' = 8, variation: 'float' = 0.5, seed: 'int' = 0, stop: 'int' = 0) -> 'np.ndarray'`
+### `speed_pace(gait: 'str', speed: 'float', mass: 'float' = 0.0) -> 'float'`
 
-Footfall onset times in seconds. Mean rate = ``pace`` footfalls per minute.
+Footfalls per minute at `speed` m/s. Trot, gallop: the preferred stride rate of a `mass` kg animal (500 kg when 0)
+plus slope x (speed - preferred speed). Other gaits: the step rate of a walker grows as speed^0.5 (the step lengthens
+as the cadence rises), scaled from the walking rate.
 
-### `footsteps(sr=44100, ground='wood', gait='walk', pace=0.0, steps=0, weight=1.0, shoe='default', variation=0.5, temperature=-8.0, mass=0.0, stop=0, seed=0, walker='', mood='neutral')`
+### `footsteps_plan(gait: 'str' = 'walk', pace: 'float' = 0.0, steps: 'int' = 8, variation: 'float' = 0.5, seed: 'int' = 0, stop: 'int' = 0, rhythm: 'str' = 'fractal') -> 'np.ndarray'`
+
+Footfall onset times in seconds. Mean rate = ``pace`` footfalls per minute. ``rhythm``: the interval
+noise is fractal (DFA exponent 0.76) or ``ar9``, the autoregressive walking series (order 9).
+
+### `footsteps(sr=44100, ground='wood', gait='walk', pace=0.0, steps=0, weight=1.0, shoe='default', variation=0.5, temperature=-8.0, mass=0.0, stop=0, seed=0, walker='', mood='neutral', speed=0.0, snow_depth=0.0, rhythm='fractal', incline=0.0, accel=0.0, species='')`
 
 
 
@@ -3438,6 +4250,11 @@ brings the odd multiples of the mains. Gear: mesh rate z rpm / 60, its harmonics
 modulation at the shaft rates. Bearing: the four kinematic rates, a race defect shocking the housing once per passage, the ball
 rates slipping 1-2 % at random, the housing fitted to recordings.
 
+### `throttle_rpm(pedal, idle: 'float', top: 'float', lag_up: 'float' = 1.4, lag_down: 'float' = 2.0) -> 'np.ndarray'`
+
+Engine speed (rpm, one value per sample) following ``pedal`` (0..1) from ``idle`` to ``top`` through a first-order lag
+that is quicker rising than falling; the lag runs at 200 Hz and is interpolated.
+
 ### `magnetostriction(b)`
 
 Core strain (arbitrary units) for a flux density ``b`` in units of the saturation knee
@@ -3449,7 +4266,7 @@ Strain of the whole core: with ``joints`` > 0, the mean over five regions whose 
 (strain goes as b^2), blended from a uniform core. ``packet`` 1-3: the regions' measured induction (middle limb, outer
 limb, yoke, corner, T-joint) over the nominal 1.7 T instead.
 
-### `grid_frequency(n, f0, eps_mhz, rng, tau=10.0, rate=100.0)`
+### `grid_frequency(n, f0, eps_mhz, rng, tau=300.0, rate=100.0)`
 
 Grid frequency as an Ornstein-Uhlenbeck process whose 1 s increments have the standard deviation eps (mHz),
 sampled at ``rate`` and interpolated.
@@ -3462,8 +4279,8 @@ and extended by their end slopes.
 ### `transformer(sr=44100, dur=4.0, mains=50.0, flux=0.8, dc_bias=0.0, load=0.3, loose=0.0, size=1.0, strip=0.0, seed=0, joints=0.0, stress=0.0, packet=0, grid='', tesla=0.0)`
 
 The radiated sound is taken as the strain velocity (a large tank radiates as its surface
-velocity) plus the tank's modes. The grid frequency is off by a constant drawn from the seed, sd 3.8e-4
-(18.8 mHz at 50 Hz): over a few seconds a real grid holds still.
+velocity) plus the tank's modes. The grid frequency is off by a constant drawn from the seed, sd 18.8 mHz at 50 Hz
+and 18.2 mHz at 60 Hz: over a few seconds a real grid holds still.
 
 ### `gear_frequencies(rpm: 'float', teeth: 'int', teeth2: 'int') -> 'dict'`
 
@@ -3497,28 +4314,84 @@ old model; above 0, the Stribeck distribution (1 - (1 - cos psi) / (2 eps))^1.5 
 
 Pressure gain of a parabolic mirror against a bare microphone: (pi D f / c)^2 above c / (pi D), 1 below.
 
-### `bearing(sr=44100, dur=3.0, rpm=1750.0, rpm_end=-1.0, state='healthy', severity=0.6, balls=9, ball_mm=7.94, pitch_mm=39.04, resonance=1000.0, seed=0, size='', angle=0.0, creep=0, load=0.0, rotating='inner', defect=0.0, ring=1.0, mirror=0)`
+### `bearing(sr=44100, dur=3.0, rpm=1750.0, rpm_end=-1.0, state='healthy', severity=0.6, balls=9, ball_mm=7.94, pitch_mm=39.04, resonance=1000.0, seed=0, size='', angle=0.0, creep=0, load=0.0, rotating='inner', defect=0.0, ring=1.0, mirror=0, preset='')`
 
 States beyond the classic four: pitting (several small pits, uneven ticks at BPFO), crack (sharp inner-race
 clicks), spall (an extended worn spall: no sharp shocks, a level that follows the shaft harmonics and noise
 swelling in the load zone), polished (the same, with a small shock as each ball leaves it), cage (irregular
 knocks at the cage rate).
 
+### `piston_x(theta_deg, stroke, rod)`
+
+Distance of the piston below TDC (same unit as the stroke).
+
+### `port_area(theta_deg, open_deg, width, stroke, rod, corner=None)`
+
+Open area of a port (mm2 for mm) whose top edge is where the piston is at ``open_deg``: width x height less the
+rounded corners (4 - pi) rc^2 s(h), s = min(h / 2 rc, 1). Zero before it opens, symmetric about the bottom dead centre.
+
+### `two_stroke_tables(ports=None, induct='reed', ccr=1.4, m=720)`
+
+(table, info): rows exhaust area, transfer area (each over its maximum), intake opening, crankcase pressure ratio and
+the intake suction (pressure the closed crankcase would have, minus 1), per 360 / m degrees after TDC; ``info`` the
+maximum exhaust area (m2), swept volume (m3) and the exhaust duration (degrees).
+
+### `scavenge(load, rpm, tuned_rpm=None, band=0.3)`
+
+(delivery ratio, scavenging efficiency) per sample: DR = 0.2 + 0.75 load, raised by ``band`` in a Gaussian of 15 % of
+the tuned speed around it; SE = 1 - exp(-1.3 DR), the residual fraction 1 - SE.
+
+### `misfire_probability(se)`
+
+Chance that a cycle does not fire: residual gas above 0.55 of the cylinder, certain at 0.8.
+
+### `tuned_length(tuned_rpm, exhaust_deg, egt=800.0)`
+
+L = a theta / (12 N) in m: the reflection comes back as the port closes (theta degrees of exhaust, N rpm).
+
+### `tuned_chamber(tuned_rpm, exhaust_deg, d1, egt=800.0, step=2, stinger=0.6)`
+
+Stepped expansion chamber as (delays in samples, junction reflections, section gains): length to the middle of the
+counter-cone L = a theta / (12 N) with a = sqrt(1.36 R T) at the mean of 1 and 0.67 egt; header 0.3 L at d1, diffuser 0.35 L to
+2.5 d1 (area ratio 6.25), belly 0.12 L, counter-cone 0.2 L down to ``stinger`` d1, stinger 12 diameters. Cones are steps of ``step``
+samples; the speed of sound follows the temperature from egt at the header to 0.67 egt at the stinger.
+
+### `limiter_skips(rpm, cut='limiter', cut_dyn=None, cylinders=1, cycle=2)`
+
+(period s, cut fraction, ignitions skipped per hole) of a limiter at ``rpm``: the hole lasts hyst / dec, the rest of the period
+hyst / acc; the ignitions it swallows are that time x the firing rate rpm / 60 x cylinders (x 1/2 in four strokes).
+
+### `firing_gates(mode, offs, cx, n, rng, state=None, skip=None, pmf=None, stick=0.3, gain=None)`
+
+Per cylinder and cycle gain of the combustion, (C, cycles). ``state`` the limiter state per sample (2 cut, 1 one in four
+skipped), ``gain`` a per-sample gain (deceleration cut), ``pmf`` per-sample chance of a natural misfire: a Markov chain that
+fires again with 1 - stick x chance after a miss. Returns the gate and the samples where a cut ends (relight).
+
 ### `firing_transients(inc, C, rng, amount)`
 
 One exponentially decaying burst of noise above ``TRANSIENT_HP`` (time constant ``TRANSIENT_TAU``) per
 firing; full while the firing rate f = inc sr C is under ``TRANSIENT_F0``, fading linearly to 0 at twice it.
 
-### `pipe_engine(sr=44100, dur=3.0, rpm=1800.0, rpm_end=-1.0, cylinders=4, load=0.5, header=1.6, pipe=6.0, lope=0.0, unequal=0.15, mic=0.3, backfire=0.0, seed=0, offsets=None, banks=None, headers=None, cycle=4, fire=None, pops=None, chamber=None, muffler=None, extractor=0.0, cylinder=0.0, timing=None, jitter=0.0, warp=0.0, block=1.0, radiate=0, units='ms', gas_temp=600.0, side=None, expansion=0.0, expansion_ms=1.0, outlet=0.0, outlet_r=0.3, alternator=0.0, roots=0.0, view='tail', crank=0.0, norm4=0, intake_gain=1.0, outlet_gain=1.0, ends='engine', transients=0.0)`
+### `pipe_engine(sr=44100, dur=3.0, rpm=1800.0, rpm_end=-1.0, cylinders=4, load=0.5, header=1.6, pipe=6.0, lope=0.0, unequal=0.15, mic=0.3, backfire=0.0, seed=0, offsets=None, banks=None, headers=None, cycle=4, fire=None, pops=None, chamber=None, muffler=None, extractor=0.0, cylinder=0.0, timing=None, jitter=0.0, warp=0.0, block=1.0, radiate=0, units='ms', gas_temp=600.0, side=None, expansion=0.0, expansion_ms=1.0, outlet=0.0, outlet_r=0.3, alternator=0.0, roots=0.0, view='tail', crank=0.0, norm4=0, intake_gain=1.0, outlet_gain=1.0, ends='engine', transients=0.0, muffler_r=-0.142, compression=2.43, ignition=1.0, clutch=0.0, ignition_time=-1.0, transmission='wave', throttle=None, redline=6000.0, lag_up=1.4, lag_down=2.0, intakes=None, bend=None, step_radius=0.0, twin=0.0, twin_phase=0.0, ports=None, tuned_rpm=None, band=0.3, induct='reed', ccr=1.4, egt=800.0, cut=None, rev_limit=None, misfire=1.0, steepen=1.0, raw=0, cut_dyn=None, relight=None, blowdown=None, gate=None, cut_at=0.0, branch=None, bottle=None, expansion_ir=0)`
 
 `lope` is a cycle asymmetry.
 
 Python callers also have ``fire`` (ignition gain, 0 = fuel cut, a number or a curve), ``pops`` (a signal
 added to the collector, ``_fin`` scale 2.5 = one backfire) and ``chamber`` ((delays in samples, junction
 reflections, section gains) of a stepped expansion chamber between the pipe and the muffler).
-Ports: exhaust 86 and transfer 116 degrees from TDC, 360 degree cycle; Wankel exhaust 195-588, intake 572-860,
-ramp 28 of 1080 degrees of shaft, three chambers per rotor.
-Half-sine port areas on the 2-stroke; the second bank's pipe, 7 % longer: with two identical pipes the banks would sum back to one even train and the half
+Wankel exhaust 195-588, intake 572-860, ramp 28 of 1080 degrees of shaft, three chambers per rotor.
+Two-stroke: the port areas come from ``ports`` and the piston; the exhaust is the blowdown of the cylinder through the exhaust port
+(motored pressure plus the combustion, decaying with the port area), plus the scavenging flow of the transfer ports; the intake
+is the crankcase pump (``induct`` reed or port); delivery ratio, scavenging efficiency and natural misfires follow the
+load and the tuned speed (``tuned_rpm``, ``band``); ``tuned_rpm`` also builds the chamber when none is given
+(``tuned_chamber``). The block keeps the compression and combustion pulses. The shock steepening of the exhaust
+(``steepen``) follows the port pressure.
+Cuts: ``fire`` = 0 leaves the motored pressure only (a 2-stroke exhaust 20 dB lower); ``cut`` runs a limiter, a soft cut or a
+deceleration fuel cut (``cut_dyn`` = (rpm/s up, rpm/s down, hysteresis rpm), ``relight`` = chance of a pop when the spark returns);
+``cut_at`` (s): the speed follows its curve until then and runs free into the limiter after it (0 = from the start);
+``gate`` = (cylinders, cycles) gain of each combustion; ``blowdown`` 1 makes a four-stroke exhaust follow the combustion too
+(a cut leaves a fifth of it, a deceleration cut a fifth of it inverted); ``raw`` 1 skips the peak normalisation.
+The second bank's pipe, 7 % longer: with two identical pipes the banks would sum back to one even train and the half
 orders of a cross-plane V8 would cancel, where in the real car the left and right paths always differ.
 
 ### `engine_rpm(throttle, rate=1000.0, rpm0=0.0)`
@@ -3544,6 +4417,10 @@ Two reads of ``x`` d0 (1 +- 0.8 amount sin 2 pi phase) back, averaged: delays st
 
 Whines of the belt-driven accessories at the crank speed ``rpm`` (a curve): the alternator at rpm / 60 x 2.8 x 36,
 the Roots blower at rpm / 60 x 2 x 6, each with its 2nd and 3rd harmonics, louder under load.
+
+### `clutch_rattle(rpm, load, amount, rng)`
+
+Noise through a 1900 Hz band-pass of Q 0.6, level amount (0.35 + 0.65 min(1, 0.06 / load)), only between 300 and 2200 rpm.
 
 ### `car_cabin(x, sr=48000)`
 
@@ -3633,12 +4510,27 @@ Per wheel, noise through a band-pass at 900 + 700 s + 220 i Hz with Q 6 x (2.2 +
 
 (rolling, propulsion) sound power levels in dB per third-octave band of ``_HN_F``.
 
+### `wet_road_db(kmh: 'float') -> 'np.ndarray'`
+
+Rise of the rolling noise on a wet road (water film), per band of ``_HN_F``, cars:
+max(15 lg f - 12 lg(v / 70) - 48, 0) dB; it starts near 1.6 kHz and falls with speed.
+
+### `erb_centres(bands: 'int' = 32, f_lo: 'float' = 50.0) -> 'np.ndarray'`
+
+Centres (Hz) of ``bands`` equivalent-rectangular bands one ERB apart from ``f_lo`` (ERB-rate scale 21.4 lg(1 + 0.00437 f)).
+
+### `equalized_noise(n: 'int', rng, levels_db, freqs=None, sr: 'int' = 48000) -> 'np.ndarray'`
+
+Noise whose power in each ERB band (the 32 of ``erb_centres``, or those at ``freqs``) is ``levels_db``: the power density
+is the level over the band's width 24.7 (0.00437 f + 1) Hz (the third-octave generator divides by f instead, a width that
+grows in proportion to f), interpolated in log frequency. ``len(levels_db) == len(freqs)``. ``sr`` is the rate of the returned signal.
+
 ### `pass_by(sr=44100, dur=5.0, speed=60.0, distance=6.0, power='combustion', cylinders=4, gear=3.2, wet=0.0, direction='lr', pan=1, seed=0, sources=1)`
 
 Source = Harmonoise rolling noise + a propulsion source scaled to the Harmonoise propulsion
 energy + aerodynamic noise (pink noise low-passed at 250 + 30 v Hz, level (v / 40)^2.5, v in m/s, faded in by a
 smoothstep from 15 to 26 m/s). Propagation = the ``doppler`` effect with its ground path.
-Wet road: spray above 2 kHz. Electric drive: a 9:1 reduction gear, 0.33 m wheels and the ripple tone of a
+Wet road: the rolling bands are raised by wet x `wet_road_db`. Electric drive: a 9:1 reduction gear, 0.33 m wheels and the ripple tone of a
 4-pole-pair motor on a six-step inverter, 12 dB under a combustion engine.
 
 ### `traffic(sr=44100, dur=20.0, rate=600.0, speed=70.0, distance=8.0, electric=0.2, seed=0)`
@@ -3646,11 +4538,15 @@ Wet road: spray above 2 kHz. Electric drive: a 9:1 reduction gear, 0.33 m wheels
 Arrivals are exponential at ``rate`` / 3600 per second; a car closer than 2 s behind the one before in its lane
 is dropped. Each is a ``pass_by`` of 6 s centred on its arrival, in stereo.
 
-### `induction_motor(sr=44100, dur=3.0, mains=50.0, poles=4, load=0.6, bars=28, fault='none', severity=0.5, seed=0)`
+### `induction_motor(sr=44100, dur=3.0, mains=50.0, poles=4, load=0.6, bars=28, fault='none', severity=0.5, drive_hz=0.0, seed=0)`
 
 Slip s = 0.005 + 0.045 load, shaft fr = 2 f (1 - s) / p. Lines: 2 f magnetostriction and its 4 f; slot passing
 bars fr and its +-2 f sidebands; shaft fr, 2 fr. Broken bar: sidebands f (1 +- 2 s) on the supply line and the hum beating
 at 2 s f. Eccentric: slot line +- fr. Bearing: an outer-race ticking at 0.4 balls fr through ``bearing``.
+Eccentric also adds the slot line +- fr +- f (the odd supply multiples of the eccentricity pattern). ``drive_hz`` > 0: current lines
+f +- drive_hz from the drive train (the shaft orders of a gearbox or pulverizer, which a broken-bar search confuses with
+the sidebands f (1 +- 2 s)).
+Shorted turns: stator lines f (n (1 - s) / pole pairs +- 1), n = 3 and 5 (125 and 175 Hz at no load on a 4-pole 50 Hz motor).
 
 ### `machine_hum(sr=44100, dur=2.0, size=120.0, work=0.5, speed=2.0, mod_freq=30.0, seed=0)`
 
@@ -3677,6 +4573,10 @@ Gilbert two-state channel: P(bad -> good) = 1 / burst, P(good -> bad) chosen so 
 loss is ``loss``. Concealment as in a waveform-substitution decoder: each lost packet is the
 previous output packet at 0.7 of its level.
 
+### `gsm_call(x, sr=44100, channel='fair', delay_ms=24.0, quality=0.5, seed=0)`
+
+
+
 ### `beat_repeat(x, sr=44100, grid=0.125, chance=0.3, repeats=3, divide=1, decay=0.85, reverse=0.2, seed=0)`
 
 A slice of one grid step repeated ``rep`` times, its edges crossfaded.
@@ -3689,7 +4589,7 @@ Wander of the read point, -1..1: (sin(2 pi phi tau) + sin(2 pi phi^2 tau) + sin(
 
 Pitch by resampling (2^(st/12) faster, shorter): the stretch is multiplied by the same factor to keep the length.
 
-### `paulstretch(x, sr=44100, stretch=8.0, window=0.25, hold=-1.0, length=4.0, smear=0.0, seed=0, phase=1.0, continuity=0.0, scan=0.0, loop=False, recipe=None, drift=0.0)`
+### `paulstretch(x, sr=44100, stretch=8.0, window=0.25, hold=-1.0, length=4.0, smear=0.0, seed=0, phase=1.0, continuity=0.0, scan=0.0, loop=False, recipe=None, drift=0.0, edge_ms=0.0)`
 
 Paulstretch: windows of the input taken every
 (W / 2) / stretch samples, each resynthesised with its magnitudes and uniformly random phases,
@@ -3722,7 +4622,7 @@ filters are circular, so the result loops without a seam. ``target_snr`` (dB; 30
 class, within 60 iterations) ends the ``iters`` passes early, at the cost of measuring the statistics each pass.
 # ponytail: 32 float32 phase tracks in memory (6 MB per second at 48 kHz): capped at 60 s; loop it.
 
-### `texturize(x, sr=44100, length=8.0, iters=12, seed=0)`
+### `texturize(x, sr=44100, length=8.0, iters=12, seed=0, mode='stats', target_snr=0.0)`
 
 
 
@@ -3745,6 +4645,10 @@ zero-crossing rate (crossings per second), windows of 23.2 ms every 2.9 ms. Retu
 
 
 ### `grain_delay(x, sr=44100, delay=0.25, delay_spread=0.15, size=0.08, size_spread=0.04, density=20.0, pan_spread=0.6, level_spread=0.4, mix=0.5, seed=0)`
+
+
+
+### `radio_chatter(sr=44100, variant=0, dur=0.0)`
 
 
 
@@ -3786,6 +4690,10 @@ A table over `magic`, `charge_up`, `teleport`, `shimmer`, `fire`.
 
 `whoosh` + `ui_tick`.
 
+### `ui_gesture(sr=44100, kind='haptic', pitch=440.0, size=0.5, seed=0)`
+
+
+
 ### `radio(sr=44100, kind='squelch', dur=1.5, seed=0)`
 
 Band 300-3400 Hz is the `telephone` effect's.
@@ -3818,7 +4726,7 @@ Frequencies: module docstring. Heard on a line at this rate, sr under 12 kHz los
 ### `morse_units(text: 'str') -> 'list[tuple[bool, int]]'`
 
 (key down, units) for ``text``. Dit 1, dah 3, within a letter 1, between letters 3, between words 7.
-A trailing space keeps its word gap, so "PARIS " is 50 units.
+A trailing space keeps its word gap, so "PARIS " is 50 units. ``<AR>``: a prosign, its letters run together.
 
 ### `morse(sr=44100, text='SOS', wpm=20.0, freq=700.0, mode='tone', seed=0)`
 
@@ -3898,6 +4806,11 @@ Loop: `feedback_guitar`, swelling 0.05..1.
 
 `squeak` + `bottle`: 1.1 kHz, a +20 % glide, 0.28 s.
 
+### `suikinkutsu(sr=44100, rate=0.5, pot=1.0, dur=8.0, earth=1500.0, seed=0)`
+
+Each drop: a plop, then three damped modes of the pot (T60 1.8 s, 1.2 s, 0.8 s) with a 2 Hz beating twin on the first,
+through a one-pole low-pass for the soil.
+
 ### `water_whistle_pitch(n: 'int', length: 'float', warble: 'float') -> 'np.ndarray'`
 
 Hz: a pipe stopped by the water, f = c / 4 (L - depth), depth bobbing at ``warble`` Hz, depth 0.1..0.4 L.
@@ -3918,11 +4831,13 @@ f = c/2 sqrt(sum (n/l)^2), rigid box, sorted, within lo..hi.
 
 The gate above; three modes per pass drawn from `room_modes`, 8 ms edge, tanh.
 
-### `cage_hits(pendulums: 'int', dur: 'float', rng) -> 'np.ndarray'`
+### `cage_hits(pendulums: 'int', dur: 'float', rng, driver: 'str' = 'pendulum') -> 'np.ndarray'`
 
-Strike times: each pendulum passes at its own steady rate; the number of pendulums sets the density.
+Strike times. pendulum: each one passes at its own steady rate, the number sets the density. washer: one rotating
+driver, one strike per turn at a steady period. balls3: three balls at 120 degrees, three strikes per turn. wind: random
+gusts, a Poisson stream whose rate swells and falls slowly.
 
-### `rod_cage(sr=44100, pendulums=2, ball='glass', dur=6.0, seed=0)`
+### `rod_cage(sr=44100, pendulums=2, ball='glass', dur=6.0, seed=0, driver='pendulum', order='auto')`
 
 `rod_bank` kernel, random rod.
 
@@ -3947,14 +4862,21 @@ R1 (ohm) of a TR-808 tom / conga bridged-T at tuning knob position 0..1: (-x^2 +
 Op-amp bridged-T resonator of a TR-808 voice: (fc Hz, Q, ring time constant s). fc = 1 / (2 pi sqrt(R1 R2 C1 C2)),
 Q = sqrt(R2 / R1) / (sqrt(C1 / C2) + sqrt(C2 / C1)), tau = Q / (pi fc). `r1` replaces R1 (tom / conga knob).
 
-### `bd_resonator(vp: 'np.ndarray', sr: 'int' = 44100, knob: 'float' = 0.5, tune: 'float' = 45.7, attack: 'np.ndarray | None' = None) -> 'np.ndarray'`
+### `sigh_current(v_comm, alpha: 'float' = 14.315, v0: 'float' = -0.556, m: 'float' = 1.4765e-05)`
+
+Current Q43 draws (A, <= 0) when the bridged-T common node swings below about a diode drop:
+i_C = -log(1 + exp(-alpha (V - V0))) m / alpha. It lowers R_eff, so the ring starts sharp and sighs down.
+
+### `bd_resonator(vp: 'np.ndarray', sr: 'int' = 44100, knob: 'float' = 0.5, tune: 'float' = 49.5, attack: 'np.ndarray | None' = None, sigh: 'bool' = False) -> 'np.ndarray'`
 
 TR-808 bass drum bridged-T resonator with its decay feedback loop (ideal op-amps): C41, C42 and R165 + R166 to
-ground form the bridged-T around the first op-amp (R167 feedback); the second op-amp inverts its output through R164
-into R169 || (VR6 + C43) and returns it through R170, so the decay knob VR6 = knob x 500 k sets how much of the ring is
-fed back. `attack` (0..1 per sample) shorts R165 as the envelope generator conducts. `tune` scales C41, C42 until the
-loop (knob included, attack off) rings at ``tune`` Hz.
-Trapezoidal rule on the three capacitor voltages; returns v_b.t.r. in volts.
+ground (R161 to the envelope node in parallel) form the bridged-T around the first op-amp (R167 feedback); the second
+op-amp inverts its output through R164 into R169 || (VR6 + C43) and returns it through R170, so the decay knob
+VR6 = knob x 500 k sets how much of the ring is fed back. `attack` (0..1 per sample) shorts R165 as the envelope
+generator conducts. `sigh`: Q43 draws `sigh_current` through R165 when the common node swings low, R_eff falls and
+the ring starts sharp, then settles. `tune` scales C41, C42 until the loop (knob included, attack and sigh off)
+rings at ``tune`` Hz; at TR808_BD_HZ the parts are the stock ones.
+Trapezoidal rule on the three capacitor voltages (the Q43 current one step behind); returns v_b.t.r. in volts.
 
 ### `bd_output_filter(x: 'np.ndarray', sr: 'int' = 44100, tone: 'float' = 0.5, level: 'float' = 1.0) -> 'np.ndarray'`
 
@@ -3968,7 +4890,7 @@ TR-808 bass drum pulse shaper: a ``TR808_TRIGGER_MS`` rectangular trigger of ``v
 series with R162 to ground, D53 across R162 (H = (R162 R163 C40 s + R162) / (R162 R163 C40 s + R162 + R163)).
 Backward Euler at 16 x the rate, Newton on the diode; returns v across R162 in volts, ``dur`` s long.
 
-### `kick808(sr=44100, vel=1.0, tune=45.7, decay=1.2, model='classic', knob=0.5, tone=0.5)`
+### `kick808(sr=44100, vel=1.0, tune=49.5, decay=1.2, model='classic', knob=0.5, tone=0.5, sigh=1)`
 
 
 
@@ -3980,11 +4902,11 @@ Pd ``vline~``: (start ms, target, ramp ms) events; each ramp starts from the cur
 
 
 
-### `hihat(sr=44100, vel=1.0, decay=0.08, tone=8000)`
+### `hihat(sr=44100, vel=1.0, decay=0.08, tone=8000, model='physical')`
 
 
 
-### `openhat(sr=44100, vel=1.0, decay=0.4)`
+### `openhat(sr=44100, vel=1.0, decay=0.4, model='physical')`
 
 
 
@@ -3996,7 +4918,7 @@ Pd ``vline~``: (start ms, target, ramp ms) events; each ramp starts from the cur
 
 
 
-### `crash(sr=44100, vel=1.0, decay=1.5)`
+### `crash(sr=44100, vel=1.0, decay=1.5, series='measured')`
 
 
 
@@ -4028,9 +4950,13 @@ Pd ``vline~``: (start ms, target, ramp ms) events; each ramp starts from the cur
 
 
 
-### `tom(sr=44100, vel=1.0, tune=120, decay=0.35, under=0.0, flip=0)`
+### `tom(sr=44100, vel=1.0, tune=120, decay=0.35, under=0.0, flip=0, head='ideal', bend=0.06)`
 
 
+
+### `farnell_hat(sr=44100, vel=1.0, length=0.05)`
+
+FM hi-hat: carrier frequency fc + I (sum of three sines), linear decay 1 -> 0 over ``length``.
 
 ### `farnell_kick(sr=44100, vel=1.0)`
 
@@ -4053,6 +4979,10 @@ Six 47.98 % pulses, the 7 kHz one-pole pair, decay exp(-6.9 t / Decay), gain 2.5
 
 
 ### `conga808(sr=44100, vel=1.0, size='mid', knob=0.5, dur=0.5)`
+
+
+
+### `cymbal808(sr=44100, vel=1.0, decay=1.6, tone=0.5, detune=0.0)`
 
 
 
@@ -4240,7 +5170,7 @@ impulsive sounds: no pre-ringing; FILT listening test, g14 B.2). `shift` scales 
 Pipe closed at one end: resonances at odd quarter-wave multiples f_n = (2n-1) c / (4 L), each a
 decaying sinusoid (any stable resonant IR is a sum of them, FILT PFE; g14 A). L = 0.1..2 m with size.
 
-### `cabin_gain(x, sr=44100, f0=60.0, gain_db=12.0)`
+### `cabin_gain(x, sr=44100, f0=70.0, gain_db=26.0)`
 
 Pressure-field gain of a closed cabin below its first mode f0: +12 dB per octave, levelling off at gain_db
 where leakage takes over. Second-order shelf (s^2 + sqrt2 w0 s + w0^2) / (s^2 + sqrt2 w1 s + w1^2), w1 below w0.
@@ -4266,6 +5196,22 @@ DSPG Eq 22-2: linear A|x|/(1+ln A) below 1/A, (1 + ln(A|x|))/(1 + ln A) above.
 ### `alaw_expand(y, a=87.6)`
 
 
+
+### `g711_mulaw_code(x)`
+
+ITU G.711 mu-law byte of each sample of x (float, +-1): 14-bit magnitude, bias 33, 8 segments of 16 steps.
+
+### `g711_mulaw_value(code)`
+
+Level (float, +-1) a G.711 mu-law byte decodes to.
+
+### `g711_alaw_code(x)`
+
+ITU G.711 A-law byte of each sample of x (float, +-1): 13-bit magnitude, 8 segments of 16 steps.
+
+### `g711_alaw_value(code)`
+
+Level (float, +-1) a G.711 A-law byte decodes to.
 
 ### `quantize(x, bits=8, dither='tpdf', seed=0)`
 
@@ -4314,14 +5260,20 @@ coefficients of sd s; a sine of amplitude A puts A*sqrt(N/2) in one coefficient,
 noise is removed). Blocks do not overlap: the seams and the block-rate noise modulation are part of
 the sound.
 
-### `gsm_like(x, pbits=3, order=8)`
+### `gsm_like(x, pbits=3, order=8, ltp=False)`
 
 GSM-full-rate-like coder for a signal ALREADY at 8 kHz: 20 ms frames, LPC (autocorrelation method,
 order 8), the prediction residual goes through the weighting filter and is kept on one of four grids of 13 pulses
 per 5 ms sub-frame (regular pulse excitation), each pulse quantised to `pbits` bits relative to the block
 maximum of Table 3.5, then re-synthesised through 1/A(z). The reflection coefficients go through log-area ratios,
-quantised and interpolated over four zones of the frame like the real coder. Not bit-exact GSM 06.10: the
-long-term predictor is omitted. Speech frame model: DSPG ch.22 / 27 (LPC = predict from past samples, store the error).
+quantised and interpolated over four zones of the frame like the real coder. Not bit-exact GSM 06.10. With `ltp` each 5 ms sub-frame first subtracts a
+quantised copy (gain 0.1 / 0.35 / 0.65 / 1) of the reconstructed residual 40-120 samples back, the lag that best correlates,
+and the pulses code what is left; without it the long-term predictor is omitted. Speech frame model: DSPG ch.22 / 27 (LPC = predict from past samples, store the error).
+
+### `gsm_bitrate(pbits=3)`
+
+Bit rate of the coder above: 36 bits of LARs per 20 ms frame plus, per sub-frame, 7 lag + 2 gain + 2 grid + 6 block maximum
++ 13 pulses of `pbits` (13 kbit/s at 3 bits).
 
 ### `k_to_lar(k)`
 
@@ -4399,6 +5351,12 @@ analog curve closely below ~sr/6; above that the bilinear warping adds extra att
 
 VU ballistics: power averaged by a one-pole with time constant 65.14 ms (99 % = 40 dB of the step
 reached in t40 ~ 300 ms). Returns the RMS-like level per sample.
+
+### `ppm_meter(x, sr=44100, kind='I')`
+
+Quasi-peak programme meter on the rectified signal: it rises as a one-pole that reaches 80 % of a steady tone in
+the integration time of the type (I 10 ms, IIa and IIb 5 ms) and falls linearly in dB (I 20 dB in 1.7 s, IIa 24 dB in
+1.5 s, IIb 24 dB in 2.8 s). Returns the level per sample, linear.
 
 ### `convolve(x, sr=44100, ir='', kind='room', decay=0.0, size=0.5, bright=0.5, mix=None, predelay=0.0, seed=0, loop=False)`
 
@@ -4541,6 +5499,15 @@ Band-limited with `terms`; sqrt(1 - a^2) brings the RMS to 0.7071, as a sine. Pe
 
 K-System reading of a program (Katz, Mastering Audio): RMS over 600 ms, in dB above 0 dBFS + k: a program at K-14 reads 0 at -14 dBFS RMS. Returns (rms_db_k, peak_db_k) for the loudest window. The 83 dB SPL calibration of 0 dB concerns the room, not the file.
 
+### `phase_splitter(x, sr=44100, order=8, lo=20.0)`
+
+Two signals 90 degrees apart (Hilbert pair of allpass chains, Zavalishin ch. 10): returns (in-phase, quadrature), the second leading the first, over `lo` Hz to sr / 2 - lo.
+`order` = total allpass sections (even): 8 reaches a fraction of a degree from 100 Hz at 44.1 kHz, more sections or a larger `lo` narrow the error; the error in degrees comes from `phase_splitter_error`.
+
+### `phase_splitter_error(order=8, lo=20.0, sr=44100)`
+
+Worst departure from 90 degrees (degrees) of `phase_splitter` over its band.
+
 ### `allpass_for_delay(D, w)`
 
 First-order allpass coefficient giving group delay D samples at w rad/sample: a = (-D cos w + sqrt(1 - D^2 + D^2 cos^2 w)) / (1 + D) (Parker, B41), the positive root.
@@ -4553,7 +5520,7 @@ First-order allpass coefficient giving group delay D samples at w rad/sample: a 
 
 
 
-### `codec(x, sr=44100, kind='adpcm', quality=0.5)`
+### `codec(x, sr=44100, kind='adpcm', quality=0.5, ltp=False)`
 
 
 
@@ -4569,7 +5536,16 @@ First-order allpass coefficient giving group delay D samples at w rad/sample: a 
 
 Magnetic hysteresis of tape, defaults and 4 sub-steps from Faust hysteresis.lib (empirical constants), HP 7 Hz.
 
-### `tape(x, sr=44100, wow=0.15, flutter=0.08, drive=1.5, bump=2.5, hf=12000, hiss=-58, seed=0, model='tanh', wow_rate=0.6)`
+### `playhead_loss_db(f, speed=7.5, spacing=2e-05, thickness=3.5e-05, gap=5e-06)`
+
+Play-head losses of a tape at ``speed`` ips: spacing e^(-kd), thickness (1 - e^(-k delta))/(k delta),
+gap sin(kg/2)/(kg/2), k = 2 pi f / v. Returns dB.
+
+### `playhead_loss(x, sr=44100, speed=7.5, spacing=2e-05, thickness=3.5e-05, gap=5e-06, taps=1023)`
+
+The play-head losses as a linear-phase FIR (inverse DFT of the loss magnitude), delay removed.
+
+### `tape(x, sr=44100, wow=0.15, flutter=0.08, drive=1.5, bump=2.5, hf=12000, hiss=-58, seed=0, model='tanh', wow_rate=0.6, speed=0.0, bias=0.0)`
 
 
 
@@ -4667,6 +5643,50 @@ the roots of det(diag(z^m) - A).
 True when every FDN built on A stays lossless: all poles on the unit circle and none repeated, for random
 delay sets 1..max_delay (A = [[3, 2], [-4, -3]] is lossless with m = (1, 1) but gives a triple pole with (1, 2)).
 
+### `fdn_echo_density(m, n: 'int') -> 'np.ndarray'`
+
+Absolute echo density of an FDN with delays m (samples) at times 0..n: the number of q in N^N with q.m = t,
+the echoes per sample whatever the feedback matrix (paths with a non-zero level).
+
+### `fdn_saturation_time(m) -> 'int'`
+
+First sample from which every sample carries an echo (Frobenius number + 1 of the delays; the delays must
+be coprime as a set, else -1).
+
+### `fdn_echo_density_equilateral(m, n) -> 'np.ndarray'`
+
+Polynomial part of the echo density with every delay at the geometric mean g of m:
+A(n) = (1 / ((N-1)! g)) prod_{j=1}^{N-1} (n/g + j).
+
+### `fdn_mixing_time(m, sr: 'int' = 44100, kind: 'str' = 'abel', threshold: 'float' = 0.9) -> 'float'`
+
+Mixing time (s) of an FDN from its delays: ``abel`` when A / (A + 1) reaches ``threshold`` (Abel & Huang's echo
+density profile), ``defrance`` when the expected empirical density 1 - exp(-A) does, ``polack`` when 10 echoes per
+24 ms are reached, all on the equilateral approximation of the echo density.
+
+### `fdn_echo_density_polynomial(m, n) -> 'np.ndarray'`
+
+Polynomial part of the echo density of an FDN with delays m (exact Ehrhart average, any delays):
+the residue at s = 0 of e^(ns) / prod(1 - e^(-m_i s)), i.e. coefficient N-1 of e^(ns) prod_i sum_k B_k+ (m_i s)^k / k!
+over prod m_i (B_1+ = +1/2). Equal to ``fdn_echo_density`` averaged over a period.
+
+### `fdn_degeneration(m) -> 'dict'`
+
+Degenerate delay patterns of an FDN: ``common_factor`` (gcd of all delays > 1: the density never reaches 1),
+``geometric_std`` (exp of the standard deviation of ln m / geometric mean; < 1.2 clusters the echoes),
+``coprime`` (pairwise relatively prime), ``order`` (smallest k = sum q1 of an integer relation q1.m = q2.m with
+q1, q2 >= 0 of disjoint support, searched up to 5; None if none).
+
+### `fdn_delays_for_mixing(t_mix: 'float', lines: 'int' = 8, sr: 'int' = 44100, kind: 'str' = 'abel', threshold: 'float' = 0.9) -> 'np.ndarray'`
+
+Pairwise coprime delays (samples) for an FDN with mixing time ``t_mix`` (s): geometric mean from
+``fdn_mean_delay_for_mixing``, spread as mean x 3^((ln i - mean ln i) / std ln i), i = 1..lines (geometric std 3), each
+raised to the next integer coprime with the previous ones.
+
+### `fdn_mean_delay_for_mixing(t_mix: 'float', lines: 'int', sr: 'int' = 44100, kind: 'str' = 'abel', threshold: 'float' = 0.9) -> 'float'`
+
+Geometric-mean delay length (samples) that gives mixing time ``t_mix`` (s) with ``lines`` delay lines.
+
 ### `apdist(x, sr=44100, drive=2.0, smooth=500.0)`
 
 Signal-dependent all-pass (Pd e_apdist): first-order all-pass whose coefficient is the input low-passed at
@@ -4676,12 +5696,14 @@ Signal-dependent all-pass (Pd e_apdist): first-order all-pass whose coefficient 
 
 Second-order waveguide oscillator (C = cos(2 pi f T), x1, x2 <- C (x1 + x2) - x2, C (x1 + x2) + x1) whose
 amplitude stays exact under FM: x2 is rescaled by the ratio of g = sqrt((1 - C)/(1 + C)) between samples.
-``tau`` > 0: exponential decay (s), r = exp(-T/tau) per sample. ``freq`` number or per-sample.
+``tau`` > 0: amplitude decays as exp(-t/tau): one state is scaled by g = exp(-2T/tau) per sample and the
+tuning coefficient is corrected for that damping. ``freq`` number or per-sample.
 
-### `wdf_port(kind: 'str', value: 'float', sr=44100)`
+### `wdf_port(kind: 'str', value: 'float', sr=44100, warp_hz=None)`
 
 Port resistance and reflection of a wave-digital element, force-velocity analogy, bilinear c = 2/T: mass m
-(R = 2 m / T, b = -a z^-1), spring k (R = k T / 2, b = a z^-1), damper r (R = r, b = 0).
+(R = c m, b = -a z^-1), spring k (R = k / c, b = a z^-1), damper r (R = r, b = 0). ``warp_hz``: pre-warp,
+c = w0 / tan(w0 T / 2), so that frequency maps exactly.
 
 ### `wdf_series(R)`
 
@@ -4694,7 +5716,8 @@ Parallel adaptor coefficients alpha_i = 2 G_i / sum G (b_i = alpha . a - a_i).
 ### `wdf_oscillator(force, sr=44100, m=0.01, k=4000.0, r=0.5)`
 
 Velocity of a mass-spring-damper driven by ``force`` (N per sample), as a wave digital filter: the three
-elements on one series adaptor, the force entering as the damper's source (b = F). Resonance sqrt(k/m)/(2 pi).
+elements on one series adaptor, the force entering as the damper's source (b = F). Resonance sqrt(k/m)/(2 pi),
+exact (bilinear pre-warped at that frequency).
 
 ### `variation_filter(x, sr=44100, n=10, depth_db=8.0, seed=0)`
 
@@ -4728,6 +5751,13 @@ eff = amount (1 - transient onset), so a note's attack is not echoed.
 Modal synthesis in the frequency domain: each frame (FFT ``n``, hop n/2, sqrt-Hann on both sides) gets every
 mode as its ``bins`` nearest bins of the windowed sinusoid's spectrum (energy error 1 bin 53 %, 3 bins 5 %,
 5 bins 1 %), then inverse FFT and overlap-add. ``decays`` T60 s.
+
+### `mode_lock(freqs, amps, coupling: 'float' = 0.1) -> 'tuple'`
+
+Mode locking of nearly harmonic partials driven by a nonlinear source. The common fundamental w is the amplitude-weighted
+least-squares fit of the partials to n w (n the nearest harmonic number); a partial is pulled onto n w when its offset is
+below ``coupling * (a / a_max) * f / (n + 1)``: the stronger the mode and the lower its order, the wider the capture range.
+Returns (locked frequencies, boolean mask of the locked partials, w).
 
 ## `genny.energy_arms`
 
@@ -4860,14 +5890,16 @@ cycle after ignition); slap and rod knock fall at the 2 thrust reversals of each
 ### `expansion_chamber(bore=0.05, egt=800.0)`
 
 Stepped tuned pipe as (delays in samples, junction reflections, section gains): header .2 m at .6 B, diffuser .3 m in 6
-steps up to 1.9 B, belly .1 m, counter-cone .2 m in 5 steps down to 1.15 x stinger, stinger .2 m at .32 B.
+steps up to 1.9 B, belly .1 m, counter-cone .2 m in 5 steps down to 1.15 x stinger, stinger .2 m at .36 B.
 Sound speed sqrt(1.36 x 287 T), T from zones 1, .85, .75, .7, .6 of 300 K..EGT and loss g = exp(-.09 k),
 k = .072 L / sqrt(D / .05) (wall .12 x .6). EGT 800 K, bore 50 mm.
 A wider section reflects a negative wave (the suction that pulls the cylinder clean), a narrower one a positive wave.
 
-### `two_stroke(sr=44100, rpm=7000.0, cylinders=1, load=0.6, bore=0.05, dur=3.0, seed=0)`
+### `two_stroke(sr=44100, rpm=-1.0, cylinders=1, load=0.6, bore=0.0, dur=3.0, seed=0, kind='default', cut=None, rev_limit=-1.0, tuned_rpm=-1.0, ports=None, idle=0, cut_at=0.0)`
 
-
+The core is ``cyber.pipe_engine(cycle=2)``; ``kind`` only picks its parameters (``TWO_STROKE_KINDS``). Python callers also have
+``ports`` and ``tuned_rpm`` (-1 = the kind's, or the speed itself when it has none) and ``cut_at`` (s: the speed follows ``rpm``
+until then, and runs free into the limiter after it).
 
 ### `ignition_delay_ms(cetane=51.0, p_bar=60.0, t_k=900.0)`
 
@@ -4924,7 +5956,7 @@ light-off has a chance per second of 55 hot (.3 + mF / 2e-5), hot = clip((EGT - 
 only above idle + 700 rpm and under 3 % throttle. LHV 43.5e6. The rich mixture feeds the pool 2e-4 kg/s; scale to the
 collector 40.
 
-### `engine_event(sr=44100, kind='engine_start', layout='inline_4', rpm=-1.0, load=0.5, gear=3, speed=60.0, limit=8000.0, bore=0.086, severity=0.5, cycles=0, dur=0.0, seed=0)`
+### `engine_event(sr=44100, kind='engine_start', layout='inline_4', rpm=-1.0, load=0.5, gear=3, speed=60.0, limit=8000.0, bore=0.086, severity=0.5, cycles=0, temperature=0.0, dur=0.0, seed=0)`
 
 
 
@@ -4943,7 +5975,8 @@ Returns (rpm, fuel-cut recovery rpm = that idle + 350).
 
 ## `genny.env`
 
-Envelopes: ADSR, exponential decay, and generic breakpoint envelopes.
+Envelopes: ADSR, exponential decay, and generic breakpoint envelopes; segment envelopes with gate, release and
+loop nodes; control-rate smoothing, sample and hold, triggers and slow random signals.
 
 ### `adsr(dur: 'float', attack: 'float' = 0.01, decay: 'float' = 0.1, sustain: 'float' = 0.7, release: 'float' = 0.2, sr: 'int' = 44100, curve: 'float' = 2.0) -> 'np.ndarray'`
 
@@ -4979,7 +6012,208 @@ points: [(time_seconds, value), ...] linearly interpolated over dur.
 
 Multiply, padding whichever is shorter with zeros / last value.
 
-### `lfo(dur: 'float', rate: 'float', sr: 'int' = 44100, shape: 'str' = 'sine', depth: 'float' = 1.0, phase0: 'float' = 0.0) -> 'np.ndarray'`
+### `lfo(dur: 'float', rate: 'float', sr: 'int' = 44100, shape: 'str' = 'sine', depth: 'float' = 1.0, phase0: 'float' = 0.0, seed: 'int' = 7) -> 'np.ndarray'`
+
+
+
+### `segment(l0: 'float', l1: 'float', n: 'int', shape='lin') -> 'np.ndarray'`
+
+n samples from l0 (excluded) to l1 (reached on the last one). ``shape``: a name of SEGMENT_SHAPES or a number c,
+the curve l0 + (l1 - l0) (1 - e^(c u)) / (1 - e^c) (c < 0 fast start, c > 0 slow start, 0 = lin).
+
+### `env(levels, times, shapes='lin', sr: 'int' = 44100, gate: 'float | None' = None, release_node: 'int | None' = None, loop_node: 'int | None' = None) -> 'np.ndarray'`
+
+Envelope through ``levels`` (N + 1 values) over ``times`` (N seconds), each segment with its shape (one for all or
+a list: names of SEGMENT_SHAPES or curve numbers). With ``release_node`` r and ``gate`` (s the note is held): the
+segments before node r play, then the level holds at node r, or the segments from ``loop_node`` to r loop, until the
+gate closes; the segments from r on then start from wherever the level is (release mid-attack is smooth).
+
+### `env_adsr(attack=0.01, decay=0.3, sustain=0.5, release=1.0, gate=1.0, peak=1.0, curve=-4.0, sr: 'int' = 44100) -> 'np.ndarray'`
+
+Attack, decay to ``sustain`` x ``peak``, hold while the gate is open, release from the current level; curve -4.
+
+### `env_perc(attack=0.01, release=1.0, level=1.0, curve=-4.0, sr: 'int' = 44100) -> 'np.ndarray'`
+
+
+
+### `lag(x, time=0.1, sr: 'int' = 44100, stages: 'int' = 1) -> 'np.ndarray'`
+
+One-pole smoothing that covers 60 dB of a step in ``time`` s; ``stages`` 2 or 3 = cascades (an S-shaped glide).
+
+### `lag_ud(x, up=0.1, down=0.1, sr: 'int' = 44100, stages: 'int' = 1) -> 'np.ndarray'`
+
+Like ``lag``, with its own time for rising and for falling input; each stage compares its own input and state.
+
+### `slew(x, up=1.0, down=1.0, sr: 'int' = 44100) -> 'np.ndarray'`
+
+Slope limiter: the output moves at most ``up`` (rising) or ``down`` (falling) units per second.
+
+### `varlag(x, time=0.1, sr: 'int' = 44100) -> 'np.ndarray'`
+
+Each change of the (stepped) input starts a straight ramp of ``time`` s from the current value to the new one.
+
+### `latch(x, trig, mode: 'str' = 'edge') -> 'np.ndarray'`
+
+Sample and hold: ``x`` is taken when ``trig`` crosses from <= 0 to > 0 (edge), or when the phase ``trig`` wraps
+(wrap: it falls, as a phasor does at the end of its cycle, so the held value changes exactly at the cycle start).
+
+### `phasor(freq, dur: 'float', sr: 'int' = 44100, reset=None, phase0: 'float' = 0.0) -> 'np.ndarray'`
+
+Ramp 0 -> 1 at ``freq`` Hz (a number or one value per sample), sent back to ``phase0`` on each rising edge of
+``reset``.
+
+### `schmitt(x, lo=0.4, hi=0.6, dead: 'float' = 0.0, sr: 'int' = 44100) -> 'np.ndarray'`
+
+Trigger with hysteresis: goes to 1 above ``hi``, back to 0 below ``lo``, and ignores the input for ``dead`` s after
+each change (no chatter on a noisy level).
+
+### `control_noise(dur: 'float', freq=4.0, interp: 'str' = 'linear', freq_max: 'float | None' = None, lo: 'float' = -1.0, hi: 'float' = 1.0, seed: 'int' = 0, sr: 'int' = 44100) -> 'np.ndarray'`
+
+Slow random signal between ``lo`` and ``hi``: a new random value ``freq`` times a second (a number or one value per
+sample), held (hold), joined by lines (linear) or by a smooth cubic (cubic, continuous slope). With ``freq_max`` each
+segment draws its own rate between freq and freq_max (an irregular, never periodic drift).
+
+### `vibrato_ratio(dur: 'float', rate: 'float' = 6.0, depth: 'float' = 0.02, delay: 'float' = 0.0, onset: 'float' = 0.0, rate_var: 'float' = 0.04, depth_var: 'float' = 0.1, sr: 'int' = 44100, seed: 'int' = 0) -> 'np.ndarray'`
+
+Frequency ratio of a sung or played vibrato (1 = no deviation): parabolic half-cycles of +-``depth``, every cycle
+with its own rate (+-``rate_var``) and each half with its own depth (+-``depth_var``), silent for ``delay`` s then
+fading in over ``onset`` s. Multiply a frequency by it, or play a sound at that rate.
+
+## `genny.export`
+
+Export helpers: scripts that carry rendered files into a game audio tool.
+
+### `fmod_import_script(paths, events=True, prefix='') -> 'str'`
+
+JavaScript for FMOD Studio's scripting API (studio.project): imports each WAV (`importAudioFile`) and, with
+`events`, makes one event per file holding a single sound on its own audio track, named `prefix` + the file name.
+Run it from Studio's Scripts menu, or send it with `fmod_send`.
+
+### `fmod_send(script: 'str', host: 'str' = '127.0.0.1', port: 'int' = 3663, timeout: 'float' = 5.0) -> 'str'`
+
+Send a script to a running FMOD Studio over its scripting TCP port and return what it answers.
+
+## `genny.family_v`
+
+Family V: binaural rendering, free reeds, measured instrument bodies, tape bias.
+
+Registers
+    effects      `binaural_move` (moving source through an HRTF), `binaural_room` (image-source room with an HRTF per arrival),
+                 `body_measured` (modal body of a violin / guitar), `tape_bias` (Jiles-Atherton tape with HF bias, wow, flutter)
+    instruments  `harmonica_reed`, `accordion_reed`, `melodica_reed`, `sho_reed`, `khaen_reed` (self-oscillating free reed),
+                 `guitar_modal`, `violin_modal` (string excitation through the measured body)
+HRTF data: the parametric sphere + pinna model, or a measured set read by `load_hrir` (.sofa through h5py, or a stereo .wav).
+
+### `itd_woodworth(az, el=0.0, a=0.0875, c=343.0)`
+
+Interaural time difference (s, > 0 when the source is on the right: the left ear is later) of a rigid sphere,
+Woodworth: a/c (theta + sin theta), theta the lateral angle asin(sin az cos el); 0.656 ms at 90 deg for a = 8.75 cm.
+
+### `itd_kuhn(az, el=0.0, a=0.0875, c=343.0)`
+
+Low-frequency (below ~500 Hz) interaural delay of the sphere, Kuhn: 3 a / c sin theta (1.5 x Woodworth at 90 deg).
+
+### `head_shadow(f, theta_deg, a=0.0875, amin=0.1, thmin=150.0)`
+
+Brown-Duda head-shadow filter, theta the angle between the source and the ear axis: (1 + j alpha w / 2w0) / (1 + j w / 2w0),
+w0 = c / a, alpha(theta) = 1 + amin/2 + (1 - amin/2) cos(180 theta / thmin): +6 dB at the near ear, about -11 dB at 180 deg above w0.
+
+### `hrir_param(az, el=0.0, sr=44100, a=0.0875, n=256, itd_model='woodworth')`
+
+Parametric HRIR (n, 2), left then right.
+
+### `load_hrir(path)`
+
+Measured HRIR set {'hrir' (M, N, 2) left/right, 'az' (M,) deg (0 ahead, +90 right), 'el' (M,) deg, 'sr'}.
+.sofa (SimpleFreeFieldHRIR, spherical or cartesian source positions; needs h5py) or a stereo .wav (one direction, ahead).
+
+### `hrir_at(az, el=0.0, sr=44100, hrtf=None, a=0.0875, n=256)`
+
+HRIR (n, 2) toward (az, el) from a measured set (`load_hrir`) or the parametric model.
+
+### `itd_measure(h, sr, fmax=1500.0)`
+
+Interaural delay (s, > 0 when the right ear leads) of an HRIR (N, 2): cross-correlation peak of the low-passed channels,
+parabolic interpolation.
+
+### `ild_measure(h, f0, f1, sr)`
+
+Level difference right - left (dB) of an HRIR (N, 2), mean over the band f0..f1.
+
+### `binaural_path(x, sr, az, el=0.0, dist=1.0, hrtf=None, head=0.0875, block=256, doppler=False)`
+
+Mono source -> (n + N, 2) binaural, the source moving along az / el / dist (scalar, or arrays spread over the signal's
+duration). Blocks of 2 `block` samples with periodic Hann windows (they sum to 1 at a hop of `block`) are each convolved with the
+HRIR of the direction at their centre; gain 1 / dist (1 m = unity); `doppler` reads the source through the travel time dist / c.
+
+### `binaural_move(x, sr=44100, az0=-60.0, az1=60.0, el=0.0, dist0=2.0, dist1=2.0, head=0.0875, hrtf='', doppler=0)`
+
+
+
+### `binaural_room_ir(dims, src, lis, surfaces='plaster', sr=44100, order=4, tmax=0.12, yaw=0.0, hrtf=None, head=0.0875, tail=True, rt=None, seed=0)`
+
+Binaural room impulse response (N, 2): shoebox image sources (Allen & Berkley) to `order` reflections up to `tmax` s after the
+direct sound, each arrival filtered by the HRTF of its direction in the listener's frame (listener faces +y, `yaw` degrees to the
+right; x right, z up) and by the per-band wall reflection sqrt(1 - alpha); fractional delays in the spectrum; the direct sound has
+gain 1. After `tmax`: an uncorrelated exponential noise tail per ear at the Sabine decay time (`rt` overrides), level matched to the
+last 20 ms of the image-source part. `surfaces`: one material or six (x0, x1, y0, y1, floor, ceiling) of `reverbs.ABSORPTION`.
+
+### `binaural_room(x, sr=44100, lx=6.0, ly=8.0, lz=3.0, src_x=3.5, src_y=5.0, src_z=1.5, lis_x=2.5, lis_y=2.0, lis_z=1.6, material='plaster', order=4, yaw=0.0, head=0.0875, hrtf='', mix=1.0)`
+
+
+
+### `free_reed_voice(freq, dur, sr=44100, preset='harmonica', vel=1.0, attack=0.03, **over)`
+
+One self-oscillating free reed at `freq` (the reed's natural frequency is freq / (1 + FREE_REED_SHIFT): a reed blown open
+sounds slightly above it). Output is the radiated sound, d(flow)/dt, peak normalised. A reed loaded by a pipe sounds off its
+own frequency: a short pilot measures it and the reed is retuned.
+
+### `harmonica_reed(freq, dur, sr=44100, vel=1.0, second=0.0, musette=None)`
+
+
+
+### `accordion_reed(freq, dur, sr=44100, vel=1.0, second=0.0, musette=None)`
+
+
+
+### `melodica_reed(freq, dur, sr=44100, vel=1.0, second=0.0, musette=None)`
+
+
+
+### `sho_reed(freq, dur, sr=44100, vel=1.0, second=0.0, musette=None)`
+
+
+
+### `khaen_reed(freq, dur, sr=44100, vel=1.0, second=0.0, musette=None)`
+
+
+
+### `body_apply(y, sr, body='violin', amount=1.0, spread=0.0, seed=0)`
+
+y plus `amount` of the modal body: parallel unit-peak resonators at the published modes, scaled by each mode's boost
+(peak gain 1 + amount * boost at the mode). `spread`: relative s.d. of the mode frequencies (a different instrument).
+
+### `body_measured(x, sr=44100, body='violin', amount=1.0, spread=0.0, seed=0)`
+
+
+
+### `guitar_modal(freq, dur, sr=44100, vel=1.0, body='guitar_classical', amount=1.0, seed=0)`
+
+
+
+### `violin_modal(freq, dur, sr=44100, vel=1.0, amount=1.0, seed=0)`
+
+
+
+### `tape_bh_loop(hmax=6.0, cycles=3, points=256)`
+
+Major B-H (M-H) loop of the tape: (H, M) of the last of `cycles` sinusoidal sweeps of amplitude hmax.
+
+### `tape_record(x, bias=1.0, hmax=6.0)`
+
+x (full scale 1) through the recording characteristic, referred to the linear-bias curve at half scale (unity gain there).
+
+### `tape_bias(x, sr=44100, bias=1.0, drive=0.6, wow=0.15, flutter=0.08, wow_rate=0.6, speed=7.5, hf=14000, hiss=-58, seed=0)`
 
 
 
@@ -5162,6 +6396,12 @@ bc: 'free' | 'clamped' | 'ss' per end. ratio > 0 cuts an arch (variable thicknes
 stable here because of the oversampling) so that mode 2 = ratio * mode 1.
 
 
+### `table_i_check(key, sr=44100, partials=(1, 2, 3, 5, 8))`
+
+The scheme of ``StiffString`` against the PDE of a ``piano_data.BENSA_TABLE_I`` row: the string is built from
+partial 1, B and two (frequency, T60) points of the PDE, then rows (p, PDE Hz, scheme Hz, error cents,
+PDE T60 s, scheme T60 s) are listed for the partials asked.
+
 ### `fd_string(freq, dur, sr=44100, vel=1.0, excitation='pluck', position=0.18, B=0.0001, t60_lo=4.0, t60_hi=0.6, pickup=0.3, bright=1.0, bead=0.0, bead_pos=0.5)`
 
 
@@ -5185,12 +6425,11 @@ inharmonicity, `strings.matched_tuning_cents`) or railsback (aural tuning curve,
 
 ### `sitar_fd(freq, dur, sr=44100, vel=1.0, buzz=0.45, B=0.0001)`
 
-Siddiq, "A physical model of the nonlinear sitar string", Arch. Acoust. 37(1), 73-79 (2012): a dispersive
-string whose first points rest on the flat bridge, a one-sided obstacle that the string strikes and leaves
-every period (so the vibrating length changes and the Young-Helmholtz law fails, his Fig. 11). Here the stiff
-string of this module, the bridge a row of rigid one-sided stops over the first 1 % of the string, curved as
-depth (x / l)^2 (jawari), depth = 2e-3 (1 - buzz) string lengths; buzz 0 = no bridge. (Siddiq gives
-no geometry): the bridge length, curvature, contact stiffness, the 5 mm pluck. Measured at D3, buzz .45: 30 % of the
+Sitar: a dispersive string whose first points rest on the flat bridge, a one-sided obstacle that the string
+strikes and leaves every period (so the vibrating length changes and a pluck at a node no longer silences that
+partial). The stiff string of this module, the bridge a row of rigid one-sided stops over the first 1 % of the
+string, curved as depth (x / l)^2 (jawari), depth = 2e-3 (1 - buzz) string lengths; buzz 0 = no bridge; plucked
+at one fifth. Bridge length, curvature, contact stiffness and the 5 mm pluck are chosen. Measured at D3, buzz .45: 30 % of the
 energy above 8 f0 late in the note (free string 43 %); a 4 % bridge at 2e-4 pinned the string and left .5 %, and a
 coarser grid (oversample 1) has no point inside 1 %. Higher buzz presses harder and takes this share down again.
 
@@ -5198,16 +6437,32 @@ coarser grid (oversample 1) has no point inside 1 %. Higher buzz presses harder 
 
 
 
+### `bar_t60(material, freq)`
+
+T60 of a bare bar whose amplitude decays at a0 + 2 pi^2 tau f^2 per second (fluid + Kelvin-Voigt losses).
+
+### `hertz_contact_time(K, mass, v)`
+
+Contact duration of a mass hitting a rigid body with F = K u^(3/2): 2.9432 u_max / v, u_max = (5 m v^2 / (4 K))^(2/5).
+
+### `mallet_hardness(name, v0=1.5, freq=440.0)`
+
+The fd_bar `mallet` value whose contact time at speed v0 equals that of a Hertz mallet from MALLET_HERTZ.
+
 ### `amplitude_glide(y, sr, cents)`
 
 Pitch that falls with the amplitude: the time base runs faster by `cents` at the peak of the envelope and
 by cents x (envelope / peak)^2 after (the stiffening of a large vibration grows with its square).
 
-### `fd_bar(freq, dur, sr=44100, vel=1.0, material='wood', boundary='free', mallet=0.5, tuning='none', position=0.5, pickup=0.42, decay=1.0, quality=1, bright=1.0, glide=0.0, scan=0.0, scheme='explicit')`
+### `fd_bar(freq, dur, sr=44100, vel=1.0, material='wood', boundary='free', mallet=0.5, tuning='none', position=0.5, pickup=0.42, decay=1.0, quality=1, bright=1.0, glide=0.0, scan=0.0, scheme='explicit', resonator=0.0)`
 
 
 
-### `bowed_string_fd(freq, dur, sr=44100, vel=1.0, force=1.0, speed=1.0, position=0.12, travel=0.03, B=5e-05, decay=2.5, pickup=0.3, bright=1.0)`
+### `rhodes_fd(freq, dur, sr=44100, vel=1.0, clamp=60.0, base=1.0, damp=0.0, position=0.15, pickup=0.9, decay=1.0, bright=1.0)`
+
+
+
+### `bowed_string_fd(freq, dur, sr=44100, vel=1.0, force=1.0, speed=1.0, position=0.12, travel=0.03, B=5e-05, decay=2.5, pickup=0.3, bright=1.0, friction='smooth', residual=0.3)`
 
 
 
@@ -5216,6 +6471,14 @@ by cents x (envelope / peak)^2 after (the stiffening of a large vibration grows 
 
 
 ### `twang(sr=44100, kind='band', freq=140.0, dur=0.9, amount=1.0, slide=0.0)`
+
+
+
+### `slinky_modes(sr, kappa=0.06)`
+
+Mode numbers and frequencies (Hz) of a unit-length bar with pivoting ends, w = kappa (n pi)^2, below 0.45 sr.
+
+### `slinky(sr=44100, kappa=0.06, dur=2.0, decay=3.0, decay_hi=0.6, pos=0.03)`
 
 
 
@@ -5228,18 +6491,18 @@ mode scales as 1/L^2, so the time base runs at 1/(1 - slide u)^2; ``y`` must las
 
 Unwound wire length of a helix of radius R with `turns` turns over an axial `height`.
 
-### `spring_geometry(r: 'float', R: 'float', turns: 'float', height: 'float' = 0.0, E: 'float' = 200000000000.0, rho: 'float' = 7850.0) -> 'dict'`
+### `spring_geometry(r: 'float', R: 'float', turns: 'float', height: 'float' = 0.0, E: 'float' = 211000000000.0, rho: 'float' = 7800.0) -> 'dict'`
 
 Echo spacing TD = 4 L R / (r c) and chirp cutoff fC = 3 r c / (16 R^2 sqrt(5 pi)) of a helical spring of wire
 radius r and helix radius R (c = sqrt(E / rho)).
 
-### `spring_dispersion(r: 'float', R: 'float', E: 'float' = 200000000000.0, rho: 'float' = 7850.0, n: 'int' = 20000)`
+### `spring_dispersion(r: 'float', R: 'float', E: 'float' = 211000000000.0, rho: 'float' = 7800.0, n: 'int' = 20000)`
 
 Dispersion of a helical spring at zero helix angle (two coupled equations, longitudinal u and transverse v):
 (w^2 - c^2 b^2)(w^2 - g^2 (b^2 - k^2)^2 - c^2 k^2) = c^4 k^2 b^2, c^2 = E/rho, g^2 = E r^2 / (4 rho), k = 1/R.
 Returns (beta rad/m, f Hz, group velocity m/s) on the lower (audio) branch below its maximum fC, and fC.
 
-### `spring_echo_time(f, r: 'float', R: 'float', turns: 'float', height: 'float' = 0.0, E: 'float' = 200000000000.0, rho: 'float' = 7850.0)`
+### `spring_echo_time(f, r: 'float', R: 'float', turns: 'float', height: 'float' = 0.0, E: 'float' = 211000000000.0, rho: 'float' = 7800.0)`
 
 Round-trip time 2 L / v_g(f) of the audio branch, seconds (inf at and above fC).
 
@@ -5255,7 +6518,7 @@ Multiplications per output sample of the parametric spring (chain sections cost 
 
 Stretched resonator of the first chirp, (A0/2)(1 - z^-2Keq)/(1 + a1 z^-Keq + a2 z^-2Keq), Keq = floor(K).
 
-### `spring_fd(x, sr=44100, r=0.0001, R=0.0025, turns=112, height=0.0, decay=1.7, E=200000000000.0, rho=7850.0, fmax=5000.0)`
+### `spring_fd(x, sr=44100, r=0.0001, R=0.0025, turns=112, height=0.0, decay=1.7, E=211000000000.0, rho=7800.0, fmax=5000.0)`
 
 Helical spring as two coupled PDEs (curved bar, zero helix angle):
 u_tt = c^2 (u_ss - k v_s) - 2 s u_t,  v_tt = -g^2 (v_ssss + 2 k^2 v_ss + k^4 v) + c^2 k (u_s - k v) - 2 s v_t,
@@ -5279,28 +6542,76 @@ tau(f) = L + M K (1 - a^2)/(1 + 2 a cos(2 pi f K / sr) + a^2). Returns dict(M, a
 Filters (RBJ biquads through scipy.lfilter). Static cutoff, or a per-sample cutoff: a TPT state-variable
 filter for lowpass / highpass / bandpass / notch, block-wise RBJ for the others.
 
+### `ladder_k_max(order: 'int' = 4) -> 'float'`
+
+Loop gain at which an ``order``-stage ladder 1 / ((1 + s)^N + k) goes unstable: sec(pi/N)^N (4 for N = 4;
+no limit below N = 3, 4 is returned).
+
+### `ladder_poles(order: 'int', k: 'float', fc: 'float') -> 'np.ndarray'`
+
+Poles (rad/s) of the N-stage ladder 1 / ((1 + s / w)^N + k), w = 2 pi fc: the circle of radius w k^(1/N)
+centred on -w, at angles pi (2 i + 1) / N.
+
+### `ladder_resonance(order: 'int', k: 'float', fc: 'float') -> 'tuple[float, float]'`
+
+(Hz, Q) of the leading pole pair of ``ladder_poles`` (the pair nearest the imaginary axis, angle pi / N); k = 0 gives (fc, 0.5).
+
+### `ladder_pole_ratio(order: 'int', k: 'float') -> 'float'`
+
+Ratio of the leading-pole frequency to the natural cut-off of the N-stage ladder: A0(k) = sqrt(1 + k^(2/N)
+- 2 k^(1/N) cos(pi / N)); 1 at k = 0.
+
+### `ladder_k_from_q(order: 'int', q: 'float') -> 'float'`
+
+Loop gain k that gives the leading poles of the N-stage ladder (N >= 2) the quality factor ``q`` (>= 1/2);
+q -> infinity gives ``ladder_k_max``.
+
+### `diode_ladder_poles(k: 'float', fc: 'float') -> 'np.ndarray'`
+
+Poles (rad/s) of the 4-stage diode ladder, the roots of 8 (1 + s/w)^4 - 8 (1 + s/w)^2 + 1 + k, w = 2 pi fc;
+at k = 0: -w (0.07612, 0.61732, 1.38268, 1.92388).
+
+### `ladder_dc_gain(k: 'float') -> 'float'`
+
+DC gain of the ladder, 1 / (1 + k) (the same for every number of stages).
+
+### `ladder_cutoff_error(order: 'int', k: 'float') -> 'float'`
+
+Relative error |1 - 1 / A0(k)| between the natural cut-off and the leading-pole frequency; its maximum over k is
+1 for N <= 6 and csc(pi / N) - 1 above (N = 4: zero at k = k_max).
+
 ### `faust_q_to_k(kind: 'str', q: 'float', norm_freq: 'float' = 0.0) -> 'float'`
 
 Faust ve.* mapping of a Q (0.7071..25, 10 for korg35) to the loop gain: moog 4(Q - .7071)/(25 - .7071),
 diode (17 - n^10 9.7)(Q - .7071)/(25 - .7071) with n the normalised cutoff 0..1, korg35 2(Q - .7071)/(10 - .7071).
 
-### `ladder(x: 'np.ndarray', cutoff, sr: 'int' = 44100, res: 'float' = 0.5, kind: 'str' = 'moog', drive: 'float' = 1.0, solver: 'str' = 'node', q: 'float | None' = None) -> 'np.ndarray'`
+### `ladder(x: 'np.ndarray', cutoff, sr: 'int' = 44100, res: 'float' = 0.5, kind: 'str' = 'moog', drive: 'float' = 1.0, solver: 'str' = 'node', q: 'float | None' = None, order: 'int' = 4, pole_cutoff: 'bool' = False) -> 'np.ndarray'`
 
 Transistor (``moog``) or diode (``diode``, TB-303 type) ladder low-pass; ``res`` 1 is the edge of self-oscillation
 (k = 4 and 17). ``cutoff`` is a number or per-sample; ``drive`` is the level into the tanh.
 ``lpf18``: the 3-pole LPF18 (18 dB/oct), ``res`` 0..1 as in Soundpipe, ``drive`` its distortion (default there 2).
 ``huovilainen``: Huovilainen's 2x-oversampled tanh-per-stage Moog (Soundpipe moogladder), ``res`` 0..1, ``drive``
 the input level against the thermal voltage (1 = full scale 32768, as Csound).
+``dangelo``: explicit ``order``-stage ladder (D'Angelo & Valimaki), one tanh per stage, ``res`` 0..1 of ``ladder_k_max(order)``,
+``drive`` the level into the tanh, output / drive; ``pole_cutoff`` makes ``cutoff`` the frequency of the leading poles
+(``ladder_pole_ratio``) instead of the natural cut-off, so the resonance stays where it is set whatever ``res``.
+``levien_linear``: Levien's exact sample-and-hold matrix ladder (tuning exact up to Nyquist, no oversampling);
+``levien``: the same matrix with tanh on the input and on each stage; ``drive`` scales into the tanh, output / drive.
 ``solver`` (moog): ``node`` tanh of the linear node estimate, ``newton`` the delay-free loop solved by Newton,
 ``adaa`` the same loop with an antiderivative-antialiased tanh. ``q`` (moog, diode): a Faust Q 0.7071..25 in place
 of ``res`` (``faust_q_to_k``); the diode then pre-saturates its input as Faust does (x 1.5, cubic).
 
-### `svf(x: 'np.ndarray', kind: 'str', cutoff, sr: 'int' = 44100, q: 'float' = 0.707, gain_db: 'float' = 0.0) -> 'np.ndarray'`
+### `svf_peak_gain(q: 'float') -> 'float'`
+
+Peak gain of the 2-pole lowpass/highpass: Q / sqrt(1 - 1/(4 Q^2)) above Q = 1/sqrt 2, else 1.
+
+### `svf(x: 'np.ndarray', kind: 'str', cutoff, sr: 'int' = 44100, q: 'float' = 0.707, gain_db: 'float' = 0.0, level: 'str' = 'none') -> 'np.ndarray'`
 
 TPT state-variable filter (lowpass, highpass, bandpass, notch, allpass, resonance = LP - HP, bandshelf with
 `gain_db` at the centre; lowshelf M^2 LP + M 2R BP + HP with g / sqrt M, highshelf LP + M 2R BP + M^2 HP with
 g sqrt M, tilt LP / M + 2R BP + M HP with g sqrt M: -gain_db/2 below, +gain_db/2 above, M = 10^(gain_db/40)) with a scalar or
-per-sample cutoff, so a shelf or a tilt can be swept.
+per-sample cutoff, so a shelf or a tilt can be swept. level="peak": lowpass/highpass divided by their resonant
+peak, so raising Q does not raise the level.
 
 ### `svf_band(x: 'np.ndarray', kind: 'str', center: 'float', bw_oct: 'float', sr: 'int' = 44100, gain_db: 'float' = 0.0) -> 'np.ndarray'`
 
@@ -5322,9 +6633,10 @@ Two-pole resonator as a rotating complex state z(n+1) = r e^(j theta) z(n) + u(n
 (1 - 2 r cos(theta) z^-1 + r^2 z^-2), r = exp(-1 / (tau sr)). ``freq`` (Hz) and ``tau`` (s to fall to 1/e; 0 or inf = no
 decay) may be per-sample: changing them leaves the ringing amplitude untouched, so very high Q can be swept without clicks.
 
-### `korg35(x: 'np.ndarray', cutoff, sr: 'int' = 44100, res: 'float' = 1.0, sat: 'float' = 1.0) -> 'np.ndarray'`
+### `korg35(x: 'np.ndarray', cutoff, sr: 'int' = 44100, res: 'float' = 1.0, sat: 'float' = 1.0, kind: 'str' = 'lowpass') -> 'np.ndarray'`
 
-Korg 35 (MS-20) low-pass, scalar or per-sample cutoff; `res` 0..2 (2 is the edge of self-oscillation, Soundpipe default 1).
+Korg 35 (MS-20) low-pass or high-pass, scalar or per-sample cutoff; `res` 0..2 (2 is the edge of self-oscillation,
+Soundpipe default 1).
 
 ### `peak_allpass(x: 'np.ndarray', center, sr: 'int' = 44100, bw: 'float' = 200.0, gain_db: 'float' = 6.0) -> 'np.ndarray'`
 
@@ -5367,13 +6679,13 @@ the cutoff, so order 1/2/4 are -3/-6/-12 dB there and a resonance doubles in dB 
 
 
 
-### `lowshelf(x, cutoff, sr=44100, gain_db=6.0)`
+### `lowshelf(x, cutoff, sr=44100, gain_db=6.0, q=0.707)`
 
+Low shelf; `q` above 0.707 makes the shelf overshoot before it levels, below 0.707 it is gentler.
 
+### `highshelf(x, cutoff, sr=44100, gain_db=6.0, q=0.707)`
 
-### `highshelf(x, cutoff, sr=44100, gain_db=6.0)`
-
-
+High shelf; `q` as for `lowshelf`.
 
 ### `dc_block(x, sr=44100)`
 
@@ -5384,6 +6696,13 @@ the cutoff, so order 1/2/4 are -3/-6/-12 dB there and a resonance doubles in dB 
 First-order shelf matched to its analog prototype (s + G wc)/(s + wc) (low) or (G s + wc)/(s + wc) (high):
 pole by impulse invariance exp(-wc T), zero and gain set so the DC and Nyquist magnitudes equal the analog ones,
 so the shelf does not cramp near Nyquist.
+
+### `shelf1(x: 'np.ndarray', kind: 'str', fc: 'float', sr: 'int' = 44100, gain_db: 'float' = 6.0) -> 'np.ndarray'`
+
+First-order plateau from the one-pole design rules: H = (1 - q z^-1) / (1 - p z^-1) with d = 2 pi fc / sr,
+p = 1 - d / sqrt(g), q = 1 - d sqrt(g), so the DC gain is exactly g and the gain far above fc is 1 (lowshelf);
+highshelf is the same plateau with gain 1 / g scaled by g. Cheaper and less warped near Nyquist than the bilinear
+shelves, but the corner is only accurate for fc well under sr / 4.
 
 ### `svf_antisat(x: 'np.ndarray', kind: 'str', cutoff, sr: 'int' = 44100, res: 'float' = 0.5, a: 'float' = 1.0, b: 'float' = 1.0) -> 'np.ndarray'`
 
@@ -5444,6 +6763,52 @@ Pinkston's TB-303 VCF (Csound tbvcf): fixed step 0.001, so the response does not
 Four cascaded one-pole low-passes as one recursion: a0 = (1-z)^4, b = 4z, -6z^2, 4z^3, -z^4, z = exp(-14.445
 fc/sr) (the 2 pi of one stage, widened so the cascade is -3 dB at fc).
 
+### `guard(x: 'np.ndarray', limit: 'float | None' = None) -> 'np.ndarray'`
+
+Non-finite samples to 0; with `limit`, clip to +-limit. Leaves a finite buffer untouched.
+
+### `biquad_stable(a) -> 'bool'`
+
+Stability triangle of 1 + a1 z^-1 + a2 z^-2: |a2| < 1 and |a1| < 1 + a2.
+
+### `ringz(x: 'np.ndarray', freq, decay, sr: 'int' = 44100, unit: 'str' = 't60') -> 'np.ndarray'`
+
+Two-pole resonator set by its ring time: R = exp(ln 0.001 / (decay sr)) (unit="tau": exp(-1 / (decay sr))),
+y0 = x + 2R cos(w) y1 - R^2 y2, out = (y0 - y2) / 2. freq and decay scalar or per-sample; the gain grows with decay.
+
+### `formlet(x: 'np.ndarray', freq, attack: 'float' = 0.005, decay: 'float' = 0.05, sr: 'int' = 44100, unit: 'str' = 't60') -> 'np.ndarray'`
+
+FOF-like resonator: ringz(decay) - ringz(attack), halved, so an impulse gives a sine with a smooth attack.
+unit="tau" (1/e times) is the Csound fofilter form.
+
+### `fofilter(x: 'np.ndarray', freq, attack: 'float' = 0.003, decay: 'float' = 0.02, sr: 'int' = 44100) -> 'np.ndarray'`
+
+
+
+### `decay(x: 'np.ndarray', time, sr: 'int' = 44100) -> 'np.ndarray'`
+
+Exponential decay of each input impulse to -60 dB in `time`: y = x + b y[n-1], b = exp(ln 0.001 / (time sr)).
+
+### `decay2(x: 'np.ndarray', attack: 'float' = 0.01, time: 'float' = 1.0, sr: 'int' = 44100) -> 'np.ndarray'`
+
+decay(time) - decay(attack): impulses become smooth attack-decay envelopes.
+
+### `slop(x: 'np.ndarray', freq: 'float' = 1000.0, max_down: 'float' = 1000000000.0, down_freq: 'float' = 0.0, max_up: 'float' = 1000000000.0, up_freq: 'float' = 0.0, sr: 'int' = 44100) -> 'np.ndarray'`
+
+Slew-limiting low-pass: one-pole at `freq` while |x - y| stays inside [-max_down, max_up], beyond it the excess
+follows a one-pole at down_freq / up_freq (0 = hard slew limit). Coefficients min(1, 2 pi f / sr).
+
+### `bob(x: 'np.ndarray', cutoff, sr: 'int' = 44100, res: 'float' = 0.5, sat: 'float' = 3.0, oversample: 'int' = 2) -> 'np.ndarray'`
+
+Moog ladder as its ODE, yi' = wc (S(y(i-1)) - S(yi)), y0 = x - 4 res y4, S(v) = sat tanh(v / sat), integrated by RK4
+with `oversample` steps per sample. res 1 is the edge of self-oscillation.
+
+### `cascade(x: 'np.ndarray', kind: 'str', cutoff, order: 'int' = 4, design: 'str' = 'butter', ripple: 'float' = 1.0, sr: 'int' = 44100) -> 'np.ndarray'`
+
+Butterworth or Chebyshev I low/high-pass of any order as SVF sections (+ one one-pole if odd), so the cutoff can
+be per-sample. Analog poles p = -sinh(v) sin(t) + j cosh(v) cos(t), t = (2i - 1) pi / 2N (Butterworth: sinh = cosh = 1):
+section frequency |p| (1/|p| for high-pass), Q = |p| / (2 sinh(v) sin t). Each section is prewarped on its own.
+
 ## `genny.foley`
 
 Foley: objects, weapons, machines, signals, sci-fi; plus the finished kernels of
@@ -5492,12 +6857,13 @@ genny.physical.ambience.chain_shift: rolling-can momentum + shell-casing tinkles
 
 
 
-### `cloth(sr=44100, kind='rustle', dur=1.0, rate=3.0, weight=0.5, seed=0)`
+### `cloth(sr=44100, kind='rustle', dur=1.0, rate=3.0, weight=0.5, seed=0, fabric='none')`
 
-Port of procedural/world.cloth and body.sacking_tear: the STK Sandpaper brush kept below 3 kHz
-plus a stick-slip band.
+Port of procedural/world.cloth and body.sacking_tear: the STK Sandpaper brush, kept below 8 kHz
+for a light fabric and 2 kHz for a heavy one, plus a stick-slip band. ``fabric`` adds the weave's friction
+tone to a rustle: pitch = sliding speed / weave period.
 
-### `creak(sr=44100, material='wood', force='ramp', level=0.8, dur=1.2, size=1.0, seed=0, width=0.0, height=0.0, wave_speed=340.0)`
+### `creak(sr=44100, material='wood', force='ramp', level=0.8, dur=1.2, size=1.0, seed=0, width=0.0, height=0.0, wave_speed=340.0, slam=0.0)`
 
 Slips every (1-f)60 + 3 ms (+ jitter) while the lagged force f
 exceeds 0.3, through the door formant bank and panel (wood), the same scaled (pine), or the
@@ -5582,7 +6948,7 @@ square body, with a Sandpaper page burst.
 ``pd nwave``: to +1 in ``rise_ms``, to -1 over ``trans_ms``, to 0 in ``rise_ms``; plus
 the ground reflection: a copy delayed by ``height_ms`` through a 100 Hz low-pass.
 
-### `crack_cone_gain(angle: 'float', v_bullet: 'float') -> 'float'`
+### `crack_cone_gain(angle: 'float', v_bullet: 'float', c: 'float' = 343.0) -> 'float'`
 
 1 inside the Mach cone (angle off the line of fire < 90 - asin(c/v) degrees), fading to 0 over 5 degrees
 outside it; 0 for a subsonic round.
@@ -5591,7 +6957,7 @@ outside it; 0 for a subsonic round.
 
 Length of the passing bullet's N-wave in ms (`arms.n_wave_pa`); 0 when subsonic.
 
-### `gunshot(sr=44100, kind='rifle', distance=10.0, shots=1, rate=0.0, action=0.6, crack=1.0, echo=0.3, ground='none', height=1.6, seed=0, angle=None, ear='center')`
+### `gunshot(sr=44100, kind='rifle', distance=10.0, shots=1, rate=0.0, action=0.6, crack=1.0, echo=0.3, ground='none', height=1.6, seed=0, angle=None, ear='center', temp=None)`
 
 Timeline shell 0 ms, barrel 6 ms, noise burst 19.2 ms; all
 layers through one 8-band body (Q 10.62) and tanh; N-wave 4 ms long with its ground reflection
@@ -5606,12 +6972,13 @@ reload.pd: slide = noise -> hip 1000 -> bp(4500 + 200 line, Q4) x line^2
 over 100 ms; the 14-click schedule over three click-factory clusters; everything through the
 same body as the shot, "so the shots and the reload sound are automatically aligned".
 
-### `casing(sr=44100, count=1, size=1.0, spread=0.25, caliber='', floor='concrete', height=1.2, roll=False, ricochet=False, seed=0)`
+### `casing(sr=44100, count=1, size=1.0, spread=0.25, caliber='556', floor='concrete', height=1.2, roll=False, ricochet=False, seed=0)`
 
-shellcasings.pd: noise x e^4 (0-39 ms) -> 3 bp Q800; bounces at 75 ms, +170-344 ms,
+The 5.56 case by default (empty = the same); ``size`` scales the case, pitch following 1 / size.
+``caliber="generic"``: shellcasings.pd: noise x e^4 (0-39 ms) -> 3 bp Q800; bounces at 75 ms, +170-344 ms,
 +75-149 ms with gains 0.416, 0.257, 0.05.
 
-### `sword(sr=44100, blade='sword', speed=1.0, thickness=1.0, model='loq', groove=0.0, seed=0)`
+### `sword(sr=44100, blade='sword', speed=1.0, thickness=1.0, model='loq', groove=0.0, seed=0, arc='full')`
 
 f = St u / d per source, dipole gain ~ u^6, Doppler. ``groove``: the flow over the blade's groove
 (``GROOVE``: length along the flow, depth, share of the blade it runs) adds ``modal.cavity_tone`` at the
@@ -5701,7 +7068,7 @@ once a second; all x 0.3 into `bodyresonance~`. Mechanism frequencies scale as
 Click noise from three crossed phasors: each phasor's output is added to the next one's phase, so the result is
 noise-like with the same level on every click.
 
-### `switch(sr=44100, kind='toggle', mount='plastic', state='on', coil=0, seed=0, noise='band')`
+### `switch(sr=44100, kind='toggle', mount='plastic', state='on', coil=0, seed=0, noise='band', bistable=0)`
 
 
 
@@ -5795,11 +7162,20 @@ Rows 697, 770, 852, 941 Hz x columns 1209, 1336, 1477, 1633 Hz, exact sines. Ton
 Line and handset at the kernel rate: clip +-0.9, band-pass 2 kHz Q 12, x 1.2, band-pass 400 Hz Q 7, two
 high-passes at 90 Hz.
 
-### `pulse_dial(sr=44100, digit=7, line=True)`
+### `phone_listen(x: 'np.ndarray', listen: 'str' = 'handset') -> 'np.ndarray'`
+
+Where the line is heard: the handset chain of `phone_line`; the line itself (clip, 2 kHz resonance, one high-pass); or the
+handset across a room, thin and far (high-passed at 400 Hz, three early reflections, rolled off at 3 kHz).
+
+### `phone_click(sr=44100, kind='hangup', listen='handset', dur=0.4)`
 
 
 
-### `phone_tone(sr=44100, kind='dial', region='us', dur=0.0, line=False)`
+### `pulse_dial(sr=44100, digit=7, line=True, listen='handset')`
+
+
+
+### `phone_tone(sr=44100, kind='dial', region='us', dur=0.0, line=False, listen='handset')`
 
 
 
@@ -5847,16 +7223,16 @@ onsets; then a flanger of three 12 ms delays swept over 12 s, and a reverb.
 Phasor at 775 + 120 e Hz, AM by osc~ 30, noise x 0.1, x 3, clip +-1, bp~ 775, 1550, 2325 Q 13.
 Two envelopes triggered together: "1 0 0, 0 120 10" (e, the pitch blip) and "1 10 0, 0 5000 10" (level): the first bends the pitch, the second carries the level; AM as 0.5 + 0.5 osc so the carrier stays.
 
-### `robot_babble(sr=44100, dur=1.5, rate=11.0, low=300.0, high=2800.0, seed=0)`
+### `robot_babble(sr=44100, dur=1.5, rate=11.0, low=300.0, high=2800.0, seed=0, style='fm', talk=0.5)`
 
 Random FM babble: glides on 30 % of the syllables, rests on 15 %.
 
-### `red_alert(sr=44100, whoops=3, low=360, high=847, rate=0.78)`
+### `red_alert(sr=44100, whoops=3, low=360, high=847, rate=0.78, model='whoop')`
 
 The oscillator rises from 360 to 847 Hz in 900 ms; rate 0.78 makes the 70 % sweep 0.9 s.
 Exponential curve, two saws through a 3 kHz low-pass.
 
-### `dark_drone(sr=44100, dur=6.0, note=52.0, ring=0.2, reverb_time=100.0, seed=0)`
+### `dark_drone(sr=44100, dur=6.0, note=52.0, ring=0.2, reverb_time=100.0, seed=0, valence=None, tension=0.0)`
 
 genny.physical.ambience.dark_ambience.
 
@@ -5939,7 +7315,7 @@ T60 (s) of a mode at ``f`` Hz: ``ratio`` = decay x f0 / f; ``rayleigh`` = alumin
 
 Mode amplitudes |phi_n(x)| of a free bar struck at ``strike`` (fraction of the length, 0 = end).
 
-### `wind_chimes(sr=44100, vel=1.0, tune=880.0, tubes=7, spread=1.0, decay=3.0, tube='bar', law='ratio', scale='pentatonic', strike=-1.0, seed=0)`
+### `wind_chimes(sr=44100, vel=1.0, tune=880.0, tubes=7, spread=1.0, decay=3.0, tube='bar', law='ratio', scale='pentatonic', strike=-1.0, seed=0, pattern='uniform')`
 
 Modal tubes (see the `wind_chime` instrument) struck at random over ``spread`` s.
 
@@ -5963,7 +7339,7 @@ struck with a (1 - cos) contact that shortens with velocity.
 A bell swinging up to ``degrees`` each side: its mouth travels arm sin(theta), heard through the moving delay
 (Doppler), and it is louder as the mouth turns toward the listener.
 
-### `handbell(freq, dur, sr=44100, vel=1.0, decay=2.5, detune=0.3, bright=1.0)`
+### `handbell(freq, dur, sr=44100, vel=1.0, decay=2.5, detune=0.3, bright=1.0, tuning='phone')`
 
 Partial ratios 0.501, 1, 0.7 | 2.002, 3, 9.6 | 2.49, 11, 2.571 | 3.05, 6.242, 12.49 |
 13, 16, 24 with group decays x 1.2, 0.9, 0.25, 0.14, 0.07; the written note is ratio 1.
@@ -6029,6 +7405,10 @@ up + Pcorr, the fall back at down - Pcorr, Pcorr = (3 |dP/dt| / (2 alpha))^(2/3)
 overshoots and a fast diminuendo undershoots (dynamic hysteresis).
 
 ### `overblow(sr=44100, note='G4', peak=400.0, dur=3.0, seed=0)`
+
+
+
+### `hit_marker(sr=44100, freq=1900.0, dur=0.05, tone=0.3)`
 
 
 
@@ -6107,7 +7487,7 @@ Free length [m] of the clamped rod whose first mode is ``freq`` (inverse of rod_
 Mass-normalised Euler-Bernoulli mode shapes (first four modes) at x in 0..1.
 kind 'free': free-free bar, x from one end; 'clamped': cantilever, x from the clamp.
 
-### `sheet_radiator(x, sr=44100, thickness=0.5, size=1.5, drive=1.0, decay=1.5, mix=0.5, bright=1.0, seed=0, metal='', mute=0.0)`
+### `sheet_radiator(x, sr=44100, thickness=0.5, size=1.5, drive=1.0, decay=1.5, mix=0.5, bright=1.0, seed=0, metal='', mute=0.0, sectors=1, tilt=0.0, tuned_to=0.0, fragments=1)`
 
 g09 §20.6 / §25 ('a sheet of metal vibrates like thunder when injected with ... one of its partials').
 
@@ -6139,7 +7519,7 @@ pitch instead (g08 §1.7); the exact proportionality is a choice.
 *The Sounding Object* §8.4.2 wineglass: resonator tuned to glass modes with long decays, friction
 parameters of Fig. 8.5 (g04 §4.6). Mode ratios: STK glass harmonica preset.
 
-### `bowed_bar(freq, dur, sr=44100, vel=1.0, material='aluminium', force=1.0, position=0.03, speed=0.2, bright=1.0)`
+### `bowed_bar(freq, dur, sr=44100, vel=1.0, material='aluminium', force=1.0, position=0.03, speed=0.2, bright=1.0, partial=1, ranks='')`
 
 Bilbao Problem 7.17 in modal form (g02 §11.3) with the soft friction characteristic, a = 100 (g01 §3.6).
 Free-bar partials: measured Ikedaphone aluminium blade 1 : 2.71 : 4.87 : 8.67 (g09 §3) or theory.
@@ -6157,10 +7537,14 @@ Free tongue length (dax to tip) whose cantilever fundamental is ``freq``: f1 = b
 Bowed plates 'scream' with a few pure frequencies standing out, depending on bow point and pressure
 (g09 §7). Friction: Bilbao bow (g01 §3.6); radiation: sheet_radiator (g09 §20.6).
 
-### `rod_bank(freq, dur, sr=44100, vel=1.0, rod='kit', hardness=0.5, decay=3.0, sympathetic=0.35, radiator='sheet', seed=0, strike='normal', collector=4.0)`
+### `rod_bank(freq, dur, sr=44100, vel=1.0, rod='kit', hardness=0.5, decay=3.0, sympathetic=0.35, radiator='sheet', seed=0, strike='normal', collector=4.0, radiator_size=0.8, feed='seam', mount='rigid', damp='none', body='metal', neighbours='kit')`
 
 Struck threaded rods in a collector (g09 §9-10, §16; g10 §8.1). The other rods are the Kit Barres
 set: their pitches follow f ~ 1/L^2 from the lengths 880 ... 610 mm, the struck rod being the 750 mm one.
+
+### `rod_length_for(kind: 'str', freq: 'float') -> 'float'`
+
+Free length (m) of a rod `kind` ("fork" | "m6_rod") that rings at `freq`: f L^2 = const.
 
 ### `wineglass_f0(h: 'float', r: 'float', height: 'float', e: 'float' = 62000000000.0, rho: 'float' = 2500.0) -> 'float'`
 
@@ -6227,7 +7611,7 @@ f = 1.875^2 / (2 pi L^2) sqrt(E I / (rho A)), sqrt(I / A) = d / 4 for a round ro
 
 
 
-### `tuning_fork(freq, dur, sr=44100, vel=1.0, radiator='balloon', pressure=0.7, swell=0.0, hardness=0.25, decay=6.0)`
+### `tuning_fork(freq, dur, sr=44100, vel=1.0, radiator='balloon', pressure=0.7, swell=0.0, hardness=0.25, decay=6.0, spin=0.0)`
 
 g10 §20: 44 aluminium forks G3-D7; felt is added to the hammers 'until the partials vanish'; balloon
 pressure raises loudness without damping. Each prong is a clamped bar, so the clang mode is at 6.267 f.
@@ -6259,7 +7643,7 @@ body mass 0.5 kg, body mode ratios 1 : 1.9 : 3.1 and their damping; Stribeck vel
 Additive non-linear friction source: e(t) = sum_k AM_k sin(phi_k), dphi_k/dt = 2 pi k f0(t), f0(t) = (1 + eps eta(t))
 Gamma, eta a low-pass noise (``cutoff`` Hz, std ``wander``). eps = 1 squeaks and creaks, 0 a self-sustained tone
 locked on ``f0``. AM_k = 1 / k; with ``diameter`` (m) and ``speed`` (m/s) the singing-glass beat
-AM_k = sin(2 pi int v / D dt) / k.
+AM_k = sin(2 pi int v / (pi D) dt) / k.
 
 ### `squeak(sr=44100, surface='hinge', pressure=1.0, speed=1.0, pitch=1.0, dur=0.6, seed=0, model='physical')`
 
@@ -6278,6 +7662,17 @@ with ``pitch`` the 3-diameter mode).
 Elasto-plastic friction (g04 §4.6) with the hand velocity reversing at each stroke end; the surface
 roughness enters through the noise term sigma3 w of the friction force.
 
+### `wineglass_mode_freq(h: 'float', r: 'float', height: 'float', m: 'float' = 1.875, n: 'int' = 2, e: 'float' = 62000000000.0, rho: 'float' = 2500.0) -> 'float'`
+
+Frequency [Hz] of the wine-glass mode with n azimuthal nodes pairs (cos n theta, n >= 2) and vertical flexure m
+(1.875, 4.694, 7.855 ...) of the cylinder model: (1 / 12 pi) sqrt(3 E / rho) (h / r^2)
+sqrt(((n^2 - 1)^2 + (m r / H)^4) / (1 + 1 / n^2)). n = 2, m = 1.875 is `wineglass_f0`.
+
+### `wineglass_torsion_freq(height: 'float', shear: 'float' = 25000000000.0, rho: 'float' = 2500.0) -> 'float'`
+
+Torsion about the vertical axis of the thin cylinder fixed at its base: (1 / 2 pi) sqrt(3 G / rho) / H, whatever
+the wall: far above the elliptical modes (a factor R / a or more).
+
 ## `genny.fx`
 
 Effects. Every effect is registered with its parameters so `genny list fx` is self-documenting.
@@ -6290,29 +7685,23 @@ params: name=(default, help)
 
 ### `reverb(x, sr=44100, mix=0.3, size=0.7, damp=None, predelay=0.0, tail=None, width=1.0, variant='genny', freeze=False)`
 
-variant freeverb, PASP 3.6: f = 0.7 + 0.28 size, d = 0.2, combs at fixed lengths, series sections (-1 + (1+g) z^-N) / (1 - g z^-N), g = 0.5.
+f = 0.7 + 0.28 size; the combs output their delayed line only (no direct path in the wet).
+variant freeverb: d = 0.2, combs at fixed lengths, series sections (-1 + (1+g) z^-N) / (1 - g z^-N), g = 0.5.
 
-### `shaker_comb(x, sr=44100, rate=4.0, ramp=0.2, seed=0)`
-
-
-
-### `delay(x, sr=44100, time=0.25, feedback=0.4, mix=0.35, pingpong=False, damp=0.3, tail=None)`
+### `shaker_comb(x, sr=44100, rate=4.0, ramp=None, seed=0)`
 
 
 
-### `chorus(x, sr=44100, rate=0.8, depth=3.0, mix=0.5, voices=2)`
+### `delay(x, sr=44100, time=0.25, feedback=0.4, mix=0.35, pingpong=False, damp=0.3, tail=None, t60=None)`
 
 
 
-### `flanger(x, sr=44100, rate=0.3, depth=2.0, feedback=0.5, mix=0.5)`
+### `scanner_vibrato(x, sr, rate=6.8, sections=9, chorus=0.0, section_ms=0.07)`
 
+Hammond scanner: the signal runs down a delay line of ``sections`` sections of ``section_ms`` ms; a scanner sweeps the taps back and
+forth as a triangle at ``rate`` Hz, the pickup crossing from tap to tap by interpolation. ``chorus`` mixes the dry signal in.
 
-
-### `phaser(x, sr=44100, rate=0.5, depth=0.7, stages=4, mix=0.5)`
-
-
-
-### `vibrato(x, sr=44100, rate=5.0, depth=0.3)`
+### `vibrato(x, sr=44100, rate=5.0, depth=0.3, model='delay', rate_var=0.04, depth_var=0.1, onset_delay=0.0, onset=0.0, seed=0, sections=9, chorus=0.0, section_ms=0.07)`
 
 
 
@@ -6320,7 +7709,7 @@ variant freeverb, PASP 3.6: f = 0.7 + 0.28 size, d = 0.2, combs at fixed lengths
 
 
 
-### `distortion(x, sr=44100, drive=4.0, mix=1.0, tone=4000, aa='adaa1')`
+### `distortion(x, sr=44100, drive=4.0, mix=1.0, tone=4000, aa='adaa1', curve='tanh', amount=0.5, rms=False)`
 
 
 
@@ -6344,6 +7733,26 @@ variant freeverb, PASP 3.6: f = 0.7 + 0.28 size, d = 0.2, combs at fixed lengths
 
 
 
+### `cascade(x, sr=44100, kind='lowpass', cutoff=1000, order=4, design='butter', ripple=1.0)`
+
+
+
+### `ringz_fx(x, sr=44100, freq=440, decay=0.2, attack=0.0, gain=0.05, mix=1.0)`
+
+
+
+### `bob(x, sr=44100, cutoff=1000, res=0.5, sat=3.0, oversample=2)`
+
+
+
+### `slop(x, sr=44100, freq=1000, max_up=0.05, max_down=0.05, up_freq=0.0, down_freq=0.0)`
+
+
+
+### `korg35(x, sr=44100, kind='lowpass', cutoff=1000, res=1.0, sat=1.0)`
+
+
+
 ### `highpass(x, sr=44100, cutoff=200, q=0.707, order=1)`
 
 
@@ -6360,11 +7769,11 @@ variant freeverb, PASP 3.6: f = 0.7 + 0.28 size, d = 0.2, combs at fixed lengths
 
 
 
-### `lowshelf(x, sr=44100, freq=200, gain=6.0)`
+### `lowshelf(x, sr=44100, freq=200, gain=6.0, q=0.707)`
 
 
 
-### `highshelf(x, sr=44100, freq=4000, gain=6.0)`
+### `highshelf(x, sr=44100, freq=4000, gain=6.0, q=0.707)`
 
 
 
@@ -6372,7 +7781,7 @@ variant freeverb, PASP 3.6: f = 0.7 + 0.28 size, d = 0.2, combs at fixed lengths
 
 Follower times: DAFX 4.3 gives attack 1-30 ms, decay 30-100 ms; 5 and 60 ms picked there (B11).
 
-### `wah(x, sr=44100, mode='lfo', rate=0.5, pos=0.5, sens=1.0, attack=0.005, release=0.06, folds=1, mix=1.0)`
+### `wah(x, sr=44100, mode='lfo', rate=0.5, pos=0.5, sens=1.0, attack=0.005, release=0.06, folds=1, mix=1.0, order=2)`
 
 DAFX Table 2.5: rate 0.5 Hz, M 5-20 and 100. Follower: Ch.4, attack 1-30 ms, decay 30-100 ms.
 
@@ -6381,16 +7790,22 @@ DAFX Table 2.5: rate 0.5 Hz, M 5-20 and 100. Follower: Ch.4, attack 1-30 ms, dec
 DAFX 5.3.4: full-wave rectification gives even harmonics, a zero-crossing counter keeps one wave part out of two, low-pass leaves
 the fundamental. The flip-flop multiplies the signal, so the sign flips where it crosses zero, with no step. tone is a voicing choice.
 
-### `radio(x, sr=44100, tau=7.5e-05, drive=1.0)`
+### `radio(x, sr=44100, tau=7.5e-05, drive=1.0, rotator=False)`
 
 Katz, Mastering Audio, appendix 1: pre-emphasis +3 dB at 2.1 kHz, +17 dB at 15 kHz for 75 us, H = 1 + j 2 pi f tau; rotator of 4 poles
-at 200 Hz; AGC about 25 dB (threshold, ratio and times are voicing choices). The clipper is why bright sounds lose treble on the radio.
+at 200 Hz (off by default: measured, it adds crest instead of lowering it); AGC about 25 dB (threshold, ratio and times are voicing choices).
+The clipper is why bright sounds lose treble on the radio.
+
+### `virtual_bass(x, sr=44100, fc=120.0, amount=0.6, drive=3.0, cut=False)`
+
+The harmonic series of the low band (2f, 3f, 4f ...) carries the pitch of the fundamental (residue pitch). The band is
+saturated, high-passed above fc and set to amount times its own RMS. No sourced level: voicing choice.
 
 ### `muffle(x, sr=44100, amount=0.7)`
 
 
 
-### `telephone(x, sr=44100, drive=2.0, low=300, high=3400)`
+### `telephone(x, sr=44100, drive=2.0, low=300, high=3400, voicing='band')`
 
 
 
@@ -6402,7 +7817,7 @@ at 200 Hz; AGC about 25 dB (threshold, ratio and times are voicing choices). The
 
 
 
-### `compressor(x, sr=44100, threshold=-18, ratio=4.0, attack=0.005, release=0.1, makeup=0.0, knee=6.0, mix=1.0, auto_makeup=True, key=None, preset='')`
+### `compressor(x, sr=44100, threshold=-18, ratio=4.0, attack=0.005, release=0.1, makeup=0.0, knee=6.0, mix=1.0, auto_makeup=True, key=None, preset='', lookahead=0.0)`
 
 Giannoulis, Massberg & Reiss 2012, the configuration of their conclusion: feed-forward, gain computer
 with a soft knee of width W (eq. 4) on the instantaneous level in dB, then the smooth decoupled peak
@@ -6412,19 +7827,19 @@ detector (eq. 17) on the gain reduction, in the log domain. alpha = exp(-1 / (ta
 
 
 
-### `expander(x, sr=44100, thresh=0.5, slope=2.0, attack=0.02, release=0.4)`
+### `expander(x, sr=44100, thresh=0.5, slope=2.0, attack=0.02, release=0.4, direction='up', thresh_db=None)`
 
 
 
-### `duck(x, sr=44100, key='', thresh=0.1, slope=0.5, attack=0.01, release=1.0)`
+### `duck(x, sr=44100, key='', thresh=0.1, slope=0.5, attack=0.01, release=1.0, hold=0.0)`
 
 
 
-### `gate(x, sr=44100, open_db=-40.0, close_db=-45.0, hold=0.05, attack=0.001, release=0.1, detect=0.002, key=None)`
+### `gate(x, sr=44100, open_db=-40.0, close_db=-45.0, hold=0.05, attack=0.001, release=0.1, detect=0.002, key=None, lookahead=0.0, band=None)`
 
 DAFX 5.2.3: envelope = two-pole lowpass of |x|, normalised to its maximum. Default values (the M-file has none).
 
-### `limiter(x, sr=44100, ceiling=-0.5, lookahead=0.0015, release=0.1, true_peak=False)`
+### `limiter(x, sr=44100, ceiling=-0.5, lookahead=0.0015, release=0.1, true_peak=False, input_db=0.0)`
 
 Katz, Mastering Audio ch. 10: auto-release about 2 ms on a transient, 50-150 ms on sustained limiting; a look-ahead of 1.5 ms (lot B14).
 Charge time of the slow detector 80 ms: the duration threshold Katz reports for the Weiss DS1's double release.
@@ -6434,7 +7849,41 @@ The gain is a minimum over +-L smoothed over +-L, so it never exceeds what any s
 
 
 
-### `normalize(x, sr=44100, level=-1.0)`
+### `normalize(x, sr=44100, level=-1.0, dc=False)`
+
+
+
+### `loudness(x, sr=44100, target=-23.0, true_peak=None, headroom_only=False, dc=True)`
+
+
+
+### `truncate_silence(x, sr=44100, threshold=-50.0, min=0.5, keep=0.2, fade=0.01)`
+
+
+
+### `lsar_fill(x, bad, order=None, context=None)`
+
+Least-squares AR interpolation: the samples flagged in ``bad`` (runs of up to a few thousand) are replaced by the
+values that minimise the prediction error of an AR model fitted around each run. Mono or stereo.
+
+### `repair(x, sr=44100, start=0.0, length=0.002)`
+
+
+
+### `declip(x, sr=44100, level=0.99)`
+
+
+
+### `declick(x, sr=44100, threshold=8.0, width=0.002, order=20)`
+
+
+
+### `rms_balance(x, ref, sr=44100, hp=10.0)`
+
+x scaled sample by sample so its running RMS (first-order low-pass of the square at ``hp`` Hz) follows the one of
+``ref``: puts back the level a resonant filter or a distortion changed.
+
+### `rms_balance_fx(x, sr=44100, key='', hp=10.0)`
 
 
 
@@ -6458,11 +7907,22 @@ ChucK ExpDelay: t_i = L (i/N)^durcurve, a_i = (i/N)^ampcurve / sum, i = 0..N-1; 
 
 
 
-### `fade(x, sr=44100, **kw)`
+### `fade_curve(k: 'int', shape: 'str' = 'linear') -> 'np.ndarray'`
+
+Rising gain 0 -> 1 over k samples. linear; cos = quarter sine (equal power); scurve = half cosine; exp = linear in
+dB from -60 dB (slow start, the ear hears it as even); log = its mirror (fast start); studio = cos (its low-pass is
+added by ``fade``).
+
+### `fade(x, sr=44100, shape='linear', **kw)`
 
 
 
-### `loop(x, sr=44100, crossfade=0.05)`
+### `crossfade(a: 'np.ndarray', b: 'np.ndarray', sr: 'int' = 44100, dur: 'float' = 0.05, power: 'bool' = True) -> 'np.ndarray'`
+
+a then b, overlapped by ``dur`` s: constant power (cos / sin, for unrelated sounds) or constant gain (linear, for
+copies of the same sound).
+
+### `loop(x, sr=44100, crossfade=0.05, period=0.0, cycles=0, preroll=0.0, snap='')`
 
 
 
@@ -6474,7 +7934,7 @@ ChucK ExpDelay: t_i = L (i/N)^durcurve, a_i = (i/N)^ampcurve / sum, i = 0..N-1; 
 
 
 
-### `pitch(x, sr=44100, semitones=0.0)`
+### `pitch(x, sr=44100, semitones=0.0, mode='granular', window=0.2, pitch_disp=0.0, time_disp=0.0, seed=0)`
 
 
 
@@ -6503,10 +7963,12 @@ chain: [{"type": "reverb", "mix": 0.3}, ...]
 Phase increment pi f / sr; A held at pi, B at the wrap, each by linear interpolation at the exact crossing;
 B = input + res A, kept in +-1; mix = 0.5 + 0.5 c (|c| + accent (1 - |c|)), c = cos(phase); out = A mix + B (1 - mix).
 
-### `phase_bash(x, sr=44100, pitch=110.0, window=2048, mix=1.0)`
+### `phase_bash(x, sr=44100, pitch=110.0, window=2048, mix=1.0, specshift=1.0, position=0.0, speed=1.0)`
 
 Each window (Hann) -> FFT -> |S[k]| (-1)^k -> IFFT: a real cycle, symmetric about its centre. Windows
 advance every N/4 samples; the oscillator reads the two tables around the current time and cross-fades them.
+specshift resamples the magnitude spectrum of each table (bin k takes the value at k / specshift); the reading
+point is position + speed * time, in windows.
 
 ### `envelope_follower(x, sr=44100, attack=0.01, release=0.1, mode='peak')`
 
@@ -6547,7 +8009,7 @@ block; mean frequency as 1/contact time, and Hertz contact as R V^(-1/5); 100 Hz
 
 
 
-### `debris_flow(sr=44100, dur=20.0, surges=4, seed=0)`
+### `debris_flow(sr=44100, dur=20.0, surges=4, approach=0.0, seed=0)`
 
 
 
@@ -6559,15 +8021,34 @@ block; mean frequency as 1/contact time, and Hertz contact as R V^(-1/5); 100 Hz
 
 
 
-### `geyser(sr=44100, dur=14.0, rate=40.0, erupt=0.4, seed=0)`
+### `geyser_tau(r: 'float') -> 'float'`
+
+Collapse time (s) of a steam bubble of radius r m: 0.05 s at 5.5 cm, in proportion to r.
+
+### `geyser(sr=44100, dur=14.0, rate=2.0, erupt=0.4, seed=0)`
 
 
 
-### `lava(sr=44100, dur=10.0, bursts=3, conduit=25.0, seed=0)`
+### `lava_f0(depth: 'float') -> 'float'`
+
+Quarter-wave pitch (Hz) of a conduit open at the vent: 343 / (4 (L + 0.6 a)).
+
+### `strombolian_pulse(radius=0.8, length=22.0, dp=47000.0, thick=0.02, mu=400.0, rho=2700.0, gamma=1.1, dist=250.0, rate: 'float' = 2000.0)`
+
+Pressure Pa at ``dist`` m of the single vibration cycle of an overpressurised gas slug under a thin magma
+film: the film (thickness ``thick``) is a mass on the gas spring, R'' + 12 mu/(rho Req^2) R' + p_air (1 - (Veq/Vg)^g)
+(1 + e)^2 / (rho Req h) = 0, started at rest with R'' = dp R0^2 / (rho Req^3 h) and cut at the second minimum radius;
+p = rho_air R (2 R'^2 + R R'') / r. Defaults: 0.8 m, 22 m, 0.47 bar, 2 cm, 400 Pa s, 2700 kg/m3.
+
+### `lava(sr=44100, dur=10.0, bursts=3, conduit=25.0, seed=0, slug=0.0)`
 
 
 
-### `glacier_calving(sr=44100, dur=14.0, size=1.0, seed=0)`
+### `bubble_plume_frequency(radius: 'float', void: 'float' = 0.02, p0: 'float' = 101325.0, rho: 'float' = 1025.0) -> 'float'`
+
+Hz: f = sqrt(3 p0 / (void rho)) / (2 pi R), the modified Minnaert law of a spherical bubble cloud of radius R.
+
+### `glacier_calving(sr=44100, dur=14.0, size=1.0, seed=0, pulse=0.0, mode='', plume=0.0)`
 
 
 
@@ -6606,6 +8087,102 @@ noise burst low-passed at 10 density Hz (air-dominated light snow absorbs the hi
 Connections as traced by the deep reading from Bfxr2's Footsteppr; E is the force curve, lopF and hipF one-pole filters, vcf a band-pass at fc with Q.
 
 ### `snow_squeal(sr=44100, speed=0.2, grain=1.0, dur=1.5, seed=0)`
+
+
+
+### `snow_rub(sr=44100, length=0.3, temperature=-15.0, dur=1.0, seed=0)`
+
+
+
+## `genny.geo_u`
+
+Granular and geophysical flows, ice and dunes from measurable quantities (mass, speed, grain diameter, ice thickness, temperature).
+
+Sources of every law and constant: research/SOURCES.md, section FAM_U.
+
+### `hertz_contact_time(mass: 'float', speed: 'float', diameter: 'float', material: 'str' = 'rock') -> 'float'`
+
+s: contact time of a sphere of ``diameter`` m and ``mass`` kg hitting a half-space of the same material at ``speed`` m/s,
+t = 2.87 (m^2 / (R E*^2 v))^(1/5), E* = E / (2 (1 - nu^2)), R = d / 2 (flat target).
+
+### `sphere_mass(diameter, material: 'str' = 'rock')`
+
+
+
+### `power_law_sizes(n: 'int', dmin: 'float', dmax: 'float', b: 'float', rng) -> 'np.ndarray'`
+
+m: n diameters with N(>d) proportional to d^-b between dmin and dmax (inverse of the truncated Pareto law).
+
+### `hill_exponent(d, dmin: 'float') -> 'float'`
+
+Maximum-likelihood exponent b of N(>d) ~ d^-b for the sizes above dmin.
+
+### `grain_rate(flow: 'float', grain_mm: 'float', material: 'str' = 'sand') -> 'float'`
+
+grains a second in a flow of ``flow`` kg/s of grains of ``grain_mm`` mm.
+
+### `boom_hz(grain_um: 'float') -> 'float'`
+
+Hz: f = 0.4 sqrt(g / d) of a booming avalanche.
+
+### `squeak_hz(speed: 'float', grain_um: 'float') -> 'float'`
+
+Hz: stick-slip of a grain layer sliding at ``speed`` m/s, f = speed / d.
+
+### `brune_corner(radius: 'float') -> 'float'`
+
+Hz: corner frequency of a rupture of radius ``radius`` m in ice, 0.37 beta / r.
+
+### `shot_noise(n: 'int', rate, impulse, tc: 'float', rng, jitter: 'float' = 0.4) -> 'np.ndarray'`
+
+Poisson train of impacts of impulse ``impulse`` (arbitrary units, scalar or array) at ``rate`` a second, each a half sine of
+``tc`` s with its area kept. Variance is rate x impulse^2 x (1 + jitter terms).
+
+### `rockfall_blocks(dur, blocks, dmin, dmax, b, height, restitution, rng, material='rock', roll=0.5, ground_hz=60.0)`
+
+Unscaled signal (and the list of diameters) of blocks of power-law sizes falling ``height`` m then bouncing down:
+each impact is a Hertz force pulse, the bounces lose speed by ``restitution``, the block rolls at the end.
+
+### `rockfall_hertz(sr=44100, dur=6.0, blocks=40, dmin=0.05, dmax=1.0, b=1.5, height=15.0, restitution=0.5, roll=0.5, material='rock', seed=0)`
+
+
+
+### `debris_impacts(n: 'int', speed: 'float', grain: 'float', rng, material: 'str' = 'rock', mud: 'float' = 0.0, rate_k: 'float' = 20.0)`
+
+Impact shot noise of a debris flow at ``speed`` m/s with effective grain ``grain`` m (Hertz impacts at 0.3 of the flow speed,
+rate k v / D); mud lowers the cut of each impact. Power goes as v^3 D^5.
+
+### `debris_flow_granular(sr=44100, dur=20.0, speed=5.0, grain=0.1, depth=1.5, mud=0.5, water=0.3, arrival=0.4, seed=0)`
+
+
+
+### `avalanche_cloud(n: 'int', speed, size: 'float', rng, density: 'float' = 1.0) -> 'np.ndarray'`
+
+Turbulent powder cloud: noise flat below U / L and falling as f^-5/3 (power) above, amplitude going as density x U^4
+(acoustic intensity of turbulence ~ rho^2 U^8). ``speed`` may be an array of n values.
+
+### `avalanche_flow(sr=44100, dur=14.0, speed=30.0, size=100.0, powder=0.5, chunk=0.25, infra=0.0, seed=0)`
+
+
+
+### `icequake_swarm(sr=44100, dur=8.0, rate=1.5, size=1.0, thickness=0.3, distance=200.0, b=1.0, temp=-10.0, seed=0)`
+
+
+
+### `iceberg_fizz(sr=44100, dur=8.0, melt=0.5, bubble=1.5, seed=0)`
+
+
+
+### `dune_sound(sr=44100, mode='boom', grain=170.0, speed=0.2, hz=0.0, dur=6.0, beat=1.0, seed=0)`
+
+
+
+### `pour_signal(n: 'int', flow: 'float', grain_mm: 'float', height: 'float', kind: 'str', wet: 'float', rng) -> 'np.ndarray'`
+
+Unscaled impact noise of a pour of ``flow`` kg/s of grains of ``grain_mm`` mm falling ``height`` m (impact speed sqrt(2 g h)):
+Poisson impacts at rate flow / grain mass, Hertz contact time of the grain, level going as sqrt(rate) x grain mass.
+
+### `granular_pour(sr=44100, kind='sand', flow=0.2, grain=0.2, height=0.5, wet=0.0, dur=3.0, seed=0)`
 
 
 
@@ -6731,9 +8308,15 @@ Facade over the first fully shared sample-by-sample interaction solvers.
 
 
 
-### `jet_bore(f0: 'float', dur: 'float', jet_velocity=18.0, *, sr=48000, bore_radius=0.006, jet_length=0.009, loss=0.996) -> 'CommonSolveResult'`
+### `jet_gain_region(strouhal: 'float') -> 'int'`
 
-Reduced flute/edge-tone loop using a hydrodynamic jet delay and bore.
+1 or 2 when St = f W / U0 lies in the first or second region where the jet amplifies the bore, else 0.
+
+### `jet_bore(f0: 'float', dur: 'float', jet_velocity=18.0, *, sr=48000, bore_radius=0.006, jet_length=0.009, loss=0.996, pressure=None, bound=False) -> 'CommonSolveResult'`
+
+Reduced flute/edge-tone loop using a hydrodynamic jet delay and bore. ``pressure`` (Pa, up to about 750) sets the
+jet speed U0 = sqrt(2 p / rho) instead of ``jet_velocity``; ``bound`` keeps St = f0 W / U0 (W = ``jet_length``) inside
+the first gain region by clamping U0. The result's info gives the Strouhal number and its region.
 
 ### `WaveguideBranch(impedance: 'float', delay_samples: 'float', max_delay: 'int', loss_dc: 'float' = 0.999, loss_hf: 'float' = 0.985, method: 'str' = 'thiran') -> None`
 
@@ -6752,6 +8335,22 @@ propagates its outgoing wave through its own passive delay/loss section.
 
 - `.step(self, excitation=None)`
 - `.render_impulse(self, n: 'int', drive_branch: 'int' = 0, amplitude: 'float' = 1.0)`
+
+### `PlectrumJunction(k: 'float', mu: 'float', f_max: 'float', feather_p: 'float' = 2.0, R: 'float' = 0.22, sr: 'float' = 48000.0) -> None`
+
+Spring plectrum on a string at the plucking point, as a displacement-wave scattering junction.
+
+The plectrum is a spring k (N/m^p) with damping mu (N s/m) whose free end ``ye`` is driven by the jack. It touches the
+string when ye passes the string's own position, pushes with the force k yd^p (yd = ye - y, so the stiffness
+p k yd^(p-1) grows from zero with the contact: ``feather_p`` = 1 is a plain spring, 2 a feathered quill), and lets go for
+good once the force exceeds ``f_max``. ``R`` is the string wave impedance sqrt(T mu_s). While in contact the junction
+gives y = S + rho{ye - S}, S the sum of the two arriving displacement waves and
+rho(z) = g (1 - zeta z^-1) / (1 - p z^-1), the bilinear force reflectance of the spring-damper seen from the string.
+
+- `.reset(self)`
+- `.coeffs(self, ks: 'float')`
+- `.step(self, s: 'float', ye: 'float') -> 'float'` — Displacement y at the plucking point from the arriving waves' sum ``s`` and the free end ``ye``.
+- `.pluck(self, freq: 'float', dur: 'float', vel: 'float' = 1.0, beta: 'float' = 0.2, t60: 'float' = 3.0, damp: 'float' = 0.12, rise: 'float' = 0.06)` — A lossless-ish two-rail string of pitch ``freq`` plucked at ``beta`` of its length by this junction, the jack rising at ``rise`` * (0.3 + 0.7 vel) m/s from 0.2 mm under the string. Returns (bridge force signal, release time s, peak contact force N).
 
 ## `genny.heavy_vehicles`
 
@@ -6783,7 +8382,7 @@ a gain per octave, interpolated in log f between the centres and held beyond the
 
 
 
-### `motorcycle(sr=44100, kind='cruiser', rpm=-1.0, speed=0.0, gear=3, load=0.6, crossplane=0, distance=6.0, direction='lr', pan=1, dur=4.0, seed=0)`
+### `motorcycle(sr=44100, kind='cruiser', rpm=-1.0, speed=0.0, gear=3, load=0.6, crossplane=0, limiter=0, distance=6.0, direction='lr', pan=1, dur=4.0, seed=0, idle=0)`
 
 Passby: the engine's spectrum brought to the octave profile of ``moto_noise_levels`` at the speed (`moto_propulsion`).
 
@@ -6791,7 +8390,7 @@ Passby: the engine's spectrum brought to the octave profile of ``moto_noise_leve
 
 A CVT holds the engine nearly still while the speed climbs: 0.4 s from 30 % of the top, then 1 % more.
 
-### `scooter(sr=44100, kind='2t', rpm=-1.0, load=0.7, belt=0.2, dur=4.0, seed=0)`
+### `scooter(sr=44100, kind='2t', rpm=-1.0, load=0.7, belt=0.2, limiter=0, dur=4.0, seed=0, slip=0.0, idle=0)`
 
 Belt: noise 800-2000 Hz, growing with the road speed.
 
@@ -6816,7 +8415,7 @@ Vintage: 600 rpm = 5 Hz, 2 or 4 stroke by model; the `modal_engine` body at 50 H
 
 
 
-### `mower(sr=44100, kind='lawn_mower', rpm=3000.0, blades=2, cut=0.6, load=0.6, dur=3.0, seed=0)`
+### `mower(sr=44100, kind='lawn_mower', rpm=3000.0, blades=2, cut=0.6, load=0.6, limiter=0, dur=3.0, seed=0)`
 
 84-94 dB(A), unused: nothing here is absolute. Cutting dominates under the deck; deck `modal_engine` at 300 Hz, damping 150 1/s.
 Grass as `GROUNDS`' Sekere at 40 grains per blade pass, pulsed by it; levels chosen so the cutting holds most of the power at the default.
@@ -6825,7 +8424,7 @@ Grass as `GROUNDS`' Sekere at 40 grains per blade pass, pulsed by it; levels cho
 
 Hz of the chain links passing the sprocket.
 
-### `chainsaw(sr=44100, rpm=9400.0, load=1.0, bite=0.0, dur=3.0, seed=0)`
+### `chainsaw(sr=44100, rpm=9400.0, load=1.0, bite=0.0, limiter=0, dur=3.0, seed=0)`
 
 The chain band sits at the link rate, CHAIN_LINKS rpm / 60, and rises with the engine.
 
@@ -6845,7 +8444,7 @@ Trot: 358 footfalls a minute at the preferred speed of a 500 kg horse (``creatur
 
 f = v / p.
 
-### `tracks(sr=44100, kind='tracked_vehicle', speed=-1.0, pitch=0.0, wheels=0, wheel_spacing=0.0, slack=-1.0, engine=0.6, rpm=-1.0, load=0.6, dur=4.0, seed=0)`
+### `tracks(sr=44100, kind='tracked_vehicle', speed=-1.0, pitch=0.0, wheels=0, wheel_spacing=0.0, slack=-1.0, engine=0.6, rpm=-1.0, load=0.6, dur=4.0, seed=0, irregular=False, stagger=False, gravel=0.0)`
 
 
 
@@ -6853,7 +8452,7 @@ f = v / p.
 
 f = z rpm / 60: 9 pistons at 2000 rpm = 300 Hz.
 
-### `hydraulic_pump(sr=44100, kind='pump', rpm=2000.0, pressure=150.0, pistons=9, dur=3.0, seed=0)`
+### `hydraulic_pump(sr=44100, kind='pump', rpm=2000.0, pressure=150.0, pistons=9, dur=3.0, seed=0, rate=0.0)`
 
 Arm: relief as `air_leak`, stop as a metal `impact`, and the end of travel at 65 % of the sound.
 
@@ -7030,7 +8629,7 @@ A leak is broadband up to 40 kHz: here up to the sampling rate's Nyquist.
 The `rubbed_glass` friction (elastoplastic), with porcelain's loss: fd 600 in `contact.MATERIALS`, xi = 1 / (2 pi fd).
 Mobility as in `rubbed_glass`, 0.3 s of release.
 
-### `fill_coef(radius=0.035, wall=0.0015, rho_l=1000.0, rho_g=2500.0, alpha=1.25) -> 'float'`
+### `fill_coef(radius=0.035, wall=0.0015, rho_l=1000.0, rho_g=2500.0, alpha=1.4) -> 'float'`
 
 The liquid's added mass on the wall: a = alpha rho_l R / (5 rho_g h).
 
@@ -7038,9 +8637,14 @@ The liquid's added mass on the wall: a = alpha rho_l R / (5 rho_g h).
 
 f = f0 / sqrt(1 + a fill^4), fill the height of liquid over the glass's; a < 0: `fill_coef()`.
 
-### `filled_glass(sr=44100, freq=1200.0, fill=0.0, force=0.6, seed=0)`
+### `french_glass_ratios(r_over_h: 'float' = 1.2) -> 'np.ndarray'`
 
-Ratios `friction.GLASS`, a 0.2 ms strike, T60 1.2 s, more damping with liquid.
+Mode ratios of the glass as a thin cylinder (radius R, effective height H = R / r_over_h): (n, vertical m) = (2, 1.875), (3, 1.875),
+(4, 1.875), (5, 1.875), (2, 4.694), over the lowest.
+
+### `filled_glass(sr=44100, freq=1200.0, fill=0.0, force=0.6, seed=0, partials='glass')`
+
+Ratios `friction.GLASS` (or the cylinder's modes), a 0.2 ms strike, T60 1.2 s, more damping with liquid.
 
 ### `flat_contact_s(mass: 'float', e_star: 'float', area: 'float') -> 'float'`
 
@@ -7225,13 +8829,26 @@ Time synchronous average over ``n`` periods (``period`` in samples, fractional a
 resampled onto round(period) points). Harmonics of 1/period pass; the rest falls as 1/N in power
 (|H(f)| = |sin(N pi T f) / (N sin(pi T f))|, a gain of 10 log10 N).
 
-### `drs(x: 'np.ndarray', delay: 'int', nfft: 'int' = 4096) -> 'tuple[np.ndarray, np.ndarray]'`
+### `drs(x: 'np.ndarray', delay: 'int', nfft: 'int' = 4096, window: 'str' = 'hann') -> 'tuple[np.ndarray, np.ndarray]'`
 
 Discrete random separation: (deterministic, random). H(f) = E{Y Y_D*} / E|Y_D|^2 between blocks of x and of x
 delayed by ``delay`` samples (longer than the random part's correlation, a few hundred periods of the band
 centre), averaged over nfft-point blocks; the deterministic part is x delayed by D through H, so the periodic
 lines pass with gain 1 and the random part with about 0. The delay is applied in time (D may exceed nfft);
-the first D samples, which have no past, use x D samples ahead instead.
+the first D samples, which have no past, use x D samples ahead instead. ``window``: block taper, hann or parzen
+(lower side lobes, wider band: twice the nfft gives the resolution of hann).
+
+### `sanc_order(spacing_hz: 'float', sr: 'float') -> 'int'`
+
+Shortest SANC filter that separates two lines `spacing_hz` apart: N = 1 / B, B the spacing over the sample rate.
+
+### `sanc_delay(noise_bandwidth_hz: 'float', sr: 'float') -> 'int'`
+
+Prediction depth that outlasts the random part: its correlation length, 1 / (narrowest noise bandwidth).
+
+### `sanc_static_gain(snr: 'float', order: 'int') -> 'float'`
+
+Gain of the SANC filter on a line of signal-to-noise power ratio `snr` (A^2 / 2 sigma^2): rN / (rN + 1).
 
 ### `sanc(x: 'np.ndarray', delay: 'int', order: 'int', mu: 'float' = 0.01) -> 'tuple[np.ndarray, np.ndarray]'`
 
@@ -7239,11 +8856,12 @@ Self-adaptive noise cancellation (normalized LMS): x predicted from its own past
 through an FIR of ``order`` taps (about one period of the slowest line, twice that is safer).
 Returns (deterministic = prediction, random = error).
 
-### `med(x: 'np.ndarray', order: 'int' = 30, iters: 'int' = 30) -> 'tuple[np.ndarray, np.ndarray]'`
+### `med(x: 'np.ndarray', order: 'int' = 30, iters: 'int' = 30, damp: 'float' = 1e-06) -> 'tuple[np.ndarray, np.ndarray]'`
 
 Minimum entropy deconvolution (Wiggins): the FIR f of ``order`` taps that maximizes the kurtosis
 sum y^4 / (sum y^2)^2 of y = f * x, by the fixed point R f = (sum y^2 / sum y^4) sum y^3 x(n - l).
-Returns (y, f): impulses smeared by the transmission path come back sharp.
+``damp``: relative increase of the zero-lag term of R (0.001-0.005 keeps a near-singular R solvable; more blurs
+the spikes). Returns (y, f): impulses smeared by the transmission path come back sharp.
 
 ### `kurtosis4(x: 'np.ndarray') -> 'float'`
 
@@ -7281,6 +8899,20 @@ More instruments live in acoustic.py and synths.py (imported at the bottom, same
 
 Register an instrument. `span` is the register it is voiced for (it still plays outside it).
 
+### `level3k_target(inst, freq)`
+
+dB of the 2.5-3.5 kHz peak under the spectral maximum at forte: LEVEL_3K_LOW_DB at 130 Hz and below, the instrument's
+high-register value (`physical.winds.LEVEL_3K_FORTE`) from 1 kHz up, log-interpolated between.
+
+### `match_3k(y, sr, inst, freq, amount=1.0)`
+
+Shelf above 2.3 kHz that moves the 2.5-3.5 kHz peak toward `level3k_target` (a few passes: a shelf also moves its own
+neighbourhood), 12 dB at a time; a note with nothing at 3 kHz is left alone.
+
+### `valve_click(y, sr, freq, level)`
+
+Valve or piston noise: 20 ms of noise around 2 kHz at `level` x 0.3 of the note's own RMS.
+
 ### `decay_env(n, tau, sr)`
 
 
@@ -7297,7 +8929,7 @@ Register an instrument. `span` is the register it is voiced for (it still plays 
 
 
 
-### `organ(freq, dur, sr=44100, vel=1.0, rotary=0.3, upper=1.0, registration='', key_click=0.0)`
+### `organ(freq, dur, sr=44100, vel=1.0, rotary=0.3, upper=1.0, registration='', key_click=0.0, click='noise', crosstalk=0.0)`
 
 
 
@@ -7353,11 +8985,15 @@ Register an instrument. `span` is the register it is voiced for (it still plays 
 
 
 
-### `glass(freq, dur, sr=44100, vel=1.0)`
+### `glass(freq, dur, sr=44100, vel=1.0, fill=0.0)`
 
 
 
-### `marimba(freq, dur, sr=44100, vel=1.0, decay=0.6, resonator=1.0)`
+### `slide_clarinet(freq, dur, sr=44100, vel=1.0, glide=3.0, at=0.5)`
+
+
+
+### `marimba(freq, dur, sr=44100, vel=1.0, decay=0.6, resonator=1.0, rise=0.0)`
 
 
 
@@ -7365,7 +9001,7 @@ Register an instrument. `span` is the register it is voiced for (it still plays 
 
 
 
-### `vibraphone(freq, dur, sr=44100, vel=1.0, motor=4.5, resonator=1.0)`
+### `vibraphone(freq, dur, sr=44100, vel=1.0, motor=4.5, resonator=1.0, rise=0.0)`
 
 
 
@@ -7378,6 +9014,10 @@ Register an instrument. `span` is the register it is voiced for (it still plays 
 
 
 ### `flute(freq, dur, sr=44100, vel=1.0, breath=0.15)`
+
+
+
+### `pea_whistle(freq, dur, sr=44100, vel=1.0, spin=25.0)`
 
 
 
@@ -7420,11 +9060,17 @@ at equal amplitude. Real instruments and players pull the top back; so does this
 
 
 
-### `render_chord(name: 'str', freqs: 'list[float]', dur: 'float', sr: 'int' = 44100, vel: 'float' = 1.0, strum: 'float' = 0.0, **params) -> 'np.ndarray'`
+### `render_chord(name: 'str', freqs: 'list[float]', dur: 'float', sr: 'int' = 44100, vel: 'float' = 1.0, strum: 'float' = 0.0, strum_var: 'float' = 0.0, **params) -> 'np.ndarray'`
 
-Sum several notes; `strum` delays each successive note by that many seconds.
+Sum several notes; `strum` delays each successive note by that many seconds. `strum_var` > 0 draws, per note, the
+delay as i x strum x exp(N(0, var)) and, when the instrument has them, `decay` (the t60) and `pick` (the plucking
+position) times exp(N(0, var)); the draw is fixed by the notes.
 
 ### `piano_wg(freq, dur, sr=44100, vel=1.0, decay=2.5, bright=1.0)`
+
+
+
+### `steelpan(freq, dur, sr=44100, vel=1.0, coupling=0.25, mallet=0.5)`
 
 
 
@@ -7477,7 +9123,19 @@ Length of a stopped pipe, end correction included: f = c / (4 (L + 0.6133 a)), B
 
 
 
-### `calliope(freq, dur, sr=44100, vel=1.0, steam=0.25, waver=0.06, diameter=0.05, seed=0)`
+### `steam_speed(warm=1.0, temp=414.0)`
+
+Speed of sound in the steam: sqrt(gamma R T), gamma 1.13 in wet steam up to 1.30 in dry steam.
+
+### `calliope_diameter(freq)`
+
+Bore of the whistle for this note: 100 mm at C3 to 40 mm at G5, on a log scale.
+
+### `calliope_pitch(freq, warm=1.0, pressure=1.0, sag=0)`
+
+Sounding pitch of a whistle tuned for `freq` with hot steam at the nominal pressure, and the relative pressure it gets.
+
+### `calliope(freq, dur, sr=44100, vel=1.0, steam=0.25, waver=0.06, diameter=0.0, pressure=1.0, warm=1.0, sag=0, overblow=0.0, seed=0)`
 
 
 
@@ -7501,7 +9159,7 @@ Helmholtz resonance f ~ sqrt(A): closing the mouth against the body lowers it (A
 
 
 
-### `flexatone(freq, dur, sr=44100, vel=1.0, rate=11.0, squeeze=0.0, curve='hold', seed=0)`
+### `flexatone(freq, dur, sr=44100, vel=1.0, rate=11.0, squeeze=0.0, curve='hold', vibrato=10.0, seed=0)`
 
 
 
@@ -7510,6 +9168,14 @@ Helmholtz resonance f ~ sqrt(A): closing the mouth against the body lowers it (A
 
 
 ### `gendyn(freq, dur, sr=44100, vel=1.0, points=12, amp_step=0.5, wander=0.0, seed=0)`
+
+
+
+### `trautonium(freq, dur, sr=44100, vel=1.0, subs=4, fade=0.6, formant=1.0, pressure=0.5)`
+
+
+
+### `ondes_martenot(freq, dur, sr=44100, vel=1.0, wave='sine', diffuser='principal', vib=0.25, vib_hz=5.5)`
 
 
 
@@ -7688,6 +9354,10 @@ Hertz felt pulse on the Faust big square body as a soft cover, Csound ``mode`` f
 The click kernels are shared with ``genny.foley``. The game-specific ``c_*`` charter set
 (tuned bell motifs) is not ported.
 
+### `auditory_icon(sr=44100, event='select', object_type='file', size=0.5, seed=0)`
+
+
+
 ### `ui_chime(sr=44100, kind='discovery', pitch=1.0, seed=0)`
 
 Port of ``channel_discovery`` / ``channel_achievement`` / ``urgency_alert`` /
@@ -7752,7 +9422,7 @@ Faust churchBell (mesh2faust FEM modes) struck with strikeModel noise, ``space.d
 
 
 
-### `bassoon(freq, dur, sr=44100, vel=1.0, meyer=0, precursor=0.0)`
+### `bassoon(freq, dur, sr=44100, vel=1.0, meyer=0, precursor=0.0, lattice=0)`
 
 
 
@@ -7913,6 +9583,22 @@ eta Pa s, radius m, load N per m. R .1, P 1000, eta .1, 1 um: 0.041 m/s. For `fr
 
 Sliding on a tooth flank: (w1 + w2) OP, signed, zero at the pitch point. ``op``: m from the pitch point.
 
+### `gear_friction_coefficient(slide_roll, p_hertz_gpa, v_entrain, mu0_cp, rough_um=0.5, radius_m=0.02, b=(-8.92, 1.03, 1.04, -0.35, 2.81, -0.1, 0.75, -0.39, 0.62))`
+
+Coefficient of friction of a lubricated gear contact from its slide-to-roll ratio, Hertz pressure (GPa), entraining speed (m/s),
+inlet viscosity (cP), rms roughness (um) and radius of curvature (m); regression on EHL runs, typical gear oil. Pass to `tooth_friction(mu=)`.
+
+### `gear_rolling_force(u_sum, w_unit, radius_m, e_eff, alpha, nu0, phi_t: 'float' = 1.0)`
+
+Rolling friction per unit contact width (N/m) of a lubricated gear contact: phi_T 4.318 (G U)^0.658 Q^0.0126 R / alpha, with
+G = alpha E', U = nu0 u_sum / (E' R), Q = w_unit / (E' R); ``u_sum`` = u1 + u2 (m/s), ``w_unit`` N/m, ``e_eff`` E' Pa, ``alpha`` pressure-viscosity
+coefficient 1/Pa, ``nu0`` dynamic viscosity Pa s, ``phi_t`` the thermal reduction factor (1 = none).
+
+### `gear_mesh_efficiency(f_slide, v_slide, f_roll, v_roll, torque_in, omega_in)`
+
+Mechanical efficiency of a mesh, 1 - sum (F_s |U1 - U2| + F_r (U1 + U2)) / (L_in w_in): ``f_slide`` N and ``f_roll`` N the sliding and
+rolling forces of each contact point, ``v_slide`` and ``v_roll`` m/s their relative and summed speeds, the torque N m, the shaft rate rad/s.
+
 ### `tooth_friction(rpm, teeth: 'int', n: 'int', load: 'float' = 0.6, mu: 'float' = 0.1, seed: 'int' = 0, top: 'float | None' = None) -> 'np.ndarray'`
 
 Friction force of a mesh, per unit tooth load, at P: a sawtooth at teeth rpm / 60 that is nil at the pitch point and changes sign
@@ -7970,7 +9656,7 @@ the motor at 20 times the speed with its brushes, rotor and stator, all through 
 
 
 
-### `conveyor(sr=44100, speed=1.0, joint=1.5, dur=4.0, seed=0)`
+### `conveyor(sr=44100, speed=1.0, joint=1.5, dur=4.0, seed=0, oiled=0.0)`
 
 Splice rate v / joint, roller rpm from v / 2 pi r.
 
@@ -8101,7 +9787,7 @@ RMS of the strongest third-octave inside 180-700 Hz, the band the annex's level 
 
 Broadband dB under water, 134 at 3 m/s to 171 at 16 m/s, a power law in speed between.
 
-### `outboard(sr=44100, strokes=4, rpm=5500.0, load=0.7, speed=10.0, planing=0, slap=2.0, listen='air', dur=4.0, seed=0)`
+### `outboard(sr=44100, strokes=4, rpm=5500.0, load=0.7, speed=10.0, planing=0, slap=2.0, listen='air', limiter=0, dur=4.0, seed=0)`
 
 
 
@@ -8156,15 +9842,31 @@ Models (sources of every constant: ``research/SOURCES.md``):
 
 Minnaert frequency in Hz at ``depth`` m below the surface.
 
-### `bubble_params(r0, depth: 'float' = 0.0, legacy: 'bool' = False, radiation: 'bool' = True)`
+### `bubble_thermal(r0, w, p_gas: 'float' = 101325.0, full: 'bool' = False)`
+
+(kappa, delta_th) of a gas bubble of radius r0 (m) driven at w (rad/s): the effective polytropic exponent and the thermal
+damping ratio p_gas Im(Phi) / (rho r0^2 w^2), from Phi = 3 gamma / (1 - 3 (gamma - 1) i chi (z coth z - 1)), z = sqrt(i / chi),
+chi = D / (w r0^2), D the gas diffusivity at p_gas (uniform pressure in the bubble).
+``full``: the pressure wave inside the bubble kept (G1 = w D_v / c_g^2, G2 = w r0^2 / D_v, D_v = gamma D: the complete
+solution, kappa = gamma G1 G2 Re Phi / 3); it only differs where w r0 approaches the speed of sound in the gas.
+
+### `bubble_params(r0, depth: 'float' = 0.0, legacy: 'bool' = False, radiation: 'bool' = True, tension: 'bool' = True, thermal: 'str' = 'devin')`
 
 Returns (w0, beta, w_d, delta) for radius r0 in metres (rad/s, 1/s, rad/s, -).
+``thermal`` "prosperetti": the polytropic exponent and the thermal damping of ``bubble_thermal`` at the bubble's own
+frequency in place of the Devin form below.
 
-w0 = sqrt(3 gamma p0 - 2 sigma / r0) / (r0 sqrt(rho));  beta = w0 delta / sqrt(delta^2 + 4);
+w0 = sqrt(3 gamma (p0 + 2 sigma / r0) - 2 sigma / r0) / (r0 sqrt(rho));  beta = w0 delta / sqrt(delta^2 + 4);
 delta = w0 r0 / c_f  +  4 mu / (rho w0 r0^2)  +  2 (sqrt(psi - 3) - (3g-1)/(3(g-1))) / (psi - 4),
 psi = PSI_K p0 / (P_atm w0); ``legacy``: PSI_K_HF. depth (m) raises p0.
 ``radiation=False`` drops the w0 r0 / c_f term: a bubble just under the free surface radiates as a
-dipole, whose loss is negligible.
+dipole, whose loss is negligible. ``tension=False``: the gas pressure without the 2 sigma / r0 Laplace
+term, as in the frozen `arms.ricochet` take.
+
+### `bubble_peak_pressure(r0, r: 'float' = 1.0, depth: 'float' = 0.0, eps: 'float' = 0.00037)`
+
+Peak pressure in Pa at ``r`` m from a bubble of radius ``r0`` m released at ``depth``: rho w0^2 r0^3 (eps0 / r0) / r,
+the amplitude of its decaying sinusoid; ``eps`` = initial wall displacement over radius (3.7e-4).
 
 ### `hf_bubble(r0: 'float', depth: 'float' = 1.0, rise: 'float' = 1.0, phi0: 'float' = -0.016, dur: 'float | None' = None) -> 'np.ndarray'`
 
@@ -8277,7 +9979,12 @@ Terminal fall speed (m/s) of a raindrop of diameter ``d_mm``: 9.65 - 10.3 exp(-0
 Frequency (Hz) of the crater-retraction sound of a drop of diameter ``d_mm`` landing at
 ``speed`` (default: terminal speed): f = V / L with the crater rim length L = D / 2.
 
-### `drip(sr=44100, size=0.4, bubbles=4.7, secondary=0.5, click=0.15, harmonic=0.0, crater=0.0, impact='parabolic', seed=0)`
+### `cavity_depth(d, v)`
+
+Maximum depth m of the crater of a drop of diameter ``d`` m hitting water at ``v`` m/s: R = (d^3 v^2 / (3 g))^(1/4)
+(hemispherical crater, the drop's kinetic energy becoming its potential energy).
+
+### `drip(sr=44100, size=0.4, bubbles=4.7, secondary=0.5, click=0.15, harmonic=0.0, crater=0.0, impact='parabolic', regime='terminal', seed=0)`
 
 
 
@@ -8313,7 +10020,7 @@ Speed of sound in the saturated air space over a liquid at ``temp_c``, relative 
 Radius factor of an entrained air bubble at ``temp_c`` against 20 C: vapour takes its partial
 pressure inside the bubble, so the same air needs the volume 1 / (1 - x_v).
 
-### `pour(sr=44100, dur=4.0, flow=1.0, fill_start=0.05, fill_end=0.9, height=0.15, radius=0.035, neck=0.0, neck_len=0.05, material='glass', resonance=0.6, temperature=20.0, collective=0.0, seed=0)`
+### `pour(sr=44100, dur=4.0, flow=1.0, fill_start=0.05, fill_end=0.9, height=0.15, radius=0.035, neck=0.0, neck_len=0.05, material='glass', resonance=0.6, temperature=20.0, collective=0.0, drop=0.0, seed=0)`
 
 Stream, bubbles and vessel resonance. Bubble rate 1580/s x flow, 300 Hz - 6 kHz. Bubble size
 falls as the column height falls; Chosen: the factor 1.3 -> 0.6, the stream:bubble balance
@@ -8375,7 +10082,12 @@ tube-bubble glugs at the end.
 so a drop is added at the start when a short render would otherwise be silent (in the medium and
 slow regimes most sources do not drip at all within a few seconds: that is the class).
 
-### `waterfall(sr=44100, dur=4.0, height=6.0, distance=8.0, seed=0)`
+### `bedload_impacts(n, rng, pebble=30.0, rate=60.0)`
+
+Pebbles knocking on a river bed: Poisson impacts, each a half-sine of the Hertz contact time 3.7e-3 D s
+(D = ``pebble`` mm: 30 mm gives a corner near 3 kHz, 5 mm near 17 kHz), amplitude ~ D^1.5 with a log-normal spread.
+
+### `waterfall(sr=44100, dur=4.0, height=6.0, distance=8.0, seed=0, bedload=0.0, pebble=30.0)`
 
 A waterfall is near-white noise; at a distance the detail is replaced by noise.
 Detail layer: bubbles at the babbling rate with the breaking-wave power law.
@@ -8493,7 +10205,7 @@ is quiet: only changes of I make sound. ``peak`` (Hz): the turbulence instead ha
 
 
 
-### `fire(sr=44100, dur=4.0, size=0.4, crackle=12.0, wet=0.2, wind=0.2, seed=0, whine=0.0, woof=0.0, clatter=0.0, detail='full')`
+### `fire(sr=44100, dur=4.0, size=0.4, crackle=12.0, wet=0.2, wind=0.2, seed=0, whine=0.0, woof=0.0, clatter=0.0, detail='full', species='')`
 
 Per flame front one shared slow control drives roar, crackle rate and hiss together (one noise per
 generator keeps them coherent); a big fire is up to 4 fronts with their own noises. Whine: relaxation
@@ -8504,6 +10216,11 @@ oscillations of outgassing; woof: 3-80 Hz air induction following the flames; cl
 Flare = the fireball gesture of ``combustion_roar`` plus fire hiss; the small flame is the
 candle. Chosen: the scrape (band-passed noise gated by a 400-900 Hz grain train; solid
 friction proper belongs to genny's friction module) and the layer timing.
+
+### `laser_farnell(sr=44100, dur=0.0, seed=0)`
+
+Six exponential sweeps f0 p^env (35 kHz to 806 kHz at the start, folded by the sample rate: the aliasing is the
+sound) started within 15 ms, with four snaps through the spark formant bank.
 
 ### `spark(sr=44100, size=0.3, tone=1.0, seed=0)`
 
@@ -8555,7 +10272,7 @@ the same signal, weaker, shorter and so higher (model 0), or the channel's own s
 Loss factor of ice at frequency f: a Debye relaxation tau = tau0 exp(Q / RT), pure or NaCl-doped, over a floor.
 ``c_parallel``: crystal c axis along the bending (neutral fibre), peak scaled by ICE_C_PARALLEL.
 
-### `ice_chirp(distance: 'float' = 60.0, thickness: 'float' = 0.05, loss: 'float' = 0.0045, return_freq: 'bool' = False, temp: 'float | None' = None, salt: 'bool' = False, c_parallel: 'bool' = False)`
+### `ice_chirp(distance: 'float' = 60.0, thickness: 'float' = 0.05, loss: 'float' = 0.0045, return_freq: 'bool' = False, temp: 'float | None' = None, salt: 'bool' = False, c_parallel: 'bool' = False, floating: 'bool' = False)`
 
 The dispersive "pew" of a crack in lake ice, heard ``distance`` m away, at 48 kHz.
 
@@ -8570,14 +10287,25 @@ where c_max caps the group speed (thin-plate theory fails once the wavelength ne
 thickness), which gives the top frequency c_max^2 / (8 pi a): about 3 kHz for 5 cm ice and
 500 Hz for 30 cm - thin ice sings, thick ice booms. Stationary-phase amplitude of a dispersed
 impulse: A ~ sqrt(|df/dt|) ~ (t0 / t)^1.5, times exp(-loss 2 pi f (t - t0)), loss = eta / 2 at the
-relaxation peak, or ``ice_eta(f, temp, salt) / 2`` when ``temp`` (C) is given.
+relaxation peak, or ``ice_eta(f, temp, salt) / 2`` when ``temp`` (C) is given. ``floating``: the sheet
+rests on water, whose mass slows the waves: a is scaled by ICE_WATER_LOAD (group speed -22 %).
 
-### `acfw_frequency(thickness: 'float', c: 'float' = 329.0, depth: 'float' = 10.0) -> 'float'`
+### `air_sound_speed(celsius: 'float') -> 'float'`
+
+m/s: 331.3 + 0.606 T.
+
+### `acfw_frequency(thickness: 'float', c: 'float' = 329.0, depth: 'float' = 10.0, e: 'float' = 8500000000.0, nu: 'float' = 0.33) -> 'float'`
 
 Frequency of the air-coupled flexural wave (the ice "sings" where the flexural phase speed equals c):
-the root of G0 with k = w/c. Thin ice sings high: ~725 Hz at 4.3 cm, ~60 Hz at 80 cm.
+the root of G0 with k = w/c. Thin ice sings high: ~725 Hz at 4.3 cm, ~195 Hz at 16 cm, ~39 Hz at 80 cm.
+`e`, `nu`: columnar fresh-water ice is 9.7 GPa and 0.31; `c` from `air_sound_speed`.
 
-### `ice_sing(distance: 'float' = 60.0, thickness: 'float' = 0.05, c: 'float' = 343.0, depth: 'float' = 10.0, lead: 'float' = 0.3, tail: 'float' = 0.1) -> 'np.ndarray'`
+### `slosh_hz(radius: 'float', depth: 'float', mode: 'int' = 0) -> 'float'`
+
+Sloshing frequency (Hz) of water in an upright round vessel: (1/2pi) sqrt(lam g/R tanh(lam h/R)).
+A 10 cm bucket filled 15 cm sways at ~2.1 Hz; mode 1 and 2 are the next modes.
+
+### `ice_sing(distance: 'float' = 60.0, thickness: 'float' = 0.05, c: 'float' = 329.0, depth: 'float' = 10.0, lead: 'float' = 0.3, tail: 'float' = 0.1) -> 'np.ndarray'`
 
 The air-coupled flexural wave of an impulse ``distance`` m away on floating ice: a near-monochromatic
 tone that builds up ahead of the air-borne crack and stops on it (plate velocity
@@ -8591,7 +10319,7 @@ r (1/c - 1/c_g), with the flexural group speed c_g at the coupled frequency (der
 Each crack: ``ice_chirp`` through the ice, then the snap through the air, which arrives later
 (d / 343 s) because the plate wave is faster, preceded by the air-coupled flexural tone ``ice_sing``.
 
-### `ice_cubes(sr=44100, dur=1.5, cubes=3, glass=1.0, liquid=0.6, energy=0.7, seed=0)`
+### `ice_cubes(sr=44100, dur=1.5, cubes=3, glass=1.0, liquid=0.6, energy=0.7, seed=0, slosh=0.0)`
 
 Collisions settle like a decaying swirl (rate falling exponentially). Each is a short contact
 pulse (``physical.core.contact_pulse``) driving a glass body (modal table ``sy_vase`` through
@@ -8626,10 +10354,15 @@ Y = H / 3.
 
 pm = 2 k (1 + psi), cos(2 alpha - psi) = cos psi / (1 + sin psi): 2.61 k at 30 degrees, 5.14 k at 90.
 
+### `wedge_half_width(alpha_deg, depth)`
+
+Half-width in m of the wedge's contact ``depth`` m below the original surface, with the piled-up lip:
+face length l = depth / (cos alpha - sin(alpha - psi)), half-width l sin alpha (wider than depth tan alpha).
+
 ### `blade_force(alpha_deg, length, depth, Y, mu=0.0)`
 
-Force in N to hold a wedge ``depth`` m into a plastic solid along ``length`` m: pm 2 a L, a = depth tan alpha, k = Y / 2.
-pm = pw (1 + mu cot alpha); pw kept frictionless. # ponytail: no pile-up on a, the true contact is a little wider.
+Force in N to hold a wedge ``depth`` m into a plastic solid along ``length`` m: pm 2 a L, a = `wedge_half_width`, k = Y / 2.
+pm = pw (1 + mu cot alpha); pw kept frictionless.
 
 ### `blade_contact(alpha_deg, mass, speed, length, Y, mu=0.0)`
 
@@ -8756,11 +10489,44 @@ A quarter-wave tube whose burning composition leaves it longer at a steady rate:
 
 Geyser and mud carry the laws of `geo.geyser`, `geo.mud_pot`.
 
-### `tornado(sr=44100, distance=500.0, dur=12.0, seed=0)`
+### `tornado_peak_hz(wind=67.5, roughness=0.1)`
+
+Centre (Hz) of the broad tornado peak for a ground wind (m/s) over a surface of roughness height (m): 45 Hz at
+67.5 m/s over 0.1 m, 150 Hz over 0.03 m, falling as 1/roughness and rising with the wind.
+
+### `tornado(sr=44100, distance=500.0, dur=12.0, seed=0, spectrum='bands', roughness=0.0, wind=67.5, approach=0.0)`
 
 
 
-### `volcano(sr=44100, stage='complet', dur=16.0, seed=0)`
+### `double_pulse_tremor(n: 'int', rng, f1=5.0, f2=4.0, gap=(1.5, 2.5), rate=0.4, a2=0.25, glide=None, sd=None) -> 'np.ndarray'`
+
+Harmonic tremor from discrete events, no resonator and no periodic comb: at random times (Poisson, `rate` per s) a
+Ricker pulse of centre frequency f1, then a second one at f2 and a2 x its amplitude after a gap drawn once in `gap`
+(s) and kept for the whole sound, or, with `glide` = (gap at the start, gap at the end), moved linearly between the two so
+the spectral peaks glide. The spectrum of the double pulse peaks at multiples of 1 / gap. `sd` (s): standard deviation of the
+interval between events, gamma distributed around 1 / rate; None = Poisson.
+
+### `tornado_psd(f, f_n=14.8, af=0.0116, a_s=0.251, zeta=1.57, an=0.000511) -> 'np.ndarray'`
+
+Pressure power density (Pa^2 per rad/s) of a tornado at frequency ``f`` (Hz): wind noise w^(-7/3), a broad turbulence
+peak a_s wn^2 w^2 / (w^4 + 4 zeta wn^2 w^2 + wn^4) around ``f_n`` Hz, and a floor ``an``.
+
+### `doppler_shift(f0: 'float', v: 'float', c: 'float' = 343.0) -> 'float'`
+
+Frequency of a source of frequency f0 moving at v m/s toward the listener: f0 / (1 - v / c).
+
+### `reduced_pressure(p: 'float', r: 'float', r_red: 'float' = 1000.0) -> 'float'`
+
+Pressure of a compact source brought to another distance: p r / r_red.
+
+### `eruption_infrasound(n: 'int', volume=5000.0, r=325.0, dipole=0.0, theta=0.0, rise=0.25, rho=0.8, c=320.0, relax=0.5) -> 'np.ndarray'`
+
+Pressure (Pa) at r m of a lava-lake bubble burst: the gas volume `volume` (m3) leaves with a Gaussian flux of time
+constant `rise` (s), half-space monopole p = rho V''/(2 pi r). `dipole` 0..1 is the share of a directional part, gain
+2 cos(theta) on the axis angle `theta` (deg), that relaxes to the monopole with time constant `relax` (s) as the film
+tears open. Starts at 0.3 s.
+
+### `volcano(sr=44100, stage='complet', dur=16.0, seed=0, tremor='noise', infra=0.0)`
 
 
 
@@ -8797,7 +10563,12 @@ Noise, bp~ f q, max~ s, -~ s, x a, clip 0..1, fourth power; the instance is high
 A glass window about 1 m2. Two recirculating delays; each feeds two ring modulators, each into its own band-pass and back into a delay line.
 Which branch feeds which line is read from the order of the objects in the figure's list.
 
-### `rain_on(sr=44100, surface='vitre', intensity=0.5, wetness=0.0, wind=1.0, rate=0.0, dur=4.0, seed=0)`
+### `drop_force(d_mm: 'float', v: 'float', sr: 'int' = 48000, pitch: 'float' = 30.0) -> 'np.ndarray'`
+
+Force (N) of one water drop of diameter ``d_mm`` landing at ``v`` m/s on a plate tilted ``pitch`` degrees:
+F = rho D^2 u^2 A s^C exp(-B s), s = t u / D, u = v cos(pitch); its impulse is the drop's normal momentum.
+
+### `rain_on(sr=44100, surface='vitre', intensity=0.5, wetness=0.0, wind=1.0, rate=0.0, model='hail', dur=4.0, seed=0)`
 
 
 
@@ -8813,7 +10584,7 @@ Which branch feeds which line is read from the order of the objects in the figur
 
 
 
-### `foliage(sr=44100, kind='feuilles', dur=2.0, seed=0)`
+### `foliage(sr=44100, kind='feuilles', dur=2.0, seed=0, wind=0.0, leaf='green')`
 
 
 
@@ -8833,7 +10604,7 @@ Gaps closing before failure as in `geo.tree_fall`.
 
 Table over `gust`, `cavity_tone`, `aeolian_harp`.
 
-### `rapids(sr=44100, turbulence=0.5, dur=6.0, seed=0)`
+### `rapids(sr=44100, turbulence=0.5, dur=6.0, seed=0, bedload=0.0, pebble=30.0)`
 
 
 
@@ -8867,7 +10638,14 @@ velocity of the last step. ``series_length`` is the (negative) series length of 
 - `.series_length`
 - `.impedance(self, sr: 'int') -> 'float'`
 
-### `MultiHoleBore(length_m: 'float' = 0.66, bore_radius_m: 'float' = 0.007, hole_positions: 'tuple[float, ...]' = (0.38, 0.47, 0.55, 0.63, 0.7, 0.77), hole_radii_m: 'tuple[float, ...]' = (0.003, 0.0032, 0.0033, 0.0035, 0.0037, 0.004), hole_chimneys_m: 'tuple[float, ...]' = (0.004, 0.004, 0.004, 0.004, 0.004, 0.004), sr: 'int' = 48000, loss_dc: 'float' = 0.999, loss_hf: 'float' = 0.982, bell_cutoff_hz: 'float' = 900.0, f_ref_hz: 'float' = 0.0, nonlinear_holes: 'bool' = False) -> None`
+### `blowhole_coefficients(fs: 'float', rb: 'float' = 0.0075, rth: 'float' = 0.003, rrh: 'float' = 0.0015, xi: 'float' = 0.0) -> 'dict'`
+
+One-pole constants of a tone hole of radius ``rth`` and of a register vent of radius ``rrh`` on a bore of radius ``rb`` at
+sample rate ``fs``: scatter = -rth^2 / (rth^2 + 2 rb^2); thCoeff = (2 te fs - c) / (2 te fs + c), te = 1.4 rth;
+vent zeta = c + 2 pi rb^2 xi / rho, psi = 2 pi rb^2 (1.4 rrh) / (pi rrh^2), rhCoeff = (zeta - 2 fs psi) / (zeta + 2 fs psi),
+rhGain = -c / (zeta + 2 fs psi).
+
+### `MultiHoleBore(length_m: 'float' = 0.66, bore_radius_m: 'float' = 0.007, hole_positions: 'tuple[float, ...]' = (0.38, 0.47, 0.55, 0.63, 0.7, 0.77), hole_radii_m: 'tuple[float, ...]' = (0.003, 0.0032, 0.0033, 0.0035, 0.0037, 0.004), hole_chimneys_m: 'tuple[float, ...]' = (0.004, 0.004, 0.004, 0.004, 0.004, 0.004), sr: 'int' = 48000, loss_dc: 'float' = 0.999, loss_hf: 'float' = 0.982, bell_cutoff_hz: 'float' = 900.0, f_ref_hz: 'float' = 0.0, nonlinear_holes: 'bool' = False, vent_position: 'float' = 0.0, vent_radius_m: 'float' = 0.0015, vent_open: 'float' = 0.0) -> None`
 
 Cylindrical bore with a chain of continuously-openable side holes.
 
@@ -8876,6 +10654,7 @@ Each bore section is a bidirectional delay; each tone-hole junction is a
 lossless three-port scattering junction (left bore, right bore, side hole).
 
 - `.set_fingering(self, openings)`
+- `.set_vent(self, openness: 'float')`
 - `.step(self, mouth_wave: 'float' = 0.0)`
 - `.render(self, drive, fingering=None)`
 
@@ -8895,7 +10674,10 @@ Jet-driven open bore with dynamic tone holes.
 
 Several strings coupled through a shared bridge state.
 
-Useful for piano unisons, mandolin courses and sympathetic strings.
+Useful for piano unisons, mandolin courses and sympathetic strings. Each string's reflection at the
+bridge loses the bridge motion: v_k <- v_k - coupling * bridge, bridge = low-passed mean of the
+incoming waves. The in-phase mode moves the bridge and decays fast; the antiphase mode leaves it
+still and rings on (two-stage decay).
 
 - `.render(self, dur: 'float', velocity=0.8, excite_index: 'int' = 0)`
 
@@ -8929,7 +10711,22 @@ to couple energy back into the bridge/string network.
 - `.step(self, force_n: 'float') -> 'tuple[float, float]'`
 - `.modal_energy`
 
-### `SympatheticPiano(struck_frequency: 'float' = 440.0, unison_detune_cents: 'tuple[float, ...]' = (-0.9, 0.0, 0.7), sympathetic_ratios: 'tuple[float, ...]' = (0.5, 1.5, 2.0, 2.5, 3.0), coupling: 'float' = 0.055, string_impedance_n_s_m: 'float' = 0.65, bridge: 'BridgeImpedance | None' = None, soundboard: 'ModalSoundboard | None' = None, sr: 'int' = 48000, loss_dc: 'float' = 0.99965, loss_hf: 'float' = 0.989) -> None`
+### `loaded_junction(v_plus, R, Rb=0.0, f_d=0.0)`
+
+N strings of wave impedances ``R`` meeting at a bridge of real load ``Rb`` driven by the force ``f_d``: the common
+velocity v_J = (2 sum R_i v_i+ - f_d) / (sum R_i + Rb), the reflections v_i- = v_J - v_i+. ``v_plus`` is (N,) or
+(n, N); returns (v_minus, v_J). Rb -> inf is the rigid end, Rb = 0 a free one; |I - 2 R 1^T / (sum R + Rb)| <= 1.
+
+### `passive_bridge(freqs, bws, g=0.9, method=1, sr=48000)`
+
+Bridge reflectance rho(z) = B/A of strings on a body with resonances at ``freqs`` Hz of bandwidth ``bws`` Hz,
+passive by construction (|rho| <= g <= 1 on the unit circle). Method 1: A = prod (1 - 2 R_i cos(theta_i) z^-1 +
+R_i^2 z^-2), rho = g flip(A) / A; the admittance is then (A - g flip(A)) / (A + g flip(A)), real positive.
+Method 2: admittance Gamma = (1 - 0.995 z^-1) sum 1 / (1 + a1_i z^-1 + a2_i z^-2), its phase inside +-90 degrees,
+rho = (1 - Gamma) / (1 + Gamma). Returns (b, a) of rho in direct form: with resonances far below ``sr`` (a few Hz at
+48 kHz) the coefficients lose their precision, so give a low ``sr`` or cascade the sections.
+
+### `SympatheticPiano(struck_frequency: 'float' = 440.0, unison_detune_cents: 'tuple[float, ...]' = (-0.9, 0.0, 0.7), sympathetic_ratios: 'tuple[float, ...]' = (0.5, 1.5, 2.0, 2.5, 3.0), coupling: 'float' = 0.055, string_impedance_n_s_m: 'float' = 0.65, bridge: 'BridgeImpedance | None' = None, soundboard: 'ModalSoundboard | None' = None, sr: 'int' = 48000, loss_dc: 'float' = 0.99965, loss_hf: 'float' = 0.989, junction: 'str' = 'mix', bridge_load: 'float' = 20.0) -> None`
 
 Reduced piano network with unison strings, sympathetic strings and one
 shared bridge/soundboard.
@@ -9030,9 +10827,10 @@ to the falling line inside a cosine, band 6 kHz Q 1, x line^2. Peak 1. Bounded i
 K1, in pascals, time 0 = the wave arrives. Friedlander shock (x ``shock``), 3 sinusoidal-noise blasts (first after 30 ms, then at
 least 5 ms apart, brightness falling: Farnell Fig 54.6), the fireball, a pressure-wave echo, the "bam-bam" of the ground.
 
-### `ground_wave(w_kg: 'float', r: 'float', rng) -> 'list'`
+### `ground_wave(w_kg: 'float', r: 'float', rng, vp: 'float' = 1715.0, vs: 'float' = 990.1557116602082, vr: 'float' = 910.3491613003954) -> 'list'`
 
 Pre-rumble through the ground: (seconds before the blast, Pa) for P, S, Rayleigh. Level 2 % of the blast at 10 m and the 80 Hz thud.
+``vp``, ``vs``, ``vr``: wave speeds of the ground in m/s (soil slower, granite faster).
 
 ### `fragments(count: 'int', r: 'float', rng, d_mm: 'float' = 5.0, v_range=(300.0, 1218.0)) -> 'list'`
 
@@ -9048,11 +10846,12 @@ miss distance; the Mach cone (Mach 3.55, 16.4 deg) decides whether its crack get
 K3: parallel band-passes on the tube's modes: factors 1, 3, 5, 7 of c/4L closed, 2, 3, 4, 5 of c/2L open (Farnell). ``f``: base
 frequency instead, per sample for a moving chamber. c/2L x 2 = 368 Hz for 0.93 m, Farnell's 366.
 
-### `rocket_motor(dur: 'float', rng, u: 'float' = 1000.0, d: 'float' = 0.066, st: 'float' = 0.05, rise: 'float' = 0.09) -> 'np.ndarray'`
+### `rocket_motor(dur: 'float', rng, u: 'float' = 1000.0, d: 'float' = 0.066, st: 'float' = 0.05, rise: 'float' = 0.09, fall: 'float' = 0.0) -> 'np.ndarray'`
 
 K4: jet noise peaking at St U/D (St 0.2 lab jet, 0.01-0.02 launchers; 0.05 for a small rocket estimated), through Farnell's rocket
 (Fig 55.8-9): a comb sweeping over the noise, a notch rising as a power curve, the pipe growing as fuel burns (0.2 -> 0.5 m, 51 cm rocket,
-0.2 estimated); louder as it burns, square-root swell (rise 90 ms, c10), exhaust jitter (low-pass 9 Hz).
+0.2 estimated); louder as it burns, square-root swell (rise 90 ms, c10), exhaust jitter (low-pass 9 Hz). ``fall`` > 0: seconds over which
+the thrust dies away after the swell (a motor that fades over 8 s), 0 keeps the burn constant.
 
 ### `fly_away(x: 'np.ndarray', speed: 'float', closest: 'float' = 3.0, c: 'float' = 343.0) -> 'np.ndarray'`
 
@@ -9064,11 +10863,36 @@ Doppler of a source with a speed profile, supersonic allowed while it recedes (r
 along a line ``closest`` m off the listener from x0. A sound emitted at t is heard at t + r(t)/c; 1/r, and it dulls with distance
 below 1500 Hz. Output time 0 = emission of the first sample.
 
-### `underwater_blast(w_kg: 'float', r: 'float', depth: 'float', rng, pulses: 'int' = 3, surface: 'bool' = False) -> 'np.ndarray'`
+### `bubble_period_factor(explosive: 'str' = 'tnt') -> 'float'`
+
+Bubble period of ``explosive`` relative to TNT of the same mass.
+
+### `bubble_ode(w_kg: 'float', r: 'float', depth: 'float', period: 'float', kept=(0.34, 0.54), pulses: 'int' = 3, rate: 'int' = 48000)`
+
+Pressure above hydrostatic at ``r`` from the radial motion of the gas bubble, as (start time s, Pa samples at ``rate``).
+Keller's compressible equation with the gas law p = KG rho^1.25, started at rest at 2 charge radii. The time axis is scaled so that
+the first collapse falls at ``period``; at each collapse the energy is cut to ``kept`` of its value at the previous maximum.
+The record starts at the first maximum radius.
+
+### `surface_period_factor(w_kg: 'float', depth: 'float') -> 'float'`
+
+Bubble period near the free surface relative to deep water (<= 1; 0.5 floor, where the theory stops holding).
+
+### `bubble_pulse_peak(w_kg: 'float', r: 'float') -> 'float'`
+
+First bubble-pulse peak above hydrostatic, Pa.
+
+### `underwater_blast(w_kg: 'float', r: 'float', depth: 'float', rng, pulses: 'int' = 3, surface: 'bool' = False, near_surface: 'bool' = False, bottom: 'bool' = False, tail: 'str' = 'exp', bubble: 'str' = 'cole', explosive: 'str' = 'tnt') -> 'np.ndarray'`
 
 Peak 1: exponential shock Pm e^(-t/theta), theta = 96.5 W^(1/3) (W^(1/3)/R)^-0.22 us, then bubble pulses. The first comes T after
-the shock with 0.84 x its impulse; each contraction keeps ``UW_KEPT`` of the energy, so the next period shrinks as its cube root and
-the pulse amplitude as its square root. Pulse width 0.2 T. ``surface``: the free surface's inverted image cuts the shock, 2 D / c later.
+the shock with 0.84 x its impulse and the peak `bubble_pulse_peak`, which sets its width (2 ms to 0.22 T); each contraction keeps
+``UW_KEPT`` of the energy, so the next period shrinks as its cube root and the pulse amplitude as its square root. ``surface``: the
+free surface's inverted image cuts the shock, 2 D / c later, and the water cannot pull below zero absolute pressure (cavitation).
+``near_surface``: the bubble period is shortened by the surface (``surface_period_factor``). ``bottom``: a charge on a hard
+sandy bottom, peak x1.10 and impulse x1.23 (measured, well under the rigid-wall x1.26 and x1.59).
+``tail`` double: after theta the shock falls as the two-exponential measured profile (``UW_TAIL``), 30-40 % more impulse than the single exponential.
+``bubble`` keller: the pulses are the radiated pressure of the bubble's radial motion (``bubble_ode``) instead of the shaped lumps; the first
+collapse stays at the period T. ``explosive``: scales the bubble period (``bubble_period_factor``); the shock stays TNT's.
 Above the depth's hull, the ear hears it low-passed.
 
 ### `blast_sfx(sr=44100, kind='grenade', charge=1.0, distance=50.0, ground=True, seed=0)`
@@ -9147,7 +10971,7 @@ Farnell, c02 l.15823-15827 (his own 30 dB and 20 dB figures disagree; the curve 
 
 
 
-### `depth_charge(sr=44100, charge=118.0, distance=50.0, depth=75.0, hull=0.5, sink=False, seed=0)`
+### `depth_charge(sr=44100, charge=118.0, distance=50.0, depth=75.0, hull=0.5, bottom=False, sink=False, bubble='cole', tail='exp', seed=0)`
 
 
 
@@ -9232,13 +11056,21 @@ the harmonics at or above Nyquist are dropped and the rest renormalised to sum t
 
 Fold x back into [lo, hi] at both walls.
 
-### `gendyn(freq, n: 'int', sr: 'int' = 44100, points: 'int' = 12, amp_step: 'float' = 0.5, dur_spread: 'float' = 0.0, seed: 'int' = 0, curve: 'float' = 0.0) -> 'np.ndarray'`
+### `xenakis_dist(u, kind: 'str' = 'uniform', a: 'float' = 0.5) -> 'np.ndarray'`
+
+Maps uniform u in [0, 1] to [-1, 1] through one of the Xenakis distributions of dynamic stochastic
+synthesis; ``a`` (0..1) sets the spread.
+
+### `gendyn(freq, n: 'int', sr: 'int' = 44100, points: 'int' = 12, amp_step: 'float' = 0.5, dur_spread: 'float' = 0.0, seed: 'int' = 0, curve: 'float' = 0.0, amp_dist: 'str' = 'uniform', dur_dist: 'str' = 'uniform', amp_param: 'float' = 0.5, dur_param: 'float' = 0.5, minfreq: 'float | None' = None, maxfreq: 'float | None' = None, preset: 'str | None' = None) -> 'np.ndarray'`
 
 Dynamic stochastic synthesis: a cycle of ``points`` breakpoints, each with an amplitude and a segment length
 that move every cycle by a second-order random walk (a random walk sets the step of another), both walls
 reflecting. Amplitudes stay in [-1, 1] with steps in [-amp_step, amp_step]; segment lengths in
 (1 +- dur_spread) of period / points, their steps in +- dur_spread / 2 of it, so the pitch wanders
-around ``freq`` (0: fixed pitch, the timbre alone walks). Segments are straight lines, or with ``curve`` > 0
+around ``freq`` (0: fixed pitch, the timbre alone walks). ``minfreq`` / ``maxfreq`` replace the length walls
+so the cycle stays between those pitches. Steps are drawn from ``amp_dist`` / ``dur_dist`` (uniform, cauchy,
+logist, hyperbcos, arcsine, expon; spread ``amp_param`` / ``dur_param``); ``preset`` xenakis, buzz, drift or
+growl sets them together. Segments are straight lines, or with ``curve`` > 0
 exponential bends a + (b - a)(1 - e^(c u)) / (1 - e^c), c drawn per segment in [-curve, curve].
 
 ### `white(n: 'int', seed: 'int | None' = None) -> 'np.ndarray'`
@@ -9276,8 +11108,9 @@ the wave turns saw-like.
 
 ### `gbuzz(freq, n: 'int', sr: 'int' = 44100, nharm: 'int' = 4, lharm: 'int' = 1, mul: 'float' = 0.1, phase0: 'float' = 0.0) -> 'np.ndarray'`
 
-Closed-form buzz: ``nharm`` cosine harmonics from ``lharm``, each ``mul`` times the one below, scaled by
-(1 - |r|) / (1 - |r^n|) (1 / n when |r| = 1). nharm is cut so the top harmonic stays under Nyquist.
+Closed-form buzz: ``nharm`` cosine harmonics from ``lharm``, each ``mul`` times the one below, scaled so the
+amplitudes sum to 1. The count follows the pitch sample by sample: a harmonic fades out linearly over its last
+f Hz below Nyquist, so a glissando adds and drops harmonics without clicks or aliasing.
 
 ### `dpw(freq, n: 'int', sr: 'int' = 44100, order: 'int' = 3, wave: 'str' = 'saw', phase0: 'float' = 0.0) -> 'np.ndarray'`
 
@@ -9288,7 +11121,8 @@ triangle or square (two saws half a period apart). Order 1 = trivial; 2..6 alias
 ### `blit(freq, n: 'int', sr: 'int' = 44100, harmonics: 'int' = 0, kernel: 'str' = 'sinc', phase0: 'float' = 0.0) -> 'np.ndarray'`
 
 Band-limited impulse train, one unit-area pulse per period. ``kernel`` sinc: closed form
-sin(M pi x) / (P sin(pi x)) with M odd = 2 floor(P / 2) + 1 harmonics (``harmonics`` > 0 sets fewer);
+sin(M pi x) / (P sin(pi x)) with M odd = 2 H + 1, H = floor(P / 2) harmonics (``harmonics`` > 0 sets fewer),
+the top one faded linearly over its last f Hz below Nyquist so a glissando changes H without clicks;
 bspline: each pulse a cubic B-spline at its exact fractional position (spectrum sinc^4, -3 dB at 10 kHz at
 44.1 kHz); thiran: the pulse on a sample, its fractional part D in [0.418, 1.418] by a first-order allpass
 a1 = (1 - D) / (1 + D).
@@ -9315,10 +11149,41 @@ scaled with sr elsewhere); 0 when even order 6 does not suffice.
 
 One period of n points from harmonic amplitudes c_1..c_N (inverse real FFT of [0, c_1..c_N, 0...]).
 
-### `wavetable_osc(freq, n: 'int', sr: 'int' = 44100, harmonics=(1.0,), phase0: 'float' = 0.0) -> 'np.ndarray'`
+### `table_read(tab, pos, interp: 'str' = 'lagrange', rows=None) -> 'np.ndarray'`
 
-Table oscillator read with linear interpolation; harmonics above 0.45 sr are dropped from the table at the
-highest frequency of `freq`.
+Periodic read of a table (or of row ``rows[i]`` of a 2-D stack) at fractional index ``pos``: ``lagrange``
+= 4-point cubic Lagrange (points i-1..i+2), ``linear``.
+
+### `mipmap(shape=None, harmonics=None, coeffs=None, per_octave: 'int' = 12, size: 'int' = 2048)`
+
+Band-limited family of one period: table j keeps the harmonics up to floor(2^(j / per_octave)). The period is
+given as samples (``shape``, any length, its harmonics found by FFT, DC dropped), as cosine amplitudes
+(``harmonics``) or as complex coefficients c_k of sum Re(c_k e^(2 pi i k t)) (``coeffs``).
+
+### `mip_read(mm, freq, ph, sr: 'int', limit: 'float' = 0.45, interp: 'str' = 'lagrange') -> 'np.ndarray'`
+
+Reads a ``mipmap`` at phase ``ph`` (cycles) for pitch ``freq``: the richest table whose harmonics stay under
+limit x sr and the one below it, crossfaded by the fractional table index, so the bandwidth follows the pitch
+smoothly.
+
+### `wavetable_osc(freq, n: 'int', sr: 'int' = 44100, harmonics=(1.0,), phase0: 'float' = 0.0, interp: 'str' = 'lagrange', mip: 'bool' = True) -> 'np.ndarray'`
+
+Table oscillator from cosine harmonic amplitudes. ``mip``: a band-limited table per 1/12 octave, the pair
+around the current pitch crossfaded, so harmonics above 0.45 sr drop out sample by sample (a sweep keeps its
+top end); off: one table cut at the highest frequency of ``freq``. Read by 4-point Lagrange (``interp``
+lagrange) or linearly.
+
+### `wavetable_morph(freq, n: 'int', sr: 'int' = 44100, tables=(), position=0.0, phase0: 'float' = 0.0, per_octave: 'int' = 12) -> 'np.ndarray'`
+
+Morphing table oscillator: ``tables`` is a list of one-period shapes (any length each), ``position`` (scalar or
+per sample, 0 .. len - 1) slides between neighbours by linear crossfade. Each table is band-limited by its own
+mip-map, so the morph never aliases.
+
+### `vco2(freq, n: 'int', sr: 'int' = 44100, wave: 'str' = 'saw', width=0.5, shape=None, phase0: 'float' = 0.0, per_octave: 'int' = 12) -> 'np.ndarray'`
+
+Band-limited table oscillator: a family of tables per 1/``per_octave`` octave (``mipmap``) read at the pitch,
+from a classic ``wave`` (saw, square, triangle; pulse = two saws ``width`` of a period apart, so the width can
+move per sample without aliasing; zero mean, swing 2) or from any one-period ``shape``.
 
 ### `minblep_table(zc: 'int' = 16, over: 'int' = 64) -> 'np.ndarray'`
 
@@ -9337,6 +11202,16 @@ band-limited: each crossing is located by a cubic Lagrange fit on 4 samples solv
 slope mu taken there, and a 2-point polyBLAMP residual x |mu| (x 2 for the full wave) laid on the two
 samples around it.
 
+### `pulse_train(freq, n: 'int', sr: 'int' = 44100, index=1.0, shape: 'str' = 'gauss', carrier=0.0, copies: 'int' = 1, phase0: 'float' = 0.0) -> 'np.ndarray'`
+
+Buzz source, a pulse of adjustable width once per period, mean removed.
+
+``shape`` gauss: e^(index (cos w n - 1)), the Gaussian train whose width falls as the index rises (harmonics
+e^-a [I0(a) + 2 sum In(a) cos k w n]); hann: the raised cosine read ``index`` times faster, duty 1/index, index >= 1;
+sine: a comparison sine-shaped hump (1 + cos w n) / 2 raised to ``index``. ``carrier``: ratio of a cosine locked to
+the pulse (a formant at carrier x freq, a wave packet). ``copies`` 2: a second pulse half a period later with the
+carrier continuing in phase, for a band narrower than the fundamental.
+
 ### `noise(n: 'int', color: 'str' = 'white', seed: 'int | None' = None, sr: 'int' = 44100) -> 'np.ndarray'`
 
 
@@ -9348,6 +11223,72 @@ Generic dispatcher used by the synth layer and the sfx generators.
 ### `sweep(start_hz: 'float', end_hz: 'float', dur: 'float', sr: 'int' = 44100, curve: 'str' = 'exp') -> 'np.ndarray'`
 
 Per-sample frequency array from start to end. curve: 'exp' (musical) or 'lin'.
+
+### `sync_phasor(freq, n: 'int', sr: 'int' = 44100, sync=None, phase0: 'float' = 0.0)`
+
+Phasor (0..1) with a sync input and output: it restarts at 0 on every sample where ``sync`` > 0, and returns
+(phase, sync_out) with sync_out = 1 where it wrapped or restarted, ready to drive another phasor.
+
+### `pad_bool(x, n: 'int') -> 'np.ndarray'`
+
+
+
+### `squinewave(freq, n: 'int', sr: 'int' = 44100, clip=0.0, skew=0.0, minsweep: 'float | None' = None, phase0: 'float' = 0.0) -> 'np.ndarray'`
+
+Sine-square-saw morph: each cycle is a rising half-cosine sweep, a hold at +1, a falling sweep and a hold at
+-1. ``clip`` 0..1 shortens the sweeps (sine to square), ``skew`` -1..1 moves the turning point (towards a
+ramp); no sweep is shorter than ``minsweep`` samples (default clip(sr / 3000, 8, sr / 100)), which keeps the
+edges band-limited. Both accept per-sample arrays.
+
+### `vactrol(x, sr: 'int' = 44100, up: 'float' = 20.0, down: 'float' = 3000.0) -> 'np.ndarray'`
+
+Vactrol (lamp + photoresistor) response of a control signal (0..1): a one-pole lowpass whose time constant
+depends on its own state, 1 + up (1 - 0.999 s) ms rising and 10 + down (1 - 0.9 s) ms falling, so it opens fast
+and lets go slowly with a long tail (the low-pass-gate decay).
+
+### `exp_shape(x, index: 'float' = 3.0) -> 'np.ndarray'`
+
+Exponential waveshaper exp(index (x - 1)): 1 at x = 1, a sine in gives the modified Bessel spectrum
+I_k(index) (brighter as index grows); not DC-free.
+
+### `quartic_line(levels, times, n: 'int', sr: 'int' = 44100) -> 'np.ndarray'`
+
+Envelope through ``levels`` with segment durations ``times`` (s), drawn straight on the fourth root of the
+level and raised to the fourth power: quick, click-free rises and natural-sounding decays.
+
+### `fm_tree_spec(seed: 'int' = 0, operators: 'int' = 4, carriers: 'int' = 1, index: 'float' = 2.0) -> 'list'`
+
+Random phase-modulation tree: a list of (parent, ratio, level); carriers have parent -1 and level 1,
+every other operator modulates an earlier one with an index drawn in [0.2, 1] x ``index``.
+
+### `fm_tree(freq, n: 'int', sr: 'int' = 44100, tree=None, seed: 'int' = 0, operators: 'int' = 4, carriers: 'int' = 1, index: 'float' = 2.0, phase0: 'float' = 0.0) -> 'np.ndarray'`
+
+Phase-modulation network from ``tree`` (see ``fm_tree_spec``, drawn from ``seed`` when None): each operator
+is a sine at ratio x freq plus the sum of its modulators; the carriers are averaged. One seed = one timbre
+family, the pitch free.
+
+### `chaos(kind: 'str', rate, n: 'int', sr: 'int' = 44100, interp: 'str' = 'cubic', params=None, x0=None, y0=None) -> 'np.ndarray'`
+
+Chaotic map iterated ``rate`` times a second (scalar or per sample) and read as audio: ``interp`` none
+(held), linear or cubic between iterations. ``kind`` logistic (r), henon (a, b), lorenz (s, r, b, h; RK4),
+latoocarfian (a, b, c, d), cusp (a, b), gingerbreadman, standard (k), quad (a, b, c), fbsine (im, fb, a, c),
+lincong (a, c, m), crackle (p); ``params`` overrides the defaults in order. Mean removed, peak 1.
+
+### `scanned(freq, n: 'int', sr: 'int' = 44100, masses: 'int' = 128, rate: 'float' = 200.0, stiffness: 'float' = 0.3, centering: 'float' = 0.0, t60: 'float' = 2.0, shape: 'str' = 'hammer', position: 'float' = 0.3, width: 'float' = 0.15, connect: 'str' = 'ring', links: 'int' = 0, seed: 'int' = 0, top: 'float | None' = None) -> 'np.ndarray'`
+
+Scanned synthesis: a network of ``masses`` unit masses on springs (``connect`` ring, line, or ring plus
+``links`` random springs) moves slowly, ``rate`` updates per second (semi-implicit Euler, one step per
+update); its displacement profile, read in mass order, is the wavetable played at ``freq``. Damping opposes
+the velocity and is set by the motion's ``t60`` (s); ``stiffness`` and ``centering`` are fractions of the
+stability limit (k deg + c < 4). Initial ``shape``: hammer (raised cosine at ``position``, ``width``), pluck
+(triangle) or noise. Each frame is band-limited to the pitch (harmonics under 0.45 sr, or under ``top`` Hz) and crossfaded to the next.
+
+### `loop_sampler(x, n: 'int', rate=1.0, start: 'float' = 0.0, loop_start: 'float | None' = None, loop_end: 'float | None' = None, mode: 'str' = 'forward', release: 'int | None' = None, xfade: 'int' = 0) -> 'np.ndarray'`
+
+Plays mono sample ``x`` for ``n`` samples at ``rate`` (scalar or per sample) from index ``start``; once past
+``loop_end`` it cycles between ``loop_start`` and ``loop_end`` (``forward`` or ``pingpong``). At sample ``release``
+it leaves the loop and plays on to the end of the sample. ``xfade`` samples (forward): the end of the loop is
+crossfaded (equal power) with the samples before ``loop_start``, so the joint does not click.
 
 ## `genny.percussion`
 
@@ -9405,13 +11346,21 @@ Returns (freqs, amps) with amps peaking where the contact rolls the radiation of
 
 
 
+### `crotale_ratios(f20)`
+
+Modes (2,0), (0,1), (3,0), (1,1), (4,0), (5,0) over (2,0) for a crotale whose (2,0) is `f20` Hz.
+
+### `crotales(sr=44100, vel=1.0, tune=1046.5, decay=1.0)`
+
+
+
 ### `meyer_bass_drum_t60(f)`
 
 
 
 ### `bass_drum(sr=44100, vel=1.0, tune=50.0, pos=0.25, mallet='felt', dur=4.0)`
 
-
+Felt mallet contact BASS_DRUM_CONTACT_MS[0] at full velocity (top of the 2-4 ms mallet-head range), rute [1].
 
 ### `snap(sr=44100, vel=1.0)`
 
@@ -9431,11 +11380,11 @@ Returns (freqs, amps) with amps peaking where the contact rolls the radiation of
 
 ### `triad(f3, n, sr, a3, t60, split=0.001, threshold=0.05, seed=0.001)`
 
-Chaigne, Touze & Thomas, "Nonlinear vibrations and chaos in gongs and cymbals", Acoust. Sci. & Tech.
-26(5) (2005), eq. 9: a symmetric mode q3 at w3 struck to amplitude a3, quadratically coupled to twin modes
+A symmetric mode q3 at w3 struck to amplitude a3, quadratically coupled to twin modes
 q1, q2 at w3 / 2 (1 -+ split) (internal resonance 1:1:2), V = alpha / 2 (q1^2 + q2^2) q3. Below the parametric
-threshold a3* = 4 mu w1 / alpha the twins stay silent; above it they grow, after a delay, as the order-2
-subharmonics of their Fig. 4, and trade energy back and forth with q3. Returns (q1 + q2, q3). alpha
+threshold a3* = 2 w1 sqrt(4 mu^2 + d^2) / alpha (d = w3 - 2 w1, the detuning of the twins) the twins stay
+silent; above it they grow, after a delay, as the order-2
+subharmonics, and trade energy back and forth with q3. Returns (q1 + q2, q3). alpha
 (set so that a3* = ``threshold``: a full strike blooms after about 0.5 s, below 0.3 nothing), the seed (an
 off-centre strike gives the twins 1e-3 of the amplitude directly), the
 twin split and their damping (that of q3).
@@ -9455,7 +11404,7 @@ w^2 = w_plate^2 + E / (rho R^2 (1 - nu^2)) (membrane stiffening, the same for ev
 Warp `y` so its pitch starts `cents` low (negative: high) and reaches the nominal one with time constant
 settle / 3 (stable after `settle` s).
 
-### `gong(sr=44100, vel=1.0, tune=90, decay=6.0, cascade=0.0, glide=1.0, curvature=0.0, preset='', hardness=0.0)`
+### `gong(sr=44100, vel=1.0, tune=90, decay=6.0, cascade=0.0, glide=1.0, curvature=0.0, preset='', hardness=0.0, amp_over_h=0.0)`
 
 
 
@@ -9507,6 +11456,14 @@ the point mobility of a plate goes as 1/h^2, so w/h goes as (hc/h(r))^3. Thin ri
 Sphere hitting the end of a long bar along its axis: Hertz contact in series with the bar end, which takes
 the force as a dashpot of impedance A rho c0 (a wave runs away and nothing comes back). Returns (t, force)
 over the contact; `speed` m/s, `ball` and `bar` = (rho, E, nu).
+
+### `gamelan_chladni(m, n)`
+
+
+
+### `gamelan_gong(sr=44100, vel=1.0, tune=458.0, dur=4.0)`
+
+
 
 ## `genny.physical.ambience`
 
@@ -9715,11 +11672,13 @@ First natural sway frequency of a conifer from its trunk diameter at breast heig
 Sway frequency and Q under a wind load 0..1: the frequency falls by ``SWAY_F_DROP`` and the damping
 grows by ``SWAY_DAMP_RISE`` (x 2) at full load and ``amplitude`` 1 (leaf drag, stick-slip in the crown).
 
-### `sway_force(w: 'np.ndarray', rng: 'np.random.Generator', *, sway_hz: 'float' = 0.35, lag_ms: 'float' = 3000.0, gain: 'float' = 1.6, loop: 'bool' = False, species: 'str | None' = None, tree: 'tuple | None' = None, amplitude: 'float' = 0.0) -> 'np.ndarray'`
+### `sway_force(w: 'np.ndarray', rng: 'np.random.Generator', *, sway_hz: 'float' = 0.35, lag_ms: 'float' = 3000.0, gain: 'float' = 1.6, loop: 'bool' = False, species: 'str | None' = None, tree: 'tuple | None' = None, amplitude: 'float' = 0.0, q: 'float' = 3.0) -> 'np.ndarray'`
 
 Force on a tree / wagon from the windspeed, delayed and smoothed like the leaves (3 s, lop~ 0.07),
-swaying as narrow-band noise at ``sway_hz``, Q 3: a Q 8 pine
+swaying as narrow-band noise at ``sway_hz``, Q ``q`` (3): a Q 8 pine
 would not reach steady state within the one-period warm-up of short loops (Dom).
+A large broadleaf measured at 13 m up a 27 m trunk sways at 0.128 and 0.145 Hz with 10-12 % damping (Q 4-5): ``q`` 5
+at 0.13 Hz has a time constant of about 12 s, so keep it for renders of a minute or more (``loop`` needs the default).
 ``tree``: (dbh_cm, height_m[, pine[, snow]]) replaces ``sway_hz`` by ``tree_sway_hz(*tree)``.
 ``species`` (a TREE_DRAG key): the wind load grows as U^n of that species instead of linearly.
 ``amplitude`` > 0: the sway slows and is damped more as the load grows (`sway_params`).
@@ -9764,11 +11723,16 @@ Drops per second on ``area_m2``.
 
 ``drops`` spikes; same as ``nature.drop_spikes``.
 
-### `rain(dur: 'float', rng: 'np.random.Generator', *, loop: 'bool' = False, intensity: 'float' = 1.0, n_generators: 'int' = 12, on_water: 'float' = 0.5, comfort: 'float' = 0.5, spikes: 'float' = 0.3) -> 'np.ndarray'`
+### `rain(dur: 'float', rng: 'np.random.Generator', *, loop: 'bool' = False, intensity: 'float' = 1.0, n_generators: 'int' = 12, on_water: 'float' = 0.5, comfort: 'float' = 0.5, spikes: 'float' = 0.3, drops: 'float | None' = None, wind: 'float' = 0.0, on_solids: 'float' = 0.0, on_leaves: 'float' = 0.0, small_alpha: 'float' = 2.9) -> 'np.ndarray'`
 
 Rain bed, stereo: Poisson parabolic clicks (10-15 generators, the thesis's three settings
 repeated with rates scaled by 1/intensity), pink comfort noise + a 300 Hz band, drops on water
 as bubbles (radius power law, alpha 2.9), and ``drops`` spikes (``spikes``).
+``drops``: the intensity that sets the number of drops that make bubbles, apart from the click rate (None = ``intensity``).
+``wind`` (m/s): the bubble radii spread (log-normal, sd 0.1 at 9 m/s) and the bubbles die out by 9 m/s.
+``on_solids``, ``on_leaves``: level of the drops landing on hard ground and on leaves, each with its own rate and tick.
+``small_alpha``: exponent of the radius law of the 0.20-0.25 mm drizzle bubbles, p(r) ~ r^-alpha (-1: the number of
+bubbles per kHz goes as f^-3).
 
 ### `rain_drops(dur: 'float', rng: 'np.random.Generator', rate_mm_h: 'float' = 5.0, area_m2: 'float' = 1.0, d_min: 'float' = 0.8, d_max: 'float' = 6.0)`
 
@@ -9794,6 +11758,10 @@ Deepener: hp 30 (lp 60 (noise)) x3.5, clipped, lp 80 (all Q3), gain 6 -> 0 over 
 One strike of Fineberg's multi-impact layer: i ~ U[1, 6) sub-impacts of white noise, each with gain 2 -> 0
 over 240 (1.4 - v)^5 ms, through a bank of 2 m + 1 band-passes (m = 4, Q 7) spread from 100 + 1200 v Hz down
 to half of it less 20 Hz.
+
+### `thunder_centroid_hz(distance_km: 'float') -> 'float'`
+
+Spectral centre of gravity of a cloud-to-ground stroke's thunder received at distance_km (0.3-20 km): 121.2 d^-0.26 Hz.
 
 ### `thunder(rng: 'np.random.Generator', *, dur: 'float' = 24.0, distance: 'float' = 0.0, return_info: 'bool' = False, fineberg: 'bool' = False, post: 'bool' = False) -> 'np.ndarray'`
 
@@ -9824,7 +11792,7 @@ Segment vectors of a 3-D tortuous channel rising from the origin: lengths expone
 each turned by a polar angle of density sin T exp(-T^2/25deg^2), uniform azimuth, from the mean direction of
 the last 5 segments pulled 0.0008 theta^2 degrees towards the vertical.
 
-### `thunder_channel(rng: 'np.random.Generator', *, dur: 'float' = 12.0, distance_m: 'float' = 1000.0, peak_hz: 'float' = 60.0, strokes: 'int' = 1, walk: 'str' = 'farnell') -> 'np.ndarray'`
+### `thunder_channel(rng: 'np.random.Generator', *, dur: 'float' = 12.0, distance_m: 'float' = 1000.0, peak_hz: 'float' = 60.0, strokes: 'int' = 1, walk: 'str' = 'farnell', horizontal: 'float' = 0.0) -> 'np.ndarray'`
 
 Thunder as a "string of pearls": a tortuous channel of segments, each sending its ``wm_wave``,
 heard in order of distance with 1/r spreading, the N-waves stretched by the distance travelled and
@@ -9832,8 +11800,10 @@ air absorption at each segment's range. ``strokes`` 1..3 return strokes down the
 shorter and weaker. ``walk`` "farnell" (10 m segments) or "ribner" (3 m, 3-D statistics: its spectral peak
 wanders 19-55 Hz from seed to seed, under the measured 40-80 Hz). Mono, at SR, peak 1, starting at the first
 arrival. N-wave 2T = 0.66 / peak_hz at 1 km, +-30 % from segment to segment.
+``horizontal``: metres of channel run sideways at the top (flashes spread 1-3 km, up to 2.5 km for positive
+strokes), 10 m segments heading one random way with a 15 % wander: the rumble stretches.
 
-### `tube_bubble(r: 'float', rng: 'np.random.Generator', n_modes: 'int' = 8, soft: 'bool' = True) -> 'np.ndarray'`
+### `tube_bubble(r: 'float', rng: 'np.random.Generator', n_modes: 'int' = 8, soft: 'bool' = True, delta_th: 'float | None' = None) -> 'np.ndarray'`
 
 Moss §3.2 non-spherical bubble: zonal modes f_n^2 = (n-1)(n+1)(n+2) sigma / (4 pi^2 rho r^3),
 radiating at 2 f_n, weight (n-1)(n+2)(4n-1)/(2n+1) * w_n^2 / sqrt((4w_n^2-w_b^2)^2+(4 b_n w_n)^2),
@@ -9915,10 +11885,12 @@ Farnell ``pd tamb`` jingles (research 09 C8.2) for a ring of keys: noise -> bp~ 
 1700 (decay d), 3149 (2d), 2330 (4d), 1511 (8d) Hz -> ring-mod by 6300 Hz -> x0.6; each hit is
 a pair 3*sep ms apart. Chosen: several hits 60-250 ms apart for a hanging bunch.
 
-### `dark_ambience(dur: 'float', rng: 'np.random.Generator', *, loop: 'bool' = False, note: 'float' = 52.0, ring: 'float' = 0.2, reverb_time: 'float' = 100.0) -> 'np.ndarray'`
+### `dark_ambience(dur: 'float', rng: 'np.random.Generator', *, loop: 'bool' = False, note: 'float' = 52.0, ring: 'float' = 0.2, reverb_time: 'float' = 100.0, chord: 'tuple' = (), swell: 'float' = 0.0) -> 'np.ndarray'`
 
 sonic-pi dark_ambience (atmos.clj defaults: note 52, detunes +12/+24, ring 0.2, room 70,
 reverb_time 100, cutoff 110, res 0.7 -> rq 0.3, pink noise x0.005), stereo.
+``chord``: semitone offsets above ``note`` that get their own resonator (a fifth, a third, a second);
+``swell``: depth of a 1 + swell sin(2 pi t / 11) level swell.
 GVerb is not ported (space.py): zita_rev1 with t60 = reverb_time stands in, mixed as GVerb's
 defaults dry 1 / tail 0.5. Chosen: that substitution.
 
@@ -9983,6 +11955,12 @@ breathing of +-15 %. Chosen: corner and drift.
 
 Keyword recipe for acts/library beds without a hand-built scene. Each keyword group adds the
 sourced emitter that the description calls for. Chosen: the keyword mapping and levels.
+
+### `salient_events(y: 'np.ndarray', thr_db: 'float' = 15.0, win: 'float' = 0.05) -> 'np.ndarray'`
+
+Times (s) of the salient events of a bed: peaks of the ``win``-second RMS envelope that stand ``thr_db`` dB over its
+median, at least ``SALIENT_GAP`` s apart. A bed that loops 120 s repeats them exactly, so the ear learns them; they belong
+in the details, placed at random.
 
 ### `render_bed(row: 'dict', rng: 'np.random.Generator', dur: 'float' = 120.0) -> 'np.ndarray'`
 
@@ -10344,7 +12322,7 @@ for ``dur`` seconds, faded out over its last 30 %.
 
 
 
-### `modal_fit(x: 'np.ndarray', n_modes: 'int' = 16, fmin: 'float' = 60.0, fmax: 'float' = 16000.0, *, method: 'str' = 'peak', N: 'int' = 4096) -> 'Modes'`
+### `modal_fit(x: 'np.ndarray', n_modes: 'int' = 16, fmin: 'float' = 60.0, fmax: 'float' = 16000.0, *, method: 'str' = 'peak', N: 'int' = 4096, residual: 'bool' = False)`
 
 Modal analysis of a recorded strike:
 the strongest spectral peaks of the first 60 ms after the onset, each one's decay rate
@@ -10352,6 +12330,8 @@ from the slope of its STFT magnitude (dB) over the following frames. ``N`` = FFT
 method="vote": a peak is kept only if it is found (within one bin) in at least half of the
 frames of those 60 ms, stands ``VOTE_FLOOR_DB`` above the noise floor measured before the
 onset, and decays faster than ``VOTE_MIN_DECAY`` 1/s (steady hum and noise lines are dropped).
+``residual=True``: returns ``(modes, resid)``, resid the recording minus the fitted modes (their amplitudes and
+phases refitted by least squares over the first second after the onset), the part the modes do not explain.
 
 ### `modal_resynth(md: 'Modes', n: 'int', rng: 'np.random.Generator', *, f_scale: 'float' = 1.0, decay_scale: 'float' = 1.0, jitter: 'float' = 0.02) -> 'np.ndarray'`
 
@@ -10462,6 +12442,16 @@ Singles to E1, bichords over the wound section (to E2), trichords above.
 
 False for the top keys, which have no damper.
 
+### `bridge_mobility_db(midi: 'float') -> 'float'`
+
+Mean bridge mobility of the key relative to the middle register (dB): the bass bridge is higher and stiffer,
+the top of the treble bridge ends near the rim.
+
+### `orth_radiation_gain(f) -> 'np.ndarray'`
+
+Radiated level of the horizontal string plane relative to the vertical one, per frequency (linear): about
+27 dB down below 500 Hz, 14 dB down at 1 kHz, level above 2 kHz.
+
 ### `bridge_admittance(f, peak: 'float' = 0.0, f0: 'float' = 470.0)`
 
 Complex bridge admittance (s/kg): the flat conductance Y_BRIDGE plus one soundboard mode at f0 whose
@@ -10482,8 +12472,9 @@ Gain of the longitudinal force at the bridge: tan(alpha) of a bridge angle alpha
 
 (a1, a2, d0, d1) of the fixed-pole parallel filter: poles log-spaced from f_lo to 0.45 sr, radii from the
 soundboard damping law. Without a measured response to fit, the numerators have unit magnitude and random
-sign (a flat, dense modal response). ``ribs``: above RIB_HZ the modes are confined between the ribs,
-RIB_DENSITY times as many poles there, each with RIB_MOBILITY of the gain.
+sign (a flat, dense modal response). ``ribs``: above RIB_HZ the modes are confined between the ribs: the
+bridge sees RIB_DENSITY times as many poles, each 1/RIB_DENSITY stronger (same mean mobility); above
+RIB_BRIDGE_HZ the mean mobility rises RIB_MOBILITY times.
 
 ### `parallel_poles(sr: 'int', n_poles: 'int' = 100, R: 'float' = 0.98, f_lo: 'float' = 30.0, f_hi: 'float | None' = None)`
 
@@ -10523,7 +12514,7 @@ only the keys without damper. The struck key itself is left out.
 
 Lid open (unchanged), half-stick or closed: a high shelf above LID_HZ.
 
-### `note(freq: 'float', dur: 'float', sr: 'int' = 48000, vel: 'float' = 0.8, *, tail: 'float' = 1.0, loss: 'float' = 1.0, hardness: 'float' = 1.0, max_modes: 'int' = 140, seed: 'int' = 0, una_corda: 'bool' = False, hammer: 'str' = 'chabassier', action: 'float' = 0.0, long_full: 'bool' = False, soundboard_ir=None, tuning_factor: 'float | None' = None, soundboard: 'str' = 'filter', polarisations: 'int' = 1, bidirectional: 'bool' = False, bridge_res: 'float' = 0.0, bridge_angle: 'float | None' = None, weighting: 'tuple | None' = None, long_place: 'bool' = False, pedal: 'bool' = False, sympathetic_strings: 'bool' = False, lid_state: 'str' = 'open', ribs: 'bool' = False, action_kind: 'str' = 'tones', air: 'str' = 'stokes') -> 'np.ndarray'`
+### `note(freq: 'float', dur: 'float', sr: 'int' = 48000, vel: 'float' = 0.8, *, tail: 'float' = 1.0, loss: 'float' = 1.0, hardness: 'float' = 1.0, max_modes: 'int' = 140, seed: 'int' = 0, una_corda: 'bool' = False, hammer: 'str' = 'chabassier', action: 'float' = 0.0, long_full: 'bool' = False, soundboard_ir=None, tuning_factor: 'float | None' = None, soundboard: 'str' = 'filter', polarisations: 'int' = 1, bidirectional: 'bool' = False, bridge_res: 'float' = 0.0, bridge_angle: 'float | None' = None, weighting: 'tuple | None' = None, long_place: 'bool' = False, pedal: 'bool' = False, sympathetic_strings: 'bool' = False, lid_state: 'str' = 'open', ribs: 'bool' = False, action_kind: 'str' = 'tones', air: 'str' = 'stokes', bridge_profile: 'bool' = False, orth_profile: 'bool' = False, horiz_y: 'float | None' = None, horiz_cents: 'float | None' = None) -> 'np.ndarray'`
 
 One piano key: ``vel`` 0..1 maps to a hammer speed of 0.5..4.5 m/s; ``loss`` scales every string decay rate,
 ``hardness`` the felt stiffness K.
@@ -10535,7 +12526,7 @@ key-bed transient at that multiple of its measured level, and delays the string 
 ``soundboard_ir``: a measured soundboard impulse response, fitted by ``fit_parallel_filter``.
 ``soundboard``: "filter" (parallel modal filter) or "fdn" (the board as a reverberator: the bridge signal plus a
 feedback-delay-network tail ringing long in the bass and short in the treble, at the filter's RMS level).
-``polarisations`` 2: the horizontal plane (hammer share 0.1, 0.3 cent sharp, a tenth of the bridge loss, radiated
+``polarisations`` 2: the horizontal plane (hammer share 0.1, 0.1 cent sharp, a tenth of the bridge loss, radiated
 10 dB down): a slow second decay, and its slopes add to the tension (more phantom partials).
 ``bidirectional``: the tension acts back on the transverse modes (pitch glide of a hard blow, mode exchange).
 ``bridge_res``: conductance peak of a soundboard mode at 470 Hz, in multiples of the flat bridge conductance
@@ -10546,6 +12537,13 @@ feedback-delay-network tail ringing long in the bass and short in the treble, at
 ``pedal``: sustain pedal: no damper at note-off, and every other string resonates through the bridge.
 ``sympathetic_strings``: without pedal, the undamped top strings resonate. ``lid_state``: open | half | closed. ``ribs``: soundboard modes confined between the
 ribs above RIB_HZ. ``action_kind``: tones (key and key-bed tones) | noise (two filtered noises).
+``bridge_profile``: the bridge conductance follows the key (bridge_mobility_db): bass and top treble keys
+couple less to the board (a smaller bridge share of the decay, a weaker two-stage decay).
+``orth_profile``: with ``polarisations`` 2, the horizontal plane radiates by frequency (orth_radiation_gain:
+27 dB down in the low register, level above 2 kHz) instead of the flat 10 dB.
+``horiz_y``: with ``polarisations`` 2, the share of the vertical-plane loss the horizontal plane keeps (default 0.1;
+0.2 to 0.5 couples it more to the board: faster second decay); ``horiz_cents``: its detuning, held within +-1 cent
+(default 0.1) so the two planes never beat as a mistuned pair.
 
 ## `genny.physical.bow`
 
@@ -10895,10 +12893,11 @@ cot(x) = alpha x above pi (the clamp's rocking mode left out), f = x cs / (2 pi 
 A stick rubbed and twisted in cold dry snow: stick-slip locked to the first torsional mode
 drives the stick's harmonic series. Silent above -5 C, full below -10 C. 48 kHz.
 
-### `render_step(ground: 'str', variation: 'int', rng: 'np.random.Generator', *, return_info: 'bool' = False, temperature: 'float' = -8.0, accel: 'float' = 0.0, incline: 'float' = 0.0)`
+### `render_step(ground: 'str', variation: 'int', rng: 'np.random.Generator', *, return_info: 'bool' = False, temperature: 'float' = -8.0, accel: 'float' = 0.0, incline: 'float' = 0.0, snow_depth: 'float' = 0.0)`
 
 One footstep on ``ground`` (mono, 48 kHz, not mastered). ``temperature`` (C) only shapes the
-snow squeak. ``accel`` > 0 (speeding up) or ``incline`` > 0 (uphill) shift the
+snow squeak. ``snow_depth`` (cm, snow only, 0 = off) raises the energy under 500 Hz by 6 dB per decade of depth
+against 5 cm (deep snow booms, a thin crust does not). ``accel`` > 0 (speeding up) or ``incline`` > 0 (uphill) shift the
 GRF toward the ball, < 0 (slowing, downhill) toward the heel, through the patch's heelf/ballf term.
 
 ### `charter_step(ground: 'str', variation: 'int', rng: 'np.random.Generator', *, chained: 'bool' = False, equipment: 'tuple[str, ...]' = ('cloth',)) -> 'np.ndarray'`
@@ -10953,6 +12952,15 @@ Parameters:
 First two resonance angular frequencies of a truncated cone with its apex xe before the reed end:
 c (12 pi L + 9 pi^2 xe + 16 L) / (4 L (4 L + 3 pi xe + 4 xe)) and c (28 pi L + 49 pi^2 xe + 16 L) /
 (4 L (4 L + 7 pi xe + 4 xe)).
+
+### `tube_loss_alpha(f, R: 'float' = 0.007) -> 'np.ndarray'`
+
+Amplitude loss per metre (1/m) of a cylindrical bore of radius R m at frequency f Hz: 2.96e-5 sqrt(f) / R.
+
+### `round_trip_loss(L: 'float', f0, R: 'float' = 0.007) -> 'np.ndarray'`
+
+Round-trip amplitude factor exp(-2 alpha L) of a bore of length L m, alpha taken at the playing frequency f0
+(the ``loss_filter`` one-pole is exact at the first two peaks instead).
 
 ### `loss_filter(L: 'float', sr: 'float', R: 'float' = 0.007, xe: 'float | None' = None) -> 'tuple[float, float]'`
 
@@ -11047,6 +13055,11 @@ Turn a ``modal_data`` table into ``Modes`` at SR.
 ``d_scale`` every decay rate, ``a_scale`` every gain. ``position`` in [0, 1] selects /
 interpolates the measured strike points. ``f0`` is the base frequency for ratio tables.
 
+### `body_interp(shape: 'float', scale: 'float') -> 'dict'`
+
+Guitar body between the nine measured tables, mode by mode, bilinear in ``shape`` (0 square, 1 semi-round,
+2 round) and ``scale`` (0 small, 1 mid, 2 big) on frequency, gain and T60. A table for ``resolve``.
+
 ### `render_modes(force: 'np.ndarray', modes: 'Modes', *, kill_at: 'int' = -1, fade_ms: 'float' = 1.0, floor_db: 'float' = -100.0) -> 'np.ndarray'`
 
 Drive the resonator bank with ``force`` (per-sample force signal).
@@ -11075,6 +13088,11 @@ Loudness -> brightness: louder contacts are shorter (JOS force-pulse synthesis).
 
 Faust ``pm.strikeModel(HP, LP, sharpness, gain)``: white noise -> HP2 -> LP2 x en.ar(att, att),
 att = 0.002 * sharpness (research 08 §1.3).
+
+### `chirped_impact(f0: 'float', sigma: 'float', alpha: 'float', dur: 'float', amp: 'float' = 1.0) -> 'np.ndarray'`
+
+Chirped impact atom: amp sin(2 pi (f0 t + sigma t^2 / 2)) exp(-alpha t), the instantaneous frequency
+f0 + sigma t moving linearly (Hz, Hz/s, 1/s). Frequencies that leave (0, SR/2) are clipped to that range.
 
 ### `micro_collisions(force: 'np.ndarray', modes: 'Modes', count: 'int', contact_ms: 'float', velocity: 'float', rng: 'np.random.Generator', start: 'int' = 0) -> 'None'`
 
@@ -11157,6 +13175,10 @@ St = St* + m / sqrt(Re), coefficients by Re range (newStrou.pd), clamped >= 0.
 StBandwidth: df/f [%] = 4.624e-5 Re + 0.9797 (Re < 193260) else
 1.227e-10 Re^2 - 8.553e-5 Re + 16.5; Q = 1 / max(df/f/100, 0.005).
 
+### `corr_length(re, d: 'float')`
+
+Spanwise correlation length (m) of the shedding: 10^1.536 Re^-0.245 d (13 d at Re 47, 3.6 d at 1e4, 1.7 d at 2e5).
+
 ### `exp_sigmoid(x, exponent: 'float' = 10.0, max_value: 'float' = 2.0, threshold: 'float' = 1e-07)`
 
 Exponentiated sigmoid for positive gains: max_value * sigmoid(x) ** ln(exponent) + threshold.
@@ -11165,9 +13187,9 @@ Exponentiated sigmoid for positive gains: max_value * sigmoid(x) ** ln(exponent)
 
 Lift-dipole intensity (W/m^2) of a cylinder of diameter ``d`` at speed ``u``:
 sqrt(2 pi) kappa^2 St^2 l b rho u^6 sin^2 th cos^2 ph / (32 c^3 r^2 (1 - M cos th)^4)
-x exp(-0.5 (2 pi M St l / d)^2 sin^2 th sin^2 ph), b = d, l = correlation length (``CORR_LENGTH_D`` d).
+x exp(-0.5 (2 pi M St l / d)^2 sin^2 th sin^2 ph), b = d, l = correlation length (``corr_length``).
 
-### `wake_intensity(u, d: 'float', st, *, length: 'float | None' = None, theta: 'float' = 90.0, phi: 'float' = 0.0, r: 'float' = 1.0, kappa: 'float' = 1.0, B: 'float' = 1.0, gamma: 'float' = 0.2)`
+### `wake_intensity(u, d: 'float', st, *, length: 'float | None' = None, theta: 'float' = 90.0, phi: 'float' = 0.0, r: 'float' = 1.0, kappa: 'float' = 1.0, B: 'float' = 0.7, gamma: 'float' = 0.0001)`
 
 Lateral-quadrupole wake intensity: Gamma sqrt(2 pi) kappa^2 St^2 l b rho u^8 / (16 pi^2 c^5 (1 - M cos(pi - th))^5 r^2)
 x [1 + B cos^4 th - (B + 3)/4 sin^2(2 th) sin^2 ph], B in [-1, 3].
@@ -11177,14 +13199,15 @@ x [1 + B cos^4 th - (B + 3)/4 sin^2(2 th) sin^2 ph], B in [-1, 3].
 Wake noise in Pa: brown noise 1 / (1 - 0.99 z^-1) through two one-pole high-passes at the shedding
 frequency (little energy below it, falling above), scaled to sqrt(I_w rho c).
 
-### `aeolian_tone(u: 'np.ndarray | float', d: 'float', dur: 'float', rng: 'np.random.Generator', model: 'str' = 'patch', *, physical: 'bool' = False, wake: 'bool' = False, theta: 'float' = 90.0, phi: 'float' = 0.0, r: 'float' = 1.0, length: 'float | None' = None) -> 'np.ndarray'`
+### `aeolian_tone(u: 'np.ndarray | float', d: 'float', dur: 'float', rng: 'np.random.Generator', model: 'str' = 'patch', *, physical: 'bool' = False, wake: 'bool' = False, theta: 'float' = 90.0, phi: 'float' = 0.0, r: 'float' = 1.0, length: 'float | None' = None, gamma: 'float' = 0.0001) -> 'np.ndarray'`
 
 One compact cylinder source at speed ``u`` (m/s, scalar or per-sample), diameter ``d`` (m).
 
 Lift fundamental only (unit gain): noise through two cascaded band-passes at St(Re) u / d
 with the bandwidth-derived Q. ``model="loq"`` fixes St = 0.2 and Q = 10 (Selfridge LoQ).
 ``physical``: the tone is scaled to the dipole pressure sqrt(I rho c) in Pa (``goldstein_intensity``
-at elevation ``theta``, azimuth ``phi``, distance ``r``); ``wake`` adds ``wake_noise`` on the same scale.
+at elevation ``theta``, azimuth ``phi``, distance ``r``); ``wake`` adds ``wake_noise`` on the same scale,
+with wake scale ``gamma`` (1e-4; 0.2 is the thesis value, audibly hissier).
 
 ### `cavity_frequencies(u, length: 'float', depth: 'float', width: 'float')`
 
@@ -11230,7 +13253,7 @@ adds 0.85 N u / chord at 1 / N^2; ``chord_tip``: the chord tapers linearly from 
 Lock-in with hysteresis: a string locks when the reduced velocity V enters [lo, hi] and lets go only
 once V leaves the wider window [lo / hyst, hi hyst]; returns 0/1 per sample.
 
-### `aeolian_harp(u, notes, dur: 'float', rng: 'np.random.Generator', *, diameter: 'float' = 0.0005, mass_damping: 'float' = 0.05, index: 'float' = 1.0, hysteresis: 'bool' = False) -> 'np.ndarray'`
+### `aeolian_harp(u, notes, dur: 'float', rng: 'np.random.Generator', *, diameter: 'float' = 0.0005, mass_damping: 'float' = 0.05, index: 'float' = 1.0, hysteresis: 'bool' = False, density: 'float | None' = None, zeta: 'float | None' = None) -> 'np.ndarray'`
 
 Strings in the wind (Selfridge, Moffat, Reiss & Avital, ICSV24 2017). Each string sheds an Aeolian
 tone at St(Re) u / d; when that frequency nears string harmonic eta (eq. 9) and the reduced velocity
@@ -11239,11 +13262,15 @@ string sings: an FM tone with carrier f_eta and modulator f_(eta+1) - f_eta (eqs
 the Govardhan-Williamson peak amplitude (eq. 7) for mass-damping alpha = ``mass_damping`` * eta (eq. 12).
 ``notes`` are the strings' fundamentals (Hz).
 ``hysteresis``: lock-in follows ``lock_state`` (a sweeping wind holds the string past the window edges)
-instead of the smooth window. Lambda, the window steepness and the default mass_damping are voicing choices.
+instead of the smooth window. ``density`` (kg/m3 of the string) with ``zeta`` (damping ratio) replace
+``mass_damping`` by alpha = density / rho_air zeta eta; the thesis strings (2432 kg/m3, 0.006) give alpha = 12 eta,
+past the range of the fit, so they stop singing. Lambda, the window steepness and the default mass_damping are
+voicing choices.
 
-### `sword_swing(preset: 'str | dict' = 'SWD1', rng: 'np.random.Generator | None' = None, *, model: 'str' = 'patch', doppler: 'bool' = True, n_sources: 'int' = 8, top_speed: 'float | None' = None, lead: 'float' = 0.05, tail: 'float' = 0.15, partials: 'tuple[int, ...]' = (1, 2, 3, 4, 5)) -> 'np.ndarray'`
+### `sword_swing(preset: 'str | dict' = 'SWD1', rng: 'np.random.Generator | None' = None, *, model: 'str' = 'patch', doppler: 'bool' = True, n_sources: 'int' = 8, top_speed: 'float | None' = None, lead: 'float' = 0.05, tail: 'float' = 0.15, partials: 'tuple[int, ...]' = (1, 2, 3, 4, 5), natural: 'bool' = True, arc: 'str' = 'azimuth') -> 'np.ndarray'`
 
 Selfridge Aeolian swing, stereo (n, 2), from a ``SWORD_PRESETS`` preset (SWD1, SWD2, PGA, MLB), or BROOM, WOODSWD (``SWING_PRESETS``).
+``arc`` azimuth | haversine: the length of the swing, from the azimuth difference alone or from the great-circle arc with the elevation.
 
 Per source k (8, stepping 7 d inward from the tip, d tapering linearly hilt -> tip):
 u_k = u_tip * (arm + pos_k) / (arm + Len); Re = rho u d / mu; St (Fey) or 0.2 (LoQ);
@@ -11251,7 +13278,8 @@ f = St u / d (x Doppler 1/(1 - M cos theta)); Q from StBandwidth (or 10 for LoQ)
 lift gain G_L = sqrt(2 pi) rho St^2 (7 d) Len u^6 D_L / (32 c^3 r^2 (1 - M cos theta)^4),
 drag gain G_D = 0.1 x the same with D_D; partials f (G_L), 2f (G_D), 3f (dB x 0.6),
 4f (drag, dB x 0.125), 5f (dB x 0.1), each through two cascaded band-passes of one white
-noise per source; equal-power pan; output x preset Gain.
+noise per source; equal-power pan; output x preset Gain. ``natural=False``: the 4f and 5f branches use the base-10
+logarithm like the 3f branch (the exponents of the published harmonic-gain table), not the natural log of the patch.
 Directivities: D_L = n . (a x v), D_D = n . v with n the unit vector source -> listener, a the
 blade axis and v the motion direction - the vector form of Goldstein's sin(theta) cos(phi)
 dipole pattern that the patch evaluates from elevation and azimuth.
@@ -11361,6 +13389,11 @@ Laugh rhythm as a damped oscillator x(t) = e^(-B t) cos(phi(t)), phi' = 2 pi f(t
 rate[1] over the bout: each positive half-cycle is a voiced call, each negative one the aspiration between calls.
 Returns (starts ms, lengths ms, gains dB) of the calls.
 
+### `laugh_calls(n_calls: 'int', gap_slope: 'float' = 0.4)`
+
+Call pattern of a laugh bout: a long first call, shorter ones after, intercall gaps that grow along the bout
+(mean LAUGH_GAP_S). Returns (starts s, lengths s).
+
 ### `preset(kind: 'str', voice: 'str' = 'female') -> 'dict'`
 
 
@@ -11377,7 +13410,8 @@ soundgen getBandwidth: one law above 500 Hz, another below.
 
 One bout of ``kind`` (laugh, scream, cry, moan, moan_sova) at SR, peak 1. ``pitch`` scales f0, ``n_syl`` the
 bout. ``subharmonic`` > 0 (depth 0..1): a random walk moves the syllable through no effect, subharmonics, and
-chaos. ``rhythm="oscillator"``: call times, lengths and levels from `damped_calls` instead of the preset's.
+chaos. ``rhythm="oscillator"``: call times, lengths and levels from `damped_calls` instead of the preset's;
+``rhythm="calls"``: a long first call, shorter ones after, growing gaps (`laugh_calls`), and for a laugh its measured formants.
 
 ## `genny.physical.particles`
 
@@ -11500,7 +13534,7 @@ Onsets are spread at random sample positions (Moss: avoid in-phase artefacts).
 plume: m of dense bubble plume the sound crosses: each bubble x exp(-plume / plume_skin_depth(f0)).
 micro: bubbles of 2 mm and more leave ``micro_bubbles``.
 
-### `surfacing_bubble(rng: 'np.random.Generator', dim: 'float' = 0.5, dur: 'float' = 0.09, fmin: 'float' = 60.0, fmax: 'float' = 300.0, sweep: 'float' = 2000.0, vol: 'float' = 1.0, mydim: 'float' = 1.0, mydur: 'float' = 1.0) -> 'np.ndarray'`
+### `surfacing_bubble(rng: 'np.random.Generator', dim: 'float' = 0.5, dur: 'float' = 0.09, fmin: 'float' = 60.0, fmax: 'float' = 300.0, sweep: 'float' = 2000.0, vol: 'float' = 1.0, mydim: 'float' = 1.0, mydur: 'float' = 1.0, film: 'float' = 0.0) -> 'np.ndarray'`
 
 Farnell surfacing bubble, decoded ``generatore_di_bolle/single-bubble.pd`` (research 02 section 7).
 
@@ -11509,6 +13543,8 @@ f(t) = fmin + (1 - D) fmax + sweep (1 - (1 - t/T)**4)
 a(t) = lop~12((1 - t/T)**8) (D + 0.1) vol
 Defaults are the patch defaults (dur 90 ms, range 2000 Hz, fmin 60, fmax 300, dim 0.5).
 The lop~ tail runs to 60 dB under the peak, then a 10 ms raised-cosine close.
+``film`` > 0: the bubble's cap then bursts (``cap_burst`` of the bubble whose Minnaert pitch is where the sweep ends,
+at ``film`` times the peak of the surfacing bubble).
 
 ### `film_thickness(rb: 'float', life: 'float', eta: 'float' = 0.001, sigma: 'float' = 0.072, rho: 'float' = 1000.0) -> 'float'`
 
@@ -11617,10 +13653,28 @@ b2 = 1.0e-6 f0 + 1e-5.
 Decay rate (1/s, positive) of a stiff string partial at f: b1 + b2 pi^2 / (2 B L^2)
 (sqrt(1 + 4 B (f/f0)^2) - 1); tends to b1 + b2 (pi n / L)^2 as B -> 0.
 
+### `stiff_string_mode(key: 'str', p) -> 'tuple'`
+
+(frequency Hz, amplitude decay rate 1/s) of mode p of the stiff lossy string PDE of a Table I row,
+sigma = -b1 - b2 beta^2, omega = sqrt(-(b1 + b2 beta^2)^2 + c^2 beta^2 + kappa^2 beta^4), beta = p pi / L.
+
+### `table_i_inharmonicity(key: 'str') -> 'float'`
+
+B of a Table I row: kappa^2 (pi / L)^2 / c^2.
+
+### `rauhala_tunable_delay(f0: 'float', B: 'float', M: 'int' = 4) -> 'float'`
+
+D, the DC delay in samples of each section of the tunable dispersion filter (M = 1 or 4 sections, 44.1 kHz):
+kd = exp(k1 ln(B)^2 + k2 ln B + k3), Cd = exp(C1 ln B + C2), D = exp(Cd - Ikey kd); Ikey = key number (1 = A0).
+
 ### `rauhala_tunable(f0: 'float', B: 'float', M: 'int' = 4) -> 'float'`
 
-a1 of the tunable dispersion allpass (M = 1 or 4 sections): kd = exp(k1 ln(B)^2 + k2 ln B + k3),
-Cd = exp(C1 ln B + C2), D = exp(Cd - Ikey kd), a1 = (1 - D) / (1 + D); Ikey = key number (1 = A0).
+First-order allpass coefficient a1 = (1 - D) / (1 + D) for the delay D of `rauhala_tunable_delay`.
+
+### `rauhala_tunable_sections(f0: 'float', B: 'float', M: 'int' = 4) -> 'tuple[float, float]'`
+
+(a1, a2) of the second-order Thiran allpass (a2 + a1 z^-1 + z^-2) / (1 + a1 z^-1 + a2 z^-2) of delay D that the
+tunable filter cascades M times.
 
 ## `genny.physical.sbp`
 
@@ -11719,6 +13773,11 @@ infinity, as Kuttruff says just below (5.26): alpha is clipped to 0.999 there, s
 
 fs = 2000 sqrt(T / V) Hz: above it modes overlap (Kuttruff 3.32).
 
+### `modal_density(volume: 'float', f, surface: 'float' = 0.0, edges: 'float' = 0.0, c: 'float' = None)`
+
+Eigenfrequencies per Hz of a box at ``f``: 4 pi V f^2 / c^3 + pi S f / (2 c^2) + L / (8 c) (the last two for the
+walls' area ``surface`` and the sum of the edge lengths ``edges``); the leading term alone when both are 0.
+
 ### `room_modes(lx: 'float', ly: 'float', lz: 'float', fmax: 'float', c: 'float' = None)`
 
 Eigenfrequencies of a rigid box up to ``fmax``, f = c/2 sqrt((nx/Lx)^2 + (ny/Ly)^2 + (nz/Lz)^2) (Kuttruff 3.15).
@@ -11736,8 +13795,8 @@ Directivity g of a baffled circular piston, (ka)^2/2 (1 - 2 J1(2ka)/(2ka))^-1 (K
 
 Reflection coefficient R (e^{+iwt}) at the open end of an unflanged pipe of radius a:
 |R| = 1 + 0.01336 ka - 0.59079 (ka)^2 + 0.33576 (ka)^3 - 0.06432 (ka)^4 up to ka = 1.5, then
-|R(1.5)| exp(-((ka)^2 - 2.25) / 2); end correction l/a = 0.6133 - 0.1168 (ka)^2 (ka capped at 2),
-R = -|R| exp(-2 i k l).
+sqrt(pi ka) e^(-ka) (1 + 3 / (32 (ka)^2)); end correction l/a from ``PIPE_END_LA`` (0.6133 at ka = 0,
+falling to 0.15 at the first cross mode, ka = 3.832), R = -|R| exp(-2 i k l).
 
 ### `pipe_directivity(ka, theta: 'float') -> 'np.ndarray'`
 
@@ -11775,7 +13834,7 @@ given by sengpielaudio "Damping of air", saturation pressure WMO-No.188). Valid 
 -20..+50 C, 10..100 % RH; used beyond 10 kHz as is. 20 C / 50 %: 4.66 dB/km at 1 kHz, 29.7 at 4 kHz.
 (The PASP Table B.2 used before read its 4 kHz column 3x too high.)
 
-### `ground_impedance(freqs: 'np.ndarray', sigma: 'float' = 300.0, model: 'str' = 'miki', tortuosity: 'float' = 1.0, porosity: 'float' = 1.0) -> 'np.ndarray'`
+### `ground_impedance(freqs: 'np.ndarray', sigma: 'float' = 300.0, model: 'str' = 'miki', tortuosity: 'float' = 1.0, porosity: 'float' = 1.0, alpha: 'float' = 0.0) -> 'np.ndarray'`
 
 Normalised characteristic impedance Z/rho c of a porous ground (e^{-iwt} convention), sigma = flow
 resistivity in cgs units (1 cgs = 1 kPa s/m^2), x = f/sigma (= 1000 f/sigma_MKS).
@@ -11788,12 +13847,24 @@ kb/k0 = sqrt(g) [(4/3 - (g-1) Npr/g) T + i 2 sigma/(pi rho0 f)]^0.5, Z = (k0/kb)
 ``slit``: identical slit-like pores, same three parameters, lambda = sqrt(3 rho0 w T / (W sigma)),
 rho = (rho0 T / W) / (1 - th(lambda s) / (lambda s)), C = (W / g P0) (1 + (g-1) th(lambda s') / (lambda s')),
 s = sqrt(-i), s' = sqrt(-i Npr), Z = sqrt(rho / C) / (rho0 c0).
+``variable_porosity``: porosity falling exponentially with depth, ``sigma`` = Re (cgs) and ``alpha`` = alpha_e (1/m):
+Z = (1 + i) sqrt(Re / (pi g rho0 f)) + i c0 alpha_e / (8 pi g f).
+
+### `foliage_attenuation(freqs: 'np.ndarray', density: 'float', radius: 'float', length: 'float') -> 'np.ndarray'`
+
+Excess attenuation in dB of sound through ``length`` m of foliage: 0.1 sqrt(F L) [ka + 0.9 sqrt(ka)],
+k = 2 pi f / c, ``density`` F in 1/m (stems or leaves met per metre), ``radius`` a in m (0.01-0.074).
 
 ### `layered_impedance(freqs: 'np.ndarray', sigma1: 'float', porosity1: 'float', depth: 'float', sigma2: 'float', porosity2: 'float') -> 'np.ndarray'`
 
 Normalised surface impedance (e^{-iwt}) of a porous layer ``depth`` m thick on a porous half-space.
 Each medium: Z = 0.436 (sigma_e/f)^0.5 (1 + i), k = 0.0112 (porosity^2 sigma_e)^0.5 f^0.5 (1 + i) m^-1,
 sigma_e in cgs (kPa s/m^2, taken x 1000 as N s/m^4); Z_s = Z1 (Z2 - i Z1 tan(k1 d)) / (Z1 - i Z2 tan(k1 d)).
+
+### `ground_bounce_gain(d, h=0.9)`
+
+Level of the floor bounce against the direct path for a source and a listener `h` m above a rigid floor, `d` m apart: d / sqrt(d^2 + 4 h^2)
+(0.94 at 5 m, 0.49 at 1 m for h = 0.9).
 
 ### `ground_effect(freqs: 'np.ndarray', d: 'float', h_source: 'float' = 1.5, h_listener: 'float' = 1.5, sigma: 'float' = 300.0, temp_c: 'float' = 20.0, layer: 'tuple | None' = None) -> 'np.ndarray'`
 
@@ -11814,6 +13885,12 @@ Place a (mono or stereo) sound ``r`` metres away (it was recorded at ``ref`` met
 Spreading: ref/r (point, -6 dB per doubling) or sqrt(ref/r) (line source, -3 dB).
 Air: zero-phase magnitude filter from ``air_db_per_m`` over (r - ref) metres.
 Delay: (r - ref) / c(T) s of silence prepended when ``delay`` is True.
+
+### `loop_gain_from_edt(ir: 'np.ndarray', lo: 'float', hi: 'float', loop_s: 'float') -> 'dict'`
+
+Feedback-loop gain that reproduces the early decay of a measured ``ir`` in the band [lo, hi]: the EDT (0 to -10 dB of the
+Schroeder decay, extrapolated to 60 dB) gives T60, then the loss per round trip of ``loop_s`` seconds is
+d = -60 loop_s / T60 dB and the linear gain g = 10^(d / 20).
 
 ### `ray_trace(dims, src, lis, alpha, scattering, m_air, rays: 'int' = 20000, tmax: 'float' = 2.0, bin_s: 'float' = 0.005, seed: 'int' = 0, c: 'float' = None) -> 'np.ndarray'`
 
@@ -12034,13 +14111,15 @@ exp(-K ((i - lg) / (2 rg))^2), K = 2 ln 10000, b the same at the lips. ``pg`` < 
 Area function on non-uniform sections resampled to equal sections close to ``dx`` (cm):
 (areas, section length).
 
-### `nasal_area(port_cm2: 'float', dx: 'float' = 0.396825) -> 'np.ndarray'`
+### `nasal_area(port_cm2: 'float', dx: 'float' = 0.396825, volume_cm3: 'float | None' = None) -> 'np.ndarray'`
 
 Nasal tract from the velopharyngeal port (first section = ``port_cm2``) to the two nostrils, summed.
+``volume_cm3`` rescales the sections after the port to that total volume (``NASAL_VOLUME_MRI_CM3``: measured mean).
 
-### `nasal_branch(port_cm2: 'float', sinuses: 'bool' = True) -> 'dict'`
+### `nasal_branch(port_cm2: 'float', sinuses: 'bool | str' = True, volume_cm3: 'float | None' = None) -> 'dict'`
 
-The nose as a radiating side branch at the velum (``tract_response(branches=...)``).
+The nose as a radiating side branch at the velum (``tract_response(branches=...)``). ``sinuses="mri"``: the
+six measured left/right cavities (``SINUSES_MRI``) in place of the three lumped ones.
 
 ### `piriform_branch(volume_cm3: 'float' = 0.5) -> 'dict'`
 
@@ -12076,6 +14155,15 @@ impedance, for ``tract_response(source=...)``.
 Acoustic sensitivity S_j(i) = (KE - PE) / TE of each section to each frequency F_j (rows), KE = rho dx
 |U|^2 / (2 A), PE = A dx |P|^2 / (2 rho c^2): dF_j / F_j = sum_i S_j(i) dA_i / A_i. Lossless hard-walled tube,
 closed at the glottis, P = 0 at the lips, taken at its resonance nearest each F_j; P and U at mid-section.
+
+### `drm_area(areas, length_cm: 'float' = 17.0, dx_cm: 'float' = 0.396825) -> 'np.ndarray'`
+
+Area function (cm^2, glottis to lips) of eight uniform tubes, the distinctive regions of a tract of effective
+length ``length_cm`` (geometric length plus the 0.6133 a end correction of the lips): lengths l/10, l/15, 2l/15,
+l/5, l/5, 2l/15, l/15, l/10. ``DRM_SIGNS[j][n]`` is the sign of the change of formant j + 1 when region n + 1
+(glottis side first) widens, in a tract with no tight constriction; ``DRM_SIGNS_TM`` the same for tight ones (transitional
+and two-tract modes); ``DRM_STOP_TARGETS[n]`` the F1-F3 (Hz, lossless) of a tract closed in the middle of region n + 1, a 17.5 cm
+neutral tube of 5 cm^2; ``DRM_FRICATIVE_F1[n]`` the first formant of the tract in front of a constriction in region n + 1.
 
 ### `deflection_constriction(V, deltas, mu: 'float' = 1.0, E: 'float' = 1.0) -> 'np.ndarray'`
 
@@ -12135,7 +14223,9 @@ a cubic part for a shell (softening at small amplitude). Two time schemes, both 
 * "conservative": the Airy amplitudes are averaged over n+1, n-1 (s_k = z^n H^k z^(n+-1)), linear in q^(n+1),
   solved with a Woodbury identity of rank N_W per step.
 
-Both conserve a discrete energy without losses (returned with `energy=True`).
+Both conserve a discrete energy without losses (returned with `energy=True`). A third, "explicit", is the second-order
+explicit modal scheme: the nonlinear force is evaluated at step n (one product per step, no inversion, no energy
+conservation, stable for moderate strikes; a hard strike on a light plate can blow up, use sav then).
 
 ### `damping(omega, law='crash', rho_h=1.0)`
 
@@ -12369,6 +14459,13 @@ Chitin click trains from Farnell's insect patches (research 03 §3.4).
   x clip(3 osc(0.5 Hz), 0, 1) -> x 0.2.
 The random on/off gates of the patches are left out (the caller places calls).
 
+### `farnell_syrinx(n: 'int', bp1=3.0, bp2=4.0, bw1=2.0, bw2=2.0, rm=0.5, mod=100.0, bf=400.0, pw=2.0, tf1=1500.0, tf2=2500.0, res=3.0, amp=0.5) -> 'np.ndarray'`
+
+Farnell's 11-parameter birdcall patch (each argument a number or a curve of ``n`` samples): two bronchus pulses
+at ``bp1`` / ``bp2`` Hz (0-10) and widths ``bw1`` / ``bw2`` (1-4) meet in a ring modulator (``rm`` 0 = their sum .. 1 = their
+product), scaled by ``mod`` Hz (0-200) and added to the syrinx base ``bf`` Hz (80-1000); a pulse oscillator of width ``pw`` (0-4) at that
+frequency is shaped by two trachea band-passes ``tf1`` / ``tf2`` Hz (50-3000, Q ``res`` 2-5) and ``amp``, then the beak's 100 Hz high-pass.
+
 ### `almost_speech(dur: 'float' = 3.0, rng: 'np.random.Generator | None' = None, *, f0_scale: 'float' = 1.0) -> 'np.ndarray'`
 
 Pd ``F02.just.say.pd`` ("just say one word", a talking "No"), research 09 B8b, literally:
@@ -12382,7 +14479,7 @@ heard as a diphthong. ``f0_scale`` transposes the pitch generator (1 = the patch
 
 The syllable phasor starts at a random phase (the patch starts at 0): voices that share a phase
 wrap together, and a crowd of them pulses at 4 Hz. Reference for the 4 syllables/s of the patch: reading
-rate 149.2 +/- 31.2 words/min, about 2.5 words/s (75 speakers, Lim, Toutios et al. 2021, fig. 4).
+rate 149.2 +/- 31.2 words/min, about 2.5 words/s.
 
 ### `paf(f0_env, fc_env, bw_env, dur: 'float | None' = None, *, gravel: 'float' = 0.0, rng: 'np.random.Generator | None' = None) -> 'np.ndarray'`
 
@@ -12472,7 +14569,7 @@ periods measure a Praat local jitter of ``jitter``. The factor is held over the 
 (cycle k spans 1/(1 + d_k) cycles of the plain phase), not over a cycle of the plain phase, which would
 smear each draw over two periods and measure about 0.6 of the asked value.
 
-### `roughness(f0, rng: 'np.random.Generator', *, jitter: 'float' = 0.03, shimmer: 'float' = 0.3, subharmonic=0.0, sub_rate: 'float' = 2.5) -> 'tuple[np.ndarray, np.ndarray]'`
+### `roughness(f0, rng: 'np.random.Generator', *, jitter: 'float' = 0.03, shimmer: 'float' = 0.3, subharmonic=0.0, sub_rate: 'float' = 2.5, duty=None, chain: 'bool' = False, jump: 'float' = 0.0, bridge: 'float' = 0.03, nlp=None) -> 'tuple[np.ndarray, np.ndarray]'`
 
 Per-cycle irregularity of a pulse source, returned as (f0 with cycle jitter, amplitude
 multiplier per sample):
@@ -12487,7 +14584,14 @@ multiplier per sample):
   partials 1/2, 3/2 ... an octave down, spectral envelope roughly kept"). ``subharmonic`` is
   the depth d (scalar or per sample); it is gated on and off in random episodes at about
   ``sub_rate`` per second, so the doubling comes and goes
-  like a real vocal-fold bifurcation instead of a steady octave.
+  like a real vocal-fold bifurcation instead of a steady octave. ``duty`` (a share, or "healthy" / "rough" of
+  ``NLP_DUTY``) sets ``sub_rate`` so the episodes (mean 0.24 s) fill that share of the time.
+``chain`` sequences the nonlinear phenomena inside each episode as they follow one another in a real call:
+harmonic, then subharmonics (SH), then optionally chaos (noise on the period and the amplitude), then
+optionally biphonation (BP: a second, inharmonic source at ``nlp['bp_ratio']`` x f0 modulating the first),
+then harmonic again; an episode never ends the call in chaos. ``jump`` (semitones) raises f0 over the first
+episode, joined to the plain f0 by a ``bridge`` s glide each way (jump alone also turns the chain on).
+``nlp`` overrides entries of ``NLP_CHAIN``.
 Amplitude changes happen at cycle starts only, over 2 ms, so no clicks inside a pulse.
 
 ### `micro_pitch(track, n: 'int', limit: 'float' = 0.12) -> 'np.ndarray'`
@@ -12530,7 +14634,7 @@ semitones from start to end) plus per-syllable pitch accents - each syllable, wi
 40-70 % into the syllable; the others glide gently. Syllable joins are slewed (25 ms), so the
 contour is continuous.
 
-### `hybrid_voice(n: 'int', rng: 'np.random.Generator', *, family: 'str', queries, pick: 'float', f0=None, source=None, source_mix: 'float' = 0.5, noise_mix: 'float' = 0.0, gate_source: 'bool' = True, alpha: 'float | None' = None, target_f1: 'float | None' = None, morph=None, flatten: 'float' = 0.0, env_follow: 'float' = 1.0, pitch_ratio: 'float | None' = None, used: 'list | None' = None, pred=None, min_warp: 'float' = 0.0, warp_mod=None) -> 'np.ndarray'`
+### `hybrid_voice(n: 'int', rng: 'np.random.Generator', *, family: 'str', queries, pick: 'float', f0=None, source=None, source_mix: 'float' = 0.5, noise_mix: 'float' = 0.0, gate_source: 'bool' = True, alpha: 'float | None' = None, target_f1: 'float | None' = None, morph=None, flatten: 'float' = 0.0, env_follow: 'float' = 1.0, pitch_ratio: 'float | None' = None, used: 'list | None' = None, pred=None, min_warp: 'float' = 0.0, warp_mod=None, segment=None) -> 'np.ndarray'`
 
 Recorded vocal tract, new excitation (Cook ch.8 p.87-92 LPC resynthesis / cross-synthesis;
 Farnell ex. 52.2 "isolate excitation from resonance, then impose ... gestures").
@@ -12546,6 +14650,8 @@ Farnell ex. 52.2 "isolate excitation from resonance, then impose ... gestures").
   whisper: noise through the same formants).
 * amplitude: the recording's residual-gain contour raised to ``env_follow`` (1 = the recorded
   articulation, 0 = flat; the caller applies its own gesture envelope on top).
+``segment`` replaces the recordings bank: a mono signal at SR (analysed here) or an ``analysis.analyse`` result
+(Track, residual); ``family``, ``queries`` and ``pick`` are then not read.
 Returns the voice normalised to peak 1. ``used`` collects the recording rows (provenance).
 
 ### `syrinx(pressure_env, f_env=(500.0, 505.0), dur: 'float | None' = None, *, mode_ratio: 'float' = 1.6, trachea_length_m: 'float' = 0.07, trachea_radius_m: 'float' = 0.0035, beak_radius_m: 'float' = 0.01, second_valve: 'bool' = True, oversample: 'int' = 4, beak_open=None, membrane: 'str' = 'sweep', radiation: 'str' = 'lowpass', beak_gape_m: 'float | None' = None) -> 'np.ndarray'`
@@ -12588,6 +14694,17 @@ Conical beak: a resonance that follows f0, raised as the beak opens (0..1).
 
 YIN f0 per frame (de Cheveigne & Kawahara 2002: cumulative-mean-normalised difference,
 threshold 0.1, parabolic refinement), via FFT correlation. Returns (times, f0).
+
+### `phonation_threshold_pressure(xi01, xi02=None, kt=1.1, thickness=0.3, bc=10.0)`
+
+Threshold subglottal pressure (cmH2O) for fold oscillation; `xi01`, `xi02` prephonatory half-widths at the
+lower and upper edge of the fold (cm), `thickness` T (cm), `kt` the transglottal pressure coefficient, `bc`
+the product of the mucosal-wave constants B c (cmH2O). Rectangular glottis when `xi02` is None.
+
+### `fold_f0(stiffness=200000.0, mass=0.476)`
+
+Small-amplitude fundamental (Hz) of a fold of areal mass `mass` (g/cm2) on a restoring stiffness
+`stiffness` (dyn/cm3), the tract load already subtracted.
 
 ## `genny.physical.waveguides`
 
@@ -12715,7 +14832,17 @@ commuted body (JOS) is used instead.
 Maestre violin body (STK Bowed) converted from 44.1 kHz to SR, optionally scaled down in
 frequency for larger bodies; peak gain kept equal to the original. sos rows for sosfilt.
 
-### `bowed_string(f0_env, bow_pressure_env, bow_velocity_env, dur: 'float', rng: 'np.random.Generator', body: 'str' = 'cello', position: 'float' = 0.127236, vibrato: 'bool' = True, bow_noise: 'float' = 0.08, tune: 'bool' = True) -> 'np.ndarray'`
+### `a0b0_modes(ratio=1.0, eps=0.02, f_air=280.0, q_body=80.0, q_air=25.0)`
+
+Two coupled violin modes, the bending mode B0 (stiffness k = ratio * mu) and the air mode A0 (mu from `f_air`),
+coupled by `eps`. Returns ((f_low, f_high), (q_low, q_high)); the pair avoids crossing at ratio = 1.
+
+### `a0b0_admittance(f, ratio=1.0, eps=0.02, f_air=280.0, q_body=80.0, q_air=25.0, alpha=1.0, beta=0.0)`
+
+Bridge driving-point admittance of the A0-B0 pair at frequencies `f` (Hz); `alpha` / `beta` weight the bridge
+motion of A0 and B0 (beta = 0: B0 does not move the bridge in the bowing plane).
+
+### `bowed_string(f0_env, bow_pressure_env, bow_velocity_env, dur: 'float', rng: 'np.random.Generator', body: 'str' = 'cello', position: 'float' = 0.127236, vibrato: 'bool' = True, bow_noise: 'float' = 0.08, tune: 'bool' = True, bow_table: 'str' = 'stk', capture: 'float' = 0.3) -> 'np.ndarray'`
 
 STK Bowed (Bowed.cpp/.h, research 07 §5; Faust violinModel research 08 §2.5).
 
@@ -12729,6 +14856,8 @@ Measured: pressure must grow with bow speed (Schelleng minimum force). With STK'
 slope 3 (p = 0.5) and bow_envelope(amp=0.8) cello/bass notes fall into double slip (sounding
 the octave); p >= 0.8 gives Helmholtz motion from 55 to 440 Hz. ``tune`` removes the
 remaining few-cent offset of the fs/f - 4 delay rule (cached calibration).
+``bow_table`` 'pasp': piecewise-linear table instead of STK's, its capture velocity vc = ``capture`` * p
+(more bow force, wider stuck plateau).
 
 ### `hurdy_gurdy(f0: 'float', dur: 'float', rng: 'np.random.Generator', amp: 'float' = 0.7, buzz: 'float' = 0.6, melody=None, wheel_attack: 'float' = 0.25, pressure: 'float' = 0.8, strings: 'tuple' = ('trompette', 'bourdon', 'mouche')) -> 'np.ndarray'`
 
@@ -12763,7 +14892,7 @@ Lip resonance at f * 4**(2 tension - 1) (STK CC2 = Faust brassLipsTable), radius
 gain 0.03, output area = lip^2 clipped at 1, bore DelayA 2 fs/f + 3, DC blocker 0.99.
 
 ``pressure_env`` p (0..1) is the breath in units of the lip's static opening: the STK
-breath is p / (0.3 G_dc(f_lip)), G_dc = lip-filter DC gain. normalisation, found by
+breath is p / (0.3 G_dc(f_lip)), G_dc = lip-filter DC gain. The normalisation was found by
 measurement: STK's unnormalised lip filter has G_dc ~ 1/f^2 (36 at 220 Hz, 140 at 110 Hz), so
 at STK's own noteOn pressures (0.5-1.0) the lip is always saturated open and the loop dies;
 it self-oscillates only while the static lip value 0.3 G_dc breath is ~0.3-1. The output is
@@ -12779,7 +14908,7 @@ Deterministic; ``rng`` unused.
 STK Saxofony (Scavone's conical bore: two delays split at ``position``): reed offset 0.7, slope 0.3 (STK's table
 takes pd as written here), noise 0.2, vibrato 0.1 at 5.735 Hz; breath 0.55 + 0.3 a; output gain amp + 0.001.
 
-### `clarinet(f0_env, breath_env, dur: 'float', rng: 'np.random.Generator', amp: 'float' = 0.8, reed_stiffness: 'float | None' = None, noise_gain: 'float' = 0.2, vibrato_gain: 'float' = 0.1, vibrato_freq: 'float' = 5.735, reflection: 'str' = 'stk', bell_vibrato: 'float' = 0.03, bell_vibrato_freq: 'float' = 5.0, legato: 'float' = 0.0) -> 'np.ndarray'`
+### `clarinet(f0_env, breath_env, dur: 'float', rng: 'np.random.Generator', amp: 'float' = 0.8, reed_stiffness: 'float | None' = None, noise_gain: 'float' = 0.2, vibrato_gain: 'float' = 0.1, vibrato_freq: 'float' = 5.735, reflection: 'str' = 'stk', bell_vibrato: 'float' = 0.03, bell_vibrato_freq: 'float' = 5.0, legato: 'float' = 0.0, reed_table: 'str' = 'stk', embouchure: 'float' = 0.9, reed_power: 'float' = 1.0) -> 'np.ndarray'`
 
 STK Clarinet (Clarinet.cpp, research 07 §7.4): reed table offset 0.7, slope -0.3
 (or -0.44 + 0.26 v for ``reed_stiffness`` v, CC2 / Faust clarinetModel); delay
@@ -12790,13 +14919,17 @@ gain amp + 0.001. ``breath_env`` = Envelope value (see ``wind_envelope('clarinet
 v = ``bell_vibrato`` sin(2 pi ``bell_vibrato_freq`` t). ``legato`` (s): crossfade time
 between the old and new delay read pointers when ``f0_env`` steps.
 
+``reed_table="pasp"``: piecewise-linear reed table 1 - (hc - h) / (hc + 1) below the closure
+point hc = ``embouchure`` (in (-1, 1): higher = reed closes later; a breath above it shuts the reed and
+the note stops), 1 above, raised to ``reed_power`` (>= 1, brighter as the reed opens).
+
 ### `holger_force(Uj: 'float', V: 'float', h: 'float', lam: 'float', b: 'float | None' = None, rho: 'float' = 1.2) -> 'float'`
 
 Vortex-street limit of the jet drive (N/m): rho lam V Uj^2 phi, phi = (2/3) b tanh(h/2b) (3 - tanh^2(h/2b)).
 ``h`` = half the jet thickness parameter, ``b`` = jet half-width (h = gamma b, gamma 0.45-0.5: default
 b = h/0.475), ``lam`` vortex spacing (H/lam ~ 0.5 with H the street width, H/2h = eps Str^(-2/3)).
 
-### `recorder(f0_env, breath_env, dur: 'float', rng: 'np.random.Generator', amp: 'float' = 0.8, model: 'str' = 'flute', noise_gain: 'float | None' = None, breath_cutoff: 'float' = 500.0, softness: 'float' = 1.0, jet_ratio: 'float' = 0.32, vibrato_gain: 'float' = 0.05, tune: 'bool' = True, jet_offset: 'float' = 0.0, jet_angle: 'float | None' = None, jet_shape: 'str' = 'cubic', jet_filter: 'str' = 'onepole', convection: 'float' = 0.4, register: 'bool' = False, skill: 'float' = 0.0, turbulence: 'str' = 'stk', **auvray) -> 'np.ndarray'`
+### `recorder(f0_env, breath_env, dur: 'float', rng: 'np.random.Generator', amp: 'float' = 0.8, model: 'str' = 'flute', noise_gain: 'float | None' = None, breath_cutoff: 'float' = 500.0, softness: 'float' = 1.0, jet_ratio: 'float' = 0.32, vibrato_gain: 'float' = 0.05, tune: 'bool' = True, jet_offset: 'float' = 0.0, jet_angle: 'float | None' = None, jet_shape: 'str' = 'cubic', jet_filter: 'str' = 'onepole', convection: 'float' = 0.4, register: 'bool' = False, skill: 'float' = 0.0, turbulence: 'str' = 'stk', attack_pulse: 'float' = 0.0, **auvray) -> 'np.ndarray'`
 
 Breathy end-blown flute. ``breath_env=None`` -> the STK noteOn envelope of the model.
 
@@ -12842,9 +14975,9 @@ Cook §7.4; sc3 MdaPiano decay/muffle laws, research 11 §C6).
 1. Hammer: key n = 12 log2(f0/27.5) + 1; Q0 = 183 e^(0.045 n) N/mm^p, p = 3.7 + 0.015 n,
    alpha = 248 + 1.83 n - 0.055 n^2 us, m = 11.074 - 0.074 n + 0.0001 n^2 g, integrated
    against the strings' 2R load (JOS 'mass into (m s + 2R)') -> force pulse; the string
-   gets velocity f/2R. ``felt`` softens Q0 (moderator felt; amount).
+   gets velocity f/2R. ``felt`` softens Q0 (moderator felt).
 2. Excitation = pulse + ``soundboard`` * pulse convolved with a noise tail whose low-pass
-   contracts (JOS 'soundboard tap', numbers), then the strike-position comb at
+   contracts (soundboard tap), then the strike-position comb at
    0.12 of the string (Chaigne & Askenfelt 1994 Table I, C2/C4).
 3. Three unison strings detuned [-0.05, 0, 0.04] semitones (SC synthetic piano). Each loop:
    DelayA + K first-order allpasses fitted to f_n = n f0 sqrt(1 + B n^2) (B =
@@ -12934,10 +15067,11 @@ tanh(2.7 t/b), closed -0.12 - 0.17 tanh(2.4 t/b).
 Side hole of radius r and chimney h on a bore of radius R at f Hz: series length la, matching hm, inner hs,
 radiation hr, total h' and the shunt impedance Zs (Pa s/m^3).
 
-### `keefe_hole(a: 'float', b: 'float', t: 'float', f: 'float', open_: 'bool' = True, rc: 'float' = 0.0005, t_c: 'float' = 26.85) -> 'dict'`
+### `keefe_hole(a: 'float', b: 'float', t: 'float', f: 'float', open_: 'bool' = True, rc: 'float' = 0.0005, t_c: 'float' = 26.85, inner: 'bool' = False) -> 'dict'`
 
 Single tone hole (bore radius a, hole radius b, wall t, edge radius rc) at f Hz: series length ta (negative),
 matching height th, effective length te, open-hole loss xi_e, series and shunt impedances Za, Zs.
+`inner` (closed hole only): adds the inner inertance k th (0.25 (b/th)^2 + 0.58 (b/a)^2 - pi b / (4 th)) to cot(k th).
 
 ### `tonehole_tmatrix(Za: 'complex', Zs: 'complex') -> 'np.ndarray'`
 
@@ -13001,10 +15135,14 @@ t in kelvin.
 
 
 
-### `tmm_impedance(length: 'float', a: 'float', holes, freqs, opens=None, t_c: 'float' = 20.0) -> 'np.ndarray'`
+### `tmm_impedance(length: 'float', a: 'float', holes, freqs, opens=None, t_c: 'float' = 20.0, bore: 'str' = 'keefe', hole_model: 'str' = 'keefe', v0: 'float' = 0.0) -> 'np.ndarray'`
 
 Input impedance of a cylinder of radius a with side holes [(x from the input, b, t), ...] (open = ``opens``,
-default all open), unflanged end; transfer matrices with Keefe's hole.
+default all open), unflanged end; transfer matrices with Keefe's hole. ``bore`` "visco": the boundary-layer
+attenuation and phase velocity of `visco_alpha` / `phase_velocity` instead of the empirical wavenumber;
+``hole_model`` "dubos": the series and shunt lengths of `dubos_hole`; ``v0`` (m/s) the acoustic velocity that
+adds the quadratic loss of the open end (`end_nonlinear_impedance`) and of the open holes
+(`hole_nonlinear_resistance`).
 
 ### `first_resonance(length, a, holes, opens=None, fmin=50.0, fmax=3000.0, kind='z') -> 'float'`
 
@@ -13028,6 +15166,12 @@ Length of plain nonlinear propagation that gives the instrument's shock: B L_ecl
 Amplitude-dependent arrival advance of a pressure p at the bell, from dx/dt = c0 + (gamma+1)/2 u and
 u(x) = u0 D0 / D(x): -(gamma+1) / (2 c0^2) B L_ecl p / (rho c0) seconds.
 
+### `brass_shock(y, inst: 'str', peak_pa: 'float', sr: 'int' = 48000) -> 'np.ndarray'`
+
+Nonlinear propagation along the bore of ``inst``: each sample of the record, scaled to a peak of ``peak_pa`` Pa at the
+bell, arrives `shock_delay` early (B and L_ecl of the instrument), so the compressions overtake the rarefactions and
+the wave steepens (a brassy edge). Where samples would cross they merge.
+
 ### `local_speed(u, c0: 'float' = 343.0)`
 
 dx/dt = c0 + (gamma + 1) u / 2.
@@ -13045,9 +15189,11 @@ Slide extension (cm) at which mode n (4, 5 or 6) sounds ``freq``; None when out 
 
 Z = ZA / (1 + 2j QA (f - fA) / fA).
 
-### `lip_params(embouchure: 'float' = 0.5) -> 'dict'`
+### `lip_params(embouchure: 'float' = 0.5, preset: 'str' = '') -> 'dict'`
 
-Table B interpolated, embouchure 0 = loosest (index 0) .. 1 = tightest (index 19).
+Table B interpolated, embouchure 0 = loosest (index 0) .. 1 = tightest (index 19). ``preset`` "slack", "medium" or
+"tight": b, H0 and the measured lip modes of `LIP_TABLE_1` replace the interpolated ones (the second mode stays
+interpolated where the table has none).
 
 ### `lip_response(f, fL: 'float', QL: 'float', inv_mu: 'float')`
 
@@ -13079,14 +15225,17 @@ Buzz of lips on a mouthpiece without the instrument (the mouthpiece's Helmholtz 
 mode). With ``mouthpiece=False`` the lip has nothing to couple to and stays still: a single mass on a steady
 pressure does not oscillate.
 
-### `trombone_lip(freq: 'float', dur: 'float', sr: 'int' = 48000, vel: 'float' = 0.8, embouchure: 'float' = 0.5, inward: 'bool' = False) -> 'np.ndarray'`
+### `trombone_lip(freq: 'float', dur: 'float', sr: 'int' = 48000, vel: 'float' = 0.8, embouchure: 'float' = 0.5, inward: 'bool' = False, lips: 'str' = '', lip_q: 'str' = '', hysteresis: 'bool' = False, shock: 'float' = 0.0) -> 'np.ndarray'`
 
 A trombone note on the one-mass lip: the slide and mode that sound ``freq`` (modes 4-6 measured; others
 on the harmonic series), lip Q and 1/mu from Table B (outward lip, or the inward one), lip frequency set
 under the note for an outward lip and above it for an inward one, mouth pressure 1.2-2 times the linear
 threshold. The lip pulls the note off the bore peak (an outward lip sharp, an inward one flat): one tuning
 pass moves the slide, all bore modes and the lip by the measured ratio. Radiated pressure (first difference
-of the mouthpiece pressure), peak 1.
+of the mouthpiece pressure), peak 1. ``lips`` "slack", "medium" or "tight": the measured lips of `LIP_TABLE_1`;
+``lip_q`` "human", "latex" or "glycerine": the outward lip's Q of that lip material; ``hysteresis``: the note
+stops when the mouth pressure falls to `LIP_HYSTERESIS` x its threshold (`lip_sounding`); ``shock`` Pa:
+the peak pressure at the bell that steepens the wave (`brass_shock`).
 
 ### `lip2d(p0, f_lip: 'float', modes=((87.0, 43.7), (232.0, 35.2), (341.0, 46.4), (457.0, 55.7), (572.0, 48.1), (686.0, 51.6), (800.0, 44.5), (913.0, 28.5)), Q_modes: 'float' = 25.0, sr: 'int' = 48000, os: 'int' = 8, y_eq: 'float | None' = None, return_area: 'bool' = False)`
 
@@ -13101,12 +15250,12 @@ Returns the mouthpiece pressure (Pa), and the lip opening S (m^2) with ``return_
 
 f_lip / f_sound at the stable optimum, interpolated over modes II-VI (1.06-1.08 low, 1.01 high).
 
-### `trumpet_lip2d(freq: 'float', dur: 'float', sr: 'int' = 48000, vel: 'float' = 0.8, tune: 'bool' = True) -> 'np.ndarray'`
+### `trumpet_lip2d(freq: 'float', dur: 'float', sr: 'int' = 48000, vel: 'float' = 0.8, tune: 'bool' = True, shock: 'float' = 0.0) -> 'np.ndarray'`
 
 A trumpet note on the 2D lip: the bore is Table II transposed so that its nearest mode (II-VIII) sits on
 ``freq`` (the valves), the lip at the optimal f_lip / f_sound, blowing pressure that of the mode in
 Table III scaled by ``vel`` (2-5 kPa); one tuning pass corrects the transposition. Radiated pressure
-(first difference), peak 1.
+(first difference), peak 1. ``shock`` Pa: the peak pressure at the bell that steepens the wave (`brass_shock`).
 
 ### `sax_equivalent_volume(f) -> 'np.ndarray'`
 
@@ -13215,33 +15364,48 @@ An edge tone next to a pipe locks onto the pipe mode nearest to it (the pipe ton
 
 Threshold reached on a linear ramp of a Pa/s: Pstat + (3 a / (2 alpha))^(2/3).
 
-### `register_track(p, sr: 'float', p12: 'float' = 311.5, p21: 'float' = 259.0, alpha: 'float' = 0.85, skill: 'float' = 0.0) -> 'np.ndarray'`
+### `register_track(p, sr: 'float', p12: 'float' = 311.5, p21: 'float' = 259.0, alpha: 'float' = 0.85, skill: 'float' = 0.0, fingering: 'str' = '') -> 'np.ndarray'`
 
 Register (1 or 2) along a blowing pressure p (Pa, per sample). A change happens when
 zeta = integral alpha sqrt(|p - Pstat|) dt past the static threshold reaches 1, so a fast crescendo overshoots
 the static threshold by (3 a / 2 alpha)^(2/3). ``skill`` 0..1 widens the hysteresis as a flutist does,
-by 2.7 times at 1 (measured 169-380 % wider).
+by 2.7 times at 1 (measured 169-380 % wider). ``fingering`` "G4" or "F4": the measured thresholds of that
+fingering instead of ``p12``, ``p21`` and ``alpha``.
 
-### `auvray_recorder(freq: 'float', dur: 'float', sr: 'int' = 48000, u0: 'float | None' = None, attack: 'float' = 0.03, release: 'float' = 0.05, labium_offset: 'float | None' = None, edge: 'str' = 'sharp', stopped: 'bool' = False, wet: 'bool' = False, attack_impulse: 'float' = 0.0, noise: 'float' = 0.0, seed: 'int' = 0, os: 'int' = 6) -> 'np.ndarray'`
+### `auvray_recorder(freq: 'float', dur: 'float', sr: 'int' = 48000, u0: 'float | None' = None, attack: 'float' = 0.03, release: 'float' = 0.05, labium_offset: 'float | None' = None, edge: 'str' = 'sharp', stopped: 'bool' = False, wet: 'bool' = False, attack_impulse: 'float' = 0.0, noise: 'float' = 0.0, seed: 'int' = 0, os: 'int' = 6, regime: 'int' = 0, recorder: 'str' = 'zenon', trajectory: 'float' = 0.0) -> 'np.ndarray'`
 
 Flue instrument as three modes of the window admittance Y = sum j w Y_n / (w_n^2 - w^2 + j eps_n w_n w)
 (the Zen-On recorder's, scaled to ``freq``) driven by the jet: eta(W, t) = e^(alpha_i W) h v_ac(t - W/cp) / u0,
 alpha_i = 0.3 / h, cp = 0.4 u0; jet drive rho delta_d b u0 / W d/dt tanh((eta - y_off) / b), delta_d =
 4 sqrt(2 h W) / pi, b = 2h/5; vena-contracta loss -rho v|v| / (2 alpha_vc^2) (0.6; 0.6 in, 1.0 out for a
-``edge="thick"`` edge). u0 defaults to the optimum of the first regime, 9 f W. Turbulent above Re = u0 h / nu
+``edge="thick"`` edge). u0 defaults to the optimum of the first regime, 9 f W; ``regime`` n > 0 takes `optimal_jet_velocity` of regime n (n = 2 overblows). Turbulent above Re = u0 h / nu
 of 2500 (the convection speed halves by 3000). ``stopped``: odd modes of a closed pipe; ``wet``: a wet bore,
 +1.5 % on the modes and peaks 9 % higher; ``attack_impulse`` K: a pressure pulse K rho u0^2 / 2 when the jet
-first reaches the edge; ``labium_offset`` in units of h (default 0.1 mm). Radiated pressure (d v_ac / dt), peak 1.
+first reaches the edge; ``labium_offset`` in units of h (default 0.1 mm). ``recorder`` "yrt304": the flue height and
+the lip-to-edge distance of that recorder (its window modes stay the Zen-On's); ``trajectory`` Re: the flutists'
+operating line (`jet_trajectory`), W / h = (3500 - Re) / 250 and, with ``u0`` unset, u0 = Re nu / h.
+Radiated pressure (d v_ac / dt), peak 1.
 
 ### `cubic_flow(zeta: 'float', gamma: 'float') -> 'tuple[float, float, float]'`
 
 (A, B, C) of the flow u = F(p) = zeta (1 - gamma + p) sqrt(gamma - p) expanded to third order at p = 0.
 
-### `modal_clarinet(freq: 'float', dur: 'float', sr: 'int' = 48000, n_modes: 'int' = 6, zeta: 'float' = 0.35, gamma: 'float' = 0.39, eta: 'float' = 0.02, c: 'float' = 340.0, attack: 'float' = 0.02, release: 'float' = 0.05, os: 'int' = 4) -> 'np.ndarray'`
+### `modal_clarinet(freq: 'float', dur: 'float', sr: 'int' = 48000, n_modes: 'int' = 6, zeta: 'float' = 0.35, gamma: 'float' = 0.39, eta: 'float' = 0.02, c: 'float' = 340.0, attack: 'float' = 0.02, release: 'float' = 0.05, os: 'int' = 4, peaks=None) -> 'np.ndarray'`
 
 Clarinet as ``n_modes`` resonators of a cylinder (l = c / 4f): p_n'' + 2 Y_n (c/l) p_n' + w_n^2 p_n =
 (2c/l)[A + 2B P + 3C P^2] P', P = sum p_n, w_j = (2j - 1) 2 pi c / 4l, Y_j = 1.3 eta sqrt(2j - 1), with the
 reed's cubic flow (A, B, C from zeta, gamma). A non-beating reed. Radiated pressure (first difference), peak 1.
+``peaks``: the resonance frequencies (Hz) of a bore that is not a cylinder (`SAX_SOPRANO_PEAKS`, `SAX_ALTO_HARMONICS`)
+replace the odd harmonics of ``freq``; the damping then grows as sqrt(f_n / f_1).
+
+### `lip_two_resonance(pm: 'float') -> 'tuple[float, float]'`
+
+(f_outward, f_inward) Hz of the two lip resonances at mouth pressure `pm` Pa, linear between the 350 and 390 Pa
+measurements and held beyond; the inward one is the one `waveguides.brass(inward=, inward_ratio=f_in/f_out)` takes.
+
+### `lip_volume_freq(ml: 'float') -> 'float'`
+
+Lip-cavity resonance Hz from the mouth volume: 500 Hz at 9 ml, 460 Hz at 12 ml, f ~ V^-0.29.
 
 ### `lip_sounding(p, p_threshold: 'float', ratio: 'float' = 0.964) -> 'np.ndarray'`
 
@@ -13433,18 +15597,18 @@ Four-stroke engine facade with physically meaningful firing-rate control.
 - `.firing_rate_hz`
 - `.render(self, dur: 'float', *, sr: 'int' = 44100, seed: 'int' = 7) -> 'np.ndarray'`
 
-### `MembraneDrum(frequency: 'float' = 180.0, radius_m: 'float' = 0.16, damping: 'float' = 1.0, harmonic_loading: 'float' = 0.0, air_coupling: 'float' = 0.25, shell: 'str' = 'wood', bend: 'float' = 0.06, bend_tau: 'float' = 0.02, radiation: 'float' = 0.0) -> None`
+### `MembraneDrum(frequency: 'float' = 180.0, radius_m: 'float' = 0.16, damping: 'float' = 1.0, harmonic_loading: 'float' = 0.0, air_coupling: 'float' = 0.25, shell: 'str' = 'wood', bend: 'float' = 0.06, bend_tau: 'float' = 0.02, radiation: 'float' = 0.0, ratios: 'tuple' = (), air_shift: 'float' = 0.0) -> None`
 
 Reduced circular-membrane model with strike-position and stroke controls.
 
 The mode ratios follow the low modes of a circular membrane (Bessel zeros),
-while ``harmonic_loading`` continuously pulls them toward an integer series
-(useful for tabla-like loaded heads).  This is a reduced modal renderer, not
+while ``harmonic_loading`` continuously pulls them toward the loaded-head
+series 1, 2, 3, 3, 4, 4, 5, 5, 5 (tabla, mridanga: nine modes on five tones).  This is a reduced modal renderer, not
 a full 2-D waveguide mesh, but preserves the excitation/resonator separation.
 
 - `.strike(self, dur: 'float' = 0.8, *, velocity: 'float' = 0.8, position: 'float' = 0.25, stroke: 'str' = 'tone', sr: 'int' = 44100, seed: 'int' = 0) -> 'np.ndarray'`
 
-### `CymbalPlate(fundamental: 'float' = 210.0, size: 'float' = 1.0, damping: 'float' = 1.0, profile: 'str' = 'crash') -> None`
+### `CymbalPlate(fundamental: 'float' = 210.0, size: 'float' = 1.0, damping: 'float' = 1.0, profile: 'str' = 'crash', modes_hz: 'tuple' = ()) -> None`
 
 Reduced nonlinear thin-plate/cymbal model.
 
@@ -13461,10 +15625,11 @@ Spatial-profile based scrape and rolling-contact generator.
 - `.scrape(self, dur: 'float', *, speed: 'float' = 0.3, force: 'float' = 1.0, sr: 'int' = 44100, seed: 'int' = 0) -> 'np.ndarray'`
 - `.roll(self, dur: 'float', *, speed: 'float' = 0.5, radius_m: 'float' = 0.03, force: 'float' = 1.0, sr: 'int' = 44100, seed: 'int' = 0) -> 'np.ndarray'`
 
-### `Rotor(rpm: 'float' = 1800.0, blades: 'int' = 5, radius_m: 'float' = 0.15, turbulence: 'float' = 0.45, tonal: 'float' = 0.55, style: 'str' = 'generic') -> None`
+### `Rotor(rpm: 'float' = 1800.0, blades: 'int' = 5, radius_m: 'float' = 0.15, turbulence: 'float' = 0.45, tonal: 'float' = 0.55, style: 'str' = 'generic', thickness: 'float' = 0.05, strouhal: 'float' = 1.0, tip_doppler: 'bool' = False) -> None`
 
 Generic rotor/propeller/fan aeroacoustic source.
 
+- `.broadband_hz` — Peak of the vortex-shedding hump: strouhal x rotation rate / (blade thickness / circumference).
 - `.rotation_hz`
 - `.blade_passing_hz`
 - `.tip_speed`
@@ -13563,16 +15728,42 @@ r + g (Phi(r + a) - Phi(a))/r + b = 0. Returns (mode displacement, energy) per s
 
 Peak overpressure in Pa of a surface burst, 0.15 < Z < 40 m/kg^(1/3) (Catovic & Kljuno's fit, within 3.3 % of its data).
 
-### `blast_wave(w_kg: 'float', r_m: 'float') -> 'tuple[float, float, float]'`
+### `blast_secondary(w_kg: 'float', r_m: 'float') -> 'tuple[float, float]'`
+
+(delay s after the shock, amplitude relative to its peak) of the second shock that follows the first
+inside Z = r / W^(1/3) < 0.4 m/kg^(1/3), where the detonation products catch up; (0, 0) beyond. The delay
+scales with the cube root of the charge, the amplitude falls to nothing at Z = 0.4.
+
+### `blast_wave(w_kg: 'float', r_m: 'float', source: 'str' = 'tnt', pressure_kpa: 'float' = 101.325, temp_c: 'float' = 15.0) -> 'tuple[float, float, float]'`
 
 (peak overpressure Pa, positive-phase duration s, decay alpha) of a free-air burst of ``w_kg`` kg TNT at
 ``r_m`` metres, for the Friedlander wave p(t) = Ps (1 - t/td) exp(-alpha t/td) (Kinney & Graham eq. 5.10).
+``pressure_kpa`` and ``temp_c`` give the ambient air (sea level, 15 C by default): the altitude scaling reads the
+sea-level result at the distance r (P / P0)^(1/3), multiplies the pressure by P / P0 and the duration by
+(P0 / P)^(1/3) c0 / c.
+``source="point"``: an energy deposit with no explosive products (lightning, a spark; ``w_kg`` its TNT-equivalent
+energy), read from the point-source half of the reference table, 0.79 <= Z <= 7.9 m/kg^(1/3), clamped beyond.
 Ps from the JRC fit (valid 0.053 <= Z <= 40 m/kg^(1/3)); td read from Kinney's Table XI where it reaches
 (0.79 <= Z <= 7.9), beyond it from the JRC impulse, i = Ps td (1/alpha - (1 - e^-alpha)/alpha^2), scaled to
 meet the table at Z = 7.9 (the two sources differ by about 30 % in td there). Past Z = 40 Ps and the
 impulse go on along their log-log slope (weak shock).
 
-### `Explosion(energy: 'float' = 1.0, distance_m: 'float' = 8.0, debris: 'float' = 0.45, enclosure: 'float' = 0.15, windows: 'float' = 0.0) -> None`
+### `friedlander_peak_freq(t0: 'float', b: 'float' = 1.0) -> 'float'`
+
+Frequency [Hz] of the spectrum peak of a Friedlander wave p = Ps (1 - t / t0) exp(-b t / t0): sqrt(-b^2 + 4 b - 2) / (2 pi t0),
+defined for b between 2 - sqrt 2 and 2 + sqrt 2 (b = 1, t0 = 0.5 ms: 318 Hz).
+
+### `muzzle_peak_angle(theta_deg, p_front: 'float', p_back: 'float')`
+
+Peak overpressure of a muzzle blast at ``theta_deg`` from the line of fire, front pressure ``p_front``, rear ``p_back``
+(same unit): p_front (1 - (p_front - p_back) / p_front sin(theta / 2)).
+
+### `hopkinson_scale(energy_ratio: 'float') -> 'float'`
+
+Factor on distance, positive-phase duration and impulse that gives the same peak pressure for a blast of ``energy_ratio``
+times the energy: its cube root (eight times the energy: twice the distance, twice the duration).
+
+### `Explosion(energy: 'float' = 1.0, distance_m: 'float' = 8.0, debris: 'float' = 0.45, enclosure: 'float' = 0.15, windows: 'float' = 0.0, secondary: 'float' = 0.0) -> None`
 
 Blast: a Friedlander shock pulse sized by the charge and distance (`blast_wave`), low-frequency
 expansion, debris and distance. ``energy`` is the charge in kg of TNT.
@@ -13604,7 +15795,27 @@ the fact that a real bridge is not a frequency-independent point coupler.
 - `.step_split(self, force_n: 'float') -> 'tuple[float, float]'`
 - `.step_note_forces(self, note_forces: 'dict[int, float]') -> 'tuple[float, float, dict[int, float]]'` — Drive one bridge with note-position dependent participation.
 
-### `PianoHammerAction(midi_note: 'int', sr: 'int' = 48000, felt_stiffness: 'float | None' = None, felt_exponent: 'float | None' = None, hammer_mass_kg: 'float | None' = None, restitution: 'float' = 0.28, string_impedance: 'float | None' = None, agraffe: 'bool' = False) -> None`
+### `hard_hammer_contact_time(mass, tension, linear_density, strike_ratio, length)`
+
+Contact time (s) of a rigid point-mass hammer on a flexible string whose first reflection from the short end
+ends the contact (valid up to twice the round trip to the near end): tau = ta + (1 + exp(-g ta)) / g, with
+g = 2 T / (m c) and ta = 2 a / c.
+
+### `heavy_hammer_energy_transfer(mass, string_mass)`
+
+Fraction of the hammer's kinetic energy left in the string by a very heavy hammer, the string taken as
+two rigid bars: 1 - (m / (m + M/3))^2.
+
+### `critical_compliance(mass, tension, linear_density)`
+
+Hammer compliance (m/N) below which the felt is overdamped by the string: m / (16 mu T).
+
+### `soft_hammer_critical_mode(mass, string_mass, compliance, tension, linear_density)`
+
+Mode number above which the hammer's compliance cuts the string spectrum (intrinsic frequency of the felt
+over the string fundamental): 4 M / (pi m sqrt(C / C0)).
+
+### `PianoHammerAction(midi_note: 'int', sr: 'int' = 48000, felt_stiffness: 'float | None' = None, felt_exponent: 'float | None' = None, hammer_mass_kg: 'float | None' = None, restitution: 'float' = 0.28, string_impedance: 'float | None' = None, agraffe: 'bool' = False, hysteresis: 'float' = 0.0, voicing: 'int | None' = None, strike_ratio: 'float | None' = None) -> None`
 
 Reduced hammer/action contact model with nonlinear felt and rebound.
 
@@ -13619,6 +15830,8 @@ retains the force-domain pulse for diagnostics and future fully unit-preserving 
 ``agraffe=True``: the string is a dashpot plus the wave sent toward the agraffe, which comes back
 inverted after 2 d / c = (hammer position ratio) / f0 and pushes the hammer off (string velocity
 (F(t) - F(t - tau)) / R). Contact then depends less on hammer mass in the bass and more on speed.
+``hysteresis`` > 0: the felt exponent grows by that amount at every reversal of the compression
+(the branch restarts from the reversal point) and the hammer leaves below 1 % of its peak force.
 
 - `.agraffe_delay_s(self) -> 'float'` — Round trip hammer -> agraffe -> hammer: beta / f0, beta the course's hammer position ratio.
 - `.strike(self, velocity: 'float', *, soft: 'bool' = False) -> 'np.ndarray'`
@@ -13663,7 +15876,7 @@ Keyboard-wide passive resonance bank used for unstruck/duplex strings.
 - `.step(self, bridge_velocity: 'float') -> 'tuple[float, float]'`
 - `.note_energy(self, midi_note: 'int') -> 'float'`
 
-### `PolyphonicPiano(sr: 'int' = 48000, bridge: 'FrequencyDependentBridge | None' = None, soundboard: 'ModalSoundboard | None' = None, global_coupling: 'float' = 0.055, sympathetic_coupling: 'float' = 0.0028, aliquot_ratios: 'tuple[float, ...]' = (2.0, 3.0, 4.0)) -> None`
+### `PolyphonicPiano(sr: 'int' = 48000, bridge: 'FrequencyDependentBridge | None' = None, soundboard: 'ModalSoundboard | None' = None, global_coupling: 'float' = 0.055, sympathetic_coupling: 'float' = 0.0028, aliquot_ratios: 'tuple[float, ...]' = (2.0, 3.0, 4.0), action_level: 'float' = 0.0, action_kind: 'str' = 'noise') -> None`
 
 Stateful reduced-order 88-key piano with shared bridge/soundboard.
 
@@ -13769,6 +15982,11 @@ mu <= 1/4 (12.15), eq 12.40, eq 11.34 and g03 §3.6's `h^2 >= 4k(sigma1 + sqrt(s
 Cost is controlled the way g03 §8.1 says: lower the internal sample rate (`quality`), never coarsen the grid
 at a fixed rate. Output is resampled to the requested rate.
 
+### `wood_ortho(species: 'str', h: 'float') -> 'tuple'`
+
+(kx, ky, kxy) of a plate of unit area made of ``species`` at thickness h (m): kx = sqrt(Ex h^2 / (12 rho (1 - nu_xy nu_yx))),
+kxy^2 = (2 nu_yx Ex / (1 - nu_xy nu_yx) + 4 Gxy) h^2 / (12 rho).
+
 ### `loss_coeffs(f1, t1, f2, t2, kappa=0.0, gamma=0.0, fs=0.0)`
 
 sigma0, sigma1 from two (Hz, T60) pairs: eq 7.29 as coded in listing A.8 (g03 §9), sigma(w) = sigma0 +
@@ -13845,7 +16063,12 @@ Head driven by `force` (N / (rho D^3)) with SNARE_N wire masses under a diameter
 
 Linear Kirchhoff plate struck with force pulse 12.28, velocity pickup (g03 §3, §4.2).
 
-### `metal_plate(sr=44100, size=0.5, thickness=2.0, decay=3.0, aspect=1.3, edges='free', pos=0.45, hardness=0.6, vel=0.8, bright=0.5, quality=1.0)`
+### `stiffened_ortho(size, thickness, aspect, ribs, rib_height=0.0, material='steel')`
+
+(kx, ky, kxy) of a plate of side sqrt(area) = ``size`` m with ``ribs`` flat ribs along its long side, smeared: with b the rib
+spacing, Dx = D + E I / b (I of the rib about the plate's mid-plane), mass per area rho (H + A / b), ky^2 = D / m, kxy^2 = 2 D / m.
+
+### `metal_plate(sr=44100, size=0.5, thickness=2.0, decay=3.0, aspect=1.3, edges='free', ribs=0, rib_height=0.0, dome=0.0, force=150.0, pos=0.45, hardness=0.6, vel=0.8, bright=0.5, quality=1.0)`
 
 
 
@@ -13853,7 +16076,7 @@ Linear Kirchhoff plate struck with force pulse 12.28, velocity pickup (g03 §3, 
 
 
 
-### `wood_panel(sr=44100, size=1.0, thickness=1.0, decay=0.35, pos=0.45, hardness=0.6, vel=0.8, bright=0.5, quality=1.0)`
+### `wood_panel(sr=44100, size=1.0, thickness=1.0, decay=0.35, pos=0.45, hardness=0.6, vel=0.8, bright=0.5, quality=1.0, species='table')`
 
 
 
@@ -13861,7 +16084,7 @@ Linear Kirchhoff plate struck with force pulse 12.28, velocity pickup (g03 §3, 
 
 
 
-### `nl_plate(sr=44100, vel=1.0, size=0.4, thickness=1.0, force=80.0, contact_ms=16.0, pos=(0.2, 0.3), decay=10.0, damping=0.005, model='vk', eps=1.0, material=(8800.0, 124000000000.0, 0.33), bright=0.6, quality=1.0, dur=2.0, points=900, drive=None, level=0.85, info=None, accel=True, hp=150.0, loss=None, scan=None, dome=0.0, scan_order=1, edges='supported')`
+### `nl_plate(sr=44100, vel=1.0, size=0.4, thickness=1.0, force=80.0, contact_ms=16.0, pos=(0.2, 0.3), decay=10.0, damping=0.005, model='vk', eps=1.0, material=(8800.0, 124000000000.0, 0.33), bright=0.6, quality=1.0, dur=2.0, points=900, drive=None, level=0.85, info=None, accel=True, hp=150.0, loss=None, scan=None, dome=0.0, scan_order=1, edges='supported', ulim=50.0)`
 
 Nonlinear plate (g03 §6): `model` = "vk" (von Karman simple scheme, Airy stress solve every step),
 `edges` "supported" | "free" (free rectangle, Phi clamped on its border; no dome),
@@ -13879,27 +16102,27 @@ edge, not the book's free circle.
 (eq. 7), read from 48 fixed points with linear interpolation along the ellipse (`scan_order` 3: 4-point
 Lagrange).
 
-### `plate_crash(sr=44100, vel=1.0, size=0.4, thickness=1.0, force=400.0, decay=6.9, dur=2.2, bright=0.6, model='vk', quality=1.0)`
+### `plate_crash(sr=44100, vel=1.0, size=0.4, thickness=1.0, force=400.0, decay=6.9, dur=2.2, bright=0.6, model='vk', quality=1.0, edges='supported')`
 
 
 
-### `shell_crash(sr=44100, vel=1.0, dome=1.3, size=0.4, thickness=1.0, force=400.0, decay=6.9, dur=2.2, bright=0.6, model='vk', quality=1.0)`
+### `shell_crash(sr=44100, vel=1.0, dome=1.3, size=0.4, thickness=1.0, force=400.0, decay=6.9, dur=2.2, bright=0.6, model='vk', quality=1.0, edges='supported')`
 
 
 
-### `plate_ride(sr=44100, vel=1.0, size=0.5, thickness=2.0, force=600.0, decay=7.0, dur=2.2, bright=0.6, model='vk', quality=1.0)`
+### `plate_ride(sr=44100, vel=1.0, size=0.5, thickness=2.0, force=600.0, decay=7.0, dur=2.2, bright=0.6, model='vk', quality=1.0, edges='supported')`
 
 
 
-### `plate_china(sr=44100, vel=1.0, size=0.45, thickness=0.8, force=400.0, decay=3.0, dur=1.6, bright=0.6, model='vk', quality=1.0)`
+### `plate_china(sr=44100, vel=1.0, size=0.45, thickness=0.8, force=400.0, decay=3.0, dur=1.6, bright=0.6, model='vk', quality=1.0, edges='supported')`
 
 
 
-### `plate_gong(sr=44100, vel=1.0, size=0.5, thickness=4.0, force=6000.0, decay=9.0, dur=4.0, bright=0.6, model='vk', quality=1.0)`
+### `plate_gong(sr=44100, vel=1.0, size=0.5, thickness=4.0, force=6000.0, decay=9.0, dur=4.0, bright=0.6, model='vk', quality=1.0, edges='supported')`
 
 
 
-### `tam_tam(sr=44100, vel=1.0, size=1.0, thickness=2.5, force=2000.0, decay=75.0, dur=8.0, bright=0.6, model='vk', quality=1.0)`
+### `tam_tam(sr=44100, vel=1.0, size=1.0, thickness=2.5, force=2000.0, decay=75.0, dur=8.0, bright=0.6, model='vk', quality=1.0, edges='supported')`
 
 
 
@@ -13909,11 +16132,11 @@ Zener thermoelastic loss of a thin plate (h in m) at ``freqs`` Hz: (loss factor 
 eta = Delta w tau / (1 + (w tau)^2), relaxation tau = rho C h^2 / (k pi^2), strength
 Delta = E alpha^2 T0 / (rho C) (1 + nu) / (1 - nu); the losses peak at f = 1 / (2 pi tau) and move up as 1 / h^2.
 
-### `steel_cymbal(sr=44100, vel=1.0, force=80.0, dur=2.0, bright=0.6, scan=0.0, quality=1.0)`
+### `steel_cymbal(sr=44100, vel=1.0, force=80.0, dur=2.0, bright=0.6, scan=0.0, quality=1.0, edges='supported')`
 
 
 
-### `steel_gong(sr=44100, vel=1.0, force=50.0, dur=5.0, bright=0.6, scan=1.0, quality=1.0)`
+### `steel_gong(sr=44100, vel=1.0, force=50.0, dur=5.0, bright=0.6, scan=1.0, quality=1.0, edges='supported')`
 
 
 
@@ -13926,7 +16149,7 @@ Delta = E alpha^2 T0 / (rho C) (1 + nu) / (1 - nu); the losses peak at f = 1 / (
 Modal von Karman plate or shallow shell (`physical.vkmodal`): `profile` = thickness law (a name of
 vkmodal.PROFILES, a (hc mm, he mm, rb) tuple, or "uniform" = `thickness` mm), `dome` = rise of the spherical cap
 in m (0 = flat: hardening, the pitch glides down as it rings; curved: softening, it glides up), `edges` 4 letters
-f/s/c, `law` = modal damping power law (vkmodal.DAMPING_LAWS), `scheme` sav | conservative | linear,
+f/s/c, `law` = modal damping power law (vkmodal.DAMPING_LAWS), `scheme` sav | conservative | explicit | linear,
 `basis` grid | ritz (sine Rayleigh-Ritz basis, supported rectangle only). Force in N, vel^2 scaled like nl_plate.
 `radiation` adds the radiation loss of each mode (`radiation_damping`); `distance` (m, 0 = far) the dipole near field.
 
@@ -14038,6 +16261,121 @@ Frequency-independent reduced acoustic impedance p = Z U.
 
 - `.pressure_from_flow(self, flow: 'np.ndarray') -> 'np.ndarray'`
 
+## `genny.presets`
+
+Presets: named parameter sets read from TOML files, validated against the schema each family declares.
+
+### `PresetError(...)`
+
+Inappropriate argument value (of correct type).
+
+
+### `PresetWarning(...)`
+
+Base class for warnings generated by user code.
+
+
+### `F(type: Any = <class 'float'>, lo: float | None = None, hi: float | None = None, unit: str = '', required: bool | None = None, default: Any = <object object at 0x000001A4DD6169C0>, choices: Any = None, ref: str | None = None, items: Any = None, of: Any = None, max_len: int = 64)`
+
+
+
+
+### `parse_count() -> 'int'`
+
+
+
+### `sources()`
+
+
+
+### `declared()`
+
+
+
+### `enable_patches()`
+
+
+
+### `schema(family, fields, version=1, shape=None, renamed=None)`
+
+
+
+### `reload(clear=False)`
+
+
+
+### `register(path, origin='user')`
+
+
+
+### `problems()`
+
+
+
+### `get(family, name)`
+
+
+
+### `resolve(family, value)`
+
+
+
+### `list(family=None)`
+
+
+
+### `origin(family, name)`
+
+
+
+### `load(path)`
+
+
+
+### `dumps(family, tables)`
+
+
+
+### `save(family, name, data, path)`
+
+
+
+## `genny.psychoacoustics_p2`
+
+Loudness and roughness models, lot P2: Moore-Glasberg loudness (the ISO 532-3 procedure) and the Sottek hearing model (the ECMA-418-2 procedure).
+
+Both take a signal in pascals (samples times `pa`) and are calibrated on their reference tone: 1 kHz at 40 dB SPL is 1 sone for the
+Moore-Glasberg model (binaural) and 1 sone_HMS for the Sottek model; 1 kHz at 60 dB SPL with 100 % modulation at 70 Hz is 1 asper_HMS.
+
+Functions: `moore_glasberg_loudness`, `moore_glasberg_loudness_tv`, `hms_loudness`, `hms_roughness`, `procedural_grid` (coverage of the procedural-audio sound taxonomy).
+
+### `moore_glasberg_loudness(y, sr, pa=1.0)`
+
+Stationary loudness of a diotic signal (the same at both ears), in sone, and the specific loudness per ERB number (372 values,
+sone per ERB, step 0.1): (N, N'). Excitation from rounded-exponential filters, lower slope level dependent, Moore-Glasberg compression.
+
+### `moore_glasberg_loudness_tv(y, sr, pa=1.0, win=0.064, hop=0.001)`
+
+Short-term loudness series (sone every `hop` s): the stationary model on a Hann window of `win` s, then a one-pole smoothing with
+attack 45 ms and release 20 ms (the loudness meter's), as an approximation of the three-window procedure.
+
+### `hms_loudness(y, sr, pa=1.0)`
+
+Sottek-model loudness in sone_HMS of a signal in pascal: 53 half-Bark auditory bands (order-4 gammatone-like filters of the Bark
+bandwidth, outer and middle ear folded in as for the other model), band power compressed with exponent 0.3 above a hearing threshold
+floor, summed over the bands. Returns (N, specific loudness per half-Bark band). 1 kHz at 40 dB SPL = 1 sone_HMS.
+
+### `hms_roughness(y, sr, pa=1.0)`
+
+Sottek-model roughness in asper_HMS: in each band the modulation spectrum of the envelope is weighted around 70 Hz (log-Gaussian,
+Q 0.9), the weighted modulation depth is scaled by the band's compressed loudness, and the bands are summed. 1 kHz at 60 dB SPL with
+100 % modulation at 70 Hz = 1 asper_HMS. Returns (R, per-band roughness).
+
+### `procedural_grid(catalog=None)`
+
+Coverage of the five-group sound taxonomy of the procedural-audio review: for each sound class the genny names that cover it
+and those not found in the catalog. Returns {group: {class: {"genny": [...], "missing": [...]}}} plus a "summary" entry.
+
 ## `genny.rail`
 
 Rail: rolling on welded or jointed track, diesel and electric traction, curve squeal, pantograph, doors and brakes.
@@ -14058,7 +16396,7 @@ Steady Qx (N) at creep ``xi``. Small creep: Q = -(8ab/3)(Kq a/h) xi, Kq a/h = 1.
 V / 2a, above which the creep force no longer follows the excitation, and f1 = 2.405 V / (2 pi a), first force frequency free of
 a trailing-edge singularity (J0 zero 2.405).
 
-### `creep_noise(creep, speed, n, rng, a=0.005, b=0.005, load=50000.0, mu=0.3)`
+### `creep_noise(creep, speed, n, rng, a=0.005, b=0.005, load=50000.0, mu=0.3, follow=False)`
 
 What ``foley.train`` hears of a creeping wheel: a creep fluctuating over the rail's roughness (white, 50 %) through the brush of
 `creep_force`, which follows it only below V / 2a and flattens at mu P. The ripple of Q as a fraction of mu P, so it grows with the creep and
@@ -14069,18 +16407,25 @@ dies once the whole patch slides.
 Two-dimensional rolling contact, closed form: Q / mu P = 1 - (1 - R |xi| / (mu a))^2 below full slip at
 |xi| = mu a / R, mu P beyond; opposite in sign to the creep, as `creep_force`.
 
+### `vermeulen_force(xi, load=50000.0, a=0.005, b=0.005, mu=0.3)`
+
+Three-dimensional rolling contact, Vermeulen-Johnson closed form: Q / mu P = 1 - (1 - xi / xi_s)^3 below xi_s = 3 mu P / k,
+mu P beyond, k the slope of `creep_force` at small creep; opposite in sign to the creep.
+
 ### `halfspace_resonance(mass, a, shear=81000000000.0, density=7850.0, nu=0.3)`
 
 Hz and damping ratio of a rigid disc of radius ``a`` carrying ``mass`` on an elastic half-space: stiffness 4 G a / (1 - nu),
 radiation damping 3.4 a^2 sqrt(rho G) / (1 - nu), so zeta = 0.425 / sqrt(B), B = (1 - nu) m / (4 rho a^3).
 
-### `contact_resonance(load=50000.0, mass=30.0, radius=0.3)`
+### `contact_resonance(load=50000.0, mass=30.0, radius=0.3, model='hertz')`
 
-Hertz: delta0 = (9 W^2 / (16 R E*^2))^(1/3), stiffness 3 W / (2 delta0), on an effective mass of wheel and rail.
+Hertz: delta0 = (9 W^2 / (16 R E*^2))^(1/3), stiffness 3 W / (2 delta0), on an effective mass of wheel and rail. ``model`` halfspace:
+the patch as a rigid disc on an elastic half-space, `halfspace_resonance`.
 
-### `corrugated_contact(freq, ratio, n, f0=None)`
+### `corrugated_contact(freq, ratio, n, f0=None, support='hertz')`
 
 Compression / static compression for corrugations of amplitude ``ratio`` static compressions passed at ``freq`` Hz (number or curve).
+``support`` halfspace takes the resonance and its radiation damping from `halfspace_resonance` instead of the Hertz stiffness.
 
 ### `rolling_band(kmh)`
 
@@ -14106,7 +16451,7 @@ Switching frequency in equal steps: 500 Hz to 2 kHz in a start, 20 ms to change 
 
 Lateral creep of the leading axle: about wheelbase / 2R, wheelbase as `foley.train`.
 
-### `curve_squeal(sr=44100, radius=50.0, speed=19.0, dur=3.0, seed=0)`
+### `curve_squeal(sr=44100, radius=50.0, speed=19.0, dur=3.0, seed=0, harmonics=0.0, straight=0.0)`
 
 # ponytail: one mode per wheel, so modes do not compete for one contact: the bands measured together would otherwise be won by one.
 
@@ -14213,7 +16558,7 @@ Source: g17-retro-sfx-generators.md §C.2, §D.1, §F.3.
 
 ### `psg_tone_period(freq: 'float', clock: 'float' = 1773450.0) -> 'int'`
 
-12-bit tone period TP for a pitch: f = clock / (16 * TP) (datasheet, g15 §2).
+12-bit tone period TP for a pitch: f = clock / (16 * TP).
 
 ### `beeper_hz(freq: 'float') -> 'float'`
 
@@ -14284,10 +16629,17 @@ Numbers without a source in those files are justified in research/SOURCES.md.
 Scale delay lengths and keep them mutually prime (PASP: "nearest prime is the safe choice").
 With ``scale == 1`` the published values are returned untouched.
 
-### `nrev(x, sr=44100, mix=0.3, t60=1.0, tail=None)`
+### `read_frac(x, pos) -> 'np.ndarray'`
+
+Band-preserving fractional read shared by delays, samplers and tables: x at the fractional indices ``pos``
+(4th-order Lagrange, linear within two samples of the edges, zero outside).
+
+### `nrev(x, sr=44100, mix=0.3, t60=1.0, tail=None, variant='stk', hdif=0.5)`
 
 STK NRev: lengths at 25641 Hz, always rescaled to primes; 3 allpasses in series, then 0.7 s + 0.3 x low-pass, a
 fourth allpass, and the fifth to L and the sixth to R; all allpass g = 0.7.
+csound: comb gain (1 - h) exp(ln 0.001 L / (k_i fs t60)), k = 0.822, 0.802, 0.773, 0.753 x 3, loop low-pass
+v + h z; five allpasses 347, 113, 37, 59, 43 with g = exp(ln 0.001 L / (0.7 fs t60)).
 
 ### `prcrev(x, sr=44100, mix=0.5, t60=1.0, tail=None)`
 
@@ -14418,7 +16770,11 @@ Returns (delay s after the direct sound, gains (taps, 6 bands) relative to the d
 (1/r spreading), unit x component of the arrival direction = sin azimuth, direct distance); with ``full``
 also the number of reflections of each path and the y component of its direction (toward the source).
 
-### `early_ir(info: 'dict', sr: 'int', distance=None, order: 'int' = 3, stereo: 'bool' = True, scattering=None, mic: 'float' = 1.0)`
+### `transition_time(volume: 'float', density: 'float') -> 'float'`
+
+Time (s) at which the image sources arrive ``density`` per second: dN/dt = 4 pi c^3 t^2 / V.
+
+### `early_ir(info: 'dict', sr: 'int', distance=None, order: 'int' = 3, stereo: 'bool' = True, scattering=None, mic: 'float' = 1.0, density=None)`
 
 Early-reflection impulse response (without the direct sound) and its mid-band energy.
 Per-band tap gains are merged with zero-phase weights that interpolate linearly in log-frequency
@@ -14437,7 +16793,15 @@ Tapped delay line of the image sources up to ``order`` (PASP/Early_Reflections: 
 
 T20 from the Schroeder integral (-5..-25 dB, x 3), and clarity C50, C80 = 10 log10(E_early / E_late) (Meyer 5.4, chunk_01 l.8728).
 
-### `room(x, sr=44100, mix=0.5, model='fdn', width=1.0, predelay=0.0, humidity=50, tail=None, preset='hall', lx=None, ly=None, lz=None, walls=None, floor=None, ceiling=None, distance=None, furnish=None, formula='sabine', source_gain=1.0, source_radius=None, modal=False, audience=False, scattering=None, mic=1.0, rays=20000)`
+### `t60_within_jnd(t_a: 'float', t_b: 'float') -> 'bool'`
+
+True when two reverberation times differ by less than the just-noticeable difference (3.5 % or 0.02 s, the larger).
+
+### `free_field_level(lw: 'float', r: 'float') -> 'float'`
+
+Lf = Lw - DA, DA = 10 log10(4 pi r^2) (point source in the open, r in metres).
+
+### `room(x, sr=44100, mix=0.5, model='fdn', width=1.0, predelay=0.0, humidity=50, tail=None, preset='hall', lx=None, ly=None, lz=None, walls=None, floor=None, ceiling=None, distance=None, furnish=None, formula='sabine', source_gain=1.0, source_radius=None, modal=False, audience=False, scattering=None, mic=1.0, rays=20000, src_beta=None, transition=None)`
 
 Direct + image-source early reflections + late reverberation.
 
@@ -14465,7 +16829,7 @@ run at its native 48 kHz and resampled; wet normalised to a unit-energy impulse 
 
 Frequency (Hz) at which ``metres`` of air removes 3 dB (ISO 9613-1, inverted numerically).
 
-### `distance(x, sr=44100, metres=10.0, air=True, humidity=50, reverb=0.0, reverb_time=1.5, ref=1.0, line_source=False, delay=False, temperature=20.0, ground='none', source_height=1.5, listener_height=1.5, source_radius=None, angle=0.0, wall_distance=None, scatter_mfp=None, flat_height=None, flat_alpha=0.2, turbulence=0.0, seed=0, gradient=0.0, rolling=False, across_water=False, pipe=False)`
+### `distance(x, sr=44100, metres=10.0, air=True, humidity=50, reverb=0.0, reverb_time=1.5, ref=1.0, line_source=False, delay=False, temperature=20.0, ground='none', source_height=1.5, listener_height=1.5, source_radius=None, angle=0.0, wall_distance=None, scatter_mfp=None, flat_height=None, flat_alpha=0.2, turbulence=0.0, seed=0, gradient=0.0, rolling=False, across_water=False, pipe=False, curve='inverse', max_dist=0.0, size=0.0)`
 
 Spreading ref/r (point source, -6 dB per doubling) or sqrt(ref/r); air absorption over (r - ref)
 metres; c = 343.2 sqrt(T/293.15) m/s. Piston 2 J1(u)/u; open pipe end D F (``physical.space.pipe_directivity``).
@@ -14494,7 +16858,7 @@ Time-varying delay = exact Doppler (PASP/Doppler_Simulation; g13 §3.2): each ou
 reads the input at its emission time with a 4th-order Lagrange interpolator (even order for
 swept delays, g13 §2.1). Pan: constant-power cos/sin law (g15 §6.1 item 7) on sin(azimuth).
 
-### `directivity(x, sr=44100, instrument='trumpet', angle=180.0, f0=440.0, wall=False, podium=False, split=False)`
+### `directivity(x, sr=44100, instrument='trumpet', angle=180.0, f0=440.0, wall=False, podium=False, split=False, elevation=0.0, m=1, player=False)`
 
 Zero-phase filter. Flute: D_n = |1 + (-1)^(n+1) exp(i n pi sin phi)| / 2, n = f / f0 (Meyer 4.2, chunk_01 l.6380).
 
@@ -14519,7 +16883,7 @@ PASP/Flanging (g13 §3.1): y(n) = x(n) + g x[n - M(n)], notches at odd multiples
 spacing fs/M = 1/delay; invert: g -> -g; regeneration a_M from the delay output to its input. deep: the delay output is scaled by 1 +- k so the
 notches stay at zero whatever the feedback k at mix 0.5, peaks 1/(1 - |k|) (Zavalishin 11.2-11.3).
 
-### `phaser(x, sr=44100, rate=0.5, depth=0.7, stages=4, mix=0.5, feedback=0.0, freq=100.0, spacing=2.0, sweep=3.0, phase=0.0, stereo=0.0, invert=False, mode='allpass1', notch_q=4.0, style='')`
+### `phaser(x, sr=44100, rate=0.5, depth=0.7, stages=4, mix=0.5, feedback=0.0, freq=100.0, spacing=2.0, sweep=3.0, phase=0.0, stereo=0.0, invert=False, mode='allpass1', notch_q=4.0, style='', barber=False)`
 
 PASP ch. 8.9 classic first-order chain (g13 §4.1): y = (x + g AP_S(...AP_1(x))) / 2, break
 frequencies 100, 200, 400, 800 Hz (octave spaced), bilinear allpass with the break mapped
@@ -14564,7 +16928,7 @@ each on an 8-line FDN; exact for the first three octaves of regeneration.
 Time-reverse, reverberate with the FDN, time-reverse again; the dry sound is delayed by the
 swell length so both stay aligned.
 
-### `feedback_guitar(freq, dur, sr=44100, vel=1.0, drive=6.0, feedback=0.5, pickup=0.18, distance=1.2, tone=2400.0, asym=0.15, seed=0, aperture=0.0)`
+### `feedback_guitar(freq, dur, sr=44100, vel=1.0, drive=6.0, feedback=0.5, pickup=0.18, distance=1.2, tone=2400.0, asym=0.15, seed=0, aperture=0.0, cabinet='')`
 
 Sullivan's electric guitar (PASP Fig. 9.4): string -> [pre gain] -> soft clip f(x) = x - x^3/3
 -> [post gain] -> out, and clip -> [feedback gain] -> [feedback delay = distance / c] -> string.
@@ -14583,10 +16947,11 @@ or a PICKUP_WIDTH key; unit DC gain. Harmonics whose wavelength nears W are atte
 
 Published defaults: decay 0.5, damping 0.0005, bandwidth 0.9995, diffusion 0.75, 0.625, 0.70, 0.50, excursion 16 at 1 Hz.
 
-### `gverb(x, sr=44100, roomsize=30.0, revtime=5.0, damping=0.8, spread=15.0, bandwidth=0.5, dry=0.6, early=0.4, tail_level=0.5)`
+### `gverb(x, sr=44100, roomsize=10.0, revtime=3.0, damping=0.5, spread=15.0, bandwidth=0.5, dry=1.0, early=0.7, tail_level=0.5, variant='sc')`
 
-Defaults, line ratios, taps, diffuser bases and coefficients from ChucK's GVerb (chugins). this port has not
-been compared with GVerb.cpp, whose source is not in the research folder: how the spread enters is a reading of its constants.
+Line lengths sr room / 340 x (1, 0.81649, 0.7071, 0.63245), the first moved to the nearest prime; gains
+-alpha^L, alpha = 0.001^(1 / (sr revtime)); taps 5 + (0.41, 0.3, 0.155, 0) x largest; diffusers 210, 159, 562,
+410 x L3 / 1341 with the spread moving the two middle splits.
 
 ### `binaural(x, sr=44100, azimuth=0.0, elevation=0.0, pinna='PB')`
 
@@ -14640,11 +17005,25 @@ q is set so that `gain` = 1 is the peak of the room's open-loop magnitude respon
 
 Low-frequency limit of a finite reflector of width b: f_u = 2 c / (b cos theta)^2 * a1 a2 / (a1 + a2).
 
-### `reflection(x, sr=44100, kind='flutter', width=10.0, absorption=0.05, spacing=0.3, count=30, distance=5.0, size=2.0, angle=0.0, level=0.5, mix=1.0)`
+### `reflection(x, sr=44100, kind='flutter', width=10.0, absorption=0.05, spacing=0.3, count=30, distance=5.0, size=2.0, angle=0.0, level=0.5, mix=1.0, depth=0.1)`
 
 Source and listener together. Flutter: echoes every 2w/c, pressure x (1 - a) per round trip and 1/r.
 Fence/stairs: element k at sqrt(D^2 + (k d)^2) (stairs: D + k d), echo 2 r_k / c, gain D / r_k.
 Panel: one echo 2D/c, first-order high-pass at reflector_cutoff(size, D, D, angle).
+
+### `audience_absorption(area_m2: 'float', f: 'float' = 1000.0) -> 'float'`
+
+Equivalent absorption area (m2) of an audience seated on `area_m2` of floor, at `f` Hz: the surface counts, not
+the head count, so alpha per m2 falls from 0.95 on 100 m2 to 0.55 on 300 m2. Interpolated between the three measured
+areas, held at the end values' alpha per m2 beyond; below 500 Hz it falls in proportion to the frequency.
+
+### `curtain_cutoff(d_cm: 'float') -> 'float'`
+
+Lowest frequency a curtain hung `d_cm` centimetres from the wall absorbs: 8500 / d.
+
+### `curtain(x, sr=44100, gap=10.0, absorption=0.6)`
+
+Shelf: pressure x sqrt(1 - absorption) above fu = 8500 / gap (one-pole high-shelf, connaissance for the shape).
 
 ### `huggins(x, sr=44100, freq=600.0, bw=0.16, mode='phase', delay=0.012)`
 
@@ -14661,22 +17040,41 @@ mouth facing the listener: + up to 6 dB and an open low-pass, side on: dulled (b
 Back desks: -7 dB at desk 3 relative to desk 1, linear in dB per desk (screened by the players in front,
 more in the highs); pit: +2.5 dB below 500 Hz (reflections of the pit walls).
 
-### `pv_reverb(x, sr=44100, t60=3.0, noise_t60=1.0, mix=0.4, seed=0)`
+### `pv_reverb(x, sr=44100, t60=3.0, noise_t60=1.0, mix=0.4, seed=0, mode='split')`
 
 STFT 2048 / hop 512. Tonal vs noise per bin by median filtering across time (harmonic) and frequency
 (noise); each bin's magnitude is a leaky maximum decaying at its own T60, phases advance at the bin frequency
 plus a random walk (decorrelated left and right).
 
-### `soundboard_fdn(x, sr=44100, t60_dc=3.84, t60_nyq=0.78, lines=8, size=1.5, seed=0)`
+### `soundboard_fdn(x, sr=44100, t60_dc=6.0, t60_nyq=0.78, lines=8, size=1.5, seed=0)`
 
 Soundboard as a reverberator: a Householder FDN whose one-pole loop filters give T60 t60_dc at 0 Hz and
 t60_nyq at Nyquist (a wooden plate rings long in the bass, short in the treble); mono in, mono out.
 
-### `moorer_late(x, sr, t60_low, t60_high)`
+### `moorer_loop_g1(sr)`
+
+Pole g1 of the loop low-pass of each of the six combs: the values given at 25 and 50 kHz, interpolated in the
+sampling rate and held outside.
+
+### `moorer_g_for_t60(t60)`
+
+
+
+### `moorer_early(x, sr, taps=19)`
+
+The sparse early-echo FIR of the seven- or nineteen-tap table (the first tap is the direct sound).
+
+### `moorer_noise_ir(sr, t60, seed=0, direct_ratio=12.0, length=None)`
+
+Impulse response of a good hall as Moorer found it: a unit impulse (the direct sound) followed by Gaussian
+noise under an exponential envelope, `direct_ratio` : 1 between the impulse and the start of the decay.
+
+### `moorer_late(x, sr, t60_low, t60_high, table=False)`
 
 Moorer's reverberator: six parallel combs (50-78 ms) each with a one-pole low-pass in its loop, set so the
 loop gives t60_low at low frequency and t60_high at 4 kHz, into an allpass of 6 ms, g 0.7 (two decorrelated
-allpasses for left and right).
+allpasses for left and right). `table`: Moorer's own settings, the pole of each loop from his table and the loop
+gain g = 1 - 0.366 / t60_low.
 
 ### `sdn_late(x, sr, info, distance=None)`
 
@@ -14705,6 +17103,36 @@ matrix. Returns the K + 1 integer multipliers L_0..L_K.
 Perceptual room settings from its volume (m^3) and decay: mean free path 4V/S (S of a cube of that volume if not
 given) as the FDN `size`, first-reflection delay = that path / c, and the decay itself.
 
+### `t60_gain(delay, t60)`
+
+Feedback gain that makes a line of ``delay`` s lose 60 dB in ``t60`` s; the sign of ``t60`` is kept (negative =
+negative feedback: odd harmonics, an octave lower); 0 gives 0.
+
+### `delay_line(x, sr=44100, delay=0.1, t60=0.0, kind='comb')`
+
+``kind`` delay | comb (y = v, line <- x + g v) | allpass (y = v - g (x + g v)), v the line read ``delay`` s back
+(a number or one value per sample, at least 3.5 samples) with 4th-order Lagrange; g = t60_gain(delay, t60) per
+sample. Same length as x; mono or stereo.
+
+### `delay_line_fx(x, sr=44100, kind='comb', time=0.05, t60=1.0, rate=0.0, depth=0.0, mix=1.0, tail=None)`
+
+
+
+### `pitch_heads(x, sr=44100, ratio=1.0, window=0.2, pitch_disp=0.0, time_disp=0.0, seed=0)`
+
+Causal pitch shifter: four read heads on one delay line, restarted in turn every window / 4, each moving at
+1 - ratio samples per sample under a triangular window (the four sum to 2, halved). Each restart draws
+ratio + pitch_disp U(-1, 1) (kept in 0..4) and an extra delay time_disp U(0, 1).
+
+### `hilbert_pair(x, sr=44100)`
+
+Causal analytic pair (real, imaginary) of a mono signal, 90 degrees apart from about 15 Hz to 0.4 sr: two
+chains of six first-order allpasses, no latency beyond their group delay.
+
+### `hilbert_shift(x, sr=44100, hz=100.0, hz_end=None, mix=1.0)`
+
+
+
 ## `genny.road`
 
 The road: electric drives and AVAS, tyres on every surface, truck air systems, car doors, horns, cabin mechanics.
@@ -14716,7 +17144,7 @@ Sources of every constant: research/SOURCES.md, section road. Nothing here has b
 Shaft orders of the electromagnetic whine: 6p and its multiples, plus the slot order and its double.
 4 pole pairs, 48 slots give the measured H24, H48, H72, H96. 6p: the sixth electrical harmonic of a three-phase machine.
 
-### `ev_whine(speed=6000.0, poles=4, slots=48, fs=7500.0, load=0.6, sr=44100, seed=0, *, dur=1.0, fs_spread=0.0) -> 'np.ndarray'`
+### `ev_whine(speed=6000.0, poles=4, slots=48, fs=7500.0, load=0.6, sr=44100, seed=0, *, dur=1.0, fs_spread=0.0, fs_pattern=None, pattern_len=200) -> 'np.ndarray'`
 
 Inverter-fed motor, no gears or tyres. ``speed``: motor rpm, number or per-sample array (the array sets the length,
 otherwise ``dur``). ``poles``: pole pairs. ``fs``: carrier Hz, number or per-sample array. ``load``: 0..1, number or array.
@@ -14755,7 +17183,7 @@ The generator spins the engine from 300 rpm to 1200 in 0.3 s, then it fires and 
 ### `tyre_roll(sr=44100, kind='tyre_road', speed=70.0, tread=0.5, dur=3.0, seed=0)`
 
 Levels between speeds are the source model's: no normalisation (`tyre_road`, `tyre_wet`, the surfaces, cobbles).
-Wet: spray above 2 kHz at 0.8 of the rolling level (as `cyber.pass_by`). Grains at 40 per metre.
+Wet: rolling bands raised by `cyber.wet_road_db` (water film, from 1.6 kHz up). Grains at 40 per metre.
 
 ### `interior(sr=44100, kind='car', speed=90.0, dur=4.0, seed=0)`
 
@@ -14821,18 +17249,6 @@ Ambience scenes: a bed under sustained layers and scattered events, all taken fr
 by name, through the registry. Before a climax the quiet passage is lowered, then a silence, four small hits and the big one;
 after it the ears are dulled (``ordnance.earplug``). Sources of every value: research/SOURCES.md, section scenes.
 
-### `L(name, db, wide=True, opt=False, **params)`
-
-A layer sounding all along. wide = one take per channel (independent, so mono-safe); else one centred take.
-
-### `E(name, db, every, opt=False, **params)`
-
-Events every (lo, hi) s. opt = skipped when this sfx is not registered.
-
-### `C(inst, db, notes)`
-
-A held chord from an instrument.
-
 ### `contrast_gain(n, sr, t0)`
 
 Gain on all that sounds before the big hit at t0 s: the quiet passage lowered, then silence. 1 again from t0 on.
@@ -14893,7 +17309,7 @@ Game sound-effect generators. Each takes (sr, **params) and returns a mono buffe
 
 
 
-### `laser(sr=44100, start=2400, end=300, dur=0.25, wave='saw')`
+### `laser(sr=44100, start=2400, end=300, dur=0.25, wave='saw', model='sweep', tail=3.3, seed=0)`
 
 
 
@@ -14909,7 +17325,7 @@ Game sound-effect generators. Each takes (sr, **params) and returns a mono buffe
 
 
 
-### `explosion(sr=44100, dur=1.5, energy=1.0, distance=8.0, debris=0.45, enclosure=0.15, windows=0.0, seed=0, boom=None, explosive='tnt', burst='air')`
+### `explosion(sr=44100, dur=1.5, energy=1.0, distance=8.0, debris=0.45, enclosure=0.15, windows=0.0, seed=0, boom=None, explosive='tnt', burst='air', secondary=0.0, model='physical')`
 
 
 
@@ -14941,7 +17357,11 @@ Game sound-effect generators. Each takes (sr, **params) and returns a mono buffe
 
 
 
-### `proximity(sr=44100, freq=1000, rate=4.0, dur=1.0, width=0.4)`
+### `proximity(sr=44100, freq=1000, rate=4.0, dur=1.0, width=0.4, harmonics='', attack=4.0)`
+
+
+
+### `crossing_beeper(sr=44100, freq=2500, rate=5.0, dur=1.0, width=0.5, harmonics='0.1 0.05', attack=0.2)`
 
 
 
@@ -14981,7 +17401,7 @@ Cycles of a pulse whose rate rises exponentially from lo to hi per second over n
 
 
 
-### `thunder(sr=44100, dur=2.5, distance=80.0, channel=0.5, strokes=1, walk='farnell', fineberg=0, seed=0)`
+### `thunder(sr=44100, dur=2.5, distance=80.0, channel=0.5, strokes=1, walk='farnell', fineberg=0, seed=0, horizontal=0.0)`
 
 
 
@@ -15021,7 +17441,7 @@ Cycles of a pulse whose rate rises exponentially from lo to hi per second over n
 
 
 
-### `vinyl(sr=44100, dur=4.0, crackle=14.0, hiss=0.3, seed=0, wear=0.0)`
+### `vinyl(sr=44100, dur=4.0, crackle=14.0, hiss=0.3, seed=0, wear=0.0, wow=0.0)`
 
 
 
@@ -15029,9 +17449,21 @@ Cycles of a pulse whose rate rises exponentially from lo to hi per second over n
 
 
 
-### `render_sfx(name: 'str', sr: 'int' = 44100, **params) -> 'np.ndarray'`
+### `rms_db(y, sr: 'int', window: 'float' = 0.4) -> 'float'`
 
+RMS level in dBFS of the loudest `window` seconds (the whole sound when shorter); channels averaged in power.
 
+### `apply_level(y, sr: 'int', name: 'str', level)`
+
+Gains an sfx render to `level`: a number = RMS dBFS of the loudest 400 ms, "-23lufs" = K-weighted level of the loudest
+400 ms, "match" = the relative level of the sfx table (`_sfx_levels`: one fixed gain per sfx, so a mix of sfx is balanced).
+None / False leaves the sound as the model made it. Silence stays silence. A sound whose peaks would pass -0.5 dBFS goes
+through the look-ahead limiter; for a number or LUFS the gain is raised until the limited sound reaches the level
+(a spike too sparse to carry it stops short), for "match" the table gain is applied as it is.
+
+### `render_sfx(name: 'str', sr: 'int' = 44100, out_level=None, **params) -> 'np.ndarray'`
+
+Renders one sfx. `out_level` is the one parameter every sfx shares (it is not passed to the sound): see `apply_level`.
 
 ### `rain(sr=44100, dur=3.0, intensity=1.0, seed=0)`
 
@@ -15041,7 +17473,7 @@ Cycles of a pulse whose rate rises exponentially from lo to hi per second over n
 
 
 
-### `stream(sr=44100, dur=3.0, seed=0)`
+### `stream(sr=44100, dur=3.0, seed=0, bedload=0.0, pebble=30.0)`
 
 
 
@@ -15105,6 +17537,12 @@ Short sounds are measured padded to 0.5 s. A peak over the limit is soft-kneed (
 turned down with plain gain so the seam stays whole. ``headroom_only``: one plain gain,
 min(target - loudness, true_peak - true peak) dB, so the ceiling is never reached (no soft knee).
 
+### `ui_level(y: 'np.ndarray', sr: 'int', offset: 'float' = 0.0, window: 'float' = 0.05, strength: 'float' = 0.75, peak: 'float' = -1.0) -> 'float'`
+
+Gain in dB that brings a short sound to the loudest `window` s of its RMS (hop 10 ms): the target is
+-25.5 + offset dB, only `strength` of the distance is closed, never above `peak` dB for the sample peak,
+clamped to +-24 dB.
+
 ### `SpecError(...)`
 
 Inappropriate argument value (of correct type).
@@ -15163,9 +17601,9 @@ STFT-domain effects and analysis -> resynthesis.
 
 Everything takes mono (n,) or stereo (n, 2) unless stated.
 
-### `window(M: 'int', kind: 'str' = 'hann', root: 'bool' = False) -> 'np.ndarray'`
+### `window(M: 'int', kind: 'str' = 'hann', root: 'bool' = False, beta: 'float' = 2.8) -> 'np.ndarray'`
 
-*Periodic* window (denominator M): only this form overlap-adds to an exact constant.
+*Periodic* window (denominator M): only this form overlap-adds to an exact constant. `kaiser`: shape `beta`.
 `root=True` gives the square root (root-Hann = MLT sine window) for WOLA.
 
 ### `cola_error(w: 'np.ndarray', R: 'int') -> 'float'`
@@ -15193,9 +17631,9 @@ lifter 1 for |n| < n_c, 0.5 at n_c, 0 beyond; n_c (samples) must stay below the 
 
 True envelope: A_0 = log|X|, A_i = max(A_{i-1}, V_{i-1}), V_i the cepstral smoothing of A_i, stop when no frame's
 log|X| rises above V_i by more than delta_db (2 dB there). It rides over the harmonics instead of through them, so a low order does not lose the peaks.
-``accel``: start from a max filter of log|X| over half the cepstral resolution (nfft / (4 n_c) bins each side) and
-over-relax each step, V_i = V_{i-1} + lambda (V'_i - V_{i-1}) with lambda = (E_I + E_O) / E_I (E_I: squared excess of
-log|X| over V_{i-1}, E_O: squared shortfall), at most 2.5. The number of steps taken is left in ``true_envelope.last_iters``.
+``accel``: start from a max filter of log|X| over blocks of nfft / (8 n_c) bins (cepstrum of 8 n_c points) and
+over-relax each step, V_i = V_{i-1} + lambda (V'_i - V_{i-1}) with lambda = (E_I + E_O) / E_I (E_I: energy of the
+cepstral change inside the lifter band, E_O: outside it), at most 2.5. The number of steps taken is left in ``true_envelope.last_iters``.
 
 ### `max_f0(x: 'np.ndarray', sr: 'int' = 44100) -> 'float'`
 
@@ -15218,12 +17656,13 @@ envelope, multiply by src's. `shift` moves the imposed formants by semitones, `s
 N = 2M so the gain curve's impulse response fits. env_ms None: the lifter follows the highest pitch of both sounds,
 P_c = 1 / (2 f0 max), so high voices keep their harmonics out of the envelope. method: cepstral | true (`true_envelope`).
 
-### `onsets(x: 'np.ndarray', sr: 'int' = 44100, sensitivity: 'float' = 1.0) -> 'np.ndarray'`
+### `onsets(x: 'np.ndarray', sr: 'int' = 44100, sensitivity: 'float' = 1.0, bands: 'int' = 0) -> 'np.ndarray'`
 
 Sample positions of attack transients: positive spectral flux of a 12 ms STFT relative to the
-level just before plus a quarter of the local maximum.
-# ponytail: full-band flux; a hit under an equally loud sustained sound is missed and a 10 Hz
-# beat is (correctly) not flagged. Per-band flux if drums buried in pads matter.
+level just before plus a quarter of the local maximum. ``bands`` > 0: the multiband detector instead, the energy E(s, i)
+of `bands` log-spaced bands from 100 Hz and the relative change C(s, i) = (-2 E(s-2) - E(s-1) + E(s+1) + 2 E(s+2)) / E(s)
+per band; an onset is a local maximum of the largest C above 3 / ``sensitivity`` (a band that doubles in energy gives 3),
+which finds a hit under an equally loud sustained sound that the full-band flux misses.
 
 ### `hpss(x: 'np.ndarray', sr: 'int' = 44100, l_h: 'int' = 17, l_p: 'int' = 17) -> 'tuple[np.ndarray, np.ndarray]'`
 
@@ -15234,6 +17673,7 @@ binary masks Y_h > Y_p and Y_p >= Y_h. l_h = l_p = 17, FFT 4096, hop 1024 at 44.
 
 Time-stretch by `factor` (> 1 longer) at constant pitch; output length is round(n * factor). `anchors`: a time map instead of a factor,
 "t_in:t_out, ..." to land moments of the sound on an animation. mode hps: vocoder on the harmonic part, short OLA (10 ms) on the percussive part. mode ola: overlap-add without the similarity search.
+A stereo pair goes through the vocoder as mid and side, so the image stays put.
 
 ### `shift_pitch(x: 'np.ndarray', sr: 'int' = 44100, semitones: 'float' = 0.0, formant: 'str' = 'shift', mode: 'str' = 'vocoder') -> 'np.ndarray'`
 
@@ -15242,10 +17682,10 @@ inverse. formant="keep" re-imposes the original spectral envelope (no "munchkini
 
 ### `band_edges(sr: 'int', kind: 'str' = 'bark') -> 'np.ndarray'`
 
-Noise-band edges in Hz up to sr/2: the Bark table, or one band per ERB
-(ERBS(f) = 21.4 log10(0.00437 f + 1)).
+Noise-band edges in Hz up to sr/2: the Bark table, one band per ERB
+(ERBS(f) = 21.4 log10(0.00437 f + 1)), or 32 equal bands (linear).
 
-### `analyze(x: 'np.ndarray', sr: 'int' = 44100, window_ms: 'float' = 46.0, thresh_db: 'float' = -50.0, max_peaks: 'int' = 60, max_tracks: 'int' = 40, bands: 'str' = 'bark', min_frames: 'int' = 4, transients: 'bool' = False) -> 'dict'`
+### `analyze(x: 'np.ndarray', sr: 'int' = 44100, window_ms: 'float' = 46.0, thresh_db: 'float' = -50.0, max_peaks: 'int' = 60, max_tracks: 'int' = 40, bands: 'str' = 'bark', min_frames: 'int' = 4, transients: 'bool' = False, residual: 'str' = 'rect', noise_env: 'str' = 'mean', min_sep: 'float' = 0.0, alpha: 'float' = 1.0, backward: 'bool' = False, harmonic: 'bool' = False, sleep: 'int' = 2, max_dev: 'float' = 0.0, f0_range=None, general_db: 'float' = 0.0, min_height: 'float' = 0.0, kaiser_beta: 'float' = 0.0) -> 'dict'`
 
 Sines + noise analysis (spectral modelling synthesis) of a mono signal.
 
@@ -15271,10 +17711,32 @@ transients: sines + transients + noise. The sines' residual is cut in
 non-overlapping blocks, each block's DCT turns a click into a slowly varying sinusoid, and this same
 sinusoidal analysis tracks them (keys t_*); the noise is then measured on what both leave. Off, an
 attack is spread over sines and noise and smears when stretched.
+residual: "rect" keeps max(|X| - |S|, 0); "abs" takes ||X| - |S|| (the magnitude residual of the model).
+noise_env: "mean" = mean power per band; "max" = the largest bin of the band (the envelope as the maximum of
+each section; reads higher than the mean). min_sep: Hz, a new guide starts only on a peak this far from every
+existing guide (0 = off). alpha: how far a guide moves toward the peak it found, h = alpha (g - f) + f (1 = it
+takes the peak's frequency; less keeps it near its old place and lets the trajectory wander round it).
+backward: track from the last frame to the first (the steady end defines the partials before the noisy attack).
+harmonic: one guide per harmonic number; each frame the fundamental is the highest peak of which the 3
+strongest peaks are multiples (within 3 %) and the guides are reset to its series; with none, they keep their
+values; no other guide is born. f0_range: (lo, hi) Hz, the fundamental is searched only inside it (None = any).
+sleep: frames a guide may go without a peak before it is dropped (and, within that time, its gap is bridged);
+0 = dropped at once. max_dev: Hz, largest frequency jump a guide follows from one frame to the next (0 = 2 sr / M).
+general_db: a peak is also kept when it is within this many dB of the loudest bin of the whole sound, even if it
+is lower than `thresh_db` under its own frame's maximum (0 = off; the widest of the two ranges is taken).
+min_height: dB, a peak must stand this far above the mean of the two valleys beside it (0 = off).
+kaiser_beta: > 0 swaps the Hamming window for a Kaiser window of that shape (2.6-3 is the usual choice; 1.75 is close to Hamming).
+residual "time": the residual is cut in the time domain, e = max(x, s) - s where x >= 0 and min(x, s) - s where x < 0, so it is never
+larger than the original and keeps the attack and its phase.
 
-### `resynth(model: 'dict', sr: 'int | None' = None, stretch: 'float' = 1.0, transpose: 'float' = 0.0, formant: 'float' = 0.0, sines_gain: 'float' = 1.0, noise_gain: 'float' = 1.0, seed: 'int' = 0, phases: 'str' = 'auto', transient_gain: 'float' = 1.0) -> 'np.ndarray'`
+### `resynth(model: 'dict', sr: 'int | None' = None, stretch: 'float' = 1.0, transpose: 'float' = 0.0, formant: 'float' = 0.0, sines_gain: 'float' = 1.0, noise_gain: 'float' = 1.0, seed: 'int' = 0, phases: 'str' = 'auto', transient_gain: 'float' = 1.0, partial_wander: 'float' = 0.0) -> 'np.ndarray'`
 
 Render a model from `analyze` (mono), at any sample rate.
+
+partial_wander: Hz of a random walk added to the partial frequencies, a step per analysis frame (scaled to a hop
+of 256); the lowest third of the tracks (by mean frequency) stays put, the middle third steps by this much and the
+upper third by twice as much, each walk bounded to 3 % of the track's frequency. Gives a resynthesised tone the
+jitter of a real one. 0 = off.
 
 stretch: duration factor (the envelopes are resampled). transpose: semitones applied
 to the partial frequencies. formant: semitones the spectral envelope moves - 0 with a transpose
@@ -15314,7 +17776,7 @@ Gender change: pt = 2 or 0.5; spectral shape shift sss = (f0 - 100) / ((500 - 10
 
 
 
-### `harmonizer(x, sr=44100, intervals='4 7', mix=0.5, formant='keep')`
+### `harmonizer(x, sr=44100, intervals='4 7', mix=0.5, formant='keep', voices='', fallback=True, series='', draw=0, seed=0)`
 
 
 
@@ -15324,7 +17786,7 @@ Channel vocoder as an FFT filter bank: band energies of the
 modulator STFT, smoothed by an attack/release follower, scale the same bands of the carrier
 STFT after flattening the carrier (dividing by its own band level).
 
-### `cross_synth(x, sr=44100, carrier=None, flatten=True, smooth=2.0, mix=1.0, seed=0, method='envelope', squelch=20.0, amount=1.0)`
+### `cross_synth(x, sr=44100, carrier=None, flatten=True, smooth=2.0, mix=1.0, seed=0, method='envelope', squelch=20.0, amount=1.0, balance=0.0)`
 
 Y = Xc / env(Xc) * env(Xm), cepstral envelopes, carrier phase kept. stamp: g[k] = c[k] min(1 / f[k], squelch^2 / 100), exponent p.
 
@@ -15343,10 +17805,18 @@ m = mask_level x the mean noise power (typically 10, a bin 20 x over the noise o
 
 
 
+### `scramble(x, sr=44100, seed=0)`
+
+
+
 ### `freeze(x, sr=44100, at=0.2, length=2.0, jitter=20.0, seed=0)`
 
 Phase vocoder whose read position stops at `at` (magnitudes held, each bin's phase advanced
 by its measured instantaneous frequency, peak-locked).
+
+### `fallaway(x, sr=44100, at=0.2, length=2.0, fall=12.0, curve=2.0, level=-40.0, jitter=20.0, seed=0)`
+
+
 
 ### `spectral_blur(x, sr=44100, time=0.08, freq=0.0, seed=0)`
 
@@ -15406,10 +17876,12 @@ current piecewise-linear approximation (Douglas-Peucker order). Returns (t_kept,
 One mark per period at the waveform maximum (period from YIN, or the fixed `f0` in Hz),
 one every 10 ms where unvoiced. Returns (marks, voiced) as arrays.
 
-### `psola(x, sr=44100, semitones=0.0, factor=1.0, f0=None)`
+### `psola(x, sr=44100, semitones=0.0, factor=1.0, f0=None, reverse_repeats=False)`
 
 TD-PSOLA: two-period Hann grains cut at the pitch marks, re-spaced by period / pitch ratio
-(voiced) and repeated or dropped to follow the time `factor`. Formants stay in place.
+(voiced) and repeated or dropped to follow the time `factor`. Formants stay in place. `reverse_repeats`: an
+unvoiced grain used twice in a row is played time-reversed the second time (a slowed noise otherwise gets a
+tonal buzz from the regular repetition).
 
 ### `epoch_sharpness(x, sr=44100, f0=110.0)`
 
@@ -15423,7 +17895,8 @@ voiced 10 ms frames, the state switching after 6 agreeing frames, 20 ms linear c
 
 ### `grains(x, sr=44100, density=20.0, size=0.08, spray=0.2, position=0.05, spread=0.5, pitch=0.0, feedback=0.0, freeze=None, window='hann', overlap='normal', tail=None, seed=0)`
 
-Grain cloud read from a 6 s ring buffer the input is written into. Each grain starts
+Grain cloud read from a 6 s ring buffer the input is written into. Grains start every sr / density
+samples (fractional: window and read pointer are offset by the sub-sample part). Each grain starts
 `back` = clip(0.9 position + 0.9 rnd spray, span / ring, 0.98) of the ring behind the write head
 (span = grain x max(ratio, 1) + 64), is read at `pitch` semitones (Catmull-Rom) and panned at
 theta = (pan / 2 + 1 / 2) pi / 2. `freeze` (s) stops recording; `feedback` (<= 0.95, DC-blocked)
@@ -15439,16 +17912,20 @@ the previous one and out symmetrically (linear ramps, unity sum); otherwise the 
 
 
 
-### `fof_envelope(n: 'int', sr: 'int', band: 'float', ris: 'float', dec: 'float') -> 'np.ndarray'`
+### `fof_envelope(n: 'int', sr: 'int', band: 'float', ris: 'float', dec: 'float', offset: 'float' = 0.0, preamp: 'bool' = False) -> 'np.ndarray'`
 
 FOF grain envelope: half-cosine rise over ``ris`` s, exp(-pi band t) body, half-cosine fall over the last ``dec`` s.
+``offset``: the grain started that fraction of a sample earlier; ``preamp`` scales by exp(pi band ris) so the
+peak at the end of the rise is 1 whatever band x ris.
 
-### `fog(x, sr=44100, dens=80.0, trans=1.0, spd=0.0, band=50.0, ris=0.01, dec=0.07, dur=0.1)`
+### `fog(x, sr=44100, dens=80.0, trans=1.0, spd=0.0, band=50.0, ris=0.01, dec=0.07, dur=0.1, pos=None, preamp=True)`
 
 FOF granulation of a sample table: ``dens`` grains per second, each reading the table from the pointer
-(``spd`` table passes per second) at speed ``trans`` under a FOF envelope ``dur`` s long.
+(``spd`` table passes per second, or the absolute position ``pos`` 0..1, scalar or per output sample) at speed
+``trans`` under a FOF envelope ``dur`` s long, peak 1 with ``preamp``. Grains start at their exact fractional
+instant: envelope and read pointer carry the sub-sample offset (4-point Lagrange read).
 
-### `fog_fx(x, sr=44100, dens=80.0, trans=1.0, spd=0.0, band=50.0, ris=0.01, dec=0.07, dur=0.1)`
+### `fog_fx(x, sr=44100, dens=80.0, trans=1.0, spd=0.0, band=50.0, ris=0.01, dec=0.07, dur=0.1, pos=None, preamp=True)`
 
 
 
@@ -15460,6 +17937,103 @@ drawn curve read at its position (x = position 0..1, y = shift in Hz).
 ### `tf_pad_fx(x, sr=44100, curve='0:0,1:0', density=40.0, size=0.08, seed=0)`
 
 
+
+### `pv_analyze(x, sr=44100, M=2048, R=None)`
+
+Mono x -> (amp, freq, phase), each (frames, M/2 + 1): magnitude, instantaneous frequency in Hz from the phase
+advance between frames (principal value around the bin's own advance), phase at the frame centre.
+
+### `pv_synth(amp, freq, n, sr=44100, M=2048, R=None, phase0=None)`
+
+Inverse of `pv_analyze`: each bin's phase integrates its frequency from ``phase0`` (default 0), then WOLA.
+
+### `pv_mix(x, y, sr=44100, M=2048)`
+
+Bin by bin, the louder (amplitude, frequency) pair of the two sounds.
+
+### `pv_freeze(x, sr=44100, at=0.2, length=1.0, amp=True, freq=True, M=2048)`
+
+Holds the amplitudes and / or the frequencies of the frame at ``at`` s for ``length`` s; what is not held keeps
+moving (amp only: the levels stop, the pitches drift on; freq only: the pitches stop, the levels follow).
+
+### `pv_osc(freq, n, sr=44100, wave='saw', M=2048)`
+
+Oscillator built in the frequency domain: each harmonic of ``wave`` (sine, saw, square, triangle) under 0.45 sr
+is the nearest bin turning at h times the fundamental's integrated phase (sine series; cosine for the triangle),
+resynthesised by WOLA.
+
+### `track_filter(model: 'dict', curve) -> 'dict'`
+
+Partial tracks of an `analyze` model through a gain curve 'Hz:dB, ...' read at each partial's frequency.
+
+### `track_cross(a: 'dict', b: 'dict', band: 'float' = 0.03, mode: 'str' = 'replace') -> 'dict'`
+
+Cross-synthesis of two `analyze` models: a partial of ``a`` with a partial of ``b`` within ``band`` (ratio) in the
+same instant takes its amplitude (``replace``) or is scaled by its level relative to the loudest (``multiply``);
+partials of ``a`` with no partner fall silent.
+
+### `heterodyne(x, sr=44100, freq=440.0, cutoff=20.0)`
+
+One partial by heterodyning: x e^(-i 2 pi f t) through a 2-pole lowpass at ``cutoff`` Hz on its real and
+imaginary parts. Returns (amplitude, phase) per sample (amplitude 2 |z|).
+
+### `pv_mix_fx(x, sr=44100, other='', mix=1.0)`
+
+
+
+### `pv_freeze_fx(x, sr=44100, at=0.2, length=1.0, amp=True, freq=True)`
+
+
+
+### `partial_filter(x, sr=44100, curve='0:0,2000:0,4000:-30', noise=1.0)`
+
+
+
+### `partial_cross(x, sr=44100, other='', band=0.03, mode='replace')`
+
+
+
+### `pvoc_reverb(x, sr=44100, t60=3.0, mix=0.4, window_ms=93.0)`
+
+Coherent phase-vocoder reverb: each bin holds an amplitude that decays at ``t60`` and turns at the phase
+increment it was measured with; a new (amplitude, phase, increment) is punched in only where the input bin is a
+peak (above both neighbours) and louder than what the bin holds. The tail keeps the input's partials.
+
+### `pvoc_reverb_fx(x, sr=44100, t60=3.0, mix=0.4, window_ms=93.0)`
+
+
+
+### `tonal_mask(s, sr=44100, M=2048, threshold=0.7)`
+
+Per (frame, bin): True where the bin and both neighbours are phase-coherent (cos of the phase difference
+above ``threshold``, zero-phase Hann frames): a sinusoid's main lobe; noise has random neighbour phases.
+
+### `tonal_split(x, sr=44100, keep='tonal', threshold=0.7)`
+
+
+
+### `whiten(x, sr=44100, squelch=20.0, amount=1.0)`
+
+
+
+### `talkbox(x, sr=44100, carrier='saw', freq=110.0, notes='', order=0, mix=1.0, seed=0)`
+
+
+
+### `grain_cloud(n, sr=44100, density=30.0, dur=(0.02, 0.08), freq=(300.0, 3000.0), amp=(0.25, 0.5), pan=0.0, kind='sine', ratio=2.0, index=(0.0, 3.0), buf=None, rate=1.0, position=(0.0, 1.0), poisson=True, times=None, seed=0)`
+
+Cloud of grains with parameters per grain: every one of ``dur`` (s), ``freq`` (Hz), ``amp``, ``pan`` (-1..1),
+``index``, ``rate``, ``position`` (0..1 in ``buf``) is a scalar, a (lo, hi) range drawn per grain (freq and rate
+log-uniform) or a longer list of per-grain values. Grains: ``kind`` sine, fm (modulator at ``ratio``) or buf
+(reads ``buf`` from ``position`` at ``rate``), Hann windowed, starting at fractional instants (Poisson arrivals at
+``density`` per second, or regular, or the given ``times`` in s). Stereo (equal power) when a pan is non-zero.
+
+### `fit_min_phase_iir(freqs, gains_db, sr=44100, order=8, iters=8)`
+
+``(b, a)`` of an order-``order`` IIR whose magnitude follows a target curve: the curve (dB at ``freqs`` Hz, held flat
+beyond its ends, interpolated in dB over linear frequency) becomes a minimum-phase impulse response by cepstral folding, and
+Steiglitz-McBride iterations fit the filter to it (no 1 / (f + 1) weighting). Poles outside the unit circle
+are reflected in.
 
 ## `genny.speech`
 
@@ -15507,7 +18081,7 @@ Returns [{"words": [{"ph": [(ph, stress)], "letter": bool} | {"pause": s}], "pun
 
 ### `formant_bandwidth(f: 'float', f0: 'float' = 132.0) -> 'float'`
 
-Hawks & Miller bandwidth (Hz) of a formant at ``f`` Hz, widened by S = 1 + 0.25 (F0 - 132)/88 (eq. 4).
+Closed-glottis bandwidth (Hz) of a formant at ``f`` Hz, widened by S = 1 + 0.25 (F0 - 132)/88.
 
 ### `render_speech(text: 'str | None' = None, sr: 'int' = 44100, phonemes: 'str | None' = None, **params) -> 'np.ndarray'`
 
@@ -15529,6 +18103,12 @@ The flattened cap is a spring of area 2 pi a x at gauge pressure P.
 ### `cavity_modes(a, c=343.0)`
 
 Hz of the first two air modes in a sphere of inner radius a.
+
+### `sphere_cavity_modes(a, n=8, c=343.0)`
+
+Air modes of a rigid sphere of inner radius a: roots k a of j_l'(k a) = 0, as (Hz, l, k a) sorted by frequency (l = 0 is
+the breathing mode, 4.49; the lowest, l = 1, is 2.08;
+each l >= 1 is 2 l + 1 times degenerate).
 
 ### `thump_pa(a, v, r=3.0)`
 
@@ -15562,7 +18142,7 @@ A rolling solid sphere slows at (5/7) mu_R g (calculated, I = .4 m R^2).
 
 Hertz impact: Tc = 2.87 (m^2 / (R E*^2 V))^(1/5) with the relative mass and radius.
 
-### `ball_bounce(sr=44100, kind='basket', height=1.0, surface='parquet', cavity=1.0, ring_cycles=1.0, radius=0.0, roll_speed=0.0, seed=0)`
+### `ball_bounce(sr=44100, kind='basket', height=1.0, surface='parquet', cavity=1.0, ring_cycles=1.0, radius=0.0, roll_speed=0.0, seed=0, modes=2)`
 
 
 
@@ -15688,7 +18268,7 @@ is derived from T60 and dispersion amount from the physical inharmonicity B.
 - `.render_bow(self, dur: 'float', *, bow_velocity: 'float' = 0.18, bow_pressure: 'float' = 0.75, bow_position: 'float' = 0.13, bridge_velocity: 'float' = 0.0) -> 'np.ndarray'` — Bowed excitation using the same string state and a hysteretic stick/slip law.
 - `.energy_proxy(self) -> 'float'`
 - `.render_pluck(self, dur: 'float', *, velocity: 'float' = 0.8, position: 'float' = 0.2, bridge_velocity: 'float' = 0.0, glide_cents: 'float' = 0.0, glide_couple: 'float' = 0.0) -> 'np.ndarray'` — glide_cents: tension-modulation pitch excess at the start of the note; glide_couple 0..1: how much that modulation couples the harmonics (see _string_kernel).
-- `.render_exciter(self: 'DispersiveString', dur: 'float', exciter: 'StringExciter', *, velocity: 'float' = 0.8, bridge_velocity: 'float' = 0.0, palm_mute: 'float' = 0.0, glide_cents: 'float' = 0.0) -> 'np.ndarray'`
+- `.render_exciter(self: 'DispersiveString', dur: 'float', exciter: 'StringExciter', *, velocity: 'float' = 0.8, bridge_velocity: 'float' = 0.0, palm_mute: 'float' = 0.0, glide_cents: 'float' = 0.0, glide_couple: 'float' = 0.0) -> 'np.ndarray'`
 - `.render_fretted(self: 'DispersiveString', fret: 'float', dur: 'float', *, velocity: 'float' = 0.8, fretboard: 'FretboardGeometry | None' = None, hardness: 'float' = 0.65, position: 'float' = 0.2, palm_mute: 'float' = 0.0) -> 'np.ndarray'`
 - `.render_fret_buzz(self: 'DispersiveString', fret: 'float', dur: 'float', *, velocity: 'float' = 0.8, fretboard: 'FretboardGeometry | None' = None, buzz: 'float' = 0.5, position: 'float' = 0.2, seed: 'int' = 0) -> 'np.ndarray'` — Fretted string plus thresholded string/fret collisions.
 - `.render_glissando(self: 'DispersiveString', dur: 'float', start_frequency: 'float', end_frequency: 'float', *, velocity: 'float' = 0.8, position: 'float' = 0.2, curve: 'float' = 1.0) -> 'np.ndarray'` — Continuous-length/pitch render by continuously moving waveguide delay.
@@ -15824,6 +18404,137 @@ G = 1 + alpha^2 / 2 |u_x|^2 over both transverse planes, so a pluck with an out-
 Cents the upper key sits above a pure octave when its n-th partial is tuned beatless to the lower key's m-th:
 600 log2[(1 + m^2 B_lo) / (1 + n^2 B_hi)] + 1200 log2(m / 2n) (0 for m = 2n), Steinway D inharmonicity.
 
+## `genny.synth_s`
+
+Historic synthesizers: Yamaha DX7 (6 operators, 32 algorithms, 4-rate / 4-level envelopes, SysEx decoder), Buchla (series wavefolder,
+vactrol low-pass gate, simplified 259) and Serge (wave multiplier, dual universal slope generator, smooth / stepped random).
+
+Registers
+    instruments  `dx7`
+    effects      `buchla_fold`, `lpg`, `serge_wavemult`
+    sfx          `buchla_259`, `lpg_ping`, `serge_dusg`, `serge_random`
+
+### `dx7_algorithm(n)`
+
+(carrier mask (6,), modulation matrix [receiver, source] (6, 6), feedback receiver index, feedback source index), 0-based.
+
+### `dx7_out_level(v)`
+
+0..99 level -> 0..127 on the 0.75 dB scale.
+
+### `dx7_qrate(rate, note=60, rs=0)`
+
+
+
+### `dx7_rate_db_per_s(q)`
+
+Decay speed of a 0..63 quantized rate in dB / s: 0.2819 2^(q div 4) (1 + 0.25 (q mod 4)).
+
+### `dx7_key_scale(note, bp, ld, rd, lc, rc)`
+
+Keyboard level scaling in 0.75 dB units: breakpoint bp 0..99 is the note bp + 21 (39 = C3 = MIDI 60); groups of 3 semitones;
+curves 0 -LIN, 1 -EXP, 2 +EXP, 3 +LIN.
+
+### `dx7_velocity(vel, sens)`
+
+Velocity 0..127 and sensitivity 0..7 -> level offset in 0.0235 dB steps (16 per unit).
+
+### `dx7_voice(name='INIT VOICE', ops=None, alg=1, fb=0, oks=1, pr=(99, 99, 99, 99), pl=(50, 50, 50, 50), lfo_speed=35, lfo_delay=0, pmd=0, amd=0, lfo_sync=1, lfo_wave=0, pms=3, transpose=24)`
+
+
+
+### `render_dx7(voice, hz, dur, sr=44100, vel=1.0, fb=None)`
+
+One note of a DX7 voice (a dict as `dx7_voice` / `dx7_parse_sysex` give). Returns mono, about [-1, 1].
+
+### `dx7_checksum(data)`
+
+Two's complement of the sum of the data bytes, 7 bits.
+
+### `dx7_unpack_voice(b)`
+
+128 packed bytes (one voice of a 32-voice bulk dump) -> voice dict.
+
+### `dx7_pack_voice(v)`
+
+
+
+### `dx7_parse_sysex(raw)`
+
+A DX7 SysEx file or message: 32-voice bulk dump (4096 data bytes), single voice (155 data bytes), or the bare data of either.
+Returns the list of voice dicts; the checksum is verified when the framing is present.
+
+### `dx7_make_sysex(voices, channel=0)`
+
+Bulk dump of up to 32 voices (the rest initial voices), or a single-voice message for one voice and `single=True` semantics
+through `dx7_make_single`.
+
+### `dx7_make_single(voice, channel=0)`
+
+
+
+### `dx7(freq, dur, sr=44100, vel=1.0, patch='epiano', sysex='', voice=0, feedback=-1)`
+
+
+
+### `buchla_fold_curve(v, cells=3, gain=2.0, threshold=1.0, knee=0.0)`
+
+Series of folding cells: each multiplies by `gain` and reflects at +-threshold (knee 0 = straight reflection, 1 = sinusoidal).
+
+### `buchla_fold(x, sr=44100, timbre=1.0, cells=3, gain=2.0, symmetry=0.0, knee=0.0, tone=0.0, mix=1.0)`
+
+
+
+### `lpg_light(cv, sr=44100, up=0.0025, dn_fast=0.035, dn_slow=0.4, thermal=0.15, weight=0.25, gamma=1.0)`
+
+Vactrol light and conductance (0..1) from a control voltage (0..1): the light rises with time constant `up`, falls with a time
+constant that grows from `dn_fast` (lit) to `dn_slow` (dark); the conductance adds a slow thermal memory (`thermal`, weight `weight`).
+
+### `lpg_process(x, cv, sr=44100, mode='combo', poles=1, ron=1500.0, roff=10000000.0, rload=100000.0, c=1e-08, floor_db=-80.0, **vactrol)`
+
+Low pass gate: conductance from `lpg_light`, series resistance R = roff (ron / roff)^g, load `rload` with shunt capacitor `c`:
+gain rload / (rload + R), corner 1 / (2 pi (R || rload) c) in `combo`; the corner at R alone with unit gain in `lowpass`; gain only in `vca`.
+
+### `lpg(x, sr=44100, mode='combo', poles=1, cv='strike', rate=2.0, width=8.0, up=2.5, down=35.0, tail=400.0, c_nf=10.0, mix=1.0)`
+
+
+
+### `lpg_ping(sr=44100, dur=1.2, freq=220.0, exc='saw', strike=5.0, level=1.0, up=2.5, down=35.0, tail=400.0, mode='combo', poles=2)`
+
+
+
+### `buchla_259(sr=44100, dur=2.0, freq=110.0, ratio=1.5, fm=0.5, am=0.0, mod_wave='sine', timbre=2.0, cells=3, gain=1.6, symmetry=0.0, knee=0.3)`
+
+
+
+### `wavemult_stage(v, mode='abs')`
+
+One multiplier stage on a wave in [-1, 1]: `abs` full-wave rectifies and re-centres (2 |v| - 1, a triangle gives a triangle at
+twice the frequency), `cheb` is the Chebyshev polynomial T2 (2 v^2 - 1, a sine gives a sine at twice the frequency).
+
+### `serge_wavemult(x, sr=44100, stages=2, mode='abs', blend=1.0, mix=1.0)`
+
+
+
+### `dusg(gate, sr=44100, rise=0.01, fall=0.1, curve=0.0, cycle=False, sustain=False, top=1.0)`
+
+Dual universal slope generator, one half: a gate (0/1 samples) starts the rise to `top`, then the fall to 0 (`sustain`: the
+fall waits for the gate to go low; `cycle`: it restarts by itself, an oscillator of period rise + fall). `curve` 0 linear .. 1 RC
+exponential (reaches the top and 0 in exactly the set times).
+
+### `serge_dusg(sr=44100, dur=2.0, rise=0.01, fall=0.1, curve=0.0, cycle=True, trig_hz=2.0, out='slope', freq=220.0, octaves=3.0)`
+
+
+
+### `serge_random_cv(n, sr=44100, rate=8.0, mode='stepped', lag=0.05, jitter=0.0, seed=0)`
+
+Serge random voltage in [-1, 1]: a clock (`rate` Hz, `jitter` = relative spread of the intervals) samples white noise; `stepped`
+holds each value, `smooth` runs the held values through a one-pole slew of time constant `lag` s.
+
+### `serge_random(sr=44100, dur=4.0, rate=6.0, mode='stepped', lag=0.05, jitter=0.0, out='fm', freq=220.0, octaves=1.5, seed=0)`
+
+
+
 ## `genny.synths`
 
 Electronic instruments: leads, plucks, pads, string machine and the basses of dance music.
@@ -15903,10 +18614,44 @@ is scaled by (2 cutoff)^(2^(k-2)) and clipped at its saw value.
 
 
 
+### `fat_pulse_wave(freq, n, sr=44100, ratio=2.01)`
+
+Ratio of two raised cosines: narrow pulses on f and on ratio*f that slide past each other.
+
+### `fat_pulse(freq, dur, sr=44100, vel=1.0, ratio=2.01, attack=0.05, release=0.3)`
+
+
+
 ### `padsynth(freq, dur, sr=44100, vel=1.0, bw=40.0, tilt=1.0, attack=0.5, release=1.2, seed=0)`
 
 Nasca's algorithm as in Soundpipe padsynth.c: bw_Hz = (2^(bw/1200) - 1) f k; Gaussian profile cut at x^2 > 14.71;
 random phase per bin; IFFT of a 2^18 table, which loops by construction and has no alias.
+
+### `scanned(freq, dur, sr=44100, vel=1.0, stiffness=0.3, t60=2.0, shape='hammer', position=0.3, connect='ring', rate=200.0, attack=0.01, release=0.4, seed=0)`
+
+
+
+### `chaos_sfx(sr=44100, kind='henon', rate=4000.0, rate_end=None, interp='cubic', a=None, b=None, dur=1.0)`
+
+
+
+### `risset_drum(sr=44100, freq=100.0, decay=2.0, cf=500.0, bw=400.0, noise=0.25, seed=0)`
+
+
+
+### `click_sound(kind: 'str', hz: 'float', amp: 'float', sr: 'int' = 44100) -> 'np.ndarray'`
+
+One metronome click: tick (filtered burst), ping / ping_long (10 / 80 ms sine), cowbell (two ring-modulated
+triangle pairs), resonant (50 ms of resonant noise), noise (5 ms noise click), drip / drip_long (sines at the
+zeros of J0, 7 / 100 ms).
+
+### `click_track(sr=44100, tempo=120.0, beats=4, bars=4, click='tick', high=84, low=80, swing=0.0)`
+
+
+
+### `grain_cloud_sfx(sr=44100, density=30.0, dur_lo=0.02, dur_hi=0.08, freq_lo=300.0, freq_hi=3000.0, kind='sine', index=3.0, ratio=2.0, spread=0.0, poisson=True, dur=2.0, seed=0)`
+
+
 
 ## `genny.tubes`
 
@@ -15924,6 +18669,21 @@ behaviour do not depend on the output sample rate.
 ### `end_correction(a_over_b)`
 
 delta / a of an unflanged pipe end with a wall: inner radius a, outer radius b.
+
+### `bend_inertance(kappa)`
+
+Inertance of a toroidal bend relative to a straight duct, alpha = (kappa^2 / 2) / (1 - sqrt(1 - kappa^2)) < 1,
+kappa = a / R0 (bore radius over the radius of curvature of the axis).
+
+### `bend_length_correction(lb, kappa)`
+
+Length correction (m, negative: resonances rise) at long wavelength of a bend whose axis is lb m long: the bend
+propagates with k sqrt(alpha), so it counts lb sqrt(alpha) instead of lb.
+
+### `bend_sign_change_frequency(a, kappa, c=343.0)`
+
+Hz above which a bend of radius-over-curvature kappa in a bore of radius a stops raising the resonances and lowers
+them: f_c / 2 (1 - (beta kappa / 2)^2), f_c = gamma10 c / (2 pi a).
 
 ### `hole_rate(b, l_eff, f, c=343.0, eta=1.846e-05, rho=1.2)`
 
@@ -15990,16 +18750,47 @@ extra mouthpiece cavity, C = volume/(c S0) (a lumped compliance in parallel with
 reed flow; it stands in for the missing apex of a truncated cone). `contact_damping` lambda (s):
 Hunt-Crossley damping of the reed on the lay, contact force g |y + 1|^alpha (1 + lambda dy/dt).
 
+### `reed_characteristic(pM, ks, cp=0.0, sc=4e-06, n=256, rho=1.2)`
+
+Quasistatic (dp, q) curve of a reed: opening S = (pM - dpc)/ks, q = S sqrt(2 dpc / rho) up to the
+constriction, then a conical diffuser recovers cp rho/2 (q/sc)^2, so dp = dpc - cp rho/2 (q/sc)^2.
+cp = 0 is the elementary model (maximum flow at pM/3); a double reed's staple moves it to pM/4..pM/5.
+
+### `free_reed_section(hn, kind='+-', r=None, n=64)`
+
+Useful section Su(hn) (m^2) of a free reed whose neutral-section tip sits at hn (m, origin on the outer face
+of the plate): front trapezoid + both sides + the corner triangles, with the reed thickness turning the upstream
+and downstream faces as the reed bends. kind "+-" blown open, "-+" blown closed.
+
+### `free_reed(freq=0.0, dur=1.0, sr=44100, kind='+-', v0=0.0, L1=0.0, attack=0.02, reed=None, os=16, full=False)`
+
+Self-oscillating free reed (harmonica, accordion, harmonium, sho): a clamped-free reed on its first mode,
+driven by the pressure between a supplied volume V1 -> short pipe -> reed -> open air; flow under the reed
+alpha Su(hn) vj with Bernoulli vj, plus the flow the reed pumps. The radiated sound is d(u)/dt. kind "+-"
+(blow-open, plays above the reed's frequency) or "-+" (blow-closed, plays below); freq rescales the reed's
+natural frequency (0 = the measured reed); v0 m/s of supply velocity, L1 m of upstream volume length (0 = the
+defaults that let each kind speak). reed="harmonium" swaps in the harmonium reed and its chamber (play it
+kind="-+"); a dict overrides FREE_REED keys. full=True returns (sound, tip opening hn in m) at the internal rate.
+
 ### `tune_length(make, freq, L0, mode=0, comp=0.0)`
 
 Tube whose (mode+1)-th input-impedance peak sits at `freq`: `make(L)` builds the tube, the length is
 iterated on the scheme's own response, so end correction, flare, holes, loss and grid are all included.
 
-### `reed_tube(freq, dur, sr=44100, vel=1.0, pressure=1.0, embouchure=1.0, breath=0.04, vibrato=0.0, attack=0.005, tongue=0.5, register=0.0, hole=0.0, bright=1.0, seed=0, reed='default', contact=0.0, mouthpiece=0.0)`
+### `air(t_c: 'float' = 20.0) -> 'dict'`
+
+Air at ``t_c`` deg C (c, rho, eta, gamma, Pr): ``physical.winds.air``.
+
+### `warm(x, t_c: 'float' = 20.0)`
+
+A bore tuned at 20 C played in air at ``t_c``: every resonance scales with c(T), so the sound is read faster by
+c(T) / c(20 C) (30 C: +29 cents, 35 C: +43 cents), same length.
+
+### `reed_tube(freq, dur, sr=44100, vel=1.0, pressure=1.0, embouchure=1.0, breath=0.04, vibrato=0.0, attack=0.005, tongue=0.5, register=0.0, hole=0.0, bright=1.0, seed=0, reed='default', contact=0.0, mouthpiece=0.0, temperature=20.0, bend=0.0, bend_share=0.2, rest=-1.0)`
 
 Beating reed on a cylindrical Webster bore with the unflanged radiation end.
 
-### `reed_cone(freq, dur, sr=44100, vel=1.0, cone=1.0, pressure=1.0, embouchure=1.0, breath=0.04, vibrato=0.0, attack=0.005, tongue=0.5, register=0.0, hole=0.0, bright=1.0, seed=0, reed='default', contact=0.0, mouthpiece=0.0)`
+### `reed_cone(freq, dur, sr=44100, vel=1.0, cone=1.0, pressure=1.0, embouchure=1.0, breath=0.04, vibrato=0.0, attack=0.005, tongue=0.5, register=0.0, hole=0.0, bright=1.0, seed=0, reed='default', contact=0.0, mouthpiece=0.0, temperature=20.0, apex=0.0, bend=0.0, bend_share=0.2, rest=-1.0)`
 
 Same reed on S(x) = (1 + cone x)^2. The taper stops at an
 end-radius ratio of 2: steeper truncated cones jump to the octave or stutter, as reported for this model
@@ -16023,18 +18814,30 @@ pulses; the square makes the flow differentiable. `vibrato` 1 = e_f 0.03, enteri
 singer's does. ``source`` rosenberg: Rosenberg's C pulse instead (cosine rise over 0.40 T, quarter-cosine fall over
 0.16 T, closed the rest), ``duty`` unused.
 
-### `vowel_tube(freq, dur, sr=44100, vel=1.0, vowel='a', vowel2='', morph=1.0, breath=0.08, vibrato=0.4, size=1.0, tense=0.2, seed=0, consonant='', source='bilbao', glide='smooth', model='webster', nasal=0.0)`
+### `vowel_tube(freq, dur, sr=44100, vel=1.0, vowel='a', vowel2='', morph=1.0, breath=0.08, vibrato=0.4, size=1.0, tense=0.2, seed=0, consonant='', source='bilbao', glide='smooth', model='webster', nasal=0.0, wall=1.0, sinuses='')`
 
 Finite-difference Webster tract with a flanged radiation end and yielding walls, area functions of ``_tract``.
 Output is the radiated pressure. A consonant onset is one constriction event (`event`, `CONSONANT_EVENT`): held
 50 ms, released over 60 ms by a raised cosine; voiceless ones (p t k f th s sh) start voicing 40 ms after the
 release with aspiration in the gap.
 
+### `subglottal_pair(area_cm2: 'float' = 0.0675, sub: 'float' = 1350.0) -> 'tuple'`
+
+(zero Hz, pole Hz, attenuation dB) added to a vowel's transfer function by the coupling with the second subglottal resonance
+``sub`` (men 1280-1370, women 1450-1620 Hz): the glottal area (0.03 to 0.2 cm2, the more open the more coupling) sets the pole
+75 to 225 Hz above the zero and the dip of the second formant at 5 to 13 dB.
+
+### `subglottal_filter(x, sr: 'int' = 44100, sub: 'float' = 1350.0, area_cm2: 'float' = 0.0675, open_phase=None)`
+
+Zero-pole pair of the subglottal coupling on a voiced signal, unity far from ``sub``: a dip at the zero and a bump of half its
+depth at the pole (`subglottal_pair`). ``open_phase``: an optional 0..1 array the length of x, the glottal opening along the
+cycle; the coupling is applied in proportion to it (the effects are stronger in the open phase).
+
 ### `formant_tract(x, sr=44100, vowel='a', shift=1.0, mix=1.0)`
 
 Transfer u_out/u_in of the tract (the formant curves); unity gain at DC.
 
-### `tube(x, sr=44100, length_m=1.0, radius_m=0.05, ends='closed-open', loss=1.0, mix=1.0, steepen=0.0, silencer=0.0)`
+### `tube(x, sr=44100, length_m=1.0, radius_m=0.05, ends='closed-open', loss=1.0, mix=1.0, steepen=0.0, silencer=0.0, bend=0.0, bend_m=0.0, model='fd')`
 
 WebsterTube as an effect: cylinder with the passive radiation end(s) and
 viscothermal loss. The distance is a virtual tube
@@ -16097,6 +18900,13 @@ piston), "levine2" (unflanged pipe). Mass end correction = a1 (0.8488 flanged, 0
 Pressure reflection of a pipe end, R = -(1 + n1 x)/(1 + d1 x + d2 x^2), x = j k a. Low ka: R = -exp(-2jk delta)
 with delta / a = (d1 - n1) / 2 (0.82 flanged, 0.61 unflanged).
 
+### `end_reflection_levine(ka)`
+
+Pressure reflection of an unflanged pipe end, R = -R(ka) exp(-2 j ka l/a), from the empirical fits to Levine &
+Schwinger (0 < ka < 1.5; the end correction l/a runs to ka = 2): R = 1 + 0.01336 ka - 0.59079 ka^2 + 0.33576 ka^3
+- 0.06432 ka^4, l/a = 0.6133 - 0.1168 ka^2 (ka < 0.5), 0.6393 - 0.1104 ka beyond. A mean flow below Mach 0.3 leaves
+l/a unchanged and raises R.
+
 ### `end_reflection_filter(radius_m, sr, end='unflanged')`
 
 Digital biquad (b, a) of `end_reflection` for a waveguide termination (bilinear transform, x = s a / c).
@@ -16144,7 +18954,7 @@ Render loops at a few fixed rpm values and crossfade/pitch between them at
 runtime (the standard "engine bank" technique) — one sample pitched across the
 whole rev range sounds like a tape speeding up.
 
-### `car_engine(sr=44100, rpm=1500, cylinders=4, load=0.5, rough=0.25, pipe=0.004, body=1.0, bright=0.0, seed=7, dur=3.0, model='classic', exhaust='auto', inharm=0.0, noise=0.0)`
+### `car_engine(sr=44100, rpm=1500, cylinders=4, load=0.5, rough=0.25, pipe=0.004, body=1.0, bright=0.0, seed=7, dur=3.0, model='classic', exhaust='auto', inharm=0.0, noise=0.0, bank='filter', layout='')`
 
 
 
@@ -16162,6 +18972,15 @@ Relative detuning of partials 1..K: D exp(-(k - mu)^2 / (2 sigma^2)), D = +-0.08
 Draeger's first circumferential gas mode: f = 1.841 c / (pi B), c = 950 m/s hot gas, modes x 1, 1.66, 2.1, tau 4.5, 3, 2 ms,
 gains 1, .5, .3; slap at each thrust reversal, 2 per turn on the block; rod knock on the crankcase, once per turn (mechsynth.js:
 author's constants, c and taus not confirmed elsewhere). how severity maps to probability and level.
+
+### `bank_ratio(rpm, root)`
+
+Playback ratio and semitones of a loop recorded at ``root`` rpm heard at ``rpm``: 20 against 26 is 0.769, -4.54 semitones.
+
+### `engine_bank(rpm_curve, bank=(1000.0, 2000.0, 3000.0, 4200.0, 5600.0), sr=44100, loop=3.0, **engine)`
+
+A rev curve (rpm per sample) played from loops of ``car_engine`` rendered at the ``bank`` speeds: each loop is read at
+rpm / its speed (varispeed) and the two nearest are crossfaded with equal power on the log of the speed.
 
 ## `genny.viscous`
 
@@ -16185,9 +19004,11 @@ Bingham: mu + tau_y / rate, rate = STRAIN w0. A yield stress is what makes the b
 
 (w0, beta, w_d, delta) of HF eq. 36-38 with this liquid's viscous term. # ponytail: thermal and radiative terms stay water's, as no source gives them for mud.
 
-### `burst_freq(r)`
+### `burst_freq(r, mu=30.0, rho=1500.0, sigma=0.05, calibration='cpb', measured: 'bool' = False)`
 
-Fundamental of the burst: falls linearly with size [CPB]. Chosen: 900 Hz and 25 kHz/m, the source's abstract has no figures; r held in 2-30 mm where the line stays positive.
+Fundamental of the burst, 1 / opening time of the film: inertial retraction pi r / (2 v) with v = sqrt(2 sigma / (rho h)), plus the viscous opening (mu h_cap / sigma) ln(r / R0), the logarithm held at 0 below R0.
+``calibration``: `cpb` (about 30 Hz at r 10 mm, mu 30 Pa s) or `liu` (about 140 Hz there).
+``measured``: the straight line through the points of Fig. 5 instead, 49.4 Hz - 1.333 Hz/mm * r.
 
 ### `rupture_time(r, mu)`
 
@@ -16245,4 +19066,94 @@ Model `mud`, higher frequencies, strands (spec): bubbles of 2-8 mm against mud's
 ### `burn_flesh(sr=44100, dur=3.0, rate=6.0, seed=0)`
 
 `_fry` for `sizzle` + slow bubbles (spec). Chosen: their radii 3-10 mm, viscosity, the balance.
+
+## `genny.world_t`
+
+World instruments (lot T): guzheng, erhu and morin khuur, oud, qanun, santur, shakuhachi, ney, bansuri, duduk, bonang, balafon.
+
+Engines (data in the dictionaries below, nothing per instrument in the code):
+    plucked   modal string with a tension contour (pressed or bent string), loss law, contact filter, courses, body bank
+    bowed     Bilbao bow on a string-mode bank with a pitch contour, bridge on a modelled membrane (skin)
+    blown     jet flute / double reed of the library, bent by a time warp of the note
+    struck    modal kettle gong and wooden bar with a resonator and a buzzing membrane
+
+### `cents_contour(n, rate, dur, bend=0.0, bend_at=0.5, bend_time=0.25, scoop=0.0, scoop_time=0.08, vib=0.0, vib_hz=5.5, vib_delay=0.3)`
+
+
+
+### `string_geometry(freq, spec)`
+
+Length, tension, linear density, diameter, axial stiffness EA and inharmonicity B of the string that sounds `freq`.
+
+### `string_freq(T, mu, L)`
+
+
+
+### `press_cents(freq, depth_mm, spec)`
+
+Pitch rise (cents) of a string pressed `depth_mm` on the side behind the bridge: the stretch d^2 / 2b raises the tension by EA dL / L.
+
+### `press_depth(freq, cents, spec)`
+
+Depth (mm) of the press that bends the note by `cents`.
+
+### `bridge_lengths(tuning='D2 E2 F#2 A2 B2 D3 E3 F#3 A3 B3 D4 E4 F#4 A4 B4 D5 E5 F#5 A5 B5 D6', spec=None)`
+
+Sounding length (m) of every string of a zheng tuning.
+
+### `guzheng(freq, dur, sr=44100, vel=1.0, position=0.11, press_mm=0.0, tension=80.0, t60=3.5, ring=0.08, bend=0.0, bend_at=0.5, bend_time=0.25, scoop=0.0, scoop_time=0.08, vib=0.0, vib_hz=5.5, vib_delay=0.3)`
+
+
+
+### `oud(freq, dur, sr=44100, vel=1.0, position=0.17, spread=4.0, bend=0.0, bend_at=0.5, bend_time=0.25, scoop=0.0, scoop_time=0.08, vib=0.0, vib_hz=5.5, vib_delay=0.3)`
+
+
+
+### `qanun(freq, dur, sr=44100, vel=1.0, position=0.08, mandal=0.0, bend=0.0, bend_at=0.5, bend_time=0.25, scoop=0.0, scoop_time=0.08, vib=0.0, vib_hz=5.5, vib_delay=0.3)`
+
+
+
+### `santur(freq, dur, sr=44100, vel=1.0, position=0.2, contact=0.0008)`
+
+
+
+### `skin_modes(spec, tension_scale=1.0)`
+
+Frequencies (Hz) and bridge coupling of the circular skin: f = alpha / (2 pi a) sqrt(Ts / sigma).
+
+### `stopped_length(freq, spec)`
+
+
+
+### `erhu(freq, dur, sr=44100, vel=1.0, kind='erhu', force=1.0, speed=0.25, bow_dist=0.0, skin_tension=1.0, bend=0.0, bend_at=0.5, bend_time=0.25, scoop=0.0, scoop_time=0.08, vib=0.0, vib_hz=5.5, vib_delay=0.3)`
+
+
+
+### `morin_khuur(freq, dur, sr=44100, vel=1.0, force=1.0, speed=0.3, bow_dist=0.0, skin_tension=1.0, bend=0.0, bend_at=0.5, bend_time=0.25, scoop=0.0, scoop_time=0.08, vib=0.0, vib_hz=5.5, vib_delay=0.3)`
+
+
+
+### `shakuhachi(freq, dur, sr=44100, vel=1.0, breath=0.3, bend=0.0, bend_at=0.5, bend_time=0.25, scoop=0.0, scoop_time=0.08, vib=0.0, vib_hz=5.5, vib_delay=0.3)`
+
+
+
+### `ney(freq, dur, sr=44100, vel=1.0, breath=0.2, bend=0.0, bend_at=0.5, bend_time=0.25, scoop=0.0, scoop_time=0.08, vib=0.0, vib_hz=5.5, vib_delay=0.3)`
+
+
+
+### `bansuri(freq, dur, sr=44100, vel=1.0, breath=0.12, bend=0.0, bend_at=0.5, bend_time=0.25, scoop=0.0, scoop_time=0.08, vib=0.0, vib_hz=5.5, vib_delay=0.3)`
+
+
+
+### `duduk(freq, dur, sr=44100, vel=1.0, breath=0.05, cone=0.15, bend=0.0, bend_at=0.5, bend_time=0.25, scoop=0.0, scoop_time=0.08, vib=0.0, vib_hz=5.5, vib_delay=0.3)`
+
+
+
+### `bonang(freq, dur, sr=44100, vel=1.0, kind='barung', ombak=3.0, contact=0.0015)`
+
+
+
+### `balafon(freq, dur, sr=44100, vel=1.0, buzz=0.5, gourd=1.0, mallet=0.5)`
+
+
 

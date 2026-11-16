@@ -1,0 +1,10 @@
+T68 §2 L676: | Bruit velours filtré ajusté à une RIR | Välimäki et al. 2017, Late reverberation … [B69] | LPC d'ordre 10 et gain Gm par segment ; densité 100 à 40 impulsions/s ; 4 allpass N = 225, 341, 441, 556, a = 0,7 ; 294 paramètres (0,33 % des données) | `identify.py` | M | normale |
+
+T107 §2 L715: | Mélanges modaux de l'échelle | Vadim Zavalishin, The Art of VA Filter Design, … [B10] | Hn = (1+s)^(4-n)/(k+(1+s)⁴) (5.14). HP 4 pôles : a = [1,-4,6,-4,1] sur y0..y4. BP 4 pôles : a = [0,0,1,-2,1]. Autres (notch, etc.) : table p. 145 | `à créer` | M | normale |
+
+T132 §2 L740: | VCF TB-303 (Pinkston tbvcf) | Soundpipe (Batchelor, fork) [R08] | ih=0.001 ; q1=res/(1+sqrt(dist)) ; fco1=(fco*260/(1+q1/2))^0.58 ; q=q1 fco1^2 0.0005 ; fc=fco1/8 ; fdbk=q y/(1+exp(-3y) asym) ; y1+=ih((x-y1)fc-fdbk) ; d=-2y ; ad=(d^3+y2)*100 dist ; y2+=ih((y1-y2)fc+ad) ; y+=ih((y2-y)fc) ; sortie y fc/1000 (1+q1) 3.2. Défauts fco 500, res .8, dist 2, asym .5. fc indépendant de sr | `à créer` | M | normale |
+
+T171 §2 L779: | Passe-bas à quatre étages | Smith, The Scientist and Engineer's Guide to … [B78] | a0=(1−x)^4, b1=4x, b2=−6x², b3=4x³, b4=−x⁴ ; coupure par 19-5 avec 2π → 14,445 | `à créer` | M | basse |
+
+T493 Add§2 L294: | Échelle : mélanges, 8 pôles, oracle, bornes | HP1 [1,-1,0,0,0] ... ; k=2,885 LP en boucle ; ×2,4142, k=16, 256 ; oracle 2 SVF ; diode 0,07612, .61732, 1,38268, 1,92388 | missing | c26 l.5849-7288 ; c27 l.12065-12116, 13312-13504 | `lot_B10.md:31,33,35` | Constantes pour `filters.ladder`, si créée |
+

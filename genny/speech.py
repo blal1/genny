@@ -180,7 +180,7 @@ PARAMS = {
     "lang": ("en", "en|es (Spanish: letter names, numbers, regular spelling rules)"),
     "gap": (0.0, "extra silence between words in seconds (spelling / countdown style)"),
     "seed": (0, "noise/jitter seed (tiny natural variations between takes)"),
-    "effort": (0.6, "vocal effort 0.3 soft .. 0.6 as voiced .. 0.9 loud: rougher when soft; when loud higher F0 and flatter spectrum, not louder (the output is peak-normalised). Conversation only spans 8.9 dB (Lienard & Di Benedetto 1999)"),
+    "effort": (0.6, "vocal effort 0.3 soft .. 0.6 as voiced .. 0.9 loud: rougher when soft; when loud higher F0 and flatter spectrum, not louder (the output is peak-normalised), F1 a little higher. Conversation only spans about 9 dB"),
     "skew": (None, "glottal pulse asymmetry alpha_m = Tp/(Oq T0), 0.5..0.95 (0.66 if unset); typically 0.6-0.8"),
     "source": (None, "glottal source: rosenberg (default) | klglott88 | saw"),
     "tilt_db": (None, "spectral tilt in dB down at 3 kHz (Klatt TL); default from voice"),
@@ -188,28 +188,50 @@ PARAMS = {
     "locus": ("class", "class | place: labial stops follow the vowel's F2 almost fully (slope 0.95) and velar onsets may fall to 750 Hz before back vowels"),
     "trajectory": ("linear", "linear | gesture: formants and F0 approach their targets as critically damped filters, in place of ramps"),
     "diplophonia": (0.0, "0..1 double pulsing (creaky ends of utterances): every other glottal pulse is delayed by up to the closed phase and weakened, 0.5 = half the delay at -6 dB"),
+    "emotion": ("", "angry | happy | pleasant | sad (empty = off): duration, mean F0 and the pitch change from first to last syllable of the four emotions of acted speech"),
+    "prevoice": (False, "voicing bar before the release of utterance-initial b d g (lang=es): 138 / 110 / 108 ms of voicing lead, as in Spanish; off = a short lag"),
     "nasal_vowels": (False, "nasalize the half of a vowel next to M N NG: F1 +100 Hz and a nasal zero between F1 and the 270 Hz nasal pole (weaker F1)"),
 }
 SPEECH_DESC = ("Formant speech synthesizer: letters, numbers, short words/phrases (English; Spanish with lang=es). "
                "Text in /slashes/ or the layer key 'phonemes' is raw ARPAbet.")
 
-# Brockmann et al., JSLHR 51:1152 (2008), Table 2, soft / medium / loud, (women, men): SPL dB at 10 cm, F0 Hz, jitter %,
-# shimmer dB. Only the ratios to medium are used. Effort 0.3 / 0.6 / 0.9 for the three levels (as `choir`),
-# women's row above FEMALE_F0 Hz.
+# soft / medium / loud, (women, men): SPL dB at 10 cm, F0 Hz, jitter %, shimmer dB; only the ratios to medium are
+# used; women's row above FEMALE_F0 Hz.
 EFFORT_X = (0.3, 0.6, 0.9)
 EFFORT_SPL = ((63.8, 72.5, 96.8), (68.8, 79.2, 98.8))
 EFFORT_F0 = ((217.0, 211.0, 301.0), (125.0, 127.0, 178.0))
 EFFORT_JITTER = ((0.78, 0.36, 0.22), (0.94, 0.31, 0.21))
 EFFORT_SHIMMER = ((1.40, 0.50, 0.12), (1.00, 0.28, 0.13))
 FEMALE_F0 = 165.0
-# A3 - A1 moves 2.8 dB over 8.9 dB of AX, 0.31 dB/dB (Lienard & Di Benedetto 1999, JASA 106:411, p. 415-416; 0.20 by
-# regression); little change below 0.5 kHz.
-EFFORT_TILT = 0.31
+EFFORT_TILT = 0.31  # dB of high-shelf per dB of effort
 EFFORT_SHELF_HZ = 1800.0
-# Birkholz 2011, p. 12-13: order 6, critically damped, tau 7 ms /l/, 15 ms /b d g r/, 25 ms /m n/ (t10, t50, t90 =
-# 3.15, 5.67, 9.27 tau). VTL 2.4 manual sec. 2.1: order 5, tau 10 ms by default, also for F0 in semitones re 1 Hz.
+EFFORT_F1 = 3.5  # Hz of F1 per dB of effort
+# articulatory gestures: critically damped, time constant per class (s)
 GESTURE_TAU = 0.010
-VOICED_VOT = {"lab": 0.006, "alv": 0.008, "vel": 0.012}
+VOICED_VOT = {"lab": 0.001, "alv": 0.005, "vel": 0.021}
+ASPIRATED_VOT = {"lab": 0.058, "alv": 0.070, "vel": 0.080}
+SPANISH_VOT = {"lab": 0.004, "alv": 0.009, "vel": 0.029}
+PREVOICE_LEAD = {"lab": 0.138, "alv": 0.110, "vel": 0.108}
+EMOTION_SPEECH = {"angry": (812.0, 324.0, 182.0), "happy": (717.0, 394.0, 29.0), "pleasant": (528.0, 283.0, 35.0), "sad": (544.0, 250.0, -364.0)}
+VOT_LANGUAGES = {
+    "dutch": {"voiced": (-85, -80, None), "unaspirated": (10, 15, 25)},
+    "spanish_pr": {"voiced": (-138, -110, -108), "unaspirated": (4, 9, 29)},
+    "hungarian": {"voiced": (-90, -87, -58), "unaspirated": (2, 16, 29)},
+    "tamil": {"voiced": (-74, -78, -62), "unaspirated": (12, 8, 24)},
+    "cantonese": {"unaspirated": (9, 14, 34), "aspirated": (77, 75, 87)},
+    "english": {"voiced": (1, 5, 21), "voiced_lead": (-101, -102, -88), "aspirated": (58, 70, 80)},
+    "armenian": {"voiced": (-96, -102, -115), "unaspirated": (3, 15, 30), "aspirated": (78, 59, 98)},
+    "thai": {"voiced": (-97, -78, None), "unaspirated": (6, 9, 25), "aspirated": (64, 65, 100)},
+}
+
+VOT_SENTENCES = {
+    "spanish_pr": {"voiced": (-110, -109, -92), "unaspirated": (4, 7, 25)},
+    "hungarian": {"voiced": (-55, -70, -61), "unaspirated": (0, 20, 28)},
+    "tamil": {"voiced": (-61, -64, -56), "unaspirated": (12, 10, 27)},
+    "english": {"voiced": (7, 9, 17), "voiceless": (28, 39, 43)},
+    "armenian": {"voiced": (-72, -107, -66), "unaspirated": (5, 13, 23), "aspirated": (51, 35, 83)},
+    "korean": {"lenis": (7, 11, 20), "tense": (22, 30, 48), "aspirated": (89, 100, 125)},
+}
 
 
 def _gesture_tau(ph: str) -> float:
@@ -674,7 +696,7 @@ def to_phonemes(text: str | None = None, lang: str = "en", phonemes: str | None 
 # ----------------------------------------------------------------------------------------------
 # Segments, durations
 # ----------------------------------------------------------------------------------------------
-def _build_segments(phrases, rate: float, gap: float, lang: str = "en") -> list[dict]:
+def _build_segments(phrases, rate: float, gap: float, lang: str = "en", prevoice: bool = False) -> list[dict]:
     segs: list[dict] = []
     for pi, phr in enumerate(phrases):
         words = phr["words"]
@@ -688,7 +710,7 @@ def _build_segments(phrases, rate: float, gap: float, lang: str = "en") -> list[
                 continue
             for k, (p, st) in enumerate(w["ph"]):
                 segs.append({"ph": p, "st": st, "phrase": pi, "word": (pi, wi), "letter": w["letter"], "lang": lang,
-                             "wstart": k == 0, "wend": k == len(w["ph"]) - 1})
+                             "wstart": k == 0, "wend": k == len(w["ph"]) - 1, "prevoice": prevoice})
             is_last = w is real[-1] if real else True
             if not is_last:
                 g = gap + (0.07 if w["letter"] else 0.0)
@@ -763,10 +785,13 @@ def _durations(segs, rate):
             if info["v"]:
                 vot = VOICED_VOT[info["place"]] if sg.get("lang") != "es" else 0.004
                 asp = 0.0
+                if sg.get("prevoice") and sg.get("lang") == "es" and prv is None:
+                    sg["lead"] = PREVOICE_LEAD[info["place"]] / max(rate, 0.1) ** 0.5
+                    sg["dur"] = max(sg["dur"], sg["lead"] + sg["burst"])
             elif sg.get("lang") == "es" or (prv is not None and prv["ph"] == "S" and prv.get("word") == sg.get("word")):
-                vot, asp = 0.014, 0.5
+                vot, asp = SPANISH_VOT[info["place"]], 0.5
             elif sg.get("wstart") or nxt.get("st", 0) >= 1:
-                vot, asp = 0.058, 1.0
+                vot, asp = ASPIRATED_VOT[info["place"]], 1.0
             else:
                 vot, asp = 0.03, 0.8
             nxt["head"] = vot / max(rate, 0.1) ** 0.5
@@ -803,15 +828,13 @@ def _nearest_vowel(segs, i):
     return None
 
 
-# Hawks & Miller 1995 (JASA 97:1343, eqs 1-3): formant bandwidth from the formant frequency alone, 5th-order
-# fits to Fujimura & Lindqvist / Fant closed-glottis data, one set below and one above 500 Hz (37 Hz at 500 Hz,
-# 360 Hz at 5 kHz, for F0 = 132 Hz).
+# formant bandwidth from the formant frequency alone: 5th-order fits below and above 500 Hz
 _HM_LO = (165.327516, -6.73636734e-01, 1.80874446e-03, -4.52201682e-06, 7.49514000e-09, -4.70219241e-12)
 _HM_HI = (15.8146139, 8.10159009e-02, -9.79728215e-05, 5.28725064e-08, -1.07099364e-11, 7.91528509e-16)
 
 
 def formant_bandwidth(f: float, f0: float = 132.0) -> float:
-    """Hawks & Miller bandwidth (Hz) of a formant at ``f`` Hz, widened by S = 1 + 0.25 (F0 - 132)/88 (eq. 4)."""
+    """Closed-glottis bandwidth (Hz) of a formant at ``f`` Hz, widened by S = 1 + 0.25 (F0 - 132)/88."""
     f = float(np.clip(f, 100.0, 5000.0))
     c = _HM_LO if f < 500.0 else _HM_HI
     s = 1.0 + 0.25 * (float(f0) - 132.0) / 88.0
@@ -1055,7 +1078,11 @@ def _build_tracks(segs, vs, lang):
                 T.add("B1ADD", rel + burst, 200.0)
             else:
                 T.add("AH", e - 0.001, 0.0)
-            if voiced:
+            if voiced and sg.get("lead"):
+                T.add("AVB", s + 0.004, 1.0)
+                T.add("AVB", rel - 0.002, 1.0)
+                T.add("AVB", rel + 0.004, 0.0)
+            elif voiced:
                 vb = 0.5 if prv_pause else 1.0
                 T.add("AVB", s + min(0.012, d / 4), vb)
                 T.add("AVB", rel - 0.002, vb)
@@ -1334,6 +1361,14 @@ def _resolve(params: dict) -> dict:
     vs["locus"] = p["locus"]
     vs["nasal_vowels"] = str(p["nasal_vowels"]).lower() in ("1", "true", "yes", "on")
     vs["diplophonia"] = float(np.clip(p["diplophonia"], 0.0, 1.0))
+    p["emotion"] = str(p["emotion"] or "").lower()
+    if p["emotion"]:
+        if p["emotion"] not in EMOTION_SPEECH:
+            raise ValueError("emotion must be angry|happy|pleasant|sad")
+        mean_dur, mean_f0 = (float(np.mean([v[i] for v in EMOTION_SPEECH.values()])) for i in (0, 1))
+        dur, f0, _ = EMOTION_SPEECH[p["emotion"]]
+        vs["pitch"] *= f0 / mean_f0
+        p["rate"] = float(p["rate"]) * mean_dur / dur
     p["intonation"] = str(p["intonation"]).lower()
     if p["intonation"] not in ("auto", "statement", "question", "exclaim", "flat"):
         raise ValueError("intonation must be auto|statement|question|exclaim|flat")
@@ -1353,7 +1388,7 @@ def render_speech(text: str | None = None, sr: int = DEFAULT_SR, phonemes: str |
     if not phrases:
         raise ValueError(f"nothing to say in {text!r}")
     rate = float(p["rate"])
-    segs = _build_segments(phrases, rate, float(p["gap"]), lang)
+    segs = _build_segments(phrases, rate, float(p["gap"]), lang, bool(p["prevoice"]))
     # drop trailing pause segments
     while segs and segs[-1]["ph"] == "_":
         segs.pop()
@@ -1362,6 +1397,10 @@ def render_speech(text: str | None = None, sr: int = DEFAULT_SR, phonemes: str |
     if intonation == "exclaim" or (intonation == "auto" and phrases[-1]["punct"] == "!"):
         vs["oq"] = max(0.45, vs["oq"] - 0.08)
     pitch_pts = _pitch_points(segs, phrases, vs, intonation, float(p["emphasis"]))
+    if p["emotion"] and pitch_pts:
+        t0, t1 = pitch_pts[0][0], pitch_pts[-1][0]
+        cents = EMOTION_SPEECH[p["emotion"]][2]
+        pitch_pts = [(t, f * 2.0 ** (cents * (t - t0) / max(t1 - t0, 1e-3) / 1200.0)) for t, f in pitch_pts]
     for t, f in pitch_pts:
         T.add("F0", t, f)
     return _synth(segs, T, vs, sr, float(p["vibrato"]), int(p["seed"]))
@@ -1489,7 +1528,7 @@ def _synth(segs, T: _Tracks, vs: dict, sr: int, vibrato: float, seed: int) -> np
 
     # ---- cascade (nasal pole/zero + F5..F1)
     F = [T.curve(f"FM{j}", tc, d) for j, d in enumerate([500, 1500, 2500, F4, F5, 60, 90, 150, 250, 320])]
-    F[0] = F[0] + T.curve("F1N", tc, 0.0)
+    F[0] = F[0] + T.curve("F1N", tc, 0.0) + EFFORT_F1 * vs.get("effort_db", 0.0)
     if vs["gesture"]:
         tau = np.full(nb, GESTURE_TAU)
         for sg in segs:

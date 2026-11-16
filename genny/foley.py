@@ -20,6 +20,8 @@ from scipy.signal import lfilter, resample_poly
 
 from . import filters as F
 from . import osc as O
+from . import presets
+from .presets import F as PF
 from .core import DEFAULT_SR
 from .drums import drum
 from .instruments import _fm_cap, instrument
@@ -462,14 +464,33 @@ def _humps(n: int, rng, rate: float, sharp: float = 1.0) -> np.ndarray:
 
 
 CLOTH_TOP = (8000.0, 2000.0)
+# fabric -> (weave period m (pitch = sliding speed / period), harmonics); cotton: no pitch, a 2-6 kHz band
+CLOTH_FABRIC = {"polyester": (0.0005, 5), "corduroy": (0.00175, 1), "cotton": (0.0, 0)}
+CLOTH_SPEED = (1.3, 0.3)    # sliding speed m/s at full movement; below the lowest measured speed amplitude ~ (s/s0)^2
+
+
+def _fabric_tone(e: np.ndarray, fabric: str, rng) -> np.ndarray:
+    """Friction tone of a weave rubbing on itself, the sliding speed following the movement energy ``e``."""
+    lam, harm = CLOTH_FABRIC[fabric]
+    s = CLOTH_SPEED[0] * e
+    g = np.minimum(1.0, (s / CLOTH_SPEED[1]) ** 2)
+    if not harm:
+        return g * _nm(amb.bp(amb.bp(rng.standard_normal(e.size), 3500.0, 1.0), 3500.0, 1.0))
+    ph = np.cumsum(2.0 * np.pi * s / lam / P)
+    y = sum(np.sin(k * ph) / k * (k * s / lam < 0.45 * P) for k in range(1, harm + 1))
+    return g * _nm(y)
 
 
 @sfx("cloth", "Cloth: rustle of a moving garment, a tear, or a flag/cape flapping.",
      kind=("rustle", "rustle|tear|flap"), dur=(1.0, "s"), rate=(3.0, "movements (rustle) or flaps per second"),
-     weight=(0.5, "0 silk .. 1 canvas/sacking: lower, rougher"), seed=(0, "variation"))
-def cloth(sr=DEFAULT_SR, kind="rustle", dur=1.0, rate=3.0, weight=0.5, seed=0):
+     weight=(0.5, "0 silk .. 1 canvas/sacking: lower, rougher"), seed=(0, "variation"),
+     fabric=("none", "none|polyester|corduroy|cotton: rustle with the weave's friction tone, its pitch following the speed (polyester ~2 kHz per m/s with harmonics, corduroy ~0.57 kHz per m/s, cotton a 2-6 kHz hiss)"))
+def cloth(sr=DEFAULT_SR, kind="rustle", dur=1.0, rate=3.0, weight=0.5, seed=0, fabric="none"):
     """Port of procedural/world.cloth and body.sacking_tear: the STK Sandpaper brush, kept below 8 kHz
-    for a light fabric and 2 kHz for a heavy one, plus a stick-slip band."""
+    for a light fabric and 2 kHz for a heavy one, plus a stick-slip band. ``fabric`` adds the weave's friction
+    tone to a rustle: pitch = sliding speed / weave period."""
+    if fabric != "none" and fabric not in CLOTH_FABRIC:
+        raise ValueError("cloth: fabric none|" + "|".join(CLOTH_FABRIC))
     rng = np.random.default_rng(int(seed))
     dur = float(np.clip(dur, 0.1, 20))
     n = _n(dur)
@@ -489,6 +510,8 @@ def cloth(sr=DEFAULT_SR, kind="rustle", dur=1.0, rate=3.0, weight=0.5, seed=0):
     y = _nm(brush)
     if k:
         y += (0.25 if kind == "rustle" else 0.8) * _nm(amb.bp(_slips(0.2 + 0.7 * e, rng, k), 2500.0 - 1200.0 * w, 1.0))
+        if kind == "rustle" and fabric != "none":
+            y += 0.5 * _fabric_tone(e, fabric, rng)
     else:
         y += 0.6 * _nm(amb.lop(np.gradient(e) * rng.uniform(0.6, 1.0), 120.0))
     return _fin(y, sr, 0.6)
@@ -512,9 +535,10 @@ def _force_curve(shape: str, n: int, level: float, rng) -> np.ndarray:
      level=(0.8, "0.3..1 peak force: more force = faster slips, higher creak (nothing slips below 0.3)"),
      dur=(1.2, "s"), size=(1.0, "object size (bigger = lower formants)"), seed=(0, "variation"),
      width=(0.0, "m: door leaf width (0 = off); with `height` the leaf rings in its own membrane modes"),
-     height=(0.0, "m: door leaf height"), wave_speed=(340.0, "m/s of bending waves in the leaf (100-3300)"))
+     height=(0.0, "m: door leaf height"), wave_speed=(340.0, "m/s of bending waves in the leaf (100-3300)"),
+     slam=(0.0, "0..1 a latch knock at the end of the creak, rung through the same leaf modes (the leaf's size, 0.9 x 2 m if none given)"))
 def creak(sr=DEFAULT_SR, material="wood", force="ramp", level=0.8, dur=1.2, size=1.0, seed=0, width=0.0, height=0.0,
-          wave_speed=340.0):
+          wave_speed=340.0, slam=0.0):
     """Slips every (1-f)60 + 3 ms (+ jitter) while the lagged force f
     exceeds 0.3, through the door formant bank and panel (wood), the same scaled (pine), or the
     measured sheet-metal box (iron). Rope and leather use several stick-slip sources at once."""
@@ -529,6 +553,14 @@ def creak(sr=DEFAULT_SR, material="wood", force="ramp", level=0.8, dur=1.2, size
         fm = door_modes(width, height, wave_speed)
         y = y + DOOR_MIX * _nm(_resons(y, fm, np.exp(-6.91 / DOOR_T60 / 44100.0) * np.ones(len(fm)),
                                        1.0 / np.arange(1, len(fm) + 1))) * np.max(np.abs(y))
+    sl = _c01(slam)
+    if sl > 0.0:
+        fm = door_modes(width or 0.9, height or 2.0, wave_speed)
+        kn = np.zeros(len(y) + _n(0.5))
+        k = _n(0.012)
+        kn[len(y) - k:len(y)] = rng.standard_normal(k) * np.hanning(k)
+        ring = _nm(_resons(kn, fm, np.exp(-6.91 / DOOR_T60 / 44100.0) * np.ones(len(fm)), 1.0 / np.arange(1, len(fm) + 1)))
+        y = np.concatenate([y, np.zeros(len(kn) - len(y))]) + sl * np.max(np.abs(y)) * 1.5 * ring
     return _fin(y, sr, 0.7)
 
 
@@ -845,16 +877,14 @@ def _bpar8(x: np.ndarray, centres, q: float = 10.62, gain: float = 0.15) -> np.n
 RIFLE_BODY = (230.0, 380.0, 560.0, 760.0, 2200.0, 2500.0, 2800.0, 3050.0)   # "four between 200 and 800 Hz ... another cluster around 2.5 kHz"
 # kind -> shell chirp ms, barrel ms, noise burst ms, bullet speed m/s, body formant scale, blast gain, blast low-pass Hz (0 = none),
 #         automatic-fire rate (rounds/s), projectile: an `arms.CALIBERS` key or (diameter mm, length mm).
-GUNS = {
-    "rifle":    (38.97, 6.1, 7.677, 850.0, 1.0, 1.0, 0.0, 10.0, "762x51"),
-    "pistol":   (30.0, 4.0, 6.0, 360.0, 1.4, 0.9, 0.0, 6.0, "9x19"),
-    "smg":      (30.0, 5.0, 6.0, 400.0, 1.25, 0.9, 0.0, 13.3, "9x19"),
-    "shotgun":  (45.0, 20.0, 30.0, 400.0, 0.75, 1.0, 0.0, 1.5, "12_slug"),
-    "silenced": (30.0, 4.0, 6.0, 300.0, 1.4, 0.08, 0.0, 6.0, "9x19_sub"),
-    "silenced_rifle": (38.97, 6.1, 7.677, 850.0, 1.0, 0.08, 0.0, 10.0, "762x51"),
-    "cannon":   (60.0, 60.0, 200.0, 450.0, 0.3, 1.0, 0.0, 0.5, (117.0, 117.0)),
-}
-SUPPRESSED = {"silenced", "silenced_rifle"}
+GUNS = presets.schema("gun_legacy", {
+    "chirp": PF(float, lo=1.0, hi=500.0, unit="ms"), "barrel": PF(float, lo=0.5, hi=500.0, unit="ms"), "burst": PF(float, lo=0.5, hi=2000.0, unit="ms"),
+    "v": PF(float, lo=1.0, hi=3000.0, unit="m/s"), "bscale": PF(float, lo=0.05, hi=5.0), "bgain": PF(float, lo=0.0, hi=10.0),
+    "blop": PF(float, lo=0.0, hi=20000.0, unit="Hz"), "rate": PF(float, lo=0.05, hi=200.0, unit="rounds/s"),
+    "proj": PF(str, required=False), "proj_dim": PF(tuple, items=(PF(float, lo=0.5, hi=500.0, unit="mm"), PF(float, lo=0.5, hi=2000.0, unit="mm")), required=False)},
+    shape=lambda d: (d["chirp"], d["barrel"], d["burst"], d["v"], d["bscale"], d["bgain"], d["blop"], d["rate"], d["proj"] if "proj" in d else d["proj_dim"]))
+BLAST_BACK_DB = 15.0                    # level of the muzzle blast behind the shooter relative to straight ahead
+SUPPRESSED = {"silenced", "silenced_rifle", "smg_sd"}
 SUPPRESSOR_CUT = (160.0, 1000.0, 0.8)   # Hz band the can takes out most, depth of that cut
 FIRST_POP = 1.6                         # first round through a cold can: the air inside burns too
 PORT_LEVEL = 0.25                       # ejection-port gas, which the suppressor does not quiet
@@ -862,12 +892,12 @@ EAR_GAIN = {"center": 1.0, "right": 3.16, "left": 0.5}   # shooter's ear on the 
 CRACK_MISS = 3.0          # m between the bullet's path and the listener
 
 
-def crack_cone_gain(angle: float, v_bullet: float) -> float:
+def crack_cone_gain(angle: float, v_bullet: float, c: float = C_AIR) -> float:
     """1 inside the Mach cone (angle off the line of fire < 90 - asin(c/v) degrees), fading to 0 over 5 degrees
     outside it; 0 for a subsonic round."""
-    if v_bullet <= C_AIR:
+    if v_bullet <= c:
         return 0.0
-    edge = 90.0 - math.degrees(math.asin(C_AIR / v_bullet))
+    edge = 90.0 - math.degrees(math.asin(c / v_bullet))
     return float(np.clip((edge - float(angle)) / 5.0, 0.0, 1.0))
 
 
@@ -893,12 +923,14 @@ def _gun_action(kind: str, rng, n: int, amount: float) -> np.ndarray:
 
 
 def _gunshot(kind: str, rng, action: float, crack: float, distance: float, echo: float, ground: str = "none", height: float = 1.6,
-             angle=None, ear: str = "center") -> np.ndarray:
+             angle=None, ear: str = "center", temp=None) -> np.ndarray:
+    c_air = C_AIR if temp is None else 331.0 * math.sqrt(1.0 + float(np.clip(temp, -40.0, 60.0)) / 273.0)
     chirp, barrel, burst, v_bullet, bscale, bgain, blop = GUNS[kind][:7]
     miss = CRACK_MISS
     if angle is not None:
         miss = max(0.5, distance * math.sin(math.radians(float(angle))))
-        crack = crack * crack_cone_gain(float(angle), v_bullet)
+        crack = crack * crack_cone_gain(float(angle), v_bullet, c_air)
+        bgain = bgain * 10.0 ** (-BLAST_BACK_DB * 0.5 * (1.0 - math.cos(math.radians(float(angle)))) / 20.0)
     n = _n(0.45 + burst * 1e-3 + (0.5 if echo > 0 else 0.0))
     x = np.zeros(n)
     _put(x, _shell(chirp * 1e-3), 0.0, 0.6)                      # detonation, heard through the body
@@ -928,8 +960,8 @@ def _gunshot(kind: str, rng, action: float, crack: float, distance: float, echo:
         nf = 1 << int(np.ceil(np.log2(len(blast) + _n(0.05))))
         H = space.ground_effect(np.fft.rfftfreq(nf, 1.0 / P), distance, height, height, _ground_sigma(ground))
         blast = np.fft.irfft(np.fft.rfft(blast, nf) * H, nf)[:len(blast)]
-    super_ = v_bullet > C_AIR and crack > 0
-    lag = distance * (1.0 / C_AIR - 1.0 / v_bullet) if super_ else 0.0   # the crack outruns the thump
+    super_ = v_bullet > c_air and crack > 0
+    lag = distance * (1.0 / c_air - 1.0 / v_bullet) if super_ else 0.0   # the crack outruns the thump
     y = np.zeros(n + _n(lag))
     _put(y, blast, lag)
     if super_:
@@ -945,9 +977,10 @@ def _gunshot(kind: str, rng, action: float, crack: float, distance: float, echo:
      height=(1.6, "m of the muzzle and the ear above that ground"),
      angle=(None, "degrees between the line of fire and the listener: the crack is heard only inside the Mach cone, its miss distance = distance sin(angle) (default: 3 m off the path)"),
      ear=("center", "center | right | left: the shooter's ear; right = beside the ejection port, its gas +10 dB"),
+     temp=(None, "air temperature in degC: sound speed 331 sqrt(1 + T/273) sets the blast lag and the Mach cone (default 343 m/s)"),
      seed=(0, "variation"))
 def gunshot(sr=DEFAULT_SR, kind="rifle", distance=10.0, shots=1, rate=0.0, action=0.6, crack=1.0, echo=0.3, ground="none", height=1.6, seed=0,
-            angle=None, ear="center"):
+            angle=None, ear="center", temp=None):
     """Timeline shell 0 ms, barrel 6 ms, noise burst 19.2 ms; all
     layers through one 8-band body (Q 10.62) and tanh; N-wave 4 ms long with its ground reflection
     9.133 ms later through lop 100. The crack arrives first; the muzzle blast and its echo tail
@@ -960,7 +993,7 @@ def gunshot(sr=DEFAULT_SR, kind="rifle", distance=10.0, shots=1, rate=0.0, actio
     shots = int(np.clip(shots, 1, 60))
     gap = 1.0 / (float(rate) if rate > 0 else GUNS[kind][7])
     ang = None if angle is None else float(np.clip(float(angle), 0.0, 180.0))
-    one = [_gunshot(kind, rng, _c01(action), _c01(crack), d, _c01(echo), ground, float(np.clip(height, 0.05, 50.0)), ang, str(ear))
+    one = [_gunshot(kind, rng, _c01(action), _c01(crack), d, _c01(echo), ground, float(np.clip(height, 0.05, 50.0)), ang, str(ear), temp)
            for _ in range(min(shots, 4))]
     y = np.zeros(_n((shots - 1) * gap * 1.05) + max(len(o) for o in one))
     t = 0.0
@@ -998,20 +1031,22 @@ def reload(sr=DEFAULT_SR, kind="rifle", speed=1.0, slide=1.0, seed=0):
 
 @sfx("casing", "Spent shell casings (or coins, small brass) bouncing on a hard floor.",
      count=(1, "casings"), size=(1.0, "bigger = lower (1 = rifle brass at 4.5-5.5 kHz); ignored with caliber"), spread=(0.25, "s over which they land"),
-     caliber=("", "empty = generic brass | 9mm|45acp|556|762|50bmg|12ga|20mm|105mm: modes of that case"),
+     caliber=("556", "9mm|45acp|556|762|50bmg|12ga|20mm|105mm: modes of that case | generic = the old shellcasings.pd model"),
      floor=("concrete", "with caliber: concrete|wood|metal|tile|dirt|grass"), height=(1.2, "m it falls, with caliber"),
      roll=(False, "true = it rolls away after the bounces (hard floors, with caliber)"),
      ricochet=(False, "true = the film / game case: a long ring, spinning, bounces speeding up into a rattle (`casing_ricochet`; 556 brass without caliber)"),
      seed=(0, "variation"))
-def casing(sr=DEFAULT_SR, count=1, size=1.0, spread=0.25, caliber="", floor="concrete", height=1.2, roll=False, ricochet=False, seed=0):
-    """shellcasings.pd: noise x e^4 (0-39 ms) -> 3 bp Q800; bounces at 75 ms, +170-344 ms,
+def casing(sr=DEFAULT_SR, count=1, size=1.0, spread=0.25, caliber="556", floor="concrete", height=1.2, roll=False, ricochet=False, seed=0):
+    """The 5.56 case by default (empty = the same); ``size`` scales the case, pitch following 1 / size.
+    ``caliber="generic"``: shellcasings.pd: noise x e^4 (0-39 ms) -> 3 bp Q800; bounces at 75 ms, +170-344 ms,
     +75-149 ms with gains 0.416, 0.257, 0.05."""
+    caliber = str(caliber) or "556"
     if ricochet:
         from .arms import casing_ricochet
-        return casing_ricochet(sr, caliber or "556", floor, height, count, spread, seed=seed)
-    if caliber:
+        return casing_ricochet(sr, caliber if caliber != "generic" else "556", floor, height, count, spread, seed=seed)
+    if caliber != "generic":
         from .arms import casing_physical
-        return casing_physical(sr, caliber, floor, height, count, spread, roll, seed)
+        return casing_physical(sr, caliber, floor, height, count, spread, roll, seed, size)
     rng = np.random.default_rng(int(seed))
     count = int(np.clip(count, 1, 40))
     y = np.zeros(_n(1.2 + float(spread)))
@@ -1026,8 +1061,13 @@ def casing(sr=DEFAULT_SR, count=1, size=1.0, spread=0.25, caliber="", floor="con
 BLADES = {"sword": "SWD1", "sword2": "SWD2", "golf_club": "PGA", "bat": "MLB", "broom": "BROOM", "wood_sword": "WOODSWD"}
 
 
-def _swing(blade: str, speed: float, rng, model: str = "loq", thick: float = 1.0) -> np.ndarray:
+SHORT_ARC = (130.0, 215.0)       # azimuth start and end of a short, close-range cut (degrees)
+
+
+def _swing(blade: str, speed: float, rng, model: str = "loq", thick: float = 1.0, arc: str = "full") -> np.ndarray:
     p = dict(modal.SWING_PRESETS[BLADES.get(str(blade), "SWD1")])
+    if arc == "short":
+        p["PreAzim"], p["PostAzim"] = SHORT_ARC
     p["TopSpeed"] *= float(np.clip(speed, 0.2, 3.0))
     p["HiltThick"] *= thick
     p["TipThick"] *= thick
@@ -1038,16 +1078,21 @@ def _swing(blade: str, speed: float, rng, model: str = "loq", thick: float = 1.0
      blade=("sword", "|".join(BLADES) + " (thin sword, thicker sword, golf club, baseball bat, broom, wooden sword)"), speed=(1.0, "tip-speed scale (1 = the preset, e.g. 36 m/s)"),
      thickness=(1.0, "diameter scale (thicker = lower)"), model=("loq", "loq (St 0.2, Q 10: rated best) | patch (Fey Strouhal, bandwidth Q)"),
      groove=(0.0, "0..1 level of the fuller groove's cavity tones (Rossiter modes of a 3 mm groove: ~3.2, 7.5, 11.8 kHz at 24 m/s)"),
+     arc=("full", "full (the preset's sweep) | short (azimuth 130 to 215 degrees: a quick close cut)"),
      seed=(0, "variation"))
-def sword(sr=DEFAULT_SR, blade="sword", speed=1.0, thickness=1.0, model="loq", groove=0.0, seed=0):
+def sword(sr=DEFAULT_SR, blade="sword", speed=1.0, thickness=1.0, model="loq", groove=0.0, seed=0, arc="full"):
     """f = St u / d per source, dipole gain ~ u^6, Doppler. ``groove``: the flow over the blade's groove
     (``GROOVE``: length along the flow, depth, share of the blade it runs) adds ``modal.cavity_tone`` at the
     groove's mid-point speed."""
     rng = np.random.default_rng(int(seed))
-    y = _swing(blade, speed, rng, model, float(np.clip(thickness, 0.2, 5)))
+    if arc not in ("full", "short"):
+        raise ValueError("arc must be full or short")
+    y = _swing(blade, speed, rng, model, float(np.clip(thickness, 0.2, 5)), arc)
     g = float(np.clip(groove, 0.0, 1.0))
     if g > 0:
         p = dict(modal.SWING_PRESETS[BLADES.get(str(blade), "SWD1")])
+        if arc == "short":
+            p["PreAzim"], p["PostAzim"] = SHORT_ARC
         p["TopSpeed"] *= float(np.clip(speed, 0.2, 3.0))
         L, gd, share = GROOVE
         _, _, u_tip, _ = modal._swing_kinematics(p, 0.05, 0.15)
@@ -1516,6 +1561,7 @@ def clock(sr=DEFAULT_SR, size="mantle", rate=0.0, dur=4.0, pendulum=0.0, chime=0
 
 
 RELAY_BOUNCE = {"on": 5e-3, "off": 7e-3}
+RELAY_BOUNCE_BISTABLE = {"on": 5e-3, "off": 15e-3}
 RELAY_OPERATE = {"on": 14e-3, "off": 12e-3}
 RELAY_RP3SL = dict(mass_g=18.0, vibration_g=20.0, shock_g=100.0, loaded_per_h=960.0, unloaded_per_h=72000.0)
 
@@ -1533,7 +1579,7 @@ def pnoise(n: int, rng, colours=PNOISE_COLOURS[0]) -> np.ndarray:
     return 2.0 * ((f1 * t + b) % 1.0) - 1.0
 
 
-def _switch(kind: str, state: str, rng, n: int, coil: bool = False, noise: str = "band") -> np.ndarray:
+def _switch(kind: str, state: str, rng, n: int, coil: bool = False, noise: str = "band", bistable: bool = False) -> np.ndarray:
     """Event patterns: each click is one mechanical event."""
     nz = rng.uniform(-1, 1, n)
     if noise == "pnoise":
@@ -1548,7 +1594,7 @@ def _switch(kind: str, state: str, rng, n: int, coil: bool = False, noise: str =
         return cl(20, 5000, 0.0) + cl(20, 5200, 0.012) + _mclick(lo, CATCH, 0.030, 1.0)
     if kind == "relay":
         st = "off" if state == "off" else "on"
-        k, t0 = RELAY_BOUNCE[st] / 5e-3, RELAY_OPERATE[st] if coil else 0.0
+        k, t0 = (RELAY_BOUNCE_BISTABLE if bistable else RELAY_BOUNCE)[st] / 5e-3, RELAY_OPERATE[st] if coil else 0.0
         y = cl(20, 5000, t0) + 0.5 * cl(10, 5000, t0 + 0.0025 * k) + 0.3 * cl(8, 5000, t0 + 0.004 * k) + 0.15 * cl(6, 5000, t0 + 0.005 * k)
         y += _shortping(n, t0, 0.02)
         _put(y, _shock(0.006), t0, 0.3 * float(np.max(np.abs(y))))
@@ -1569,11 +1615,12 @@ def _switch(kind: str, state: str, rng, n: int, coil: bool = False, noise: str =
      kind=("toggle", "toggle|rocker|push|relay|slide|rotary"), mount=("plastic", "plastic|wood|metal: the panel it sits on"),
      state=("on", "on|off (latching push button sounds different each way; a relay bounces longer when it releases)"),
      coil=(0, "relay: 1 = start when the coil is switched, the contact moves 14 ms (on) / 12 ms (off) later"), seed=(0, "variation"),
-     noise=("band", "band: white noise in each click | pnoise: one shared generator of three crossed phasors, the same level every click"))
-def switch(sr=DEFAULT_SR, kind="toggle", mount="plastic", state="on", coil=0, seed=0, noise="band"):
+     noise=("band", "band: white noise in each click | pnoise: one shared generator of three crossed phasors, the same level every click"),
+     bistable=(0, "relay: 1 = a latching (bistable) relay, which bounces 15 ms on release instead of 7 ms; 5 ms on operate either way"))
+def switch(sr=DEFAULT_SR, kind="toggle", mount="plastic", state="on", coil=0, seed=0, noise="band", bistable=0):
     if noise not in ("band", "pnoise"):
         raise ValueError("switch noise must be band or pnoise")
-    return _fin(_panel(_switch(str(kind), str(state), np.random.default_rng(int(seed)), _n(0.3), bool(coil), noise), mount), sr, 0.6)
+    return _fin(_panel(_switch(str(kind), str(state), np.random.default_rng(int(seed)), _n(0.3), bool(coil), noise, bool(bistable)), mount), sr, 0.6)
 
 
 @sfx("relay_chatter", "A relay switched on and off in a row, each operation a contact click with its bounce; the rate is held to what the relay can do (20 Hz unloaded, 960 an hour under load).",
@@ -1968,20 +2015,55 @@ def phone_line(x: np.ndarray) -> np.ndarray:
     return amb.hip(amb.hip(amb.bp(1.2 * amb.bp(np.clip(x, -0.9, 0.9), 2000.0, 12.0), 400.0, 7.0), 90.0), 90.0)
 
 
+LISTEN_HELP = "handset (loud, close) | line (the signal straight off the line) | room (thin, far, with the room around it)"
+
+
+def phone_listen(x: np.ndarray, listen: str = "handset") -> np.ndarray:
+    """Where the line is heard: the handset chain of `phone_line`; the line itself (clip, 2 kHz resonance, one high-pass); or the
+    handset across a room, thin and far (high-passed at 400 Hz, three early reflections, rolled off at 3 kHz)."""
+    listen = str(listen)
+    if listen == "handset":
+        return phone_line(x)
+    if listen == "line":
+        return amb.hip(amb.bp(np.clip(x, -0.9, 0.9), 2000.0, 12.0), 90.0)
+    if listen == "room":
+        y = amb.hip(phone_line(x), 400.0)
+        out = 0.5 * y
+        for d, g in ((0.007, 0.4), (0.013, 0.3), (0.023, 0.2)):
+            out[_n(d):] += g * y[:len(y) - _n(d)]
+        return amb.lop(out, 3000.0)
+    raise ValueError(f"listen must be handset|line|room, not {listen!r}")
+
+
+@sfx("phone_click", "The click of a telephone line: the exchange current cut (hang-up, the dead line) or made (pick-up), a step edge that makes the line ring.",
+     kind=("hangup", "hangup|pickup"), listen=("handset", LISTEN_HELP), dur=(0.4, "s"))
+def phone_click(sr=DEFAULT_SR, kind="hangup", listen="handset", dur=0.4):
+    if str(kind) not in ("hangup", "pickup"):
+        raise ValueError("kind must be hangup|pickup")
+    n = _n(float(np.clip(dur, 0.1, 5.0)))
+    a, w = _n(0.05), _n(0.0003)
+    ramp = np.linspace(0.0, 1.0, w)
+    y = np.zeros(n)
+    y[a:a + w] = ramp if kind == "pickup" else 1.0 - ramp
+    y[a + w:] = 1.0 if kind == "pickup" else 0.0
+    y[:a] = 0.0 if kind == "pickup" else 1.0
+    return _fin(phone_listen(0.8 * y, listen), sr, 0.6, fade=0.0005)
+
+
 @sfx("pulse_dial", "Rotary phone pulse dialling heard down the line: the exchange current switched on and off, one 40 ms pulse every 100 ms per count of the digit.",
-     digit=(7, "1..9, or 0 = ten pulses"), line=(True, "through the telephone line and handset"))
-def pulse_dial(sr=DEFAULT_SR, digit=7, line=True):
+     digit=(7, "1..9, or 0 = ten pulses"), line=(True, "through the telephone line and handset"), listen=("handset", LISTEN_HELP))
+def pulse_dial(sr=DEFAULT_SR, digit=7, line=True, listen="handset"):
     k = int(digit) % 10 or 10
     y = np.zeros(_n(0.1 * k + 0.2))
     for i in range(k):
         y[_n(0.1 * i):_n(0.1 * i + 0.04)] = 0.8
-    return _fin(phone_line(y) if line else y, sr, 0.6, fade=0.0005)
+    return _fin(phone_listen(y, listen) if line else y, sr, 0.6, fade=0.0005)
 
 
 @sfx("phone_tone", "Telephone network tones: dial tone, busy signal or ringback, with each region's frequencies and cadence.",
      kind=("dial", "dial|busy|ringback"), region=("us", "us|uk|eu"), dur=(0.0, "s (0 = 2 s of dial tone, two busy cycles, or one ringback cycle)"),
-     line=(False, "through the telephone line and handset (clipped, 2 kHz and 400 Hz band-passes)"))
-def phone_tone(sr=DEFAULT_SR, kind="dial", region="us", dur=0.0, line=False):
+     line=(False, "through the telephone line and handset (clipped, 2 kHz and 400 Hz band-passes)"), listen=("handset", LISTEN_HELP))
+def phone_tone(sr=DEFAULT_SR, kind="dial", region="us", dur=0.0, line=False, listen="handset"):
     key = (str(region).lower(), str(kind).lower())
     if key not in PHONE_TONES:
         raise ValueError(f"phone_tone: unknown region/kind {key}; regions us|uk|eu, kinds dial|busy|ringback")
@@ -2001,7 +2083,7 @@ def phone_tone(sr=DEFAULT_SR, kind="dial", region="us", dur=0.0, line=False):
             j += 1
         y = y * env
     if line:
-        return _fin(phone_line(_fin(0.125 * y, P, None, src=sr, fade=0.003)), sr, 0.5, fade=0.003)
+        return _fin(phone_listen(_fin(0.125 * y, P, None, src=sr, fade=0.003), listen), sr, 0.5, fade=0.003)
     return _fin(y, sr, 0.5, src=sr, fade=0.003)
 
 
@@ -2273,12 +2355,80 @@ def transporter_activate(n: int, sr: int, rng) -> np.ndarray:
     return y / (np.max(np.abs(y)) + 1e-12)
 
 
-@sfx("robot_babble", "Droid chatter: a string of random FM bleeps, whistles and warbles.",
-     dur=(1.5, "s"), rate=(11.0, "syllables per second"), low=(300.0, "Hz lowest carrier"), high=(2800.0, "Hz highest carrier"), seed=(0, "variation"))
-def robot_babble(sr=DEFAULT_SR, dur=1.5, rate=11.0, low=300.0, high=2800.0, seed=0):
+R2D2_PERIOD = (0.1, 0.6)         # s: metronome period = 0.1 + 0.6 talk
+R2D2_CARRIER_HZ, R2D2_RATIO, R2D2_INDEX, R2D2_AMP = 0.6 * 9000.0, 32.0, 2.0, 0.5
+
+
+def _r2d2_curve(rng, ticks, n, sr, draw):
+    """One randomiser per parameter: at every tick the value is held (1 in 3), stepped to a new draw (1 in 3) or
+    slid to it over the tick (1 in 3)."""
+    out = np.empty(n)
+    v = draw()
+    pos = 0
+    for d in ticks:
+        m = min(max(int(d * sr), 1), n - pos)
+        if m <= 0:
+            break
+        new = draw()
+        mode = int(rng.integers(0, 3))
+        if mode == 1:
+            v = new
+            out[pos:pos + m] = v
+        elif mode == 2:
+            out[pos:pos + m] = v + (new - v) * np.arange(1, m + 1) / m
+            v = new
+        else:
+            out[pos:pos + m] = v
+        pos += m
+    out[pos:] = v
+    return out
+
+
+def _r2d2(sr, dur, talk, rng):
+    """Phase-modulation babble: carrier, modulator ratio, index and level each follow their own randomiser; the ratio
+    and index are driven well past the band limit on purpose (foldover), then two low-passes at 10 kHz and two
+    high-passes at 100 Hz."""
+    n = int(sr * dur)
+    period = R2D2_PERIOD[0] + R2D2_PERIOD[1] * float(np.clip(talk, 0.0, 1.0))
+    ticks = []
+    while sum(ticks) < dur + period:
+        ticks.append(period / (1 + int(rng.integers(0, 2))))
+    cf = _r2d2_curve(rng, ticks, n, sr, lambda: R2D2_CARRIER_HZ * rng.random())
+    ratio = _r2d2_curve(rng, ticks, n, sr, lambda: R2D2_RATIO * (20.0 + rng.integers(0, 800)) / 1000.0)
+    idx = _r2d2_curve(rng, ticks, n, sr, lambda: R2D2_INDEX * rng.integers(0, 1000) / 1000.0)
+    amp = _r2d2_curve(rng, ticks, n, sr, lambda: R2D2_AMP * (0.2 + rng.integers(0, 100) / 200.0))
+    ph = np.cumsum(cf) / sr
+    phm = np.cumsum(cf * ratio) / sr
+    y = np.cos(2 * np.pi * (ph + idx * np.sin(2 * np.pi * phm))) * amp
+    for _ in range(2):
+        y = F.highpass(F.lowpass(y, 10000.0, sr), 100.0, sr)
+    return y
+
+
+@sfx("robot_babble", "Droid chatter: a string of random FM bleeps, whistles and warbles; `style=pd` is the phase-modulation babble of a random-everything synthesiser (carrier, ratio, index and level each hold, step or slide at every tick).",
+     dur=(1.5, "s"), rate=(11.0, "syllables per second"), low=(300.0, "Hz lowest carrier"), high=(2800.0, "Hz highest carrier"), seed=(0, "variation"),
+     style=("fm", "fm | farnell (two random oscillators sampled every random(300)+12 ms set a third one: 12-312 ms ticks, up to 3 kHz) | pd (random phase modulation driven past the band limit, folded on purpose: carrier up to 5.4 kHz, modulator ratio up to 26)"),
+     talk=(0.5, "0..1 pd only: tick period 0.1 + 0.6 talk s (half of them split in two)"))
+def robot_babble(sr=DEFAULT_SR, dur=1.5, rate=11.0, low=300.0, high=2800.0, seed=0, style="fm", talk=0.5):
     """Random FM babble: glides on 30 % of the syllables, rests on 15 %."""
     rng = np.random.default_rng(int(seed))
     dur = float(np.clip(dur, 0.1, 60.0))
+    if style == "pd":
+        return _fin(_r2d2(sr, dur, talk, rng), sr, 0.5, src=sr)
+    if style == "farnell":
+        y = np.zeros(int(sr * dur))
+        t0 = 0.0
+        while t0 < dur - 0.012:
+            d = (rng.integers(0, 300) + 12) * 1e-3
+            g = np.sin(2 * np.pi * np.array([rng.integers(0, 2000) + 20, rng.integers(0, 1000) + 20]) * rng.random(2))
+            f = float(np.clip(abs(g.sum()) * rng.integers(0, 500) + rng.integers(0, 3000), 20.0, 0.45 * sr))
+            m = min(int(d * sr), len(y) - int(t0 * sr))
+            if m > 8:
+                _put(y, np.sin(2 * np.pi * f * np.arange(m) / sr) * _gate(m, sr, 0.002), t0, 0.5, rate=sr)
+            t0 += d
+        return _fin(y, sr, 0.5, src=sr)
+    if style != "fm":
+        raise ValueError("robot_babble style must be fm|pd|farnell")
     y = np.zeros(int(sr * dur))
     t0 = 0.0
     lo, hi = float(np.clip(low, 50, 0.2 * sr)), float(np.clip(high, 100, 0.22 * sr))
@@ -2299,12 +2449,40 @@ def robot_babble(sr=DEFAULT_SR, dur=1.5, rate=11.0, low=300.0, high=2800.0, seed
     return _fin(F.lowpass(y, 5000.0, sr), sr, 0.5, src=sr)
 
 
-@sfx("red_alert", "Starship red alert: a rising klaxon whoop repeated.",
-     whoops=(3, "repeats"), low=(360, "start: Hz or note name"), high=(847, "end: Hz or note name"), rate=(0.78, "whoops per second"))
-def red_alert(sr=DEFAULT_SR, whoops=3, low=360, high=847, rate=0.78):
+RED_ALERT_RESONATORS_MS = (14.7, 22.4, 24.3, 35.0, 11.0)
+RED_ALERT_FORMANTS = (740.0, 1400.0, 1500.0, 1600.0)
+
+
+def _red_alert_patch(sr, whoops, low, high, per):
+    sweep = min(0.9, per)
+    m = int(sr * sweep)
+    f = low + (high - low) * np.sqrt(np.arange(m) / m)
+    ph = np.cumsum(f) / sr % 1.0
+    one = (2.0 * ph - 1.0 + 0.3 * np.sin(4.0 * np.pi * ph)) * _gate(m, sr, 0.03)
+    y = np.zeros(int(sr * per * whoops))
+    for j in range(whoops):
+        _put(y, one, j * per, rate=sr)
+    taps = lambda ms: max(1, int(round(sr * ms / 1000.0)))
+    res = sum(lfilter([1.0], np.r_[1.0, np.zeros(taps(ms) - 1), -0.6], y) for ms in RED_ALERT_RESONATORS_MS)
+    loop = taps(61.0)
+    res = lfilter([1.0], np.r_[1.0, np.zeros(loop - 1), -0.3], res)
+    res = F.highpass(res, 20.0, sr)
+    res = np.clip(res / (np.max(np.abs(res)) + 1e-12) * 4.0, -1.0, 1.0)
+    out = sum(F.bandpass(res, fc, sr, q=8.0) for fc in RED_ALERT_FORMANTS)
+    return _fin(out, sr, 0.55, src=sr)
+
+
+@sfx("red_alert","Starship red alert: a rising klaxon whoop repeated.",
+     whoops=(3, "repeats"), low=(360, "start: Hz or note name"), high=(847, "end: Hz or note name"), rate=(0.78, "whoops per second"),
+     model=("whoop", "whoop = two saws, exponential sweep | patch = the analysed siren: square-root sweep (0.9 s) with a second harmonic, five feedback resonators in a 61 ms loop, hard clip, formants at 740, 1400, 1500 and 1600 Hz"))
+def red_alert(sr=DEFAULT_SR, whoops=3, low=360, high=847, rate=0.78, model="whoop"):
     """The oscillator rises from 360 to 847 Hz in 900 ms; rate 0.78 makes the 70 % sweep 0.9 s.
     Exponential curve, two saws through a 3 kHz low-pass."""
     per = 1.0 / float(np.clip(rate, 0.2, 8.0))
+    if model == "patch":
+        return _red_alert_patch(sr, int(np.clip(whoops, 1, 60)), to_hz(low), to_hz(high), per)
+    if model != "whoop":
+        raise ValueError(f"red_alert model {model!r}: use whoop or patch")
     m = int(sr * per * 0.7)
     f = to_hz(low) * (to_hz(high) / to_hz(low)) ** (np.arange(m) / m)
     one = F.lowpass(O.saw(f, m, sr) + O.saw(f * 1.006, m, sr), 3000.0, sr) * _gate(m, sr, 0.012)
@@ -2316,11 +2494,19 @@ def red_alert(sr=DEFAULT_SR, whoops=3, low=360, high=847, rate=0.78):
 
 @sfx("dark_drone", "Dark resonant drone: pink noise ringing three octave-stacked resonators inside a very long reverb.",
      dur=(6.0, "s"), note=(52.0, "MIDI note of the lowest resonator (52 = E3)"), ring=(0.2, "s ring time of the resonators"),
-     reverb_time=(100.0, "s reverb T60"), seed=(0, "variation"))
-def dark_drone(sr=DEFAULT_SR, dur=6.0, note=52.0, ring=0.2, reverb_time=100.0, seed=0):
+     reverb_time=(100.0, "s reverb T60"), seed=(0, "variation"),
+     valence=(None, "-1..1 mood: adds a fifth, and a major third above +0.2 or a minor third below -0.2; slow 11 s swell"),
+     tension=(0.0, "0..1 mood: a second is added above 0.5"))
+def dark_drone(sr=DEFAULT_SR, dur=6.0, note=52.0, ring=0.2, reverb_time=100.0, seed=0, valence=None, tension=0.0):
     """genny.physical.ambience.dark_ambience."""
+    chord, swell = (), 0.0
+    if valence is not None:
+        v = float(np.clip(valence, -1.0, 1.0))
+        chord = (7,) + ((4 if v > 0 else 3,) if abs(v) > 0.2 else ()) + ((2,) if tension > 0.5 else ())
+        swell = 0.35
     y = amb.dark_ambience(float(np.clip(dur, 0.5, 120.0)), np.random.default_rng(int(seed)), note=float(np.clip(note, 20, 90)),
-                          ring=float(np.clip(ring, 0.02, 3.0)), reverb_time=float(np.clip(reverb_time, 1.0, 200.0)))
+                          ring=float(np.clip(ring, 0.02, 3.0)), reverb_time=float(np.clip(reverb_time, 1.0, 200.0)),
+                          chord=chord, swell=swell)
     return _fin(y, sr, 0.6, fade=0.05)
 
 
@@ -2544,20 +2730,33 @@ def _tube(freq: float, n: int, rate: int, decay: float, bright: float, rng=None,
       law=("ratio", "ratio: T60 = decay / overtone ratio | rayleigh: aluminium Rayleigh damping, T60 ~ 1/f^2 (10 s at 587 Hz)"),
       scale=("pentatonic", "pentatonic on `tune` | measured: the six tubes of a real aluminium chime set (586-1167 Hz)"),
       strike=(-1.0, "-1: fixed weights 1, 0.5, 0.25, 0.12 | 0..1: struck at this fraction of the length, amplitudes |phi_n| of a free bar"),
+      pattern=("uniform", "uniform: strikes at random over `spread` | gust: clustered, the wind rises and falls twice over `spread` | sweep: the hand runs up the tubes in order"),
       seed=(0, "variation"))
-def wind_chimes(sr=DEFAULT_SR, vel=1.0, tune=880.0, tubes=7, spread=1.0, decay=3.0, tube="bar", law="ratio", scale="pentatonic", strike=-1.0, seed=0):
+def wind_chimes(sr=DEFAULT_SR, vel=1.0, tune=880.0, tubes=7, spread=1.0, decay=3.0, tube="bar", law="ratio", scale="pentatonic", strike=-1.0, seed=0,
+                pattern="uniform"):
     """Modal tubes (see the `wind_chime` instrument) struck at random over ``spread`` s."""
+    if pattern not in ("uniform", "gust", "sweep"):
+        raise ValueError("wind_chimes pattern: uniform, gust or sweep")
     if tube not in TUBES or law not in ("ratio", "rayleigh") or scale not in ("pentatonic", "measured"):
         raise ValueError("wind_chimes: tube bar|square, law ratio|rayleigh, scale pentatonic|measured")
     rng = np.random.default_rng(int(seed))
     dec, spread = float(np.clip(decay, 0.2, 20.0)), float(np.clip(spread, 0.0, 10.0))
     ring = dec if law == "ratio" else min(float(chime_decay(min(CHIME_OBRIEN) if scale == "measured" else tune, "rayleigh")), 20.0)
     y = np.zeros(int(sr * (spread + ring)))
-    for t0 in np.sort(rng.uniform(0, spread, int(np.clip(tubes, 1, 40)))):
+    nt = int(np.clip(tubes, 1, 40))
+    if pattern == "gust":                      # density ~ 1 + sin over two swells: reject uniform draws
+        draws = rng.uniform(0, spread, 8 * nt)
+        draws = draws[rng.random(draws.size) < 0.5 * (1.0 + np.sin(4 * np.pi * draws / max(spread, 1e-3)))][:nt]
+        times = np.sort(draws) if draws.size else np.array([0.0])
+    elif pattern == "sweep":
+        times = np.linspace(0.0, spread, nt)
+    else:
+        times = np.sort(rng.uniform(0, spread, nt))
+    for k, t0 in enumerate(times):
         if scale == "measured":
-            f = float(rng.choice(CHIME_OBRIEN))
+            f = float(np.sort(CHIME_OBRIEN)[k % len(CHIME_OBRIEN)] if pattern == "sweep" else rng.choice(CHIME_OBRIEN))
         else:
-            f = float(np.clip(tune, 100, 4000)) * 2.0 ** (rng.choice([0, 2, 4, 7, 9, 12]) / 12.0)
+            f = float(np.clip(tune, 100, 4000)) * 2.0 ** (((0, 2, 4, 7, 9, 12)[k % 6] if pattern == "sweep" else rng.choice([0, 2, 4, 7, 9, 12])) / 12.0)
         _put(y, _tube(f, int(sr * ring), sr, dec, 1.0, rng, tube, law, float(strike)), t0, rng.uniform(0.4, 1.0), rate=sr)
     return _fin(y, sr, 0.7 * _c01(vel, 0.05), src=sr, tail=0.05)
 
@@ -2694,14 +2893,39 @@ def swung(y, degrees, arm=BELL_SWING["arm"], period=BELL_SWING["period"]):
     return z * (1.0 + BELL_SWING["tilt"] * np.sin(th))
 
 
+HANDBELL_UP = (4.8, 5.4, 5.9, 7.4, 7.6, 9.0, 10.2, 10.4, 11.7, 12.0, 12.6, 15.2, 15.3)
+
+
 @instrument("handbell", "Small bright handbell (bell partial groups): hammer clang that settles to a pure tone, with a second bell a hair sharp for the beat.",
             family="mallet", span=("G4", "G6"), decay=(2.5, "s base decay"), detune=(0.3, "% the second bell is sharp (0 = one bell)"),
-            bright=(1.0, "0.3 dull .. 3 all hammer partials"))
-def handbell(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=2.5, detune=0.3, bright=1.0):
+            bright=(1.0, "0.3 dull .. 3 all hammer partials"),
+            tuning=("phone", "phone: the bell partial groups | english: measured handbell modes 1, 2, 3 x the note, T60 40 s at G4 falling with pitch | dutch: third partial at 2.4"))
+def handbell(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=2.5, detune=0.3, bright=1.0, tuning="phone"):
     """Partial ratios 0.501, 1, 0.7 | 2.002, 3, 9.6 | 2.49, 11, 2.571 | 3.05, 6.242, 12.49 |
     13, 16, 24 with group decays x 1.2, 0.9, 0.25, 0.14, 0.07; the written note is ratio 1."""
+    if tuning not in ("phone", "english", "dutch"):
+        raise ValueError("handbell: tuning phone|english|dutch")
     rng = np.random.default_rng(7)
     dec = float(np.clip(decay, 0.1, 12.0))
+    if tuning != "phone":
+        k = dec / 2.5
+        n = int(sr * (max(float(dur), 0.05) + min(40.0 * k, 12.0)))
+        tau = np.arange(n) / sr
+        t60 = float(np.clip(40.0 * (392.0 / max(float(freq), 50.0)) ** 1.2, 0.8, 60.0)) * k
+        third = 3.0 if tuning == "english" else 2.4
+        modes = [(1.0, 1.0, 1.0), (2.0, 0.5, 0.5), (third, 0.6, 0.4)] + [(r, 0.3 / (1 + 0.25 * i), 0.1) for i, r in enumerate(HANDBELL_UP)]
+
+        def one(f0):
+            y = np.zeros(n)
+            for r, a, d in modes:
+                f = f0 * r
+                if f < 0.45 * sr:
+                    y += a * float(_roll(f, 1.4 * float(bright))) * np.exp(-6.91 * tau / (t60 * d)) * np.sin(2 * np.pi * f * tau + rng.uniform(0, 2 * np.pi))
+            return y
+        y = one(float(freq))
+        if detune:
+            y = y + 0.6 * one(float(freq) * (1 + float(detune) / 100.0))
+        return _inst("handbell", y * np.minimum(1.0, tau / 0.002), sr, vel, src=sr)
     n = int(sr * (max(float(dur), 0.05) + min(1.2 * dec, 4.0)))
     tau = np.arange(n) / sr
     y = _fbell(float(freq), dec, tau, sr, rng, float(bright) * 0.6)
@@ -3058,3 +3282,18 @@ def overblow(sr=DEFAULT_SR, note="G4", peak=400.0, dur=3.0, seed=0):
     whistle = (reg == 0) * lvl * 0.5 * F.bandpass(rng.standard_normal(n), min(6.0 * f0, 0.4 * sr), sr, 30.0)
     y = tone + 0.05 * breath * lvl + whistle
     return _fin(y, sr, 0.7, src=sr, fade=0.02)
+
+
+HIT_MARKER = dict(freqs=(1900.0, 2850.0), weights=(0.7, 0.3), dur=0.05)
+
+
+@sfx("hit_marker", "Hit confirmation tick of a shooter: two sines at 1900 and 2850 Hz (weights .7 and .3) under a 50 ms decaying envelope.",
+     freq=(1900.0, "Hz of the main tone; the second sits at 1.5 times it"), dur=(0.05, "s"), tone=(0.3, "0..1 weight of the second tone"))
+def hit_marker(sr=DEFAULT_SR, freq=1900.0, dur=0.05, tone=0.3):
+    c = HIT_MARKER
+    n = _n(float(np.clip(dur, 0.01, 1.0)))
+    t = np.arange(n) / P
+    w = float(np.clip(tone, 0.0, 1.0))
+    f1 = float(freq)
+    y = (1.0 - w) * np.sin(2 * np.pi * f1 * t) + w * np.sin(2 * np.pi * f1 * c["freqs"][1] / c["freqs"][0] * t)
+    return _fin(y * np.exp(-5.0 * t / (n / P)), sr, 0.7, fade=0.002)

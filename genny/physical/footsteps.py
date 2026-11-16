@@ -89,6 +89,9 @@ ARABADZHI_SQUEAK = {
 }
 
 
+SNOW_DEPTH_REF, SNOW_DEPTH_DB_DECADE, SNOW_DEPTH_CORNER = 5.0, 6.0, 500.0
+
+
 def snow_squeak_bands(temperature: float) -> np.ndarray:
     """Measured third-octave squeak levels (dB) at ``temperature`` (C): linear in dB between the
     -1.5 C and -15 C curves ("the spectrum widens gradually"), clamped outside that range."""
@@ -469,9 +472,10 @@ def _scuff(F_all: np.ndarray, rng: np.random.Generator) -> np.ndarray:
 
 
 def render_step(ground: str, variation: int, rng: np.random.Generator, *, return_info: bool = False,
-                temperature: float = -8.0, accel: float = 0.0, incline: float = 0.0):
+                temperature: float = -8.0, accel: float = 0.0, incline: float = 0.0, snow_depth: float = 0.0):
     """One footstep on ``ground`` (mono, 48 kHz, not mastered). ``temperature`` (C) only shapes the
-    snow squeak. ``accel`` > 0 (speeding up) or ``incline`` > 0 (uphill) shift the
+    snow squeak. ``snow_depth`` (cm, snow only, 0 = off) raises the energy under 500 Hz by 6 dB per decade of depth
+    against 5 cm (deep snow booms, a thin crust does not). ``accel`` > 0 (speeding up) or ``incline`` > 0 (uphill) shift the
     GRF toward the ball, < 0 (slowing, downhill) toward the heel, through the patch's heelf/ballf term."""
     if ground not in GROUND_SPECS:
         raise KeyError(f"unknown ground {ground!r}; known: {list(GROUND_SPECS)}")
@@ -614,6 +618,10 @@ def render_step(ground: str, variation: int, rng: np.random.Generator, *, return
             # softer ground = HF decays faster: a low-pass per ground
             y = one_pole_lp(np.ascontiguousarray(y), one_pole_coef(soft))
         mix += _norm(y[:n]) * _db(db)
+    if snow_depth > 0.0 and "squeak" in sp:
+        gain = 10.0 ** (float(np.clip(SNOW_DEPTH_DB_DECADE * np.log10(snow_depth / SNOW_DEPTH_REF), -9.0, 9.0)) / 20.0)
+        mix = mix + (gain - 1.0) * lowpass(mix, SNOW_DEPTH_CORNER)
+        info["snow_depth"] = snow_depth
     nf = seconds(0.04)
     mix[-nf:] *= pow_decay(nf, 4.0)
     mix *= _ramp_in(n, 1.0)

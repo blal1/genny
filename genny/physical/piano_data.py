@@ -253,20 +253,54 @@ def bensa_decay(f, f0: float, B: float, L: float):
     return b1 + b2 * math.pi ** 2 / (2.0 * B * L * L) * (np.sqrt(1.0 + 4.0 * B * x * x) - 1.0)
 
 
+BENSA_TABLE_I = {"C2": dict(f0=65.4, L=1.23, c=160.9, kappa=0.58, b1=0.25, b2=7.5e-5, fs=16000),
+                 "C4": dict(f0=261.6, L=0.63, c=329.6, kappa=1.25, b1=1.1, b2=2.7e-4, fs=32000),
+                 "C7": dict(f0=2093.0, L=0.10, c=418.6, kappa=1.24, b1=9.17, b2=2.1e-3, fs=96000)}
+
+
+def stiff_string_mode(key: str, p) -> tuple:
+    """(frequency Hz, amplitude decay rate 1/s) of mode p of the stiff lossy string PDE of a Table I row,
+    sigma = -b1 - b2 beta^2, omega = sqrt(-(b1 + b2 beta^2)^2 + c^2 beta^2 + kappa^2 beta^4), beta = p pi / L."""
+    r = BENSA_TABLE_I[key]
+    beta2 = (np.asarray(p, float) * math.pi / r["L"]) ** 2
+    s = r["b1"] + r["b2"] * beta2
+    w = np.sqrt(np.maximum(-s * s + r["c"] ** 2 * beta2 + r["kappa"] ** 2 * beta2 * beta2, 0.0))
+    return w / (2.0 * math.pi), s
+
+
+def table_i_inharmonicity(key: str) -> float:
+    """B of a Table I row: kappa^2 (pi / L)^2 / c^2."""
+    r = BENSA_TABLE_I[key]
+    return (r["kappa"] * math.pi / (r["c"] * r["L"])) ** 2
+
+
 _RAUHALA_T1 = {4: dict(k1=-0.00050469, k2=-0.0064264, k3=-2.8743, C1=0.069618, C2=2.0427),
                1: dict(k1=-0.0026580, k2=-0.014811, k3=-2.9018, C1=0.071089, C2=2.1074)}
 
 
-def rauhala_tunable(f0: float, B: float, M: int = 4) -> float:
-    """a1 of the tunable dispersion allpass (M = 1 or 4 sections): kd = exp(k1 ln(B)^2 + k2 ln B + k3),
-    Cd = exp(C1 ln B + C2), D = exp(Cd - Ikey kd), a1 = (1 - D) / (1 + D); Ikey = key number (1 = A0)."""
+def rauhala_tunable_delay(f0: float, B: float, M: int = 4) -> float:
+    """D, the DC delay in samples of each section of the tunable dispersion filter (M = 1 or 4 sections, 44.1 kHz):
+    kd = exp(k1 ln(B)^2 + k2 ln B + k3), Cd = exp(C1 ln B + C2), D = exp(Cd - Ikey kd); Ikey = key number (1 = A0)."""
     p = _RAUHALA_T1[int(M)]
     ikey = math.log(f0 * 2 ** (1 / 12) / 27.5) / math.log(2 ** (1 / 12))
     lb = math.log(max(B, 1e-9))
     kd = math.exp(p["k1"] * lb * lb + p["k2"] * lb + p["k3"])
     cd = math.exp(p["C1"] * lb + p["C2"])
-    d = math.exp(cd - ikey * kd)
+    return math.exp(cd - ikey * kd)
+
+
+def rauhala_tunable(f0: float, B: float, M: int = 4) -> float:
+    """First-order allpass coefficient a1 = (1 - D) / (1 + D) for the delay D of `rauhala_tunable_delay`."""
+    d = rauhala_tunable_delay(f0, B, M)
     return (1.0 - d) / (1.0 + d)
+
+
+def rauhala_tunable_sections(f0: float, B: float, M: int = 4) -> tuple[float, float]:
+    """(a1, a2) of the second-order Thiran allpass (a2 + a1 z^-1 + z^-2) / (1 + a1 z^-1 + a2 z^-2) of delay D that the
+    tunable filter cascades M times."""
+    from ..graphsolver import thiran_coeffs
+    a = thiran_coeffs(rauhala_tunable_delay(f0, B, M), 2)
+    return float(a[1]), float(a[2])
 
 
 # unwound virtual piano strings (steel 7850 kg/m^3): length m, diameter m, tension N, hammer mass kg, K, R

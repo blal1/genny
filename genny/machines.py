@@ -84,6 +84,36 @@ def sliding_speed(rpm: float, teeth: int, teeth2: int, op):
     return (w1 + w1 * teeth / teeth2) * np.asarray(op, float)
 
 
+GEAR_OIL_B = (-8.92, 1.03, 1.04, -0.35, 2.81, -0.10, 0.75, -0.39, 0.62)
+
+
+def gear_friction_coefficient(slide_roll, p_hertz_gpa, v_entrain, mu0_cp, rough_um=0.5, radius_m=0.02, b=GEAR_OIL_B):
+    """Coefficient of friction of a lubricated gear contact from its slide-to-roll ratio, Hertz pressure (GPa), entraining speed (m/s),
+    inlet viscosity (cP), rms roughness (um) and radius of curvature (m); regression on EHL runs, typical gear oil. Pass to `tooth_friction(mu=)`."""
+    sr = np.maximum(np.abs(np.asarray(slide_roll, float)), 1e-6)
+    ph, ve, mu0 = np.asarray(p_hertz_gpa, float), np.asarray(v_entrain, float), float(mu0_cp)
+    L = np.log10(mu0)
+    f = b[0] + b[3] * sr * ph * L + b[4] * np.exp(-sr * ph * L) + b[8] * np.exp(float(rough_um))
+    return np.exp(f) * ph ** b[1] * sr ** b[2] * ve ** b[5] * mu0 ** b[6] * float(radius_m) ** b[7]
+
+
+def gear_rolling_force(u_sum, w_unit, radius_m, e_eff, alpha, nu0, phi_t: float = 1.0):
+    """Rolling friction per unit contact width (N/m) of a lubricated gear contact: phi_T 4.318 (G U)^0.658 Q^0.0126 R / alpha, with
+    G = alpha E', U = nu0 u_sum / (E' R), Q = w_unit / (E' R); ``u_sum`` = u1 + u2 (m/s), ``w_unit`` N/m, ``e_eff`` E' Pa, ``alpha`` pressure-viscosity
+    coefficient 1/Pa, ``nu0`` dynamic viscosity Pa s, ``phi_t`` the thermal reduction factor (1 = none)."""
+    g = float(alpha) * float(e_eff)
+    u = float(nu0) * np.asarray(u_sum, float) / (float(e_eff) * float(radius_m))
+    q = np.asarray(w_unit, float) / (float(e_eff) * float(radius_m))
+    return float(phi_t) * 4.318 * (g * u) ** 0.658 * q ** 0.0126 * float(radius_m) / float(alpha)
+
+
+def gear_mesh_efficiency(f_slide, v_slide, f_roll, v_roll, torque_in, omega_in):
+    """Mechanical efficiency of a mesh, 1 - sum (F_s |U1 - U2| + F_r (U1 + U2)) / (L_in w_in): ``f_slide`` N and ``f_roll`` N the sliding and
+    rolling forces of each contact point, ``v_slide`` and ``v_roll`` m/s their relative and summed speeds, the torque N m, the shaft rate rad/s."""
+    loss = np.sum(np.asarray(f_slide, float) * np.abs(np.asarray(v_slide, float)) + np.asarray(f_roll, float) * np.asarray(v_roll, float))
+    return float(1.0 - loss / (float(torque_in) * float(omega_in)))
+
+
 def tooth_friction(rpm, teeth: int, n: int, load: float = 0.6, mu: float = 0.1, seed: int = 0, top: float | None = None) -> np.ndarray:
     """Friction force of a mesh, per unit tooth load, at P: a sawtooth at teeth rpm / 60 that is nil at the pitch point and changes sign
     there, amplitude mu load (OP spans -1..1 of the path). Band-limited; ``top`` Hz: heard through a housing,
@@ -97,11 +127,11 @@ def tooth_friction(rpm, teeth: int, n: int, load: float = 0.6, mu: float = 0.1, 
     return float(mu) * float(load) * 2.0 / math.pi * y
 
 
-def _geared(rpm: float, teeth: int, teeth2: int, load: float, dur: float, seed: int, housing: float = 1800.0, wear: float = 0.2) -> np.ndarray:
+def _geared(rpm: float, teeth: int, teeth2: int, load: float, dur: float, seed: int, housing: float = 1800.0, wear: float = 0.2, mu: float = 0.1) -> np.ndarray:
     """`gearbox` plus the tooth friction it lacks."""
     n = _n(dur)
     g = _m(gearbox(sr=P, dur=dur, rpm=rpm, teeth=teeth, teeth2=teeth2, load=load, wear=wear, backlash=0.5 * wear, housing=housing, seed=seed), n)
-    return _nm(g) + 2.0 * tooth_friction(rpm, teeth, n, load, seed=seed, top=3000.0)
+    return _nm(g) + 2.0 * tooth_friction(rpm, teeth, n, load, mu, seed=seed, top=3000.0)
 
 
 def servo_env(n: int) -> np.ndarray:
@@ -395,8 +425,9 @@ CONVEYOR_ROLLER = 0.05                                      # m roller radius
 
 
 @sfx("conveyor", "Conveyor belt: rollers on bearings, a belt splice crossing them, geared drive motor.",
-     speed=(1.0, "m/s"), joint=(CONVEYOR_JOINT, "m between belt splices"), dur=(4.0, "s"), seed=(0, "variation"))
-def conveyor(sr=DEFAULT_SR, speed=1.0, joint=CONVEYOR_JOINT, dur=4.0, seed=0):
+     speed=(1.0, "m/s"), joint=(CONVEYOR_JOINT, "m between belt splices"), dur=(4.0, "s"), seed=(0, "variation"),
+     oiled=(0.0, "0..1: 1 = the drive's tooth friction from `gear_friction_coefficient` (oiled gear, about 0.02) instead of 0.1"))
+def conveyor(sr=DEFAULT_SR, speed=1.0, joint=CONVEYOR_JOINT, dur=4.0, seed=0, oiled=0.0):
     """Splice rate v / joint, roller rpm from v / 2 pi r."""
     d, seed = _dur(dur, 0.3), int(seed)
     n, v = _n(d), float(np.clip(speed, 0.1, 6.0))
@@ -405,7 +436,10 @@ def conveyor(sr=DEFAULT_SR, speed=1.0, joint=CONVEYOR_JOINT, dur=4.0, seed=0):
     rl = _nm(amb.lop(_m(K.roll(sr=P, dur=d, speed=v, radius=CONVEYOR_ROLLER, roughness=0.5, material="rubber", surface="steel", surface_size=1.5, joints=L, seed=seed), n), 3000.0))
     splice = _nm(_clicks(n, ENDSTOP[:2], _beats(v / L, d - 0.1, 0.05), np.random.default_rng(seed)))     # `roll(joints=)` alone does not carry v / L in its envelope (measured)
     be = _nm(_m(bearing(sr=P, dur=d, rpm=roller, state="healthy", seed=seed), n))
-    drive = _geared(1450.0, 20, 400, 0.6, d, seed, wear=0.0)
+    mu = 0.1
+    if oiled >= 0.5:
+        mu = float(gear_friction_coefficient(0.3, 1.0, 5.0, 30.0))
+    drive = _geared(1450.0, 20, 400, 0.6, d, seed, wear=0.0, mu=mu)
     return _fin(0.12 * rl + splice + 0.06 * be + 0.08 * _nm(drive) + 0.08 * _motor(1450.0, d, 0.6, 0.0, seed), sr, 0.7, fade=0.05, tail=0.1)
 
 

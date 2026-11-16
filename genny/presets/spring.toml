@@ -1,0 +1,67 @@
+schema = "genny.preset/1"
+family = "spring"
+
+[leem1]
+td = 0.056
+fc = 4300.0
+a = 0.62
+M = 100
+g = -0.8
+gmod = 8.0
+c1 = 0.1
+g_rip = 0.1
+g_echo = 0.1
+f_eq = 95.0
+b_eq = 130.0
+
+[leem2]
+td = 0.044
+fc = 4400.0
+a = 0.62
+M = 100
+g = -0.8
+gmod = 12.0
+c1 = 0.1
+g_rip = 0.1
+g_echo = 0.1
+f_eq = 95.0
+b_eq = 130.0
+
+[leem3]
+td = 0.047
+fc = 4450.0
+a = 0.62
+M = 100
+g = -0.8
+gmod = 10.0
+c1 = 0.1
+g_rip = 0.1
+g_echo = 0.1
+f_eq = 95.0
+b_eq = 130.0
+
+[sansui]
+td = 0.056
+fc = 3526.0
+a = 0.62
+M = 100
+g = -0.8
+gmod = 6.0
+c1 = 0.2
+g_rip = -0.2
+g_echo = 0.1
+f_eq = 95.0
+b_eq = 130.0
+
+[leem_auto]
+td = 0.056
+fc = 4275.0
+a = 0.63
+M = 100
+g = -0.64
+gmod = 8.0
+c1 = 0.1
+g_rip = 0.1
+g_echo = 0.1
+f_eq = 183.0
+b_eq = 146.0

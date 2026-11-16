@@ -69,7 +69,7 @@ for _k, _v in _NEW_SCALES.items():            # also visible to `genny list scal
 RATIO_SCALES = {
     "ptolemy": [1, 9 / 8, 5 / 4, 4 / 3, 3 / 2, 5 / 3, 15 / 8],      # syntonic diatonic, g08 s4.3
     "seven_eleven": [1, 7 / 6, 4 / 3, 3 / 2, 11 / 6],                # harmonics 6:7:8:9:11:12, g08 s4.3
-    "slendro_equal": [2 ** (i / 5) for i in range(5)],               # octave in 5 equal parts (Ruiz i Carulla, Baschet annexes, citing Sethares p. 306)
+    "slendro_equal": [2 ** (i / 5) for i in range(5)],               # octave in 5 equal parts
 }
 RATIO_SCALES["7-11"] = RATIO_SCALES["seven_eleven"]
 RATIO_SCALES["ikeda_18"] = [2 ** (i / 18) for i in range(18)]
@@ -649,15 +649,17 @@ def _pink_white(n: int, rng, white: float = 0.5) -> np.ndarray:
     ``white`` is the white share of the variance."""
     if n < 1:
         return np.zeros(0)
-    p = voss(n, rng, generators=max(4, int(np.ceil(np.log2(max(n, 2))))))
+    p = voss(n, rng)
     p = (p - p.mean()) / (p.std() + 1e-12) if n > 1 else np.zeros(1)
     w = rng.standard_normal(n)
     return np.sqrt(1.0 - white) * p + np.sqrt(white) * w
 
 
-def voss(n: int, rng, generators: int = 4) -> np.ndarray:
+def voss(n: int, rng, generators: int | None = None) -> np.ndarray:
     """1/f ("pink") sequence in 0..1, Voss-McCartney: generator g is re-rolled every 2^g steps and
-    the generators are summed (MIT 21M.380: gamma about 1 for melodic walks, 12-music s3.5)."""
+    the generators are summed; default about log2(n) generators (at least 4) so the whole length stays 1/f."""
+    if generators is None:
+        generators = max(4, int(np.ceil(np.log2(max(n, 2)))))
     vals = rng.random(generators)
     out = np.empty(n)
     for i in range(n):
@@ -796,6 +798,7 @@ STYLES = {
     "chiptune": _st((130, 160), "major", ["I IV V I", "I V vi IV"],
                     {"kick": "x-----x-x---x---", "snare": _BB, "hihat": _H8},
                     ("chiptri", "octave"), None, "chip", arp="chip"),
+    "atari_vcs": _st((120, 150), "major", ["I IV V I", "I V vi IV"], None, ("tia", "octave"), None, "tia"),
     "orchestral_heroic": _st((90, 120), "mixolydian", ["I VII IV I", "I v IV I"],
                              {"taiko": "x-----x-x-------", "crash": _CR},
                              ("cello", "long"), ("strings", "sustain"), "french_horn", counter="trumpet"),
@@ -903,6 +906,9 @@ def _context(layer: dict, bpm=None) -> NS:
     c.spb = max(1, int(round(1.0 / c.grid)))                     # steps per beat
     c.offs = scale_offsets(layer.get("scale") or (st.scale if st else "major"), layer.get("tuning", "equal"))
     c.ext = int(layer.get("chord_size", st.ext if st else 3))
+    c.loop_form = layer.get("loop_form") or None
+    if c.loop_form not in (None, "interrupted", "answer_question"):
+        raise SpecError(f"loop_form {c.loop_form!r}: interrupted|answer_question")
     rg = layer.get("range")
     if rg:
         m = _RANGE.match(str(rg))
@@ -963,6 +969,8 @@ def _harmonise(c: NS, layer: dict) -> None:
                 else:
                     text = functional_progression(_rng(c.seed, "harmony", m), 4)
             table[m] = parse_progression(text, c.offs, c.ext)
+    if c.loop_form == "interrupted":
+        table = {m: [ch for ch in v[1:] + v[:1] for _ in (0, 1)] for m, v in table.items()}
     c.chords = []
     for s in c.sections:
         s.chords = [table[s.mat][(b // hr) % len(table[s.mat])] for b in range(s.nbars)]
@@ -1083,6 +1091,14 @@ def _gen_melody(c, sec, rng, L):
         if pb == ph - 1 or b == sec.nbars - 1:          # breathe: rest on the last beat of a phrase
             steps = [s for s in steps if s < c.S - c.spb] or [0]
         onsets += [(b, s) for s in steps]
+    if mode == "voss" and L.get("rhythm") == "voss":     # durations from their own 1/f source: half, quarter, eighth
+        step = [max(1, int(round(c.spb * d))) for d in (2.0, 1.0, 0.5)]
+        t, onsets = 0, []
+        for v in voss(sec.nbars * c.S, rng):
+            if t >= sec.nbars * c.S:
+                break
+            onsets.append(divmod(t, c.S))
+            t += step[min(2, int(v * 3))]
     n = len(onsets)
     # pitch sources ---------------------------------------------------------------
     mid = P.index(_near(P, (c.lo + c.hi) / 2))
@@ -1225,7 +1241,7 @@ def _gen_motif(c, sec, rng, L, mode):
             last = k == len(m) - 1 or t + d >= end - 1e-9
             if last:
                 T = _tones(c, ch) or P
-                if op == "answer" or u + unit >= sec.nbars:
+                if op == "answer" or (u + unit >= sec.nbars and c.loop_form != "answer_question"):
                     T = [x for x in T if abs((x - c.kpc - ch["root"]) % 12) < 1e-6] or T
                 p = _near(T, p)
             elif L.get("snap") and _strong(c, int(round((t % c.meter) / c.grid))):
@@ -1497,6 +1513,16 @@ def _gen_drums(c, sec, rng, L):
             for a, b in zip(seq, seq[1:]):
                 if b["vel"] >= lv["X"] - 1e-9 > a["vel"]:
                     a["vel"] *= 10 ** (-dip / 20.0)
+    late = L.get("accent_late")
+    if late:
+        late = ACCENT_LATE if late is True else float(late)
+        by = {}
+        for e in sorted(out, key=lambda e: e["t"]):
+            by.setdefault(e["drum"], []).append(e)
+        for seq in by.values():
+            for a, b in zip(seq, seq[1:]):
+                if a["vel"] >= lv["X"] - 1e-9 > b["vel"]:
+                    b["t"] += late * (b["t"] - a["t"])
     return out
 
 
@@ -1518,18 +1544,26 @@ def soloist_delay(bpm: float) -> float:
 
 
 PHRASE_LENGTHEN_NOTES, PHRASE_LENGTHEN_LAST = 3, 0.20
+KTH83_RISE = 0.03
+KTH83_LEAP = (0.03, 0.05, 0.06)
+KTH83_PAUSE = (0.030, 0.040)
+TODD_PEAK = 0.2
 NMA_MS = {"musician": 30.0, "novice": 50.0}
 ENSEMBLE_SD = (0.03, 30.0, 50.0)
 ACCENT_DIP_DB = 2.0
+ACCENT_LATE = 0.1
 EMOTIONS = {
-    "angry": {"rules": {"duration_contrast": 1.0, "high_loud": 1.0, "leap_articulation": 1.0, "repetition": 1.0,
-                        "phrase_arch": -1.0}, "tempo": 1.15, "level_db": 3.0, "articulation": 0.75},
-    "happy": {"rules": {"duration_contrast": 1.0, "leap_articulation": 1.0, "repetition": 1.0, "faster_uphill": 1.0},
-              "tempo": 1.15, "level_db": 3.0, "articulation": 0.75},
-    "sad": {"rules": {"duration_contrast": -1.0, "phrase_arch": 1.0, "kth_phrase": 1.0},
-            "tempo": 0.85, "level_db": -3.0, "articulation": 1.0},
-    "tender": {"rules": {"duration_contrast": -1.0, "phrase_arch": 1.0, "kth_phrase": 1.0, "high_loud": -1.0},
-               "tempo": 0.85, "level_db": -3.0, "articulation": 1.0},
+    "angry": {"rules": {"duration_contrast": 2.0, "leap_articulation": 1.0, "repetition": 1.0, "phrase_arch": -1.0},
+              "tempo": 1.0 / 0.85, "level_db": 8.0, "articulation": 0.75},
+    "happy": {"rules": {"duration_contrast": 2.0, "high_loud": 1.0, "leap_articulation": 1.0, "repetition": 1.0,
+                        "faster_uphill": 1.0}, "tempo": 1.0 / 0.80, "level_db": 3.0, "articulation": 0.75},
+    "sad": {"rules": {"duration_contrast": -2.0, "phrase_arch": 1.5, "kth_phrase": 1.0},
+            "tempo": 1.0 / 1.3, "level_db": -6.0, "articulation": 1.0},
+    "tender": {"rules": {"duration_contrast": -4.0, "phrase_arch": 1.0, "kth_phrase": 1.0},
+               "tempo": 1.0 / 1.3, "level_db": -6.0, "articulation": 1.0},
+    "fear": {"rules": {"duration_contrast": 4.0, "phrase_arch": -1.5, "leap_articulation": 1.0},
+             "tempo": 1.0 / 1.8, "level_db": -6.0, "articulation": 0.75},
+    "solemn": {"rules": {"high_loud": 1.0}, "tempo": 1.0 / 1.3, "level_db": 3.0, "articulation": 1.0},
 }
 
 
@@ -1556,6 +1590,19 @@ def ride_ratio(bpm: float) -> float:
     linear in between and beyond, capped at 3.5:1."""
     b0, r0 = RIDE_RATIO_REF
     return float(np.clip(r0 + (1.0 - r0) * (float(bpm) - b0) / (RIDE_STRAIGHT_BPM - b0), 1.0, 3.5))
+
+
+RIDE_PICKUP_GAP = ((60.0, 0.20), (120.0, 0.25), (180.0, 0.33), (240.0, 0.33))
+FEEL_BASS_RANGE_MS = (10.0, 70.0)
+FEEL_BASS_RIDE_MS = 40.0
+
+
+def ride_ratio_pickup(bpm: float) -> float:
+    """Long:short ratio of the ride's swung eighths from the share g of the beat that the short tap leaves before the next
+    beat (20 % at 60 bpm, 25 % at 120, 33 % at 180-240): (1 - g) / g, 4:1 at 60 bpm, 3:1 at 120, 2:1 from 180."""
+    b, g = zip(*RIDE_PICKUP_GAP)
+    gap = float(np.interp(float(bpm), b, g))
+    return (1.0 - gap) / gap
 
 
 def ritard_map(rit, total: float, meter: float = 4.0, end: float | None = None):
@@ -1672,6 +1719,16 @@ def _kth(ev, c, L):
                 if i == 0 or abs(ioi[i - 1] - ioi[i]) > 1e-6:
                     d[i] -= x
             i += 1
+    k = float(L.get("kth_1983", 0.0))
+    if k:
+        for i in range(ioi.size):
+            if top[i] is None or top[i + 1] is None:
+                continue
+            if top[i + 1] > top[i]:
+                d[i] -= KTH83_RISE * ioi[i] * k
+            if i and top[i - 1] is not None:
+                a = abs(top[i] - top[i - 1])
+                d[i] += (KTH83_LEAP[2] if a > 7.5 else KTH83_LEAP[1] if a > 4.5 else KTH83_LEAP[0] if a > 2.5 else 0.0) * ioi[i] * k
     k = float(L.get("leap_duration", 0.0))
     if k:
         step = lambda a, b: a is not None and b is not None and abs(b - a) <= 2.0 + 1e-6   # noqa: E731
@@ -1783,6 +1840,9 @@ def _kth(ev, c, L):
             x = (np.array([on[i] for i in idx]) - a) / (b - a)
             p = float(L.get("phrase_turn", 0.7))
             m = 0.1 * k * ((x - p) / np.where(x < p, p, 1.0 - p)) ** 2
+            if L.get("phrase_shape") == "todd":
+                u = 1.0 - np.abs(x - p) / np.where(x < p, p, 1.0 - p)
+                m = (np.maximum(1.0 + TODD_PEAK * k * u, 0.05)) ** -0.5 - 1.0
             m -= np.average(m, weights=ioi[idx])
             for j, i in enumerate(idx):
                 d[i] += ioi[i] * m[j]
@@ -1817,6 +1877,14 @@ def _kth(ev, c, L):
                 continue
             dro = 8.0 * dn * (0.3 * (ioi[i] - 100.0) / 600.0 + 0.3) * k
             gap = grp[i + 1][0]["t"] - grp[i][0]["t"] - dro / 1000.0 / c.q
+            for e in grp[i]:
+                e["dur"] = max(0.0, min(e["dur"], gap))
+    k = float(L.get("kth_1983", 0.0))
+    if k:
+        for i in range(ioi.size):
+            if top[i] is None or top[i + 1] is None or abs(top[i + 1] - top[i]) < 2.5:
+                continue
+            gap = grp[i + 1][0]["t"] - grp[i][0]["t"] - KTH83_PAUSE[abs(top[i + 1] - top[i]) > 7.5] * k / c.q
             for e in grp[i]:
                 e["dur"] = max(0.0, min(e["dur"], gap))
     k = float(L.get("kth_phrase", 0.0))
@@ -1884,6 +1952,15 @@ def _perform(ev, c, L, tag):
         for e in ev:
             e["vel"] *= g
             e["dur"] *= art
+    if L.get("vel_law") == "beta":
+        rngb = _rng(c.seed, tag, "beta")
+        vr = L.get("vel_range") or {}
+        for e in ev:
+            r = vr.get((e.get("drum") or "").split(":")[0], vr.get("*", (50, 127))) if isinstance(vr, dict) else vr
+            e["vel"] = (float(r[0]) + (float(r[1]) - float(r[0])) * rngb.beta(0.2, 0.2)) / 127.0
+    if "gate" in L and getattr(c, "role", None) in ("bass", "chords", "pad", "counter"):
+        for e in ev:
+            e["dur"] *= float(L["gate"]) / 0.92
     sw = L.get("swing", c.style.swing if c.style else 0.0)
     sg = float(L.get("swing_grid", c.grid))
     if sw == "auto":
@@ -1917,6 +1994,9 @@ def _perform(ev, c, L, tag):
             tdev = dict(zip(onsets, sig * (g - g.mean()) / (g.std() + 1e-12)))
         elif hum.get("model") == "arma" and sig > 0:
             tdev = dict(zip(onsets, sig * arma_hihat(len(onsets), rng)))
+        elif "beta" in hum and sig > 0:
+            g = gamma_noise(len(onsets), float(hum["beta"]), rng)
+            tdev = dict(zip(onsets, sig * (g - g.mean()) / (g.std() + 1e-12)))
         else:
             tdev = dict(zip(onsets, sig * _pink_white(len(onsets), rng))) if sig > 0 else {}
         # velocity: 1/f too, mapped to 0..1 like the old Beta draw
@@ -1926,6 +2006,9 @@ def _perform(ev, c, L, tag):
                 e["vel"] *= 1.0 - vs * float(np.clip(0.5 + 0.25 * vdev[i], 0.0, 1.0))
         for e in ev:
             e["t"] = max(0.0, e["t"] + tdev.get(e["t"], 0.0))
+    if float(hum.get("offset_ms", 0.0)):                  # a constant lead (-) or lag (+) of the whole layer, ms
+        for e in ev:
+            e["t"] = max(0.0, e["t"] + float(hum["offset_ms"]) / 1000.0 / c.q)
     if L.get("ensemble"):
         rng_e = _rng(c.seed, tag, "ensemble")
         on_ = sorted({e["t"] for e in ev})
@@ -1976,7 +2059,7 @@ def _perform(ev, c, L, tag):
         raise SpecError(f"feel must be soloist, bass or ride, not {feel!r}")
     bpm = 60.0 / c.q
     if feel == "ride":
-        r = ride_ratio(bpm)
+        r = ride_ratio_pickup(bpm) if L.get("ride_data") == "pickup" else ride_ratio(bpm)
         for e in ev:
             if abs(e["_t0"] - math.floor(e["_t0"]) - 0.5) < 1e-6:
                 e["t"] += r / (1.0 + r) - 0.5
@@ -1990,7 +2073,7 @@ def _perform(ev, c, L, tag):
     shift = float(L.get("offset_ms", 0.0)) / 1000.0 / c.q
     late = float(L.get("downbeat_delay_ms", ellis_delay(bpm) if feel == "soloist" else 0.0)) / 1000.0 / c.q
     if feel == "bass":
-        shift += FEEL_BASS_MS / 1000.0 / c.q
+        shift += float(L.get("bass_ms", FEEL_BASS_MS)) / 1000.0 / c.q
     nma = L.get("nma")
     if nma:
         shift -= (NMA_MS.get(nma, 0.0) if isinstance(nma, str) else (NMA_MS["musician"] if nma is True else float(nma))) / 1000.0 / c.q
@@ -2066,6 +2149,8 @@ def generate(layer: dict, bpm: float | None = None) -> list[dict]:
         return _arp_events(layer, bpm)
     if kind == "stinger":
         return _stinger_events(layer, bpm)
+    if kind == "figure":
+        return _figure_events(layer, bpm)
     if kind != "compose":
         raise SpecError(f"generate() handles compose|euclid|arp|stinger layers, not {kind!r}")
     c = _context(layer, bpm)
@@ -2086,13 +2171,33 @@ def generate(layer: dict, bpm: float | None = None) -> list[dict]:
     kept = []
     for e in ev:                                        # vertical layering: mute the bars under the threshold
         lvl = c.intensity[min(c.bars - 1, int(e["t"] // c.meter + 1e-9))]
-        if lvl > 0 and lvl + 1e-9 >= thr and (owner is None or owner[min(c.bars - 1, int(e["t"] // c.meter + 1e-9))] == gi):
+        if lvl >= INTENSITY_FLOOR and lvl + 1e-9 >= thr and (owner is None or owner[min(c.bars - 1, int(e["t"] // c.meter + 1e-9))] == gi):
             e["vel"] *= 0.8 + 0.2 * min(1.0, lvl)
             kept.append(e)
     return _perform(kept, c, layer, c.role)
 
 
 # ============================================================================ events -> ordinary layers
+INTENSITY_FLOOR = 0.01          # a bar whose intensity is under this is silent for every part, even those with threshold 0
+
+# Where a game genre tends to go in the style palette (a leaning, not a rule): first = the usual choice.
+GENRE_STYLES = {
+    "shooter": ("rock", "orchestral_heroic", "metal"), "horror": ("spooky", "orchestral_heroic", "metal", "ambient"),
+    "racing": ("acid_techno", "house", "drum_and_bass", "synthwave", "rock"), "platformer": ("chiptune", "pop", "ragtime"),
+    "puzzle": ("ambient", "lofi", "lullaby"), "rpg": ("orchestral_heroic", "baroque", "celtic_jig"),
+    "fighting": ("metal", "rock", "trap"), "strategy": ("orchestral_heroic", "ambient"), "sports": ("rock", "pop", "house"),
+    "adventure": ("orchestral_heroic", "ambient", "japanese"), "retro": ("chiptune", "atari_vcs", "synthwave"),
+    "cyberpunk": ("synthwave", "acid_techno", "ambient"), "kids": ("lullaby", "christmas", "ragtime"),
+}
+
+
+def genre_styles(genre: str) -> tuple:
+    """Styles of the palette that suit a game genre, the usual one first (`GENRE_STYLES`)."""
+    if genre not in GENRE_STYLES:
+        raise SpecError(f"genre {genre!r}: use one of {sorted(GENRE_STYLES)}")
+    return GENRE_STYLES[genre]
+
+
 def _tok(p: float):
     return N.midi_to_name(int(round(p))) if abs(p - round(p)) < 1e-6 else f"{N.midi_to_freq(p):.4f}hz"
 
@@ -2118,7 +2223,7 @@ def _layers_from_events(ev, layer, inst=None) -> list[dict]:
             steps.append({**st, "dur": d, "vel": round(float(np.mean([e["vel"] for e in es])), 4)})
             cursor += d
         seq = {"type": "seq", "inst": inst or layer.get("inst") or "pluck", "steps": steps}
-        for k in ("params", "strum", "legato"):
+        for k in ("params", "strum", "strum_var", "legato"):
             if k in layer:
                 seq[k] = layer[k]
         out.append(seq)
@@ -2151,7 +2256,7 @@ def to_spec(layer: dict, bpm: float | None = None, sr: int = DEFAULT_SR) -> dict
     arrangement. `scatter` becomes a group of placed children; `arrangement` a group of its parts
     with their gains, pans (`automix`, analysed at `sr`) and master fx."""
     kind = layer.get("type")
-    if kind in ("compose", "euclid", "arp", "stinger"):
+    if kind in ("compose", "euclid", "arp", "stinger", "figure"):
         mp = stinger_mood(layer) if kind == "stinger" else None
         if mp:
             layer = {**layer, "fx": list(layer.get("fx") or []) + [{"type": "lowpass", "cutoff": round(mp["brightness"], 3)}]}
@@ -2192,10 +2297,42 @@ layer_type("compose", "One generated part (role melody|bass|chords|arp|drums|pad
 layer_type("euclid", "Euclidean drum pattern E(k, n) with rotation: hits spread as evenly as possible over the steps.")(_render_generated)
 layer_type("arp", "Arpeggiate given chords (up, down, updown, random or a pattern).")(_render_generated)
 layer_type("stinger", "Generated jingle by mood: victory, defeat, mystery, danger, pickup, unlock.")(_render_generated)
+layer_type("figure", "A short gestural figure (rise, run, blur, wobble, alert...) on one note, onset spacing drawn from the figure's range; any instrument.")(_render_generated)
 layer_type("scatter", "Random placement of child layers (count or rate, time / pitch / gain / pan jitter): ambiences, debris.")(_render_generated)
 
 
 # ============================================================================ euclid / arp / stinger layers
+# name: (semitone multipliers of `step`, onset spacing range in ms, per-note spacing ratio range or None)
+FIGURES = {
+    "rise-two": ((0, 1), (60, 110), None), "rise-three": ((0, 1, 2), (60, 100), None), "rise-four": ((0, 1, 2, 3), (50, 85), None),
+    "run-five": ((0, 1, 2, 3, 4), (32, 50), None), "pair-quick": ((0, 1), (28, 45), None), "blur-three": ((0, 1, 2), (16, 26), None),
+    "accel-rise": ((0, 1, 2, 3), (85, 120), (0.68, 0.8)), "call-answer": ((0, 1), (170, 240), None), "fall-two": ((1, 0), (70, 120), None),
+    "wobble": ((0, 1, 0, 1), (50, 85), None), "double-alert": ((0, 0), (100, 160), None), "triple-alert": ((0, 0, 0), (85, 130), None),
+}
+
+
+def _figure_events(layer, bpm=None):
+    """{"type": "figure", "name": "rise-three", "inst": "bell", "note": "C5", "step": 4}: the notes of the figure, `step` semitones apart
+    (0 for the alerts), the onset spacing drawn once in the figure's range (`ms` fixes it), accelerating figures shrinking it by a ratio per note."""
+    name = layer.get("name", "rise-two")
+    if name not in FIGURES:
+        raise SpecError(f"figure {name!r}: one of {sorted(FIGURES)}")
+    mult, (lo, hi), acc = FIGURES[name]
+    q, rng = _beat_q(layer, bpm), _rng(layer.get("seed", 0), "figure", name)
+    ioi = float(layer["ms"]) if layer.get("ms") else float(rng.uniform(lo, hi))
+    ratio = float(rng.uniform(*acc)) if acc else 1.0
+    step = float(layer.get("step", 0 if name.endswith("alert") else 4))
+    p0 = 69 + 12 * math.log2(N.to_freq(layer.get("note", "C5")) / 440.0)
+    ev, t = [], 0.0
+    for i, m in enumerate(mult):
+        d = ioi * ratio ** i / 1000.0
+        ev.append(_ev(t / q, min(d * 0.9, float(layer.get("dur", 0.25))) / q, p0 + m * step, 0.85 if i == 0 else 0.75))
+        t += d
+    ev[-1]["dur"] = float(layer.get("dur", 0.25)) / q
+    c = NS(bars=1, meter=t / q + 1.0, grid=ioi / 1000.0 / q, style=None, seed=int(layer.get("seed", 0)), q=q)
+    return _perform(ev, c, layer, "figure")
+
+
 def _euclid_events(layer, bpm=None):
     """{"type": "euclid", "kind": "hihat", "k": 5, "n": 16, "rotate": 0, "bars": 2, "step": 0.25}"""
     n, step = int(layer.get("n", 16)), float(layer.get("step", 0.25))
@@ -2234,15 +2371,46 @@ def _arp_events(layer, bpm=None):
     return _perform(ev, c, layer, "arp")
 
 
+# mean ratings 1..7 of a melodic interval: (anger, happiness, pleasantness, sadness), downward / upward
+INTERVAL_AFFECT = {
+    0: ((2.96, 2.31, 2.72, 3.66),) * 2,
+    100: ((4.26, 1.68, 2.14, 4.82), (4.72, 1.81, 2.35, 4.19)),
+    200: ((2.77, 2.47, 2.98, 3.79), (2.70, 2.75, 3.47, 3.32)),
+    300: ((3.39, 2.09, 2.61, 4.47), (3.08, 2.22, 2.99, 4.10)),
+    400: ((2.58, 3.09, 3.52, 3.28), (2.31, 3.29, 3.82, 3.19)),
+    500: ((2.42, 3.35, 3.92, 3.20), (2.41, 3.93, 3.63, 2.78)),
+    600: ((3.96, 1.98, 2.21, 4.44), (4.34, 2.49, 2.42, 3.56)),
+    700: ((1.82, 4.07, 4.74, 3.05), (2.45, 4.47, 4.28, 2.45)),
+    800: ((2.85, 2.63, 3.08, 4.07), (3.34, 3.12, 3.04, 3.75)),
+    900: ((2.63, 3.39, 3.54, 3.31), (2.00, 4.92, 4.46, 2.65)),
+    1000: ((2.80, 2.92, 3.02, 3.59), (2.75, 3.63, 4.13, 3.50)),
+    1100: ((3.61, 2.29, 2.03, 3.94), (4.21, 2.57, 2.50, 3.55)),
+    1200: ((2.23, 4.03, 3.94, 2.93), (2.42, 4.96, 4.38, 2.29)),
+}
+
+
+def interval_affect(cents: float) -> dict:
+    """Ratings (1..7) of anger, happiness, pleasantness and sadness for a melodic interval of ``cents`` (positive up,
+    negative down) taken to its nearest semitone class; larger intervals fold by octaves."""
+    c = abs(float(cents))
+    k = int(round(c / 100.0)) * 100
+    k = 1200 if k > 1200 and (k % 1200 == 0) else k % 1200 if k > 1200 else k
+    row = INTERVAL_AFFECT[k][1 if cents >= 0 else 0]
+    return dict(zip(("anger", "happiness", "pleasantness", "sadness"), row))
+
+
 # mood -> (scale, instrument, default length in notes, tonic MIDI octave base, velocity)
 # Shapes follow AGENTS.md "Design recipes" (rising = positive, falling = negative; win = major triad up
 # to the octave chord; game over = descending minor) and Phillips (a stinger with no known key is
 # cluster-like and unmetred, 12-music s2.3).
 MOODS = {"victory": ("major", "brass", 5, 60, 0.9), "defeat": ("minor", "piano", 4, 60, 0.75),
-         "mystery": ("whole_tone", "vibraphone", 5, 60, 0.6), "danger": ("locrian", "brass", 4, 48, 0.95),
+         "mystery": ("whole_tone", "vibraphone", 5, 60, 0.6), "danger": ("locrian", "brass", 4, 72, 0.95),
          "pickup": ("pentatonic", "marimba", 3, 72, 0.8), "unlock": ("lydian", "bell", 4, 72, 0.7),
          "alarm": ("chromatic", "brass", 5, 60, 0.9), "settle": ("chromatic", "strings", 5, 60, 0.7)}
 _MAP_FIGURE = {"major": "victory", "minor": "defeat", "phrygian": "danger", "chromatic": "alarm"}
+
+
+PYTHAGOREAN_COMMA_ST = 12.0 * math.log2(531441 / 524288)    # 0.2346 semitone (23.46 cents)
 
 
 def stinger_mood(layer) -> dict | None:
@@ -2299,6 +2467,8 @@ def _stinger_events(layer, bpm=None):
     ev += [_ev((n - 1) * step, step * float(layer.get("hold", 4)), P(s), vel) for s in final]
     if mp:                                              # a second voice detuned against the final chord
         ev += [_ev((n - 1) * step, step * float(layer.get("hold", 4)), P(s) + mp["detune"], vel) for s in final]
+    if layer.get("comma"):                              # a second voice a Pythagorean comma (531441/524288 = 1.01364) above the final chord
+        ev += [_ev((n - 1) * step, step * float(layer.get("hold", 4)), P(s) + PYTHAGOREAN_COMMA_ST, vel) for s in final]
     c = NS(bars=1, meter=(n - 1 + float(layer.get("hold", 4))) * step, grid=step, style=None, seed=int(layer.get("seed", 0)), q=q)
     return _perform(ev, c, layer, "stinger")
 
@@ -2448,8 +2618,8 @@ _SHARED = ("key", "scale", "tuning", "bars", "sections", "progression", "chords"
            "grid", "swing", "humanize", "drift", "intensity", "density", "chord_size", "ritard", "high_loud",
            "high_sharp", "double_duration", "duration_contrast", "faster_uphill", "repetition", "rmd", "rmd_unit",
            "rmd_ref_bpm", "inegales", "leap_duration", "melodic_charge", "kth_phrase", "chromatic_charge", "drift_trend",
-           "expression", "harmonic_charge", "leap_articulation", "phrase_arch", "phrase_turn", "melodic_intonation",
-           "harmonic_intonation")
+           "expression", "harmonic_charge", "leap_articulation", "phrase_arch", "phrase_turn", "phrase_shape", "kth_1983", "melodic_intonation",
+           "harmonic_intonation", "loop_form")
 
 
 def tempo_delay(bpm: float, k: float = 3, feedback: float = 0.3, mix: float = 0.25) -> dict:
@@ -2578,8 +2748,8 @@ def xfade_times(layer, states, a, b):
 
 @layer_type("adaptive")
 def _render_adaptive(layer, sr, q):
-    """iMuse-style state graph kept to what a WAV renderer can honestly do (g15 s8; Phillips, vertical
-    layering and horizontal re-sequencing, 12-music s2): every state is an arrangement from the same
+    """iMuse-style state graph kept to what a WAV renderer can honestly do (vertical
+    layering and horizontal re-sequencing): every state is an arrangement from the same
     seed / key / tempo (one shared score), rendered as an exact folded loop; with `out_stems` each
     state, each part of each state and each transition stinger is written as its own WAV next to a
     `graph.json` (states, loop lengths, transitions quantised to the bar). All files share one gain,

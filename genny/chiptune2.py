@@ -1126,7 +1126,8 @@ _CHOWNING_PERC = {"bell": 15.0, "drum": 0.2, "wood_drum": 0.2}
             family="winds", span=("C3", "A4"), voice=("clarinet", "clarinet|woodwind|bassoon|brass|bell|drum|wood_drum|soprano"), attack=(0.08, "s"), release=(0.1, "s"))
 def chowning(freq, dur, sr=DEFAULT_SR, vel=1.0, voice="clarinet", attack=0.08, release=0.1):
     """Ratios to the note; bell, drum and wood_drum ring for their own time and ignore attack and release.
-    soprano: a second carrier on the harmonic nearest 2100 Hz shares the modulator (sung formant)."""
+    soprano: a second carrier on the harmonic nearest 2100 Hz shares the modulator (sung formant).
+    Winds: the index follows the amplitude through the attack and the held note, then stays put while it dies away."""
     if voice == "soprano":
         return _soprano(freq, dur, sr, vel, attack, release)
     if voice not in _CHOWNING:
@@ -1149,7 +1150,8 @@ def chowning(freq, dur, sr=DEFAULT_SR, vel=1.0, voice="clarinet", attack=0.08, r
         amp = np.interp(t, [0.0, dur / 6, dur / 3, 5 * dur / 6, dur], [0.0, 1.0, 0.75, 0.62, 0.0])
     else:
         amp = np.interp(t, [0.0, a, max(dur, a + 1e-3), dur + r], [0.0, 1.0, 0.85, 0.0])
-    y = amp * np.sin(2.0 * np.pi * c * freq * t + (i0 + (i1 - i0) * amp) * np.sin(2.0 * np.pi * m * freq * t))
+    ind = amp if voice == "brass" else np.where(t <= dur, amp, np.interp(dur, t, amp))
+    y = amp * np.sin(2.0 * np.pi * c * freq * t + (i0 + (i1 - i0) * ind) * np.sin(2.0 * np.pi * m * freq * t))
     return _fade(y, sr, 0.5, 2.0) * (0.5 * (0.5 + 0.5 * vel))
 
 
@@ -1270,7 +1272,11 @@ def glitch_saw(freq, dur, sr=DEFAULT_SR, vel=1.0, freq2=1.0, comparator=2.0, hys
     n = samples(dur + 0.03, sr)
     hi, lo = max(float(lowlim), float(uplim)), min(float(lowlim), float(uplim))
     y = _glitch_saw_core(n, freq / sr, freq * float(freq2) / sr, freq * float(comparator) / sr, lo, hi, max(1, int(hysteresis)))
-    y = _soften(y, freq, sr, bright=float(bright))
+    y = _soften(y, freq, sr, lo=1800.0, hi=3500.0, bright=float(bright))
     t = np.arange(n) / sr
     y = y * np.minimum(t / 0.003, 1.0) * np.clip((dur + 0.03 - t) / 0.03, 0.0, 1.0)
     return 0.5 * (0.5 + 0.5 * float(vel)) * y
+
+
+from . import chiptune_q  # noqa: E402,F401  (SCC, Namco WSG, HuC6280)
+from . import chiptune_r  # noqa: E402,F401  (VRC6, N163, FDS, Paula, OPL2, OPL3)

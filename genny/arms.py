@@ -1,96 +1,135 @@
 """Firearms and everything around them: named weapons, handling, spent brass, bullet impacts, ricochets, passing bullets.
 
-The shot keeps Farnell's Practical 30 layers (`foley._gunshot`), adds a Friedlander pressure wave and a gas tail (`_body_blast`), and mixes in pascals, on measured levels:
-- muzzle blast, peak on axis at 3 m and front/back directivity: Maher 2019 (AES, shot-to-shot), Maher & Shaw 2010 (AES 39);
-- N-wave: Whitham's far field as in Flamme & Murphy, Int. J. Audiology 2019, eq. 1 (coefficients 0.53 and 1.82);
-- arrival of the shock: t = x/V + y cos(theta_M)/c, Maher 2006 (IEEE DSP), Tables 1-2;
-- suppressor: Murphy et al., POMA 33, 2019 (15-30 dB, mostly 160-1000 Hz, shock untouched).
-Bullet lengths, the levels of rounds nobody measured, and all handling times except two (see MECH) are
-estimates where no published measurement exists. Spec with every source: reports/sons/armes_feu.md, rechargement_douilles.md.
+A weapon is a preset (cartridge, barrel, action, muzzle device); the sound is computed in pascals from `ballistics` (interior
+ballistics, muzzle blast, N-wave, suppressor, ground, recorder) and `brass` (spent cases). Nothing is normalised to a common peak:
+the recorder is a parameter and the file level follows the pressure at the listener. Sources: research/SOURCES.md.
 """
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 
 import numpy as np
+from scipy.signal import butter, fftconvolve, sosfilt
 
+from . import ballistics as B
+from . import brass as BR
 from . import contact as K
+from . import filters as FL
 from .core import DEFAULT_SR
 from .foley import (C_AIR, CATCH, ENDSTOP, P, RATCHET, RIFLE_BODY, _barrel, _bpar8, _c01, _fin, _mclick, _n, _nm,
                     _noiseburst, _put, _shell, _strike)
 from .physical import ambience as amb
 from .physical import modal, space
+from . import presets
+from .presets import F
 from .sfx import sfx
 
 P0 = 101325.0
 
-# diameter mm, length mm, speed m/s, blast peak Pa on axis at 3 m, directivity A dB (0 = none, see _blast_gain)
-# Peaks: Maher 2019 (9x19, .45, .357, 5.56, .308). A: Maher & Shaw 2010. Speeds: spec table A. Marked rows are estimates:
-# peak: .22 (Maher & Shaw: 25 dB under .308), .40, 10 mm, .38, 7.62x39, .300, .50, 12 ga, musket.
-CALIBERS = {
-    "22lr": (5.7, 11.0, 390.0, 380.0, 30.0), "22lr_sub": (5.7, 11.0, 320.0, 300.0, 30.0),
-    "9x19": (9.0, 15.5, 360.0, 3307.0, 15.0), "9x19_sub": (9.0, 18.0, 297.0, 2600.0, 15.0),
-    "45acp": (11.5, 17.0, 255.0, 5123.0, 10.0), "40sw": (10.2, 16.0, 340.0, 4000.0, 15.0),
-    "10mm": (10.2, 16.0, 400.0, 4000.0, 12.0), "357": (9.1, 16.0, 380.0, 6491.0, 15.0),
-    "38spl": (9.1, 16.0, 290.0, 3500.0, 10.0), "556": (5.7, 23.0, 948.0, 8137.0, 15.0),
-    "762x39": (7.9, 26.0, 715.0, 6780.0, 15.0), "762x51": (7.8, 29.0, 853.0, 6780.0, 15.0),
-    "308": (7.8, 29.0, 802.0, 6780.0, 15.0), "762x54": (7.9, 29.0, 825.0, 6780.0, 15.0),
-    "300blk": (7.8, 28.0, 675.0, 6000.0, 15.0), "300blk_sub": (7.8, 35.0, 310.0, 3000.0, 15.0),
-    "50bmg": (12.9, 58.0, 928.0, 12000.0, 8.0), "12_buck": (8.4, 8.4, 404.0, 6780.0, 16.0),
-    "12_slug": (18.5, 20.0, 396.0, 6780.0, 16.0), "musket": (19.0, 19.0, 300.0, 3000.0, 12.0),
-}
-# caliber, rounds/s (0 = one at a time), body scale, blast ms (93 % of the energy), options
-WEAPONS = {
-    "pistol_9mm": ("9x19", 0, 1.4, 0.78, {}), "pistol_9mm_sub": ("9x19_sub", 0, 1.4, 0.78, {}),
-    "pistol_45": ("45acp", 0, 1.2, 0.77, {}), "pistol_40": ("40sw", 0, 1.3, 0.75, {}),
-    "pistol_10mm": ("10mm", 0, 1.3, 0.75, {}), "pistol_22": ("22lr", 0, 1.6, 0.33, {}),
-    "machine_pistol": ("9x19", 22.5, 1.4, 0.78, {"open_bolt": True}),
-    "revolver_357": ("357", 0, 1.3, 0.98, {"gap": True, "manual": True}),
-    "revolver_38": ("38spl", 0, 1.35, 0.84, {"gap": True, "manual": True}),
-    "smg_mp5": ("9x19", 13.3, 1.25, 0.78, {}), "smg_mp5sd": ("9x19_sub", 13.3, 1.25, 0.78, {"suppressed": 1.0}),
-    "smg_uzi": ("9x19", 10.0, 1.25, 0.78, {"open_bolt": True}),
-    "smg_45": ("45acp", 12.0, 1.15, 0.77, {"open_bolt": True}),
-    "ar15": ("556", 13.0, 1.1, 0.72, {}), "m4_short": ("556", 13.0, 1.15, 0.72, {"boost_db": 2.0}),
-    "ak47": ("762x39", 10.0, 1.0, 1.93, {"wood": True}), "battle_rifle": ("762x51", 10.0, 1.0, 1.93, {}),
-    "m1_garand": ("762x51", 0, 0.95, 1.93, {"wood": True, "clip": 8, "cadence": 0.75}), "blackout": ("300blk", 13.0, 1.05, 1.93, {}),
-    "blackout_sub": ("300blk_sub", 13.0, 1.05, 1.93, {}),
-    "sniper_308": ("308", 0, 0.95, 1.93, {"manual": True}),
-    "sniper_50": ("50bmg", 0, 0.5, 4.0, {"manual": True, "brake": True}),
-    "sniper_22": ("22lr_sub", 0, 1.6, 0.33, {"manual": True}),
-    "shotgun_buck": ("12_buck", 0, 0.75, 2.56, {"pellets": 9, "manual": True}),
-    "shotgun_slug": ("12_slug", 0, 0.75, 2.56, {"manual": True}),
-    "shotgun_short": ("12_buck", 0, 0.8, 2.56, {"pellets": 9, "manual": True, "boost_db": 2.0}),
-    "lmg_m249": ("556", 14.2, 0.9, 0.72, {"open_bolt": True}), "gpmg_pkm": ("762x54", 11.7, 0.8, 1.93, {"open_bolt": True}),
-    "hmg_m2": ("50bmg", 9.0, 0.5, 4.0, {}), "minigun": ("762x51", 50.0, 0.9, 1.93, {"manual": True}),
-    "flintlock": ("musket", 0, 0.6, 60.0, {"manual": True, "lock": (35.0, "flint")}),
-    "matchlock": ("musket", 0, 0.6, 60.0, {"manual": True, "lock": (60.0, "match")}),
-    "percussion": ("musket", 0, 0.6, 50.0, {"manual": True, "lock": (5.0, "cap")}),
-}
-# Barrel mm, spec section 4 (Wikipedia pages listed there). Detonation to muzzle = barrel / v, 1-2 ms (Farnell, c14 l.24523);
-# weapons not listed: 1.5 ms (klang.py:931).
-BARREL_MM = {"pistol_9mm": 118.0, "machine_pistol": 117.0, "smg_uzi": 260.0, "ar15": 508.0, "ak47": 415.0, "battle_rifle": 559.0, "m1_garand": 610.0,
-             "blackout": 406.0, "sniper_50": 1143.0, "lmg_m249": 465.0, "gpmg_pkm": 605.0, "hmg_m2": 1143.0, "minigun": 559.0,
-             # spec table B and section 4: MS10 test guns, W-Bess
-             "pistol_22": 508.0, "pistol_45": 127.0, "revolver_357": 76.0, "revolver_38": 51.0, "pistol_10mm": 117.0, "sniper_308": 610.0,
-             "shotgun_buck": 457.0, "shotgun_slug": 457.0, "shotgun_short": 356.0, "flintlock": 990.0}
-BODY_Q = 10.62       # Farnell's preset
-TAIL_GAIN = 0.04
-# calibre -> muzzle energy J, peak chamber pressure MPa. Spec section 4: W-9x19, W-.45, W-.357, W-5.56, W-7.62, W-.300, W-.50, W-12, Fed, W-Arq.
-# Calculated from the spec's mass and speed: .22 (40 gr), .308 (168 gr), .40 (165 gr), 10 mm (180 gr), .38 (125 gr).
-# energy: 7.62x39 (8 g), 7.62x54 (9.6 g), 12 buck (34 g). pressure: .40, 10 mm, .38, 7.62x39, 7.62x54, musket.
-CHARGE = {"22lr": (197.0, 165.0), "22lr_sub": (133.0, 165.0), "9x19": (481.0, 235.0), "9x19_sub": (420.0, 235.0), "45acp": (483.0, 135.0),
-          "40sw": (618.0, 235.0), "10mm": (933.0, 235.0), "357": (731.0, 270.0), "38spl": (340.0, 150.0), "556": (1797.0, 430.0),
-          "762x39": (2045.0, 355.0), "762x51": (3469.0, 415.0), "308": (3505.0, 415.0), "762x54": (3267.0, 390.0), "300blk": (1840.0, 380.0),
-          "300blk_sub": (675.0, 380.0), "50bmg": (18050.0, 395.0), "12_buck": (2775.0, 79.0), "12_slug": (2300.0, 79.0), "musket": (1500.0, 30.0)}
-REF_PA, REF_PEAK = 12000.0, 0.7
-IMPACT_REF_J = 18050.0             # the .50 BMG again: the hardest hit sits at 0.85
-# His body rings "several hundred ms" (c14 l.24633): T60 300 ms at 230 Hz. c14 computes Q 31 for it, but amb.bp measures T60 = 1.1 Q / f (Q 31: 148 ms): Q 62.
+PRESETS = presets.schema("weapon", {
+    "cart": F(ref="cartridge"), "barrel": F(float, lo=0.02, hi=2.0, unit="m"), "rate": F(float, lo=0.0, hi=200.0, unit="rounds/s"),
+    "action": F(str, choices=("semi_gas", "open_bolt", "manual", "revolver", "lock")), "body": F(float, lo=0.1, hi=5.0),
+    "muzzle": F(str, choices=("bare", "brake", "flash_hider", "can")), "wood": F(bool, required=False), "clip": F(int, lo=1, hi=200, required=False),
+    "cadence": F(float, lo=0.05, hi=20.0, unit="rounds/s", required=False), "lock": F(tuple, items=(F(float, lo=0.0, hi=500.0, unit="ms"), F(str, choices=("flint", "match", "cap"))), required=False),
+    "suppressed": F(float, lo=0.0, hi=1.0, required=False)})
+
+
+class _View(Mapping):
+    """A table that is computed from the live presets at each access, so a cartridge or weapon registered later is in it."""
+
+    def __init__(self, keys, build):
+        self._keys, self._build = keys, build
+
+    def __getitem__(self, k):
+        if k not in self._keys():
+            raise KeyError(k)
+        return self._build(k)
+
+    def __iter__(self):
+        return iter(self._keys())
+
+    def __len__(self):
+        return len(self._keys())
+
+    def __contains__(self, k):
+        return k in self._keys()
+
+
+def _caliber(k: str) -> tuple:
+    c, leg = B.CARTRIDGES[k], presets.get("cartridge", k)
+    peak = leg["legacy_peak_pa"] if "legacy_peak_pa" in leg else B.blast_at(B.muzzle_state(k, c.l_ref), k, 3.0, 0.0)[0]
+    return c.d_mm, c.l_mm, c.v_ref, peak, leg.get("legacy_dir_db", 0.0)
+
+
+def _charge(k: str) -> tuple:
+    c, leg = B.CARTRIDGES[k], presets.get("cartridge", k)
+    return (leg["legacy_e_j"] if "legacy_e_j" in leg else 0.5e-3 * c.m_g * c.v_ref * c.v_ref), c.p_max_mpa
+
+
+# caliber -> (diameter mm, length mm, speed m/s, blast peak Pa at 3 m, directivity dB), from the cartridge presets
+CALIBERS = _View(B.CARTRIDGES.keys, _caliber)
+_NO_MECH = ("manual", "revolver", "lock")
+
+
+def _opts(p: dict) -> dict:
+    o = {k: p[k] for k in ("wood", "clip", "cadence", "lock", "suppressed") if k in p}
+    if p["action"] in _NO_MECH:
+        o["manual"] = True
+    if p["action"] == "open_bolt":
+        o["open_bolt"] = True
+    if p["action"] == "revolver":
+        o["gap"] = True
+    if p["muzzle"] == "brake":
+        o["brake"] = True
+    if B.CARTRIDGES[p["cart"]].pellets > 1:
+        o["pellets"] = B.CARTRIDGES[p["cart"]].pellets
+    return o
+
+
+def _blast_ms(p: dict) -> float:
+    st = B.muzzle_state(p["cart"], p["barrel"])
+    _, t0, b = B.blast_at(st, p["cart"], 3.0, 0.0)
+    return round(1e3 * t0 * (1.0 + 8.0 / b), 2)
+
+
+# compatibility views of the presets: caliber, rounds/s, body scale, blast span ms (computed), options
+WEAPONS = _View(PRESETS.keys, lambda k: (PRESETS[k]["cart"], PRESETS[k]["rate"], PRESETS[k]["body"], _blast_ms(PRESETS[k]), _opts(PRESETS[k])))
+BARREL_MM = _View(PRESETS.keys, lambda k: PRESETS[k]["barrel"] * 1e3)
+BODY_Q = 10.62       # the gun body's preset Q (pov)
+# calibre -> muzzle energy J, peak chamber pressure MPa
+CHARGE = _View(B.CARTRIDGES.keys, _charge)
+REF_PEAK = 0.7
+REF_PEAK_ENV = 0.5
 POV_Q = 62.0
+_REFC: dict = {}
+
+
+def _refs() -> tuple:
+    """The 5.56 on its 508 mm barrel (chamber pressure, burnt energy) and the .50's on-axis blast at 3 m, from the live cartridges."""
+    key = (repr(B.CARTRIDGES["50bmg"]), repr(B.CARTRIDGES["556"]))
+    if key not in _REFC:
+        _REFC.clear()
+        st = B.muzzle_state("556", 0.508)
+        _REFC[key] = (B.blast_at(B.muzzle_state("50bmg", 1.143), "50bmg", 3.0, 0.0)[0], st["p_m"], st["e_b"],
+                      B.blast_at(st, "556", ENV_REF_M, 30.0)[0])
+    return _REFC[key]
+
+
+def __getattr__(name: str):
+    if name in ("REF_PA", "_PM_REF", "_EB_REF"):
+        return _refs()[("REF_PA", "_PM_REF", "_EB_REF").index(name)]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+BOLT_PA_M = {"rifle": 20.0, "pistol": 10.0, "open_bolt": 30.0}      # pascals at 1 m, each bolt locking
+MOTOR_PA_M, CLIP_PA_M, LOCK_PA_M, BRASS_PA_M = 2.0, 20.0, 5.0, 0.2
+IMPACT_REF_J = 18050.0
 
 
 def n_wave_pa(v: float, d_mm: float, l_mm: float, miss: float, c: float = C_AIR):
-    """Whitham N-wave of a bullet: ``(peak Pa, duration s)`` at distance ``miss`` m from the trajectory, or
-    ``(0, 0)`` when subsonic. Far field only (miss > 1000 d); unreliable close to Mach 1."""
+    """N-wave of a bullet: ``(peak Pa, duration s)`` at distance ``miss`` m from the trajectory, or ``(0, 0)`` when subsonic.
+    Far-field law (miss > 1000 d); `ballistics.n_wave_pa` adds the near-field law."""
     m = v / c
     if m <= 1.0:
         return 0.0, 0.0
@@ -105,8 +144,9 @@ RHO_AIR, CD_BULLET = 1.225, 0.3
 
 def drag_length(cal: str) -> float:
     """Metres over which a bullet loses 1/e of its speed under quadratic drag, 2 m / (rho Cd A); mass from muzzle energy and speed."""
-    d, _, v, _, _ = CALIBERS[cal]
-    m = 2.0 * CHARGE[cal][0] / (v * v)
+    c = B.CARTRIDGES[cal]
+    d, v = c.d_mm, c.v_ref
+    m = 2.0 * (CHARGE[cal][0] if cal in CHARGE else 0.5e-3 * c.m_g * v * v) / (v * v)
     return 2.0 * m / (RHO_AIR * CD_BULLET * math.pi * (d * 1e-3) ** 2 / 4.0)
 
 
@@ -126,26 +166,29 @@ def _n_wave_shape(dur: float) -> np.ndarray:
     return np.append(np.linspace(1.0, -1.0, max(2, int(round(dur * P)))), 0.0)
 
 
-def _crack(v, d_mm, l_mm, miss, rng, height=1.5, wake=True) -> np.ndarray:
-    """The passing bullet in Pa: N-wave, ground reflection (M06: dt = path difference / c) and
-    the broadband wake behind it (2 kHz up, 30 ms, -20 dB)."""
-    p, t = n_wave_pa(v, d_mm, l_mm, miss)
+def _crack(v, d_mm, l_mm, miss, rng, height=1.5, wake=True, near=False) -> np.ndarray:
+    """The passing bullet in Pa: N-wave, ground reflection (dt = path difference / c) and the broadband wake behind it
+    (2 kHz up, 30 ms, -20 dB). ``near``: the near-field law inside 1000 diameters."""
+    p, t = (B.n_wave_pa if near else n_wave_pa)(v, d_mm, l_mm, miss)
     if p <= 0:
         return np.zeros(1)
-    b = max(miss, 0.05)
+    return _cone(p * _n_wave_shape(t), max(miss, 0.05), rng, height, wake)
+
+
+def _cone(w: np.ndarray, b: float, rng, height=1.5, wake=True) -> np.ndarray:
+    """Add the ground reflection and the wake to an N-wave ``w`` (Pa) heard ``b`` m from the path."""
     dt = (math.hypot(b, 2.0 * height) - b) / C_AIR
-    y = np.zeros(_n(dt + t + 0.05))
-    w = _n_wave_shape(t)
+    y = np.zeros(len(w) + _n(dt) + _n(0.05))
     y[:len(w)] += w
     _put(y, amb.lop(w, 6000.0), dt, 0.6)
     if wake:
         m = _n(0.03)
-        _put(y, amb.hip(rng.uniform(-1, 1, m), 2000.0) * (1.0 - np.arange(m) / m) ** 2, t, 0.1)
-    return y * p
+        _put(y, amb.hip(rng.uniform(-1, 1, m), 2000.0) * (1.0 - np.arange(m) / m) ** 2, len(w) / P, 0.1 * float(np.max(np.abs(w))))
+    return y
 
 
 # Measured muzzle-blast peaks of a rifle every 15 degrees, dB re the axis; 180 continues the last slope
-BLAST_SHAPE_DB = (0.0, 0.1, -0.6, -0.9, -2.6, -4.0, -11.1, -12.2, -16.1, -19.3, -23.6, -26.8, -30.0)
+BLAST_SHAPE_DB = B.BLAST_SHAPE_DB
 
 
 def _blast_gain(a_db: float, azimuth: float) -> float:
@@ -155,143 +198,240 @@ def _blast_gain(a_db: float, azimuth: float) -> float:
 
 
 def _friedlander(a: float, n: int) -> np.ndarray:
-    """Blast wave at a point: (1 - t/a) e^(-t/a), a = positive phase; the negative phase lasts over twice as long
-    ("at least twice", Kinney & Graham, Explosive Shocks in Air, ch. Duration). Decay constant 1."""
+    """Blast wave at a point: (1 - t/a) e^(-t/a), a = positive phase; decay constant 1."""
     u = np.arange(n) / (P * a)
     return (1.0 - u) * np.exp(-u)
 
 
 def _gas_tail(t60: float, rng) -> np.ndarray:
-    """Gas still leaving and mixing after the front: decaying low-passed noise. Band and shape."""
+    """Gas still leaving and mixing after the front (pov layers): decaying low-passed noise."""
     n = _n(t60)
     return amb.lop(rng.uniform(-1, 1, n), 2500.0) * np.exp(-6.9 * np.arange(n) / n) * (1.0 - np.arange(n) / n)
 
 
-def _body_blast(cal, body, blast_ms, opts, rng, action, cycle, close, echo, delay=1.5e-3, ring=1.0, direct=0.35, apart=False, barrel=None, pov=False,
-                weight=0.0, texture=0.0):
-    """The muzzle blast, peak 1. Heard from outside: the Friedlander wave (``blast_ms`` holds 93 % of its energy) and a short gas
-    tail, no body; ``weight`` ms (included in ``blast_ms``) lengthen the wave past its 8 ms cap; ``texture`` adds Farnell's
-    layers (chirp, barrel, noise burst) at that share of the peak. ``pov``: Farnell's layers through the gun's body and tanh, ``ring`` scaling the body's Q.
-    ``apart``: also returns the mechanics alone, for what a can does not touch."""
-    b = blast_ms * 1e-3
-    joules, mpa = CHARGE[cal]
-    scale = (joules / CHARGE["556"][0]) ** (1.0 / 3.0)
-    n = _n(0.4 * max(ring, 1.0) + 2.0 * b + (0.5 if echo > 0 else 0.0))
+def _pov_shot(p: dict, st: dict, rng, supp, subsonic, action, cycle, ring, direct, weight, k_t0, L: float) -> np.ndarray:
+    """The shooter's ears, in Pa: the gun's body and the breech layers through the body filters, at the level of the blast
+    0.35 m behind the muzzle and 165 degrees off the axis."""
+    cart, c = p["cart"], B.CARTRIDGES[p["cart"]]
+    pk, t0, b = B.blast_at(st, cart, L + 0.35, 165.0, 30.0, k_t0)
+    if p["muzzle"] == "brake":
+        pk *= 10.0 ** (B.brake_boost_db(165.0) / 20.0)
+    if subsonic:
+        pk *= 10.0 ** (-4.0 / 20.0)
+    t0 += weight * 1e-3 / 2.28
+    if supp > 0:
+        pk, t0 = B.suppress(pk, t0, cart, (c.supp_db if c.supp_db is not None else B.SUPPRESSOR_DEFAULT_DB) * supp,
+                            ejection_port=p["action"] in ("semi_gas", "open_bolt"))
+    o = _opts(p)
+    body = p["body"]
+    bb = max(1.7 * t0, 1e-3)
+    v = min(st["v"], 310.0) if subsonic else st["v"]
+    delay = L / v
+    scale = (st["e_b"] / _refs()[2]) ** (1.0 / 3.0)
+    n = _n(0.4 * max(ring, 1.0) + 2.0 * bb)
     x = np.zeros(n)
     mech = np.zeros(n)
-    t0 = 0.0
-    if opts.get("gap"):                                     # cylinder gap leads the muzzle by ~200 us (Maher & Routh 2017)
-        _put(x, _barrel(max(0.6 * b, 1e-3)), 0.0, 0.5)
-        t0 = 2e-4
-    _put(x, _shell(max(b, 1e-3)), t0, 0.6)
-    _put(x, _barrel(max(0.6 * b, 1e-3)), t0 + delay, 0.5)
-    a = min(b, 8e-3) / 2.28                                  # 93 % of the energy of (1-u) e^-u lies within u < 2.28: the measure in NIJ Fig. 6
-    _put(x, _friedlander(a, min(n, int(12 * a * P))), t0 + delay, 0.5)
-    _put(x, _barrel(8.0 / (100.0 * body)), t0 + delay, min(0.25, 0.1 * scale))
-    _put(x, _gas_tail(max(0.005 * scale, b), rng), t0 + delay, 0.25)
-    _put(x, _noiseburst(max(0.6 * b, 1e-3), rng), t0 + delay + 0.35 * b, 0.8)
-    if opts.get("brake"):
-        _put(x, _noiseburst(2.0 * b, rng), t0 + delay + 1e-3, 0.8)
-    if action > 0 and close > 0 and not opts.get("manual"):
+    tg = 0.0
+    if o.get("gap"):
+        _put(x, _barrel(max(0.6 * bb, 1e-3)), 0.0, 0.5)
+        tg = 2e-4
+    _put(x, _shell(max(bb, 1e-3)), tg, 0.6)
+    _put(x, _barrel(max(0.6 * bb, 1e-3)), tg + delay, 0.5)
+    _put(x, _friedlander(t0, min(n, int(12 * t0 * P))), tg + delay, 0.5)
+    _put(x, _barrel(8.0 / (100.0 * body)), tg + delay, min(0.25, 0.1 * scale))
+    _put(x, _gas_tail(max(0.005 * scale, bb), rng), tg + delay, 0.25)
+    _put(x, _noiseburst(max(0.6 * bb, 1e-3), rng), tg + delay + 0.35 * bb, 0.8)
+    if o.get("brake"):
+        _put(x, _noiseburst(2.0 * bb, rng), tg + delay + 1e-3, 0.8)
+    if action > 0 and not o.get("manual"):
         nz = amb.hip(rng.uniform(-1, 1, n), 300.0)
-        c = min(cycle, 0.1)
-        mech += 0.5 * action * close * (_mclick(nz, CATCH, 0.45 * c, 0.33) + _mclick(nz, ENDSTOP, 0.0 if opts.get("open_bolt") else 0.7 * c, 0.33))
-    if opts.get("wood") and action > 0 and close > 0:       # "wooden knocking sound about 90 ms after the impulse" (Farnell)
-        _put(mech, _nm(_strike("sy_stick", 0.3, 1.5, 0.0, rng, dur=0.12)), 0.09, 0.1 * action * close)
-    if not pov:
-        y = np.zeros(n)
-        w = weight * 1e-3
-        ad = (min(b - w, 8e-3) + min(w, 0.1)) / 2.28 - (2.5e-4 / 2.28 if opts.get("gap") else 0.0)    # 0.25: the lead and the pre-pulse's own energy
-        f = _friedlander(ad, min(n, int(40 * ad * P)))
-        for t, g in ((t0 + delay, 1.0),) + (((t0 + delay - 2e-4, 0.5),) if opts.get("gap") else ()) + (((t0 + delay + 1e-3, 0.5),) if opts.get("brake") else ()):
-            _put(y, f, t, g)
-        _put(y, _gas_tail(max(0.005 * scale, b), rng), t0 + delay, TAIL_GAIN)
-        y = y / np.abs(y).max()
-        if texture > 0:
-            y = y + texture * x / (np.abs(x).max() + 1e-12)
-        if not apart:
-            y = y + mech
-        if echo > 0:
-            y = y + echo * 4.0 * (amb.outdoor_echoes(y) - 0.2 * y)
-        return (y, mech) if apart else y
+        cc = min(cycle, 0.1)
+        mech += 0.5 * action * (_mclick(nz, CATCH, 0.45 * cc, 0.33) + _mclick(nz, ENDSTOP, 0.0 if o.get("open_bolt") else 0.7 * cc, 0.33))
+    if o.get("wood") and action > 0:
+        _put(mech, _nm(_strike("sy_stick", 0.3, 1.5, 0.0, rng, dur=0.12)), 0.09, 0.1 * action)
     centres = [f * body * rng.uniform(0.97, 1.03) for f in RIFLE_BODY]
     q = BODY_Q * ring
-    if barrel:
-        centres.append(C_AIR / (2.0 * barrel * 1e-3))
-        q *= (barrel / 508.0) ** 0.25
-    drive = 4.8 * math.sqrt(mpa / CHARGE["556"][1])
+    centres.append(C_AIR / (2.0 * L))
+    q *= (L * 1e3 / 508.0) ** 0.25
+    drive = 4.8 * math.sqrt(st["p_m"] / _refs()[1])
 
     def voice(u):
         return np.tanh(drive * (ring * _bpar8(u, centres, q=q) + direct * u))
-    y = voice(x if apart else x + mech)
-    if echo > 0:
-        y = y + echo * 4.0 * (amb.outdoor_echoes(y) - 0.2 * y)
-    return (_nm(y), voice(mech)) if apart else _nm(y)
+    return _nm(voice(x + mech)) * pk
 
 
-def _suppress(y, db):
-    """Murphy 2019: the loss sits at 160-1000 Hz; 8 dB of ``db`` as a band dip there."""
-    y = y * 10.0 ** (-(db - 8.0) / 20.0)
-    return y - 0.6 * amb.bp(y, 400.0, 0.7)
+CAN_HISS_HZ, CAN_HISS_Q, CAN_HISS_RMS, CAN_HISS_S = 1500.0, 0.7, 0.1, 0.012
 
 
-def _shot(weapon, rng, r, az, miss, suppress, subsonic, action, crack, echo, cycle, ring=1.0, direct=0.35, weight=0.0, pov=False,
-          texture=0.0) -> np.ndarray:
-    cal, _, body, blast_ms, opts = WEAPONS[weapon]
-    blast_ms += weight
-    d, l, v, p3, a = CALIBERS[cal]
-    suppress = max(suppress, opts.get("suppressed", 0.0))
+def _can_hiss(pk: float, rng) -> np.ndarray:
+    """Gas leaving the suppressor after the shot: band noise around 1.5 kHz, rms 10 % of the treated peak, dying over 12 ms."""
+    n = _n(CAN_HISS_S)
+    w = amb.bp(rng.uniform(-1.0, 1.0, n), CAN_HISS_HZ, CAN_HISS_Q) * np.exp(-3.0 * np.arange(n) / n)
+    return w * (CAN_HISS_RMS * pk / math.sqrt(float(np.mean(w * w)) + 1e-30))
+
+
+def _shot(weapon, rng, r, az, miss, suppress, subsonic, action, crack, cycle, ring=1.0, direct=0.35, weight=0.0, pov=False,
+          ground="asphalt", flash=0.0, barrel_ring=0.0, barrel=0.0, k_t0=1.0) -> np.ndarray:
+    """One round in pascals at the listener (first sample = first arrival): precursor, Friedlander blast of the muzzle gas,
+    brake ports, flash, gas jet, suppressor chamber tone, then air absorption and ground effect; the bullet's N-wave and the bolt."""
+    p = presets.resolve("weapon", weapon)
+    cart, c = p["cart"], B.CARTRIDGES[p["cart"]]
+    L = barrel if barrel > 0 else p["barrel"]
+    st = B.muzzle_state(cart, L)
+    supp = max(suppress, p.get("suppressed", 0.0))
+    if pov:
+        return _pov_shot(p, st, rng, supp, subsonic, action, cycle, ring, direct, weight, k_t0, L)
+    v = min(st["v"], 310.0) if subsonic else st["v"]
+    if supp > 0:
+        v *= 1.03
+    brake = p["muzzle"] == "brake"
+    pk, t0, b = B.blast_at(st, cart, r, az, B.BRAKE_A_DB if brake else 30.0, k_t0)
+    if brake:
+        pk *= 10.0 ** (B.brake_boost_db(az) / 20.0)
     if subsonic:
-        v, p3 = min(v, 310.0), p3 * 10.0 ** (-4.0 / 20.0)
-    if suppress > 0:
-        v *= 1.03                                            # Murphy 2019: 0-6 % faster
-    close = float(np.clip(1.0 - r / 100.0, 0.0, 1.0))        # "over 100 m [the body] is lost" (Farnell)
-    acts = action * (2.0 if suppress > 0 else 1.0)
-    barrel = BARREL_MM.get(weapon)
-    delay = barrel * 1e-3 / v if barrel else 1.5e-3
-    if suppress > 0:                                         # the can does not touch the bolt or the ejection port (Mu19): C7
-        blast, mech = _body_blast(cal, body, blast_ms, opts, rng, acts, cycle, close, echo, delay, ring, direct, True, barrel, pov, weight, texture)
-        blast = _suppress(blast, 25.0 * suppress) + mech
-    else:
-        blast = _body_blast(cal, body, blast_ms, opts, rng, acts, cycle, close, echo, delay, ring, direct, False, barrel, pov, weight, texture)
-    blast = space.distance(blast, r, ref=1.0) * p3 * 3.0 * _blast_gain(a, az) * 10.0 ** (opts.get("boost_db", 0.0) / 20.0)
+        pk *= 10.0 ** (-4.0 / 20.0)
+    t0 += weight * 1e-3 / 2.28
+    pk0 = pk
+    if supp > 0:
+        pk, t0 = B.suppress(pk, t0, cart, (c.supp_db if c.supp_db is not None else B.SUPPRESSOR_DEFAULT_DB) * supp)
+    lead = 1e-3
+    parts = [(B.friedlander(pk, t0, b, None), lead)]
+    if p["action"] == "revolver":
+        parts.append((B.friedlander(0.5 * pk, t0, b, None), lead - 2e-4))
+    pre, adv = B.precursor(st, cart, r, az, L, v)
+    if adv > 0:
+        parts.append((pre * (pk / pk0), lead - adv))
+    if brake:
+        parts += [(s, lead + d) for s, d in B.brake_pulses(pk, t0, b)]
+    if flash > 0:
+        s, d = B.flash_pulse(pk, t0, b, flash)
+        parts.append((s, lead + d))
+    jet = B.gas_jet(st, pk, rng)
+    parts.append((jet, lead))
+    if barrel_ring > 0:
+        f = math.sqrt(B.GAMMA * B.R_GAS * st["t_gas"]) / (4.0 * L)
+        parts.append((amb.bp(B.gas_jet(st, pk, rng), f, 8.0) * barrel_ring, lead))
+    if supp > 0:
+        parts.append((B.can_tone(pk, rng), lead))
+        parts.append((_can_hiss(pk, rng), lead))
+    x = np.zeros(max(int(t * P) + len(s) for s, t in parts) + 8)
+    for s, t in parts:
+        _put(x, s, t)
+    x = B.ground(B.air_absorb(x, r), r, 1.5, 1.6, ground)
     th = math.radians(az)
-    x, y = r * math.cos(th), r * math.sin(th)
+    xx, yy = r * math.cos(th), r * math.sin(th)
     if miss > 0:
-        y = float(miss)
+        yy = float(miss)
+    yy = max(yy, 0.05)
     t_b = r / C_AIR
-    t_c = shock_arrival(v, x, max(y, 0.05), C_AIR) if crack > 0 and az < 75.0 else None     # none past 75 deg (Murphy 2019)
-    t0 = min(t_b, t_c) if t_c is not None else t_b
-    out = np.zeros(len(blast) + _n(0.05))
-    _put(out, blast, t_b - t0)
-    if t_c is not None:
-        bm = max(y, 0.05)
-        for _ in range(int(opts.get("pellets", 1))):
-            w = space.distance(_crack(v, d, l, bm, rng), bm + 1.0, ref=1.0) * (bm + 1.0)
-            gain = crack / math.sqrt(float(opts.get("pellets", 1)))
-            _put(out, w, t_c - t0 + rng.uniform(-2e-4, 2e-4) * (opts.get("pellets", 1) > 1), gain)
+    waves = []
+    if crack > 0 and az < 75.0 and v > C_AIR:
+        d, l = c.d_mm, c.l_mm
+        lam = drag_length(cart)
+        for _ in range(c.pellets):
+            w, ta = B.n_wave(v, d, l, xx, yy, lam, P)
+            if ta is not None:
+                w = B.air_absorb(_cone(w, yy, rng), yy, P)
+                waves.append((w * crack / math.sqrt(float(c.pellets)), ta + (rng.uniform(-2e-4, 2e-4) if c.pellets > 1 else 0.0)))
+    org = min([t_b - lead] + [ta for _, ta in waves])
+    mech = None
+    if p["action"] not in _NO_MECH and action > 0:
+        bp = BOLT_PA_M["open_bolt"] if p["action"] == "open_bolt" else (BOLT_PA_M["pistol"] if L < 0.3 else BOLT_PA_M["rifle"])
+        nz = amb.hip(rng.uniform(-1, 1, _n(0.4)), 300.0)
+        cc = min(cycle, 0.1)
+        tu = st["tau_b"] + 1e-3
+        mech = _mclick(nz, CATCH, max(0.45 * cc, tu), 0.33) + _mclick(nz, ENDSTOP, tu if p["action"] == "open_bolt" else 0.7 * cc, 0.33)
+        mech = mech * (action * bp / max(r, 1.0) / (float(np.max(np.abs(mech))) + 1e-12))
+    out = np.zeros(max([len(x) + int((t_b - lead - org) * P)] + [len(w) + int((ta - org) * P) for w, ta in waves]) + _n(0.05) + (_n(0.4) if mech is not None else 0))
+    _put(out, x, t_b - lead - org)
+    for w, ta in waves:
+        _put(out, w, ta - org)
+    if mech is not None:
+        _put(out, mech, t_b - org)
     return out
 
 
-HEARD_WEIGHT_MS, HEARD_DRIVE, HEARD_MIX, HEARD_TEXTURE = 3.0, 30.0, 0.35, 0.6
-RENDER_HELP = ("heard = as a recording or the ear gets it: the blast's weight, a microphone overloaded at 150 dB, the place's "
-               "reflections | pressure = the bare pressure at the ear, a click of a few ms")
+RENDER_HELP = ("heard = as a recording gets it: the place's reflections and the `recorder` chain | "
+               "pressure = the bare pressure at the ear: no ground, no place, no recorder")
 PLACE_HELP = "render=heard: where it is heard, none | street | forest | canyon | arena | cave | hall ... (room presets)"
+RECORDER_HELP = "none (bare Pa) | field (measurement microphone) | camera (clips at clip_db, locks, limiter) | phone"
 
 
-def _heard_weight(cal: str) -> float:
-    return HEARD_WEIGHT_MS * (CHARGE[cal][0] / CHARGE["556"][0]) ** (1.0 / 3.0)
+def _place(y: np.ndarray, place: str) -> np.ndarray:
+    if str(place) == "none":
+        return y
+    from .reverbs import room
+    w = room(np.concatenate([y, np.zeros(_n(2.0))]), P, mix=0.35, preset=str(place))
+    return w.mean(axis=1) if w.ndim == 2 else w
 
 
-def _heard(y: np.ndarray, place: str) -> np.ndarray:
-    """Overload then the place: the peak is kept, so relative levels survive."""
-    pk = float(np.max(np.abs(y))) + 1e-12
-    y = np.tanh(HEARD_DRIVE * y / pk) / math.tanh(HEARD_DRIVE) * pk
-    if str(place) != "none":
-        from .reverbs import room
-        w = room(np.concatenate([y, np.zeros(_n(2.0))]), P, mix=HEARD_MIX, preset=str(place))
-        y = w.mean(axis=1) if w.ndim == 2 else w
-    return y
+ENVS = presets.schema("weapon_env", {
+    "body_db": F(float, lo=-80.0, hi=30.0, unit="dB"), "body_ms": F(float, lo=1.0, hi=500.0, unit="ms"),
+    "body_hz": F(float, lo=50.0, hi=20000.0, unit="Hz"),
+    "boom_db": F(float, lo=-80.0, hi=30.0, unit="dB"), "boom_ms": F(float, lo=1.0, hi=2000.0, unit="ms"),
+    "boom_hz": F(float, lo=20.0, hi=2000.0, unit="Hz"),
+    "tail_db": F(float, lo=-80.0, hi=30.0, unit="dB"), "tail_ms": F(float, lo=0.5, hi=500.0, unit="ms"),
+    "t60": F(float, lo=0.05, hi=6.0, unit="s"), "t60_hf": F(float, lo=0.05, hi=6.0, unit="s"),
+    "tail_hz": F(float, lo=200.0, hi=20000.0, unit="Hz"),
+    "echoes": F(list, of={"ms": F(float, lo=0.5, hi=3000.0, unit="ms"), "db": F(float, lo=-80.0, hi=6.0, unit="dB"),
+                          "hz": F(float, lo=100.0, hi=20000.0, unit="Hz")}, max_len=32, required=False)})
+ENV_HELP = "open_field | urban | range | indoor | forest | ... (weapon_env presets) or an inline dict; none or anechoic = dry, as before"
+ENV_REF_M, ENV_GROW_DB, ENV_SPLIT_HZ, ENV_MAX_S = 10.0, 20.0, 2000.0, 3.0
+_DRY = ("none", "anechoic", "None", "")
+
+
+def _env_params(env):
+    if env is None or (isinstance(env, str) and env in _DRY):
+        return None
+    return presets.resolve("weapon_env", env)
+
+
+def _lp(x: np.ndarray, hz: float) -> np.ndarray:
+    return sosfilt(butter(2, min(hz, 0.45 * P), "low", fs=P, output="sos"), x) if hz < 0.45 * P else x
+
+
+def _band_energy(x: np.ndarray, g: float, db: float, hz: float) -> np.ndarray:
+    """``x`` scaled so that its energy below ``hz`` is ``g`` 10^(db/10) times that of a unit impulse in the same band."""
+    return x * math.sqrt(g * 10.0 ** (db / 10.0) * min(1.0, 2.0 * hz / P) / (float(np.sum(x * x)) + 1e-30))
+
+
+def env_ir(env, r: float, seed: int = 0, azimuth: float = 30.0) -> np.ndarray:
+    """Impulse response of a place for a listener ``r`` m from the source, first sample = the direct sound (1). An early dense
+    part (``body_*``), a low one (``boom_*``), discrete echoes, then a late tail that builds up over ``tail_ms`` and decays with
+    ``t60`` below 2 kHz and ``t60_hf`` above. Energies are given re the direct sound at 10 m and 30 degrees off the bore; they
+    grow as r^2 (direct ~ 1/r^2, the field of the place does not) and as the muzzle's directivity takes the direct sound
+    away from ``azimuth``, at most +20 dB."""
+    e = _env_params(env)
+    if e is None:
+        return np.ones(1)
+    rng = np.random.default_rng(int(seed) + 7919)
+    d = B._dir_gain(30.0, 30.0) / B._dir_gain(float(np.clip(azimuth, 0.0, 180.0)), 30.0)
+    g = min((max(float(r), 0.1) / ENV_REF_M) ** 2 * d * d, 10.0 ** (ENV_GROW_DB / 10.0))
+    echoes = e.get("echoes") or []
+    span = max(e["body_ms"] * 1e-3, e["boom_ms"] * 1e-3, e["tail_ms"] * 1e-3 + max(e["t60"], e["t60_hf"]), max([x["ms"] for x in echoes], default=0.0) * 1e-3 + 0.05)
+    h = np.zeros(_n(min(span, ENV_MAX_S)))
+    h[0] = 1.0
+    for k in ("body", "boom"):
+        m = min(_n(e[k + "_ms"] * 1e-3), len(h) - 1)
+        b = _lp(_lp(rng.standard_normal(m), e[k + "_hz"]), e[k + "_hz"]) * np.exp(-6.9 * np.arange(m) / m)
+        _put(h, _band_energy(b, g, e[k + "_db"], e[k + "_hz"]), 1.0 / P)
+    t = np.arange(len(h) - 1) / P
+    nz = rng.standard_normal(len(t))
+    lo = _lp(nz, ENV_SPLIT_HZ)
+    w = (1.0 - np.exp(-3.0 * t / (e["tail_ms"] * 1e-3))) * (lo * np.exp(-6.9 * t / e["t60"]) + (nz - lo) * np.exp(-6.9 * t / e["t60_hf"]))
+    _put(h, _band_energy(_lp(w, e["tail_hz"]), g, e["tail_db"], e["tail_hz"]), 1.0 / P)
+    for x in echoes:
+        k = np.zeros(_n(0.01))
+        k[0] = 1.0
+        k = _lp(k, x["hz"])
+        _put(h, k * (math.sqrt(g) * 10.0 ** (x["db"] / 20.0) / (float(np.sum(k)) + 1e-30)), x["ms"] * 1e-3)
+    return h
+
+
+def _env(y: np.ndarray, env, r: float, seed: int = 0, azimuth: float = 30.0) -> np.ndarray:
+    if _env_params(env) is None:
+        return y
+    return fftconvolve(y, env_ir(env, r, seed, azimuth))
 
 
 def _check_render(render: str) -> bool:
@@ -300,14 +440,15 @@ def _check_render(render: str) -> bool:
     return render == "heard"
 
 
-def _finish(y, sr, r, level, fade, tail=0.0) -> np.ndarray:
-    """``level="peak"``: 0.9 at the crest. ``"relative"``: pascals at the ear over the .50's on-axis blast at the same distance,
-    so calibres keep their measured differences and distance only colours; never over 0.89."""
+def _finish(y, sr, r, level, fade, tail=0.0, wet=False) -> np.ndarray:
+    """``level="peak"``: 0.9 at the crest. ``"relative"``: pascals over a reference, so every weapon keeps its physical level;
+    never over 0.89. Dry (no ``env``): the .50's on-axis blast at 3 m sits at 0.7. With an ``env``: the 5.56's blast at 10 m
+    and 30 degrees sits at 0.5, so a .22 or a suppressed gun stays audible."""
     if level == "peak":
         return _fin(y, sr, 0.9, fade=fade, tail=tail)
     if level != "relative":
         raise ValueError(f"unknown level {level!r}: relative|peak")
-    y = _fin(y * REF_PEAK / (REF_PA * 3.0 / r), sr, None, fade=fade, tail=tail)
+    y = _fin(y * (REF_PEAK_ENV / _refs()[3] if wet else REF_PEAK / _refs()[0]), sr, None, fade=fade, tail=tail)
     return y * min(1.0, 0.89 / (float(np.max(np.abs(y))) + 1e-12))
 
 
@@ -320,8 +461,7 @@ def _clip_ping(rng) -> np.ndarray:
 
 
 def _lock(kind: str, delay: float, rng) -> np.ndarray:
-    """What precedes the charge of an old gun: the lock falling, then the priming flash for ``delay`` ms
-    (20-50 ms flint, US 6374525; match and cap estimated)."""
+    """What precedes the charge of an old gun: the lock falling, then the priming flash for ``delay`` ms."""
     n = _n(delay * 1e-3 + 0.05)
     nz = amb.hip(rng.uniform(-1, 1, n), 300.0)
     y = _mclick(nz, ENDSTOP, 0.0, 0.5) + _mclick(nz, CATCH, 0.0, 0.5 if kind == "flint" else 0.2)
@@ -331,74 +471,96 @@ def _lock(kind: str, delay: float, rng) -> np.ndarray:
     return y
 
 
-@sfx("firearm", "A named firearm in physical units: muzzle blast by calibre and direction, the bullet's own N-wave and where it reaches you, bolt cycling, burst rate, suppressor, subsonic rounds.",
-     weapon=("ar15", "|".join(WEAPONS)), distance=(10.0, "m from the shooter"),
-     azimuth=(30.0, "degrees off the line of fire: 0 you are shot at, 180 behind the shooter (10-30 dB quieter); no crack past 75"),
+_CASE_OF = presets.schema("case_of", {"case": F(str)}, shape=lambda d: d["case"])
+
+
+def _fall(case: str, floor: str, rng, height=1.2) -> np.ndarray:
+    return BR.render_case(_case_geom(case), floor, height, rng, rate=P)
+
+
+@sfx("firearm", "A named firearm in physical units: muzzle blast from the interior ballistics (cartridge, barrel), the bullet's own N-wave and where it reaches you, ground, recorder, bolt cycling, burst rate, suppressor, subsonic rounds.",
+     weapon=("ar15", "|".join(PRESETS)), distance=(10.0, "m from the shooter"),
+     azimuth=(30.0, "degrees off the line of fire: 0 you are shot at, 180 behind the shooter; no crack past 75"),
      miss=(0.0, "m the bullet passes from you (0 = from distance and azimuth)"), shots=(1, "rounds (up to 2000)"),
-     rate=(0.0, "rounds/s (0 = the weapon's own)"), suppressor=(0.0, "0..1: 1 = -25 dB at the muzzle, mostly 160-1000 Hz; the crack stays"),
-     subsonic=(False, "true = slowed to 310 m/s: no crack, a little quieter"), action=(0.6, "0..1 bolt cycling (lost beyond 100 m)"),
-     crack=(1.0, "0..1 level of the N-wave against its true level"), echo=(0.0, "0..1 street / treeline echoes; Farnell keeps them out of the sound, use `room` or a recipe"),
+     rate=(0.0, "rounds/s (0 = the weapon's own)"), suppressor=(0.0, "0..1: 1 = the cartridge's can reduction at the muzzle (22-32 dB); the crack stays"),
+     subsonic=(False, "true = slowed to 310 m/s: no crack, a little quieter"), action=(0.6, "0..1 gain of the bolt cycling, 1 = its physical level (10-30 Pa at 1 m)"),
+     crack=(1.0, "0..1 level of the N-wave against its true level"), echo=(0.0, "0..1 street / treeline echoes"),
      first_pop=(3.0, "dB louder on a suppressed gun's first round, half that on the second"),
-     pov=(False, "true = the shooter's ears: at the breech, the body ringing 300 ms, less blast, the mechanism up, no crack"),
-     ring=(1.0, "pov only: how long the gun's body rings, Q = 10.62 x ring (5.8 = T60 300 ms at 230 Hz)"),
-     weight=(0.0, "ms added to the blast wave (0-200): a longer shot sounds heavier; from outside it stops at 100, the rest is infrasound"),
-     level=("relative", "relative = weapons keep their measured differences (a .22 is 30 dB under a .50; needs normalize off in a spec) | peak = every file at 0.9"),
-     render=("heard", RENDER_HELP), place=("street", PLACE_HELP), seed=(0, "variation"))
+     pov=(False, "true = the shooter's ears: 0.35 m behind the muzzle, the body ringing 300 ms, the mechanism up, no crack"),
+     ring=(1.0, "pov only: how long the gun's body rings, Q = 10.62 x ring"),
+     weight=(0.0, "ms added to the blast wave (0-200): a longer shot sounds heavier"),
+     barrel=(0.0, "m of barrel (0 = the weapon's own): the speed and the blast follow"),
+     ground=("asphalt", "ground between the shooter and you: none | asphalt | grass | ..."),
+     treeline=(0.0, "Hz: echoes off a wood scatter as f^4, so the echo is high-passed (2nd order, f^2 in amplitude) and brighter than the direct shot; 0 = street echoes, 1500 is a forest edge"),
+     flash=(0.0, "0..1 secondary flash pressure 2 ms after the shot"),
+     barrel_ring=(0.0, "0..1 resonance of the bore after the gas leaves"),
+     k_t0=(1.0, "scale of the blast's positive phase (0.6 short .. 1.7 long)"),
+     brass=(0.0, "0..1 gain of the case falling and ringing after the shot"),
+     recorder=("field", RECORDER_HELP), clip_db=(0.0, "dB SPL where the recorder clips (0 = its own)"),
+     level=("relative", "relative = pressure over a reference shot (the 5.56 at 10 m sits at 0.5 with an env, the .50 at 3 m at 0.7 without), nothing normalised | peak = every file at 0.9"),
+     render=("heard", RENDER_HELP), env=("open_field", "render=heard: " + ENV_HELP), place=("none", PLACE_HELP), seed=(0, "variation"))
 def firearm(sr=DEFAULT_SR, weapon="ar15", distance=10.0, azimuth=30.0, miss=0.0, shots=1, rate=0.0, suppressor=0.0,
-            subsonic=False, action=0.6, crack=1.0, echo=0.0, first_pop=3.0, pov=False, ring=1.0, weight=0.0, level="relative",
-            render="heard", place="street", seed=0):
-    weapon = str(weapon)
-    if weapon not in WEAPONS:
-        raise ValueError(f"unknown weapon {weapon!r}: {'|'.join(WEAPONS)}")
+            subsonic=False, action=0.6, crack=1.0, echo=0.0, first_pop=3.0, pov=False, ring=1.0, weight=0.0, barrel=0.0, ground="asphalt",
+            treeline=0.0, flash=0.0, barrel_ring=0.0, k_t0=1.0, brass=0.0, recorder="field", clip_db=0.0, level="relative", render="heard",
+            env="open_field", place="none", seed=0):
     heard = _check_render(str(render))
     rng = np.random.default_rng(int(seed))
+    pr = presets.resolve("weapon", weapon)
+    L = float(barrel) if barrel > 0 else pr["barrel"]
     r = float(np.clip(distance, 1.0, 5000.0))
     az = float(np.clip(abs(float(azimuth)), 0.0, 180.0))
     shots = int(np.clip(shots, 1, 2000))
-    ring, direct = float(np.clip(ring, 0.5, 6.0)), 0.35
+    ring = float(np.clip(ring, 0.5, 6.0))
+    direct = 0.35
     if pov:
         r, az, crack, action, ring, direct = 1.0, 180.0, 0.0, _c01(action) * 3.0, max(ring, POV_Q / BODY_Q), 0.1
-    own = WEAPONS[weapon][1]
-    cal, _, _, _, opts = WEAPONS[weapon]
-    quiet = suppressor > 0 or opts.get("suppressed", 0.0) > 0
-    per_s = float(rate) if rate > 0 else (own if own > 0 else opts.get("cadence", 2.0))
+    quiet = suppressor > 0 or pr.get("suppressed", 0.0) > 0
+    per_s = float(rate) if rate > 0 else (pr["rate"] if pr["rate"] > 0 else pr.get("cadence", 2.0))
     gap = 1.0 / max(per_s, 0.05)
-    w = float(weight) + (_heard_weight(cal) if heard and not pov and not quiet else 0.0)
-    tex = HEARD_TEXTURE if heard and not pov else 0.0
-    one = [_shot(weapon, rng, r, az, float(miss), _c01(suppressor), bool(subsonic), float(action), _c01(crack), _c01(echo), gap, ring, direct, float(np.clip(w, 0.0, 200.0)), bool(pov), tex)
+    gr = str(ground) if heard and not pov else "none"
+    one = [_shot(weapon, rng, r, az, float(miss), _c01(suppressor), bool(subsonic), float(action) if pov else _c01(action), _c01(crack), gap, ring, direct,
+                 float(np.clip(weight, 0.0, 200.0)), bool(pov), gr, _c01(flash), _c01(barrel_ring), float(barrel), float(np.clip(k_t0, 0.3, 3.0)))
            for _ in range(min(shots, 8))]
-    lock = WEAPONS[weapon][4].get("lock")
-    pre = _lock(lock[1], lock[0], rng) * 2000.0 / r if lock else None
+    lock = pr.get("lock")
+    pre = _nm(_lock(lock[1], lock[0], rng)) * LOCK_PA_M / r if lock else None
     start = lock[0] * 1e-3 if lock else (0.0 if pov else 1e-3)
-    y = np.zeros(_n(start + shots * gap * 1.03) + max(map(len, one)))
+    fall = [_fall(_CASE_OF[pr["cart"]], "concrete", rng) for _ in range(min(shots, 3))] if brass > 0 and pr["cart"] in _CASE_OF else []
+    y = np.zeros(_n(start + shots * gap * 1.03) + max(map(len, one)) + (_n(4.5) if fall else 0))
     t = start
     for k in range(shots):
-        g = 1.0 + 0.07 * rng.standard_normal()                # +-5-10 % shot to shot (Maher 2019)
+        g = 1.0 + 0.07 * rng.standard_normal()                # +-5-10 % shot to shot
         if quiet and k < 2:
-            g *= 10.0 ** (float(first_pop) / (20.0 if k == 0 else 40.0))    # first-round pop: oxygen in the can (Murphy 2019)
+            g *= 10.0 ** (float(first_pop) / (20.0 if k == 0 else 40.0))
         _put(y, one[k % len(one)], t, g)
-        if opts.get("clip") and (k + 1) % opts["clip"] == 0:  # en-bloc clip thrown out after the last round (Wikipedia, M1)
-            _put(y, _clip_ping(rng), t + 0.06, 0.03 * CALIBERS[cal][3] * 3.0 / r)
+        if pr.get("clip") and (k + 1) % pr["clip"] == 0:
+            _put(y, _clip_ping(rng), t + 0.06, CLIP_PA_M / r)
+        if fall:
+            _put(y, fall[k % len(fall)], t + 0.35 + rng.uniform(0.0, 0.1), BRASS_PA_M * _c01(brass) / r)
         t += gap * (1.0 + 0.01 * rng.standard_normal())
     if pre is not None:
         _put(y, pre, 0.0)
+    if echo > 0:
+        e = amb.outdoor_echoes(y) - 0.2 * y
+        if treeline > 0:
+            e = FL.highpass(e, float(np.clip(treeline, 100.0, 8000.0)), sr, order=2)
+        y = y + _c01(echo) * 4.0 * e
+    wet = heard and _env_params(env) is not None
     if heard:
-        y = _heard(y, place)
-    return _finish(y, sr, r, str(level), 0.0005)
-
-
-# Pa at 1 m: the motor whine at its rated speed, and each bolt locking
-MOTOR_PA_M, BOLT_PA_M = 2.0, 20.0
+        y = B.recorder(_place(_env(y, env, r, int(seed), az), place), str(recorder), float(clip_db) if clip_db > 0 else None)
+    return _finish(y, sr, r, str(level), 0.0005, 0.03, wet)
 
 
 @sfx("minigun", "Rotary machine gun: the motor spins the barrels up, the fire merges into a tearing buzz, then it winds down (fire=false: the spin alone).",
      dur=(3.0, "s of firing"), rate=(50.0, "rounds/s: 33-100 (M134, 2000-6000 rounds/min)"), spin=(0.4, "s to spin up"),
      fire=(True, "false = barrels turning, no rounds"), distance=(10.0, "m"), azimuth=(30.0, "degrees off the line of fire"),
-     level=("relative", "relative|peak, as in firearm"), render=("heard", RENDER_HELP), place=("street", PLACE_HELP), seed=(0, "variation"))
-def minigun(sr=DEFAULT_SR, dur=3.0, rate=50.0, spin=0.4, fire=True, distance=10.0, azimuth=30.0, level="relative",
-            render="heard", place="street", seed=0):
-    """Six barrels: one bolt per round, so the rotor runs at rate/6 (5.6-16.7 Hz). The electric motor whine
-    (24 x rotor) and its gain are estimated; both it and the bolts fall with distance like the shots."""
+     whine_ratio=(24.0, "motor whine in rotor turns: the gear ratio, 24 = 4 per round"), brass=(1.0, "0..1 gain of the cases raining down"),
+     ground=("asphalt", "ground between the gun and you"), recorder=("field", RECORDER_HELP), clip_db=(0.0, "dB SPL where the recorder clips (0 = its own)"),
+     level=("relative", "relative|peak, as in firearm"), render=("heard", RENDER_HELP), env=("open_field", "render=heard: " + ENV_HELP),
+     place=("none", PLACE_HELP), seed=(0, "variation"))
+def minigun(sr=DEFAULT_SR, dur=3.0, rate=50.0, spin=0.4, fire=True, distance=10.0, azimuth=30.0, whine_ratio=24.0, brass=1.0, ground="asphalt",
+            recorder="field", clip_db=0.0, level="relative", render="heard", env="open_field", place="none", seed=0):
+    """Six barrels: one bolt per round, so the rotor runs at rate/6 (5.6-16.7 Hz). The rounds are the ordinary shot of the
+    preset, summed; the motor whine, the bolts and the cases are in pascals at 1 m over the distance."""
     heard = _check_render(str(render))
     rng = np.random.default_rng(int(seed))
     r = float(np.clip(distance, 1.0, 5000.0))
@@ -407,27 +569,31 @@ def minigun(sr=DEFAULT_SR, dur=3.0, rate=50.0, spin=0.4, fire=True, distance=10.
     down = 0.8
     n = _n(spin + dur + down)
     t = np.arange(n) / P
-    env = np.where(t < spin + dur, np.clip(t / spin, 0.0, 1.0), np.clip((spin + dur + down - t) / down, 0.0, 1.0) ** 2)
-    per_s = rate * env
-    ph = np.cumsum(per_s) / P
+    spin_env = np.where(t < spin + dur, np.clip(t / spin, 0.0, 1.0), np.clip((spin + dur + down - t) / down, 0.0, 1.0) ** 2)
+    ph = np.cumsum(rate * spin_env) / P
     idx = np.flatnonzero(np.diff(np.floor(ph)) > 0)
-    fw = 4.0 * ph                                            # 24 x rotor = 4 x bolt rate
-    whine = (np.sin(2 * np.pi * fw) + 0.5 * np.sin(4 * np.pi * fw) + 0.25 * np.sin(6 * np.pi * fw)) * env
-    y = whine * MOTOR_PA_M / r
+    fw = float(whine_ratio) / 6.0 * ph
+    whine = (np.sin(2 * np.pi * fw) + 0.5 * np.sin(4 * np.pi * fw) + 0.25 * np.sin(6 * np.pi * fw)) * spin_env
+    shots_i = [i for i in idx if spin <= i / P < spin + dur] if fire else []
+    rain = (_n(4.0) if (fire and brass > 0) else 0)
+    y = np.zeros(n + rain)
+    y[:n] = whine * MOTOR_PA_M / r
     nz = amb.hip(rng.uniform(-1, 1, _n(0.05)), 300.0)
-    tick = _mclick(nz, CATCH, 0.0, 0.33) + _mclick(nz, ENDSTOP, 0.0, 0.15)
+    tick = _nm(_mclick(nz, CATCH, 0.0, 0.33) + _mclick(nz, ENDSTOP, 0.0, 0.15))
     for i in idx:
-        _put(y, tick, i / P, BOLT_PA_M / r)
+        _put(y, tick, i / P, BOLT_PA_M["rifle"] / r)
     if fire:
-        w = _heard_weight(WEAPONS["minigun"][0]) if heard else 0.0
-        pool = [_shot("minigun", rng, r, abs(float(azimuth)), 0.0, 0.0, False, 0.0, 1.0, 0.0, 1.0 / rate, weight=w, texture=HEARD_TEXTURE if heard else 0.0)
-                for _ in range(6)]
-        for k, i in enumerate(idx):
-            if spin <= i / P < spin + dur:
-                _put(y, pool[k % 6], i / P, 1.0 + 0.07 * rng.standard_normal())
+        az = abs(float(azimuth))
+        pool = [_shot("minigun", rng, r, az, 0.0, 0.0, False, 0.0, 1.0, 1.0 / rate, ground=str(ground) if heard else "none") for _ in range(6)]
+        cases = [_fall("762x51", "concrete", rng, 1.0) for _ in range(3)] if brass > 0 else []
+        for k, i in enumerate(shots_i):
+            _put(y, pool[k % 6], i / P, 1.0 + 0.07 * rng.standard_normal())
+            if cases:
+                _put(y, cases[k % 3], i / P + rng.uniform(0.3, 0.5), BRASS_PA_M * _c01(brass) / r * rng.uniform(0.5, 1.0))
+    wet = heard and _env_params(env) is not None
     if heard:
-        y = _heard(y, place)
-    return _finish(y, sr, r, str(level), 0.001, 0.05)
+        y = B.recorder(_place(_env(y, env, r, int(seed), abs(float(azimuth))), place), str(recorder), float(clip_db) if clip_db > 0 else None)
+    return _finish(y, sr, r, str(level), 0.001, 0.05, wet)
 
 
 # ================================================================== handling
@@ -477,21 +643,28 @@ RELOADS = {
 MECH_BODY = {"pistol": 1.4, "smg": 1.25, "rifle": 1.0, "shotgun": 0.75, "lmg": 0.9, "hmg": 0.5, "revolver": 1.3, "musket": 0.6}
 
 
-def _cluster_times(ev, k: float) -> dict:
+CLUSTER_WINDOW_MS = (35.0, 14.0, 35.0)
+FINISHES = {"steel": (1.0, 1.0), "blued": (0.95, 0.9), "nickel": (1.05, 1.1), "aluminium": (0.8, 0.9), "polymer": (0.35, 0.7), "wood": (0.25, 0.6)}
+
+
+def _cluster_times(ev, k: float, rng=None, spread: float = 0.0) -> dict:
     """Event ms -> ms at speed 1/k. A faster hand brings the clusters closer, not the clicks inside one: only the start of
-    each scales (clusters 1-36, 87-101, 348-383 ms: Farnell, c14 l.24703). A gap over 40 ms starts a cluster (read off those)."""
-    out, base, prev = {}, 0.0, None
+    each scales. A gap over 40 ms starts a cluster; with ``spread`` each cluster start is drawn in its own window
+    (CLUSTER_WINDOW_MS: 1-36, 87-101, 348-383 ms), the 1st, 2nd, 3rd and later clusters."""
+    out, base, prev, i = {}, 0.0, None, -1
     for t in sorted({e[1] for e in ev}):
         if prev is None or t - prev > 40.0:
-            base = t
-        out[t] = base * k + (t - base)
+            base, i = t, i + 1
+            jit = float(spread) * CLUSTER_WINDOW_MS[min(i, 2)] * float(rng.uniform(0.0, 1.0)) if rng is not None and spread > 0 and i > 0 else 0.0
+        out[t] = (base + jit) * k + (t - base)
         prev = t
     return out
 
 
-def _mech(action: str, k: float, rng) -> np.ndarray:
+def _mech(action: str, k: float, rng, finish: str = "steel", spread: float = 0.0) -> np.ndarray:
     ev = MECH[action]
-    at = _cluster_times(ev, k)
+    at = _cluster_times(ev, k, rng, spread)
+    fs, fg = FINISHES[finish]
     end = max((at[e[1]] + (e[2] * k if e[0] == "slide" else 0) for e in ev), default=0.0) * 1e-3 + 0.2
     n = _n(end)
     x = np.zeros(n)
@@ -500,11 +673,11 @@ def _mech(action: str, k: float, rng) -> np.ndarray:
         if e[0] == "slide":                                  # Farnell's slide: hip 1000 -> bp(4500 + 200 line, Q4) x line^2
             m = _n(e[2] * 1e-3 * k)
             ln = np.arange(m) / m
-            _put(x, amb.bp(amb.hip(rng.uniform(-1, 1, m), 1000.0), (4500.0 + 200.0 * ln) * e[3], 4.0) * ln ** 2, at[e[1]] * 1e-3, 1.2)
+            _put(x, amb.bp(amb.hip(rng.uniform(-1, 1, m), 1000.0), (4500.0 + 200.0 * ln) * e[3] * fs, 4.0) * ln ** 2, at[e[1]] * 1e-3, 1.2 * fg)
         else:
             f = e[3] if len(e) > 3 else 1.0
-            parts = tuple((a * f, q, d) for a, q, d in _C[e[0]])
-            x += _mclick(nz, parts, at[e[1]] * 1e-3, 0.33 * e[2])
+            parts = tuple((a * f * fs, q, d) for a, q, d in _C[e[0]])
+            x += _mclick(nz, parts, at[e[1]] * 1e-3, 0.33 * e[2] * fg)
     return x
 
 
@@ -552,8 +725,11 @@ def _mech_extras(action: str, weapon: str, k: float, seed: int, floor: str, mag:
      action=("slide_rack", "|".join((*MECH, *RELOADS))), weapon=("rifle", "|".join(MECH_BODY) + ": the body it rings through"),
      speed=(1.0, "0.5 slow and deliberate .. 2 fast: the clicks inside a cluster keep their gaps"),
      floor=("concrete", "|".join(("concrete", "wood", "metal", "tile", "dirt", "grass")) + ": where magazines and cases land"),
-     mag=("plastic", "plastic|steel: the magazine of mag_drop"), rounds=(6, "links of link_eject, one per round"), seed=(0, "variation"))
-def gun_mech(sr=DEFAULT_SR, action="slide_rack", weapon="rifle", speed=1.0, floor="concrete", mag="plastic", rounds=6, seed=0):
+     mag=("plastic", "plastic|steel: the magazine of mag_drop"), rounds=(6, "links of link_eject, one per round"),
+     finish=("steel", "|".join(FINISHES) + ": the surface the clicks come from, its peak sits at 1-5 kHz (polymer and wood lowest)"),
+     spread=(0.0, "0..1: each cluster of a reload starts at a random time in its own window (up to 35, 14, 35 ms later) instead of the fixed ones"),
+     seed=(0, "variation"))
+def gun_mech(sr=DEFAULT_SR, action="slide_rack", weapon="rifle", speed=1.0, floor="concrete", mag="plastic", rounds=6, finish="steel", spread=0.0, seed=0):
     """Same recipe as `reload` (R03 §5.3): every click and the slide through the shot's body, "so the shots and
     the reload sound are automatically aligned"."""
     action = str(action)
@@ -561,10 +737,12 @@ def gun_mech(sr=DEFAULT_SR, action="slide_rack", weapon="rifle", speed=1.0, floo
         raise ValueError(f"unknown action {action!r}: {'|'.join((*MECH, *RELOADS))}")
     if str(floor) not in FLOORS:
         raise ValueError(f"unknown floor {floor!r}: {'|'.join(FLOORS)}")
+    if str(finish) not in FINISHES:
+        raise ValueError(f"unknown finish {finish!r}: {'|'.join(FINISHES)}")
     rng = np.random.default_rng(int(seed))
     k = 1.0 / float(np.clip(speed, 0.25, 4.0))
     seq = RELOADS.get(action, [(action, 0.0)])
-    parts = [(_mech(a, k, rng), t * k) for a, t in seq]
+    parts = [(_mech(a, k, rng, str(finish), float(np.clip(spread, 0.0, 1.0))), t * k) for a, t in seq]
     x = np.zeros(_n(max(t for _, t in parts)) + max(len(p) for p, _ in parts))
     for p, t in parts:
         _put(x, p, t)
@@ -584,8 +762,8 @@ BRASS_C = 1090.0     # sqrt(E / (12 rho (1 - nu^2))), C26000: E 110.3 GPa, rho 8
 PLASTIC_C = 505.0    # the same for polyethylene-ish plastic: E 3.2 GPa, rho 1190, nu 0.35 (contact.MATERIALS)
 # length, base diameter, wall mm. Lengths and diameters: CIP/Wikipedia; walls estimated. Gives 4.6 kHz for 7.62 against
 # Farnell's 4.5-5.5 kHz for rifle brass. Ring: Q 800 at 5 kHz (Farnell) -> d = 20 1/s.
-CASES = {"9mm": (19.15, 9.93, 0.35), "45acp": (22.8, 12.1, 0.35), "556": (44.7, 9.58, 0.30), "762": (51.2, 11.9, 0.35),
-         "50bmg": (99.31, 20.42, 0.60), "12ga": (16.0, 20.2, 0.50), "20mm": (102.0, 29.0, 1.0), "105mm": (370.0, 120.0, 1.5)}
+CASES = presets.schema("case_dim", {"L": F(float, lo=1.0, hi=500.0, unit="mm"), "dia": F(float, lo=1.0, hi=200.0, unit="mm"),
+                                    "wall": F(float, lo=0.05, hi=5.0, unit="mm")}, shape=lambda d: (d["L"], d["dia"], d["wall"]))
 # surface material or None (soft), surface size m, restitution, low-pass Hz
 FLOORS = {"concrete": ("concrete", 1.5, 0.5, 0), "wood": ("wood", 0.8, 0.55, 0), "metal": ("steel", 0.6, 0.6, 0),
           "tile": ("ceramic", 0.3, 0.55, 0), "dirt": (None, 0.0, 0.15, 1500), "grass": (None, 0.0, 0.1, 900)}
@@ -606,14 +784,27 @@ def shell_modes(radius_mm: float, wall_mm: float, c: float = BRASS_C, length_mm:
     return np.concatenate([f, f * np.sqrt((1.0 + 24.0 * (1.0 - nu) * q) / (1.0 + 12.0 * q / (ns * ns + 1.0)))])
 
 
-def casing_physical(sr, caliber, floor, height, count, spread, roll, seed) -> np.ndarray:
-    """Brass modes (spec table A), struck at each bounce with a new mix of modes (it lands lip, base or flank)
-    on a surface that rings too, or on soft ground where it just stops."""
-    caliber, floor = str(caliber), str(floor)
+_CASE_DIM_KEY = {"9x19": "9mm", "762x51": "762"}
+
+
+def _case_name(caliber) -> str:
+    c = str(caliber)
+    if c in CASES:
+        return c
+    c = _CASE_OF[c] if c in _CASE_OF else c
+    return _CASE_DIM_KEY.get(c, c)
+
+
+def casing_physical(sr, caliber, floor, height, count, spread, roll, seed, size=1.0) -> np.ndarray:
+    """Brass modes, struck at each bounce with a new mix of modes (it lands lip, base or flank)
+    on a surface that rings too, or on soft ground where it just stops. ``size`` scales the case: pitch follows 1 / size.
+    ``caliber`` is a case name or any cartridge name (resolved through ``case_of``)."""
+    caliber, floor = _case_name(caliber), str(floor)
     if caliber not in CASES or floor not in FLOORS:
         raise ValueError(f"caliber must be {'|'.join(CASES)}; floor {'|'.join(FLOORS)}")
     rng = np.random.default_rng(int(seed))
-    length, dia, wall = CASES[caliber]
+    size = float(np.clip(size, 0.2, 5.0))
+    length, dia, wall = (x * size for x in CASES[caliber])
     fm = shell_modes(dia / 2.0, wall, length_mm=length)
     fm = fm[fm < 0.45 * P]
     mat, size, e, lop = FLOORS[floor]
@@ -662,98 +853,93 @@ def casing_physical(sr, caliber, floor, height, count, spread, roll, seed) -> np
     return _fin(y, sr, 0.6)
 
 
-def _bounce_times(v0: float, e: float, rng, min_gap: float = 1.5e-3) -> tuple:
-    """Bounce instants (s) and landing speeds (m/s). Each flight lasts 2 v / g and v falls by the restitution, so the gaps
-    shrink geometrically down to ``min_gap``; up to 7 % is lost to the tumble."""
-    ts, vs, v, t = [0.0], [v0], v0, 0.0
-    while True:
-        v *= e * rng.uniform(0.93, 1.0)
-        gap = 2.0 * v / 9.81
-        if gap < min_gap:
-            return np.array(ts), np.array(vs)
-        t += gap
-        ts.append(t)
-        vs.append(v)
+_CASE_EXTRA = presets.schema("case_extra", {
+    "L": F(float, lo=1.0, hi=500.0, unit="mm"), "db": F(float, lo=1.0, hi=200.0, unit="mm"), "dn": F(float, lo=1.0, hi=200.0, unit="mm"),
+    "h": F(float, lo=0.05, hi=5.0, unit="mm"), "cap": F(float, lo=0.1, hi=5000.0, unit="cm3"), "mass": F(float, lo=0.1, hi=5000.0, unit="g"),
+    "mat": F(str, choices=("brass", "pe")), "neck": F(float, lo=0.0, hi=300.0, unit="mm")})
+_CASE_KEY = {"9mm": "9x19", "762": "762x51"}
 
 
-@sfx("casing_ricochet", "The film and video-game spent case: a long brass ring bouncing on the floor, turning as it flies, the bounces speeding up into a final rattle.",
-     caliber=("556", "|".join(CASES)), floor=("concrete", "|".join(FLOORS)), height=(1.2, "m it falls from (0.1-5)"), count=(1, "cases (1-64)"),
-     spread=(0.25, "s between the cases, on average"), ring=(2.0, "how long the brass rings: 1 = Farnell's Q 800, T60 0.35 s at 5 kHz; 2 is a film choice"),
-     spin=(40.0, "tumbling in rev/s as it leaves the floor; 0 = no turning"), lively=(0.45, "0..1 of the gap between the floor's restitution and 1 given back (film choice; hard floors only)"),
-     seed=(0, "variation"))
-def casing_ricochet(sr=DEFAULT_SR, caliber="556", floor="concrete", height=1.2, count=1, spread=0.25, ring=2.0, spin=40.0, lively=0.45, seed=0):
-    """`shell_modes` (spec table A) with a constant Q, so d grows with f and the top dies first (Q 800 at 5 kHz, Farnell, kept over the
-    band: estimated); a split doublet on each mode, the air column closed at the base (c / 4L), and the mode's lobes passing the
-    ear as the case turns, an amplitude modulation at n x spin that runs through flights and rings. Depth 0.5, split 0.2 %,
-    amplitude in sqrt(v) so the final rattle stays audible (true law: v): estimated."""
-    caliber, floor = str(caliber), str(floor)
-    if caliber not in CASES or floor not in FLOORS:
-        raise ValueError(f"caliber must be {'|'.join(CASES)}; floor {'|'.join(FLOORS)}")
+def _case_geom(case: str) -> dict:
+    c = _CASE_KEY.get(str(case), str(case))
+    return BR.CASE_GEOM[c] if c in BR.CASE_GEOM else _CASE_EXTRA[c]
+
+
+@sfx("casing_ricochet", "The spent case of a film or a game, from its physics: modes of the shell wall each with its own decay, the air column, a fall of Hertz bounces that speed up, tumbling in flight, a roll or a wobble to rest.",
+     caliber=("556", "|".join(CASES)), floor=("concrete", "|".join(BR.FLOORS)), height=(1.2, "m it falls from (0.1-5)"), count=(1, "cases (1-64)"),
+     spread=(0.25, "s between the cases, on average"), ring=(1.0, "how long the brass rings: 1 = the wall's own losses (internal + thermoelastic), 2 = twice as long"),
+     spin=(40.0, "tumbling in rev/s as it leaves the floor; 0 = no turning"), lively=(0.0, "0..1 of the gap between the floor's restitution and 1 given back (film choice)"),
+     spin_depth=(0.5, "0..1 how much the turning modulates the ring"), rattle_law=("v", "v (physical) | sqrt_v (the louder final rattle of film)"),
+     wobble=(True, "true = one case in five ends as a spinning disc instead of rolling"), air=(0.25, "gain of the air column"),
+     wall_scale=(1.0, "wall thickness scale: the ring's pitch follows (5.56: 5-7 kHz)"), seed=(0, "variation"))
+def casing_ricochet(sr=DEFAULT_SR, caliber="556", floor="concrete", height=1.2, count=1, spread=0.25, ring=1.0, spin=40.0, lively=0.0,
+                    spin_depth=0.5, rattle_law="v", wobble=True, air=0.25, wall_scale=1.0, seed=0):
+    caliber, floor = _case_name(caliber), str(floor)
+    if caliber not in CASES or floor not in BR.FLOORS:
+        raise ValueError(f"caliber must be {'|'.join(CASES)}; floor {'|'.join(BR.FLOORS)}")
+    if str(rattle_law) not in ("v", "sqrt_v"):
+        raise ValueError("rattle_law must be v|sqrt_v")
     rng = np.random.default_rng(int(seed))
-    length, dia, wall = CASES[caliber]
-    mat, size, e, lop = FLOORS[floor]
-    e = e if lop else min(0.9, e + (1.0 - e) * _c01(lively))
-    k_ring = float(np.clip(ring, 0.2, 6.0))
-    fs = shell_modes(dia / 2.0, wall)
-    fs = fs[fs < 0.45 * P]
-    # (f, d 1/s, gain, lobes); d at least 3 /s: a shell's low modes would otherwise ring for 20 s
-    modes = [(f * (1.0 + s), 400.0 if lop else max(3.0, 20.0 * f / 5000.0 / k_ring), 1.0 / (i + 1.0), i + 2.0) for i, f in enumerate(fs) for s in (-0.001, 0.001)]
-    modes.append((C_AIR / (4.0 * length * 1e-3), 300.0, 0.25, 0.0))
-    if caliber == "12ga":                                    # the plastic hull dominates, as in casing_physical
-        modes += [(f, 120.0, 1.0, 0.0) for f in shell_modes(10.1, 0.6, PLASTIC_C)]
-    v0 = math.sqrt(2.0 * 9.81 * float(np.clip(height, 0.1, 5.0)))
-    body = K._make_body("rect_plate", mat, size, 0.37, 0.41, modes=24, fmax=8000.0) if mat else None
-    pulse = np.zeros(_n(0.25))
-    pulse[:3] = (1.0, 0.66, 0.33)                            # Hertz contact 40-200 us (spec table C)
-    thump = _nm(K.modal_bank(pulse, body, P, 0.5)[0]) if body is not None else None
+    geom = _case_geom(caliber)
     count = int(np.clip(count, 1, 64))
-    tail = 7.0 / min(m[1] for m in modes)
-    runs = []
-    for c in range(count):
-        ts, vs = _bounce_times(v0, e, rng)
-        runs.append((0.0 if c == 0 else float(rng.uniform(0.0, float(spread) * count)), ts, vs))
-    y = np.zeros(_n(max(t0 + ts[-1] for t0, ts, _ in runs) + tail + 0.3))
-    unit = [float(np.max(np.abs(modal.render_modes(pulse[:_n(0.01)], modal.Modes(np.array([m[0]]), np.array([m[1]]), np.ones(1), "vdd"))))) + 1e-12 for m in modes]
-    for t0, ts, vs in runs:
-        idx = np.round((t0 + ts) * P).astype(int)
-        g = np.sqrt(vs / v0) * np.minimum(1.0, (2.0 * vs / 9.81 - 1.5e-3) / 6e-3 + 0.15)    # the last few fade out rather than stop
-        meff = 1.0 / (1.0 + 12.0 * rng.uniform(-0.5, 0.5, len(ts)) ** 2)   # lands anywhere along its length, c17 l.23436 (casing_physical)
-        turn = np.zeros(len(y))
-        turn[idx] = float(spin) * np.sqrt(vs / v0) * rng.uniform(0.7, 1.3, len(ts))
-        turn = turn[np.maximum.accumulate(np.where(turn > 0, np.arange(len(y)), 0))]   # hold each flight's rate
-        turn[idx[-1] + _n(0.02):] = 0.0                      # at rest
-        phase = np.cumsum(turn) / P
-        for (f, d, gain, lobes), one in zip(modes, unit):
-            force = np.zeros(len(y))
-            hit = g * meff * gain * rng.uniform(0.2, 1.0, len(idx))
-            for j, w in enumerate(pulse[:3]):
-                force[idx + j] += w * hit
-            u = modal.render_modes(force, modal.Modes(np.array([f]), np.array([d]), np.ones(1), "vdd")) / one
-            if lobes > 0 and spin > 0:
-                u = u * (1.0 - 0.25 * (1.0 - np.cos(2.0 * np.pi * lobes * phase + rng.uniform(0.0, 6.28))))
-            y += u
-        for i, gg in zip(idx, g):
-            if thump is not None:
-                _put(y, thump, i / P, 0.15 * gg)
-            else:
-                m = _n(0.012)
-                _put(y, amb.lop(rng.uniform(-1, 1, m) * (1.0 - np.arange(m) / m) ** 2, float(lop)), i / P, 0.3 * gg)
-    return _fin(amb.lop(y, float(lop)) if lop else y, sr, 0.6, fade=0.0005, tail=0.1)
+    runs = [(0.0 if c == 0 else float(rng.uniform(0.0, float(spread) * count)),
+             BR.render_case(geom, floor, float(np.clip(height, 0.1, 5.0)), rng, ring=float(np.clip(ring, 0.2, 6.0)), spin=float(spin),
+                            spin_depth=_c01(spin_depth), air=float(air), wobble=bool(wobble), rattle_law=str(rattle_law), rate=P,
+                            lively=_c01(lively), wall_scale=float(np.clip(wall_scale, 0.3, 3.0)))) for c in range(count)]
+    y = np.zeros(max(int(t0 * P) + len(u) for t0, u in runs))
+    for t0, u in runs:
+        _put(y, u, t0)
+    return _fin(y, sr, 0.6, fade=0.0005, tail=0.1)
 
 
 # ================================================================== bullets
-_BULLET = {"metal": ("steel", 0.5, 0.0, 120), "metal_thin": ("steel", 0.25, 2.0, 80), "concrete": ("concrete", 0.4, 0.0, 40),
-           "wood": ("wood", 0.3, 30.0, 60), "glass": ("glass", 0.4, 0.0, 80)}
+# body, plate size m, damping, modes, thickness m (None = stops the bullet), flow stress Pa, restitution of the debris
+_TARGET = {"metal": ("steel", 0.5, 0.0, 120, None, 0.0, 0.0), "metal_thin": ("steel", 0.25, 2.0, 80, 0.002, 2.5e8, 0.0),
+           "concrete": ("concrete", 0.4, 0.0, 40, None, 0.0, 0.1), "wood": ("wood", 0.3, 30.0, 60, 0.025, 4e7, 0.0),
+           "glass": ("glass", 0.4, 0.0, 80, 0.006, 5e7, 0.0)}
+_BULLET = {k: v[:4] for k, v in _TARGET.items()}
+FLESH_STOP_M = 0.15
 
 
-def _hit(material, sz, damping, modes, v, cal_mm, rng) -> np.ndarray:
-    """Force into the struck body, level from energy in the caller. Above 100 m/s the length follows the penetration, not Hertz
-    (Johnson, Table 11.3, c30 L13117): t_p = 2 calibres / v, coefficient estimated (40-110 us; at least one sample)."""
+def _hit(material, sz, damping, modes, v, cal_mm, rng, impulse=None, t_c=None) -> np.ndarray:
+    """Force into the struck body. Without ``impulse``: the ricochet's hit (length 2 calibres / v, at least one sample, peak 1).
+    With ``impulse`` (N s) and ``t_c`` (s): a half-sine of that impulse, the modes ring in proportion to it, nothing normalised."""
     body = K._make_body("rect_plate", material, sz, 0.37, 0.41, modes=modes, damping=damping, fmax=16000.0)
     f = np.zeros(_n(max(0.2, min(1.5, body.t60()))))
-    m = max(1, _n(2.0 * cal_mm * 1e-3 / max(v, 100.0)))
-    f[:m] = np.linspace(1.0, 0.0, m, endpoint=False)
-    return _nm(K.modal_bank(f, body, P, 0.7)[0])
+    if impulse is None:
+        m = max(1, _n(2.0 * cal_mm * 1e-3 / max(v, 100.0)))
+        f[:m] = np.linspace(1.0, 0.0, m, endpoint=False)
+        return _nm(K.modal_bank(f, body, P, 0.7)[0])
+    f += B.half_sine_force(impulse, t_c, len(f), P)
+    return K.modal_bank(f, body, P, 0.7)[0]
+
+
+def _transfer(material: str, cal: str) -> tuple[float, float, float]:
+    """``(impulse N s, contact time s, energy dissipated J)`` of a bullet on a target. A target that stops the bullet takes
+    m v (1 + e); a thin one is perforated (hole work pi/2 sigma d^2 h, residual speed v sqrt(1 - W/E)) and takes m (v - v_r)."""
+    d, l, v, _, _ = CALIBERS[cal]
+    e = CHARGE[cal][0]
+    m = 2.0 * e / (v * v)
+    if material in ("flesh", "flesh_armor"):
+        return m * v, 2.0 * FLESH_STOP_M / v, e
+    h, sig, er = _TARGET[material][4:] if material in _TARGET else (None, 0.0, 0.0)
+    if h is not None:
+        wp = 0.5 * math.pi * sig * (d * 1e-3) ** 2 * h
+        if wp < e:
+            return m * v * (1.0 - math.sqrt(1.0 - wp / e)), (l * 1e-3 + h) / v, wp
+    return m * v * (1.0 + er), l * 1e-3 / v, e
+
+
+def _modes(mat, sz, damp, nm, cal, material, law, rng) -> np.ndarray:
+    """The target's modes for this calibre, in units where the 5.56 on the same target peaks at 1 (law impulse: in proportion to the
+    impulse; law energy: in proportion to sqrt of the muzzle energy)."""
+    d, _, v, _, _ = CALIBERS[cal]
+    j, tc, _ = _transfer(material, cal)
+    j5, tc5, _ = _transfer(material, "556")
+    raw = _hit(mat, sz, damp, nm, v, d, rng, j, tc)
+    ref = float(np.max(np.abs(raw if cal == "556" else _hit(mat, sz, damp, nm, CALIBERS["556"][2], CALIBERS["556"][0], rng, j5, tc5)))) + 1e-30
+    out = raw / ref
+    return out if law == "impulse" else out * math.sqrt(CHARGE[cal][0] / CHARGE["556"][0]) * j5 / j
 
 
 def _debris(kind, rng, gain) -> np.ndarray:
@@ -766,65 +952,92 @@ def _debris(kind, rng, gain) -> np.ndarray:
     return _nm(amb.lop(y, cutoff)) * gain
 
 
-@sfx("bullet_impact", "A bullet striking metal, thin metal, concrete, wood, flesh, armour, water, dirt or glass, with its fragments. Bands and lengths are estimates: no published measurements.",
-     material=("metal", "metal|metal_thin|concrete|wood|flesh|flesh_armor|water|dirt|glass"), caliber=("556", "|".join(CALIBERS)),
-     distance=(5.0, "m"), debris=(1.0, "0..1 fragments, chips, drops"),
-     level=("relative", "relative = amplitude in sqrt(muzzle energy), the .50 at 0.85 | peak = every file at 0.85"), seed=(0, "variation"))
-def bullet_impact(sr=DEFAULT_SR, material="metal", caliber="556", distance=5.0, debris=1.0, level="relative", seed=0):
-    """Same recipe as before, then what the bullet's size changes: the struck area grows as
-    sqrt(calibre), which lowers the modes; the force lasts length / v instead of being one sample; soft targets close down."""
+MATERIALS = "metal|metal_thin|concrete|wood|flesh|flesh_armor|water|dirt|glass"
+
+
+def _impact(material: str, cal: str, seed: int, debris: float, law: str, distance: float) -> np.ndarray:
     from . import foley as Fo
     from . import matter as M
-    material = str(material)
     rng = np.random.default_rng(int(seed))
-    cal = str(caliber) if str(caliber) in CALIBERS else "556"
-    d, l, v, _, _ = CALIBERS[cal]
-    area = math.sqrt(d / CALIBERS["556"][0])
     db = _c01(debris)
+    _, _, ed = _transfer(material, cal)
+    _, _, e5 = _transfer(material, "556")
+    se = math.sqrt(ed / e5)                                  # debris, sparks, splash: in proportion to the energy dissipated
     y = np.zeros(_n(2.5))
-    if material in _BULLET:
-        mat, sz, damp, modes = _BULLET[material]
-        _put(y, _hit(mat, sz * area, damp, modes, v, d, rng), 0.0)
+    if material in _TARGET:
+        mat, sz, damp, nm = _TARGET[material][:4]
+        _put(y, _modes(mat, sz, damp, nm, cal, material, law, rng), 0.0)
         if material == "metal_thin":
-            _put(y, _nm(K.crumple(P, kind="can", energy=0.7, dur=0.05, seed=int(seed))), 0.0, 0.5)
+            _put(y, _nm(K.crumple(P, kind="can", energy=0.7, dur=0.05, seed=int(seed))), 0.0, 0.5 * se)
         elif material == "metal":
-            s = _nm(M.spark(P, size=0.2, seed=int(seed)))
-            _put(y, s, 0.002, 0.15 * db)
+            _put(y, _nm(M.spark(P, size=0.2, seed=int(seed))), 0.002, 0.15 * db * se)
         elif material == "concrete":
             m = _n(0.015)
-            _put(y, amb.bp(rng.uniform(-1, 1, m), 1500.0, 0.6) * (1.0 - np.arange(m) / m), 0.0, 1.5)
-            _put(y, _debris("chips", rng, 0.3 * db), 0.03)
+            _put(y, amb.bp(rng.uniform(-1, 1, m), 1500.0, 0.6) * (1.0 - np.arange(m) / m), 0.0, 1.5 * se)
+            _put(y, _debris("chips", rng, 0.3 * db * se), 0.03)
         elif material == "wood":
-            _put(y, _nm(K.crumple(P, kind="can", energy=0.3, dur=0.04, bright=0.8, seed=int(seed))), 0.0, 0.25)
-            _put(y, _debris("splinters", rng, 0.2 * db), 0.02)
+            _put(y, _nm(K.crumple(P, kind="can", energy=0.3, dur=0.04, bright=0.8, seed=int(seed))), 0.0, 0.25 * se)
+            _put(y, _debris("splinters", rng, 0.2 * db * se), 0.02)
         elif material == "glass":
-            _put(y, _nm(K.smash(P, material="glass", size=0.4, energy=0.6, seed=int(seed))), 0.0, 0.8 if db else 0.4)
+            _put(y, _nm(K.smash(P, material="glass", size=0.4, energy=0.6, seed=int(seed))), 0.0, (0.8 if db else 0.4) * se)
     elif material in ("flesh", "flesh_armor"):
-        _put(y, _nm(Fo.thud(P, body="sack", contact_ms=8.0, size=0.6, force=0.9, seed=int(seed))), 0.0)
+        j, _, _ = _transfer("flesh", cal)
+        j5, _, _ = _transfer("flesh", "556")
+        s = j / j5 if law == "impulse" else math.sqrt(CHARGE[cal][0] / CHARGE["556"][0])
+        _put(y, _nm(Fo.thud(P, body="sack", contact_ms=8.0, size=0.6, force=0.9, seed=int(seed))), 0.0, s)
         m = _n(0.01)
-        _put(y, amb.lop(rng.uniform(-1, 1, m) * (1.0 - np.arange(m) / m), 1200.0 / area), 0.0, 1.2)
+        _put(y, amb.lop(rng.uniform(-1, 1, m) * (1.0 - np.arange(m) / m), 1200.0), 0.0, 1.2 * se)
         if material == "flesh_armor":
-            _put(y, _hit("steel", 0.2 * area, 30.0, 60, v, d, rng), 0.0, 0.5)
+            _put(y, _modes("steel", 0.2, 30.0, 60, cal, "metal", law, rng), 0.0, 0.5)
     elif material == "water":
-        _put(y, _nm(M.splash(P, size=0.1 * area, dur=1.0, droplets=int(6 * db), seed=int(seed))), 0.0)
+        _put(y, _nm(M.splash(P, size=0.1, dur=1.0, droplets=int(6 * db), seed=int(seed))), 0.0, se)
     elif material == "dirt":
         m = _n(0.025)
-        _put(y, amb.lop(rng.uniform(-1, 1, m) * (1.0 - np.arange(m) / m) ** 2, 1500.0 / area), 0.0, 1.5)
-        _put(y, _debris("dirt", rng, 0.25 * db), 0.05)
+        _put(y, amb.lop(rng.uniform(-1, 1, m) * (1.0 - np.arange(m) / m) ** 2, 1500.0), 0.0, 1.5 * se)
+        _put(y, _debris("dirt", rng, 0.25 * db * se), 0.05)
     else:
         raise ValueError(f"unknown material {material!r}")
-    a = 0.0327 * (l * 1e-3 / v * P) ** 2 / 2.0               # 3 taps with the variance of a Hann pulse length / v: under 3 samples here
-    y = np.convolve(y, (a, 1.0 - 2.0 * a, a))[1:-1]
-    y = space.distance(y, float(np.clip(distance, 1.0, 2000.0)), ref=1.0)
+    return space.distance(y, float(np.clip(distance, 1.0, 2000.0)), ref=1.0)
+
+
+_IMPACT_G = []
+
+
+def _impact_gain() -> float:
+    """The constant that brings the .50 on thick steel at 1 m to 0.85, computed once."""
+    if not _IMPACT_G:
+        _IMPACT_G.append(0.85 / float(np.max(np.abs(_impact("metal", "50bmg", 0, 1.0, "impulse", 1.0)))))
+    return _IMPACT_G[0]
+
+
+@sfx("bullet_impact", "A bullet striking metal, thin metal, concrete, wood, flesh, armour, water, dirt or glass: the target's modes ring in proportion to the impulse the bullet gives it, its fragments in proportion to the energy it dissipates.",
+     material=("metal", MATERIALS), caliber=("556", "|".join(CALIBERS)),
+     distance=(5.0, "m"), debris=(1.0, "0..1 fragments, chips, drops"),
+     level=("relative", "relative = the physical level, the .50 on steel at 1 m at 0.85 | peak = every file at 0.85"),
+     gain_db=(0.0, "dB added in relative"), law=("impulse", "impulse (modes follow m v: .50 is 20 dB over the 5.56 on steel) | energy (follow sqrt(E): 10 dB)"),
+     env=("open_field", ENV_HELP), seed=(0, "variation"))
+def bullet_impact(sr=DEFAULT_SR, material="metal", caliber="556", distance=5.0, debris=1.0, level="relative", gain_db=0.0, law="impulse",
+                  env="open_field", seed=0):
+    material, law = str(material), str(law)
+    if material not in MATERIALS.split("|"):
+        raise ValueError(f"unknown material {material!r}")
+    if law not in ("impulse", "energy"):
+        raise ValueError("law must be impulse|energy")
     if str(level) not in ("relative", "peak"):
         raise ValueError(f"unknown level {level!r}: relative|peak")
-    peak = 0.85 * (math.sqrt(CHARGE[cal][0] / IMPACT_REF_J) if level == "relative" else 1.0)
-    return _fin(y, sr, peak, fade=0.0003, tail=0.05)
+    cal = str(caliber) if str(caliber) in CALIBERS else "556"
+    y = _impact(material, cal, int(seed), debris, law, distance)
+    wet = _env_params(env) is not None
+    y = _env(y, env, float(np.clip(distance, 1.0, 2000.0)), int(seed))
+    if level == "relative":
+        y = _fin(y * _impact_gain() * 10.0 ** (float(gain_db) / 20.0), sr, None, fade=0.0003, tail=0.05)
+        return y * min(1.0, 0.89 / (float(np.max(np.abs(y))) + 1e-12)) if wet else y
+    return _fin(y, sr, 0.85, fade=0.0003, tail=0.05)
 
 
 @sfx("ricochet", "Bullet glancing off a surface: a short hit, then a whining tone falling as it flies away.",
      surface=("metal", "metal|stone|water"), variant=("whine", "whine | tumble (fluttering) | zip (short and high) | none (only the hit)"),
-     f0=(1343.0, "Hz of the whine (one forum reading of 3200 -> 850 Hz; UNSOURCED)"), speed=(199.0, "m/s after the bounce (same reading)"),
+     f0=(1343.0, "Hz of the whine (tuned by ear, no measured source)"), speed=(199.0, "m/s after the bounce (tuned by ear)"),
      closest=(5.0, "m"), dur=(0.8, "s"), seed=(0, "variation"))
 def ricochet(sr=DEFAULT_SR, surface="metal", variant="whine", f0=1343.0, speed=199.0, closest=5.0, dur=0.8, seed=0):
     from . import matter as M
@@ -839,7 +1052,7 @@ def ricochet(sr=DEFAULT_SR, surface="metal", variant="whine", f0=1343.0, speed=1
     if variant != "none":
         f, T = float(f0) * (1.5 if variant == "zip" else 1.0), 0.12 if variant == "zip" else float(np.clip(dur, 0.1, 4.0))
         n = _n(T)
-        src = sum(g * amb.bp(rng.uniform(-1, 1, n), f * r, 8.0) for r, g in ((1.0, 1.0), (1.5, 0.4), (2.3, 0.2)))    # UNSOURCED partials
+        src = sum(g * amb.bp(rng.uniform(-1, 1, n), f * r, 8.0) for r, g in ((1.0, 1.0), (1.5, 0.4), (2.3, 0.2)))
         if variant == "tumble":
             src = src * (0.6 + 0.4 * np.sin(2 * np.pi * rng.uniform(80.0, 300.0) * np.arange(n) / P))
         src = np.asarray(doppler(src, P, speed=float(speed), closest=float(closest), pass_at=0.05, pan=False))
@@ -851,8 +1064,11 @@ def ricochet(sr=DEFAULT_SR, surface="metal", variant="whine", f0=1343.0, speed=1
 @sfx("bullet_pass", "A bullet passing near you: the supersonic crack alone (N-wave, ground reflection, wake); a subsonic round only whizzes; near Mach 1 you get both.",
      caliber=("556", "|".join(CALIBERS)), miss=(3.0, "m from your head"), speed=(0.0, "m/s (0 = the calibre's own)"),
      range=(0.0, "m flown already: it slows down, so far away the crack gives way to a whizz"), spin_tone=(True, "true = the faint line at speed / rifling twist"),
-     render=("heard", RENDER_HELP), place=("street", PLACE_HELP), seed=(0, "variation"))
-def bullet_pass(sr=DEFAULT_SR, caliber="556", miss=3.0, speed=0.0, range=0.0, spin_tone=True, render="heard", place="street", seed=0):
+     level=("peak", "peak = the file at 0.9 | relative = pascals over the .50's blast at 3 m (a 5.56 crack at 3 m is 35 dB under)"),
+     recorder=("field", RECORDER_HELP), clip_db=(0.0, "dB SPL where the recorder clips (0 = its own)"),
+     render=("heard", RENDER_HELP), env=("open_field", "render=heard: " + ENV_HELP), place=("none", PLACE_HELP), seed=(0, "variation"))
+def bullet_pass(sr=DEFAULT_SR, caliber="556", miss=3.0, speed=0.0, range=0.0, spin_tone=True, level="peak", recorder="field", clip_db=0.0,
+                render="heard", env="open_field", place="none", seed=0):
     from .reverbs import doppler
     heard = _check_render(str(render))
     rng = np.random.default_rng(int(seed))
@@ -862,19 +1078,22 @@ def bullet_pass(sr=DEFAULT_SR, caliber="556", miss=3.0, speed=0.0, range=0.0, sp
     b = float(np.clip(miss, 0.1, 500.0))
     y = np.zeros(_n(0.6))
     if v > C_AIR:
-        _put(y, _crack(v, d, l, b, rng), 0.0)
+        _put(y, _crack(v, d, l, b, rng, near=True), 0.0)
         # the spin line v / twist: 915 m/s / 0.18 m = 5083 Hz (M249) -30 dB, 15 ms
         m = _n(0.015) if spin_tone else 0
-        _put(y, np.sin(2 * np.pi * min(v / 0.18, 0.45 * P) * np.arange(m) / P) * (1.0 - np.arange(m) / m), 0.0, 0.03 * n_wave_pa(v, d, l, b)[0])
+        _put(y, np.sin(2 * np.pi * min(v / 0.18, 0.45 * P) * np.arange(m) / P) * (1.0 - np.arange(m) / m), 0.0, 0.03 * B.n_wave_pa(v, d, l, b)[0])
     if v < 1.1 * C_AIR:
         n = _n(0.4)
         src = amb.bp(rng.uniform(-1, 1, n), min(0.2 * v / (d * 1e-3), 0.45 * P), 4.0)
         src = np.asarray(doppler(src, P, speed=min(v, 0.9 * C_AIR), closest=b, pass_at=0.3, pan=False))
         src = src.mean(axis=1) if src.ndim == 2 else src
         _put(y, _nm(src), 0.0, (0.5 if v > C_AIR else 1.0) * max(1.0, float(np.max(np.abs(y)))))
+    wet = heard and _env_params(env) is not None
+    if heard:
+        y = _env(y, env, max(b, ENV_REF_M), int(seed))
     if heard and v > C_AIR:
-        y = _heard(y, place)
-    return _fin(y, sr, 0.9, fade=0.0002, tail=0.02)
+        y = B.recorder(_place(y, place), str(recorder), float(clip_db) if clip_db > 0 else None)
+    return _finish(y, sr, b, str(level), 0.0002, 0.02, wet)
 
 
 # Specs, no code (armes_feu.md:204, 224). Spread 0.3-1 s and reloads estimated. Indoors: echo 0, the room is the fx (Farnell: not in the sound).
@@ -882,6 +1101,6 @@ RECIPES = {
     "musket_volley": {"layers": [{"type": "scatter", "dur": 1.0, "count": 12, "seed": 4, "reseed": True, "gain_db": 3.0, "pitch": 0.3,
                                   "layers": [{"type": "sfx", "kind": "firearm", "params": {"weapon": "flintlock", "distance": 5.0, "echo": 0.0}}]}],
                       "fx": [{"type": "distance", "metres": 150.0}], "normalize": -1.0},
-    "gunshot_indoor": {"layers": [{"type": "sfx", "kind": "firearm", "params": {"weapon": "pistol_9mm", "distance": 5.0, "echo": 0.0, "place": "none"}}],
+    "gunshot_indoor": {"layers": [{"type": "sfx", "kind": "firearm", "params": {"weapon": "pistol_9mm", "distance": 5.0, "echo": 0.0, "env": "none", "place": "none"}}],
                        "fx": [{"type": "room", "preset": "bathroom", "mix": 0.6}], "normalize": -1.0},
 }

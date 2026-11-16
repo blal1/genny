@@ -775,10 +775,12 @@ def sway_params(load, sway_hz: float = 0.35, q: float = 3.0, amplitude: float = 
 
 def sway_force(w: np.ndarray, rng: np.random.Generator, *, sway_hz: float = 0.35, lag_ms: float = 3000.0,
                gain: float = 1.6, loop: bool = False, species: str | None = None,
-               tree: tuple | None = None, amplitude: float = 0.0) -> np.ndarray:
+               tree: tuple | None = None, amplitude: float = 0.0, q: float = 3.0) -> np.ndarray:
     """Force on a tree / wagon from the windspeed, delayed and smoothed like the leaves (3 s, lop~ 0.07),
-    swaying as narrow-band noise at ``sway_hz``, Q 3: a Q 8 pine
+    swaying as narrow-band noise at ``sway_hz``, Q ``q`` (3): a Q 8 pine
     would not reach steady state within the one-period warm-up of short loops (Dom).
+    A large broadleaf measured at 13 m up a 27 m trunk sways at 0.128 and 0.145 Hz with 10-12 % damping (Q 4-5): ``q`` 5
+    at 0.13 Hz has a time constant of about 12 s, so keep it for renders of a minute or more (``loop`` needs the default).
     ``tree``: (dbh_cm, height_m[, pine[, snow]]) replaces ``sway_hz`` by ``tree_sway_hz(*tree)``.
     ``species`` (a TREE_DRAG key): the wind load grows as U^n of that species instead of linearly.
     ``amplitude`` > 0: the sway slows and is damped more as the load grows (`sway_params`)."""
@@ -790,10 +792,10 @@ def sway_force(w: np.ndarray, rng: np.random.Generator, *, sway_hz: float = 0.35
     if species is not None:
         L = np.maximum(L, 0.0) ** TREE_DRAG[species][1]
     if amplitude > 0:
-        fq, qq = sway_params(np.clip(L * gain, 0.0, 1.0), sway_hz, 3.0, amplitude)
+        fq, qq = sway_params(np.clip(L * gain, 0.0, 1.0), sway_hz, float(q), amplitude)
         sw = bp(dom.noise(rng), fq, qq)
     else:
-        sw = bp(dom.noise(rng), sway_hz, 3.0)
+        sw = bp(dom.noise(rng), sway_hz, float(q))
     sw = sw / (np.std(sw[dom.m // 4:]) + 1e-12)
     f = np.clip(L * gain * (0.55 + 0.35 * sw), 0.0, 1.0)
     return dom.out(f)
@@ -1055,12 +1057,43 @@ def drop_spikes(noise: np.ndarray) -> np.ndarray:
     return hip(np.clip((np.maximum(bp(noise, 7.7, 0.013), 0.16) - 0.16) * 3.0, 0.0, 1.0) ** 4, 2000.0)
 
 
+RAIN_SOLID_SHARE, RAIN_LEAF_SHARE = 0.25, 0.5       # share of the drops that land on hard ground, on leaves
+
+
+def _surface_ticks(dom: Dom, rng: np.random.Generator, rate: float, leaf: bool) -> np.ndarray:
+    """Drops on a solid (a 0.4 ms tick ringing at 3.5 kHz) or on leaves (a 6 ms soft burst under 5 kHz), Poisson at
+    ``rate`` per second with log-normal gains, mono."""
+    y = np.zeros(dom.n + seconds(0.05))
+    m = seconds(0.006) if leaf else seconds(0.0004)
+    if leaf:
+        shape = lop(rng.standard_normal(m), 5000.0) * np.hanning(m)
+    else:
+        shape = bp(np.concatenate([[1.0], np.zeros(seconds(0.003))]), 3500.0, 3.0)
+    for t in np.sort(rng.uniform(0.0, dom.dur, int(rng.poisson(rate * dom.dur)))):
+        i = int(t * SR)
+        g = rng.lognormal(0.0, 0.6)
+        seg = shape[: len(y) - i]
+        y[i:i + len(seg)] += g * seg
+    return dom.tile(dom.fold(y))
+
+
 def rain(dur: float, rng: np.random.Generator, *, loop: bool = False, intensity: float = 1.0,
-         n_generators: int = 12, on_water: float = 0.5, comfort: float = 0.5, spikes: float = 0.3) -> np.ndarray:
+         n_generators: int = 12, on_water: float = 0.5, comfort: float = 0.5, spikes: float = 0.3,
+         drops: float | None = None, wind: float = 0.0, on_solids: float = 0.0, on_leaves: float = 0.0,
+         small_alpha: float = 2.9) -> np.ndarray:
     """Rain bed, stereo: Poisson parabolic clicks (10-15 generators, the thesis's three settings
     repeated with rates scaled by 1/intensity), pink comfort noise + a 300 Hz band, drops on water
-    as bubbles (radius power law, alpha 2.9), and ``drops`` spikes (``spikes``)."""
+    as bubbles (radius power law, alpha 2.9), and ``drops`` spikes (``spikes``).
+    ``drops``: the intensity that sets the number of drops that make bubbles, apart from the click rate (None = ``intensity``).
+    ``wind`` (m/s): the bubble radii spread (log-normal, sd 0.1 at 9 m/s) and the bubbles die out by 9 m/s.
+    ``on_solids``, ``on_leaves``: level of the drops landing on hard ground and on leaves, each with its own rate and tick.
+    ``small_alpha``: exponent of the radius law of the 0.20-0.25 mm drizzle bubbles, p(r) ~ r^-alpha (-1: the number of
+    bubbles per kHz goes as f^-3)."""
     dom = Dom(dur, loop)
+    wet = intensity if drops is None else float(drops)
+    w = float(np.clip(wind, 0.0, 50.0))
+    keep = max(0.0, 1.0 - w / RAIN_WIND_OFF)
+    sp = math.exp(2.0 * 0.1 * w / RAIN_WIND_OFF)
     n = dom.n
     y = np.zeros((n + seconds(0.05), 2))
     for g in range(n_generators):
@@ -1082,7 +1115,7 @@ def rain(dur: float, rng: np.random.Generator, *, loop: bool = False, intensity:
     clicks = np.stack([dom.fold(y[:, 0]), dom.fold(y[:, 1])], axis=1) * 0.1
     clicks = np.stack([hip(dom.tile(clicks[:, c]), 900.0) for c in (0, 1)], axis=1)
     out = _norm(clicks)
-    if on_water > 0:
+    if on_water > 0 and keep > 0:
         bw = []
         for c in (0, 1):
             # drops of 0.8-1.1 mm at terminal speed entrain bubbles of about 0.22 mm: the 14 kHz peak of rain
@@ -1090,11 +1123,15 @@ def rain(dur: float, rng: np.random.Generator, *, loop: bool = False, intensity:
             # larger drops fill in below 7 kHz. The 0.20-0.25 mm spread (median 0.22 mm, 15 kHz) lies inside the 13-25 kHz
             # "sound of drizzle" of small drops (Nystuen, NASA "Listening to raindrops", Table 1; 0.13-0.25 mm by
             # f r = 3.29 m/s), its top at the band's 13 kHz edge. the 3:1 rate split.
-            b = P.bubble_field(dur + 0.3, rng, rate=300.0 * intensity, alpha=2.9, r_range=(0.20e-3, 0.25e-3))
-            b = b + P.bubble_field(dur + 0.3, rng, rate=100.0 * intensity, alpha=2.9, r_range=(0.25e-3, 1.5e-3))
+            b = P.bubble_field(dur + 0.3, rng, rate=300.0 * wet * keep, alpha=small_alpha, r_range=(0.20e-3 / sp, 0.25e-3 * sp))
+            b = b + P.bubble_field(dur + 0.3, rng, rate=100.0 * wet * keep, alpha=2.9, r_range=(0.25e-3 / sp, 1.5e-3 * sp))
             bw.append(dom.tile(dom.fold(b)))
         bw = np.stack(bw, axis=1)
         out = out + _norm(bw) * on_water
+    for lv, share, leaf in ((on_solids, RAIN_SOLID_SHARE, False), (on_leaves, RAIN_LEAF_SHARE, True)):
+        if lv > 0:
+            tk = np.stack([_surface_ticks(dom, rng, rain_rate(intensity) * share, leaf) for _ in (0, 1)], axis=1)
+            out = out + _norm(tk) * lv
     if spikes > 0:
         sp = np.stack([drop_spikes(dom.noise(rng)) for _ in (0, 1)], axis=1)
         out = out + _norm(sp) * spikes
@@ -1255,6 +1292,11 @@ THUNDER_DELAY, THUNDER_FEEDBACK = 0.6, 0.15
 THUNDER_COMP = (-20.0, 12.0, 0.0, 0.5, 20.0)
 
 
+def thunder_centroid_hz(distance_km: float) -> float:
+    """Spectral centre of gravity of a cloud-to-ground stroke's thunder received at distance_km (0.3-20 km): 121.2 d^-0.26 Hz."""
+    return 121.2 * float(distance_km) ** -0.26
+
+
 def thunder(rng: np.random.Generator, *, dur: float = 24.0, distance: float = 0.0,
             return_info: bool = False, fineberg: bool = False, post: bool = False) -> np.ndarray:
     """Farnell's 8-layer thunder, stereo. distance in [0, 1] is the start of the patch's travelling
@@ -1362,7 +1404,7 @@ def thunder(rng: np.random.Generator, *, dur: float = 24.0, distance: float = 0.
 
 C_AIR = 343.0
 THUNDER_PEAK_HZ = 60.0
-CHANNEL_M, SEGMENT_M, TURN_DEG = 2000.0, 10.0, 16.0
+CHANNEL_M, SEGMENT_M, TURN_DEG = 2000.0, 10.0, 16.3 * math.sqrt(math.pi / 2.0)
 RIBNER_SEGMENT_M, RIBNER_TURN_DEG, MEMORY, VERTICAL_BIAS = 3.0, 25.0, 5, 0.0008
 STRETCH_A, STRETCH_R0 = 10.0, 1000.0
 STROKE_E, STROKE_A, STROKE_DT = (1.0, 0.5, 0.25), (1.0, 0.6, 0.35), (0.0, 0.06, 0.12)
@@ -1434,15 +1476,21 @@ def ribner_channel(rng: np.random.Generator, length: float = CHANNEL_M, segment:
 
 
 def thunder_channel(rng: np.random.Generator, *, dur: float = 12.0, distance_m: float = 1000.0,
-                    peak_hz: float = THUNDER_PEAK_HZ, strokes: int = 1, walk: str = "farnell") -> np.ndarray:
+                    peak_hz: float = THUNDER_PEAK_HZ, strokes: int = 1, walk: str = "farnell", horizontal: float = 0.0) -> np.ndarray:
     """Thunder as a "string of pearls": a tortuous channel of segments, each sending its ``wm_wave``,
     heard in order of distance with 1/r spreading, the N-waves stretched by the distance travelled and
     air absorption at each segment's range. ``strokes`` 1..3 return strokes down the same channel, later ones
     shorter and weaker. ``walk`` "farnell" (10 m segments) or "ribner" (3 m, 3-D statistics: its spectral peak
     wanders 19-55 Hz from seed to seed, under the measured 40-80 Hz). Mono, at SR, peak 1, starting at the first
-    arrival. N-wave 2T = 0.66 / peak_hz at 1 km, +-30 % from segment to segment."""
+    arrival. N-wave 2T = 0.66 / peak_hz at 1 km, +-30 % from segment to segment.
+    ``horizontal``: metres of channel run sideways at the top (flashes spread 1-3 km, up to 2.5 km for positive
+    strokes), 10 m segments heading one random way with a 15 % wander: the rumble stretches."""
     n = seconds(dur)
     vecs = (ribner_channel if walk == "ribner" else farnell_channel)(rng, CHANNEL_M)
+    if horizontal > 0.0:
+        k, a = max(int(horizontal / 10.0), 1), rng.uniform(0.0, 2.0 * math.pi)
+        side = 10.0 * np.array([math.cos(a), math.sin(a), 0.0]) + 1.5 * rng.normal(size=(k, 3))
+        vecs = np.vstack([vecs, side])
     m = len(vecs)
     lens = np.linalg.norm(vecs, axis=1)
     pts = np.vstack([np.zeros(3), np.cumsum(vecs, axis=0)])
@@ -1481,7 +1529,7 @@ def thunder_channel(rng: np.random.Generator, *, dur: float = 12.0, distance_m: 
 SIGMA_W, RHO_W, MU_W = 0.0728, 998.0, 1.0e-3   # water: surface tension N/m, density, dyn. viscosity
 
 
-def tube_bubble(r: float, rng: np.random.Generator, n_modes: int = 8, soft: bool = True) -> np.ndarray:
+def tube_bubble(r: float, rng: np.random.Generator, n_modes: int = 8, soft: bool = True, delta_th: float | None = None) -> np.ndarray:
     """Moss §3.2 non-spherical bubble: zonal modes f_n^2 = (n-1)(n+1)(n+2) sigma / (4 pi^2 rho r^3),
     radiating at 2 f_n, weight (n-1)(n+2)(4n-1)/(2n+1) * w_n^2 / sqrt((4w_n^2-w_b^2)^2+(4 b_n w_n)^2),
     viscous decay b_n = (n+2)(2n+1) mu / (rho r^2); the 8 strongest kept (Table I: 8-10 suffice),
@@ -1489,7 +1537,7 @@ def tube_bubble(r: float, rng: np.random.Generator, n_modes: int = 8, soft: bool
     Chosen: equal shape amplitudes c_n, the radial:shape balance 1:0.5, and the decay floor at
     # the radial mode's beta0 (Moss prints no radiation damping for shape modes)."""
     fb = P.MINNAERT_FR / r
-    b0 = math.pi * fb * (P.DELTA_RAD + P.DELTA_TH)
+    b0 = math.pi * fb * (P.DELTA_RAD + (P.DELTA_TH if delta_th is None else delta_th))
     wb = 2 * math.pi * fb
     ns = np.arange(2, 400)
     fn = np.sqrt((ns - 1) * (ns + 1) * (ns + 2) * SIGMA_W / (RHO_W * r ** 3)) / (2 * math.pi)
@@ -1809,9 +1857,11 @@ def _ringz(x, f, decay):
 
 
 def dark_ambience(dur: float, rng: np.random.Generator, *, loop: bool = False, note: float = 52.0,
-                  ring: float = 0.2, reverb_time: float = 100.0) -> np.ndarray:
+                  ring: float = 0.2, reverb_time: float = 100.0, chord: tuple = (), swell: float = 0.0) -> np.ndarray:
     """sonic-pi dark_ambience (atmos.clj defaults: note 52, detunes +12/+24, ring 0.2, room 70,
     reverb_time 100, cutoff 110, res 0.7 -> rq 0.3, pink noise x0.005), stereo.
+    ``chord``: semitone offsets above ``note`` that get their own resonator (a fifth, a third, a second);
+    ``swell``: depth of a 1 + swell sin(2 pi t / 11) level swell.
     GVerb is not ported (space.py): zita_rev1 with t60 = reverb_time stands in, mixed as GVerb's
     defaults dry 1 / tail 0.5. Chosen: that substitution."""
     dom = Dom(dur, loop)
@@ -1821,6 +1871,10 @@ def dark_ambience(dur: float, rng: np.random.Generator, *, loop: bool = False, n
     s2 = _ringz(src, f1 * 2.0, ring)
     s3 = _ringz(src, f1 * 4.0, ring)
     mix = s1 + s1 + s2 + s3
+    for k in chord:
+        mix = mix + _ringz(src, f1 * 2.0 ** (float(k) / 12.0), ring)
+    if swell:
+        mix = mix * (1.0 + float(swell) * np.sin(2 * np.pi * np.arange(len(mix)) / SR / 11.0))
     wet = S.zita_rev1(mix, rdel=60.0, f1=200.0, f2=6000.0, t60dc=reverb_time, t60m=reverb_time)
     y = np.stack([mix, mix], axis=1) + 0.5 * wet
     y = np.tanh(y)
@@ -2071,6 +2125,29 @@ ACT_BEDS = {"caravan": bed_caravan, "wilds": bed_wilds, "shore": bed_shore, "awa
 
 
 BED_MODIFIERS = ("night", "dawn", "high_tide", "dark")        # AUDIO_CHARTER §8.7 variants
+
+
+SALIENT_DB = 15.0            # an event stands this far over the median level of its bed
+SALIENT_GAP = 1.0            # s: peaks closer than this are one event
+
+
+def salient_events(y: np.ndarray, thr_db: float = SALIENT_DB, win: float = 0.05) -> np.ndarray:
+    """Times (s) of the salient events of a bed: peaks of the ``win``-second RMS envelope that stand ``thr_db`` dB over its
+    median, at least ``SALIENT_GAP`` s apart. A bed that loops 120 s repeats them exactly, so the ear learns them; they belong
+    in the details, placed at random."""
+    x = np.asarray(y, float)
+    x = x.mean(axis=1) if x.ndim == 2 else x
+    w = max(1, seconds(win))
+    env = np.sqrt(np.convolve(x * x, np.ones(w) / w, "same")[::w] + 1e-20)
+    lim = np.median(env) * 10 ** (thr_db / 20.0)
+    gap = max(1, int(SALIENT_GAP / (w / SR)))
+    keep: list[int] = []
+    for i in np.flatnonzero(env > lim):
+        if not keep or i - keep[-1] >= gap:
+            keep.append(int(i))
+        elif env[i] > env[keep[-1]]:
+            keep[-1] = int(i)
+    return np.asarray(keep) * w / SR
 
 
 def render_bed(row: dict, rng: np.random.Generator, dur: float = BED_SECONDS) -> np.ndarray:

@@ -189,10 +189,46 @@ def triangle(sr=DEFAULT_SR, vel=1.0, open=1.0, tune=2100, axis="perpendicular", 
     return y * env * 0.25 * (0.5 + 0.5 * vel)
 
 
+CROTALE_F = (1046.5, 1480.0, 2093.0)       # C6, F#6, C7
+CROTALE_R = ((1.45, 2.08, 3.05, 3.5, 5.2), (1.42, 1.98, 2.85, 3.41, 5.19), (1.42, 1.92, 2.67, 3.28, 4.92))   # (0,1) (3,0) (1,1) (4,0) (5,0) over (2,0)
+CROTALE_AMP = (1.0, 0.25, 0.6, 0.4, 0.3, 0.15)
+CROTALE_T60 = (6.0, 0.8, 3.0, 1.5, 1.0, 0.6)        # s at C6, scaled by 1046.5 / f
+
+
+def crotale_ratios(f20):
+    """Modes (2,0), (0,1), (3,0), (1,1), (4,0), (5,0) over (2,0) for a crotale whose (2,0) is `f20` Hz."""
+    x = float(np.clip(math.log2(max(f20, 1.0) / CROTALE_F[0]), 0.0, 1.0))
+    lf = np.log2(np.asarray(CROTALE_F) / CROTALE_F[0])
+    return [1.0] + [float(np.interp(x, lf, [r[i] for r in CROTALE_R])) for i in range(5)]
+
+
+@drum("crotales", "Crotales (antique cymbals): small bronze discs struck with a hard beater, a bright ping whose (3,0) mode sits an octave "
+      "above the (2,0) fundamental and adds to the sense of pitch.", tune=(1046.5, "Hz of the (2,0) fundamental (C6 1047 .. C7 2093)"),
+      decay=(1.0, "ring-time scale"))
+def crotales(sr=DEFAULT_SR, vel=1.0, tune=1046.5, decay=1.0):
+    f0 = float(np.clip(tune, 200.0, 4200.0))
+    n = samples(6.0 * float(np.clip(decay, 0.1, 3.0)), sr)
+    t = np.arange(n) / sr
+    y = np.zeros(n)
+    for r, a, t60 in zip(crotale_ratios(f0), CROTALE_AMP, CROTALE_T60):
+        f = f0 * r
+        if f < 0.45 * sr:
+            y += a * np.exp(-6.91 * t * f0 / 1046.5 / (t60 * float(np.clip(decay, 0.1, 3.0)))) * np.sin(2 * np.pi * f * t + 1.3 * r)
+    y *= np.minimum(1.0, t / 0.0008)
+    _fade_out(y, sr, 0.3)
+    return y / (np.max(np.abs(y)) + 1e-12) * 0.6 * (0.4 + 0.6 * float(np.clip(vel, 0.0, 1.0)))
+
+
 def meyer_bass_drum_t60(f):
     f =np.asarray(f, float)
     mid = 15.0 * (np.maximum(f, 50.0) / 50.0) ** (np.log(4.0 / 15.0) / np.log(4.0))
     return np.where(f <= 50.0, 15.0, np.where(f < 200.0, mid, np.where(f <= 400.0, 4.0, 4.0 * 400.0 / np.maximum(f, 1.0))))
+
+
+BASS_DRUM_CONTACT_MS = (4.0, 1.0)   # felt, rute
+BASS_DRUM_SERIES = (1.0, 80.0 / 39, 121.0 / 39, 162.0 / 39, 204.0 / 39, 248.0 / 39)   # (m,1) m = 0..5 over (0,1)
+DJEMBE_RATIOS = (1.0, 1.47, 1.56, 2.11, 2.76, 3.16, 3.50, 3.60)
+CONGA_RATIOS = (1.0, 1.75, 2.58, 3.2, 3.6, 4.0)
 
 
 @drum("bass_drum", "Orchestral bass drum (gran cassa): a dull boom near 100 Hz from many inharmonic membrane modes, "
@@ -201,6 +237,7 @@ def meyer_bass_drum_t60(f):
       tune=(50.0, "Hz of the (0,1) mode"), pos=(0.25, "strike point, 0 = centre (ring modes only, dull) .. 0.9 = near "
       "the rim (asymmetric modes, harsher)"), mallet=("felt", "felt | rute"), dur=(4.0, "s rendered (lows faded out)"))
 def bass_drum(sr=DEFAULT_SR, vel=1.0, tune=50.0, pos=0.25, mallet="felt", dur=4.0):
+    """Felt mallet contact BASS_DRUM_CONTACT_MS[0] at full velocity (top of the 2-4 ms mallet-head range), rute [1]."""
     from scipy.special import jn_zeros, jv
     from scipy.signal import fftconvolve
     from .physical.modal import contact_time
@@ -212,8 +249,8 @@ def bass_drum(sr=DEFAULT_SR, vel=1.0, tune=50.0, pos=0.25, mallet="felt", dur=4.
     bend = 1.0 + (2.0 ** (140.0 / 1200.0) - 1.0) * v * v * np.exp(-t / 0.25)
     y = np.zeros(n)
     for m in range(13):
-        for j in jn_zeros(m, 6):
-            f = float(tune) * j / j01
+        for k, j in enumerate(jn_zeros(m, 6)):
+            f = float(tune) * (BASS_DRUM_SERIES[m] if k == 0 and m < len(BASS_DRUM_SERIES) else j / j01)
             if f > 0.4 * sr:
                 continue
             g = jv(m, j * r) / abs(jv(m + 1, j)) / j
@@ -223,7 +260,7 @@ def bass_drum(sr=DEFAULT_SR, vel=1.0, tune=50.0, pos=0.25, mallet="felt", dur=4.
                 y += g * np.sin(ph) * d
             else:
                 y += 0.5 * g * (np.sin(ph) + np.sin(ph * 1.004 + 1.0)) * d
-    ms = 1.0 if str(mallet) == "rute" else 6.0
+    ms = BASS_DRUM_CONTACT_MS[str(mallet) == "rute"]
     y = fftconvolve(y, _pulse(contact_time(ms, max(v, 0.05)), sr))[:n]
     _fade_out(y, sr, 0.4)
     return y / (np.max(np.abs(y)) + 1e-12) * 0.9 * (0.5 + 0.5 * vel)
@@ -279,18 +316,18 @@ def sleigh(sr=DEFAULT_SR, vel=1.0, decay=0.35):
     return y / 4.0 * perc(decay + 0.1, 0.001, sr, curve=1.0) * (0.5 + 0.5 * vel)
 
 def triad(f3, n, sr, a3, t60, split=0.001, threshold=0.05, seed=1e-3):
-    """Chaigne, Touze & Thomas, "Nonlinear vibrations and chaos in gongs and cymbals", Acoust. Sci. & Tech.
-    26(5) (2005), eq. 9: a symmetric mode q3 at w3 struck to amplitude a3, quadratically coupled to twin modes
+    """A symmetric mode q3 at w3 struck to amplitude a3, quadratically coupled to twin modes
     q1, q2 at w3 / 2 (1 -+ split) (internal resonance 1:1:2), V = alpha / 2 (q1^2 + q2^2) q3. Below the parametric
-    threshold a3* = 4 mu w1 / alpha the twins stay silent; above it they grow, after a delay, as the order-2
-    subharmonics of their Fig. 4, and trade energy back and forth with q3. Returns (q1 + q2, q3). alpha
+    threshold a3* = 2 w1 sqrt(4 mu^2 + d^2) / alpha (d = w3 - 2 w1, the detuning of the twins) the twins stay
+    silent; above it they grow, after a delay, as the order-2
+    subharmonics, and trade energy back and forth with q3. Returns (q1 + q2, q3). alpha
     (set so that a3* = ``threshold``: a full strike blooms after about 0.5 s, below 0.3 nothing), the seed (an
     off-centre strike gives the twins 1e-3 of the amplitude directly), the
     twin split and their damping (that of q3)."""
     w3 = 2.0 * np.pi * f3
     w1, w2 = 0.5 * w3 * (1.0 - split), 0.5 * w3 * (1.0 + split)
     mu = 6.91 / max(t60, 1e-3)
-    al = 4.0 * mu * w1 / threshold
+    al = 2.0 * w1 * math.sqrt(4.0 * mu * mu + (w3 - 2.0 * w1) ** 2) / threshold
     return _triad(int(n), 1.0 / sr, w1, w2, w3, mu, al, float(a3) * w3, seed * float(a3))
 
 
@@ -364,8 +401,10 @@ def pitch_glide(y, sr, cents, settle):
                       "shell stiffening, the low ones most"),
       preset=("", "'agung' = Balinese hanging gong: 4 Hz ombak on the fundamental, upper partials that fade "
                   "and swell back (626 Hz returns at 3 s)"),
-      hardness=(0.0, "0..1 the fundamental as a hardening (cubic) mode: a hard stroke starts sharp and sinks to the nominal pitch as it dies"))
-def gong(sr=DEFAULT_SR, vel=1.0, tune=90, decay=6.0, cascade=0.0, glide=1.0, curvature=0.0, preset="", hardness=0.0):
+      hardness=(0.0, "0..1 the fundamental as a hardening (cubic) mode: a hard stroke starts sharp and sinks to the nominal pitch as it dies"),
+      amp_over_h=(0.0, "W/h of the face at full velocity (0 = off): the fundamental of a free disc hardens as w^2 = w0^2 (1 + 0.6772 (W/h)^2), "
+                       "so the pitch starts sharp and sinks as the amplitude dies"))
+def gong(sr=DEFAULT_SR, vel=1.0, tune=90, decay=6.0, cascade=0.0, glide=1.0, curvature=0.0, preset="", hardness=0.0, amp_over_h=0.0):
     from .physics import TunedPercussion
     if preset == "agung":
         y = agung(tune, max(float(decay), 4.0), sr, vel, decay)
@@ -398,9 +437,11 @@ def gong(sr=DEFAULT_SR, vel=1.0, tune=90, decay=6.0, cascade=0.0, glide=1.0, cur
             sub += tw
         y = y + c * sub / (np.max(np.abs(sub)) + 1e-12) * np.max(np.abs(y)) * float(np.clip(vel, 0.0, 1.0))
     h = float(np.clip(hardness, 0.0, 1.0))
-    if h > 0.0 and v > 0.0:
+    wh = float(np.clip(amp_over_h, 0.0, 10.0))
+    if (h > 0.0 or wh > 0.0) and v > 0.0:
         w0 = 2 * math.pi * float(tune)
-        u = cubic_mode(float(tune), float(decay) / 6.91, v, h * w0 * w0, len(y), sr)
+        u = cubic_mode(float(tune), float(decay) / 6.91, v, (0.6772 * wh * wh if wh > 0.0 else h) * w0 * w0, len(y), sr)
+        h = h if h > 0.0 else 1.0
         y = y + h * u / (np.max(np.abs(u)) + 1e-12) * np.max(np.abs(y))
     return np.tanh(y*1.15) * .8
 
@@ -430,7 +471,7 @@ def cubic_mode(f0, tau, amp, eps, n, sr):
 def conga(sr=DEFAULT_SR, vel=1.0, tune=220, slap=0.0):
     from .physics import MembraneDrum
     s=float(np.clip(slap,0,1))
-    return MembraneDrum(float(tune), .145, damping=1.3, air_coupling=.28).strike(
+    return MembraneDrum(float(tune), .145, damping=1.3, air_coupling=.28, ratios=CONGA_RATIOS).strike(
         .62, velocity=vel, position=.48+.38*s, stroke="slap" if s>.55 else "tone", sr=sr, seed=71)
 
 
@@ -450,7 +491,7 @@ def djembe(sr=DEFAULT_SR, vel=1.0, tune=330, stroke="tone"):
     if st=="bass":
         return MembraneDrum(float(tune)*.24,.17,damping=.9,air_coupling=.55).strike(
             .72,velocity=vel,position=.06,stroke="bass",sr=sr,seed=73)
-    return MembraneDrum(float(tune),.17,damping=1.25,air_coupling=.34).strike(
+    return MembraneDrum(float(tune),.17,damping=1.25,air_coupling=.34, ratios=DJEMBE_RATIOS).strike(
         .52,velocity=vel,position=.82 if st=="slap" else .58,stroke="slap" if st=="slap" else "tone",sr=sr,seed=74)
 
 
@@ -681,3 +722,43 @@ def bar_end_impact(speed, radius=0.005, ball=(7850.0, 2.0e11, 0.3), bar_area=mat
         t.append(i * dt)
         f.append(p)
     return np.array(t), np.array(f)
+
+
+GAMELAN_GONG_MODES = (   # (m, n), lower Hz, upper Hz of the doublet (ESPI)
+    ((0, 1), 458.0, 458.0), ((1, 1), 698.0, 734.0), ((2, 1), 2005.0, 2093.0), ((3, 1), 2529.0, 2606.0),
+    ((4, 1), 3045.0, 3089.0), ((5, 1), 3726.0, 3748.0), ((6, 1), 4469.0, 4494.0), ((0, 2), 1284.0, 1284.0),
+    ((1, 0), 69.0, 99.0), ((2, 0), 240.0, 244.0), ((3, 0), 527.0, 556.0), ((4, 0), 945.0, 1151.0),
+    ((5, 0), 1388.0, 1807.0), ((6, 0), 2227.0, 2344.0), ((7, 0), 2941.0, 2941.0), ((8, 0), 3436.0, 3594.0),
+    ((9, 0), 4182.0, 4300.0),
+)
+GAMELAN_GONG_AMP = {(0, 1): 1.0, (1, 1): 0.45, (2, 1): 0.25}
+GAMELAN_CHLADNI = {0: 47.26, 1: 48.70}   # f = C (m + 2n)^2, upper doublet component
+
+
+def gamelan_chladni(m, n):
+    return GAMELAN_CHLADNI[n] * (m + 2 * n) ** 2
+
+
+@drum("gamelan_gong", "Small steel gamelan gong from the measured modes of one 20.7 cm gong: (0,1) dominates, "
+      "(1,1) and (2,1) follow, the rim modes ring faintly; `tune` = (0,1) frequency.",
+      tune=(458.0, "Hz of the (0,1) mode"), dur=(4.0, "s"))
+def gamelan_gong(sr=DEFAULT_SR, vel=1.0, tune=458.0, dur=4.0):
+    n = samples(float(np.clip(dur, 0.2, 60.0)), sr)
+    t = np.arange(n) / sr
+    y = np.zeros(n)
+    rng = np.random.default_rng(37)
+    k = float(tune) / 458.0
+    bright = 0.4 + 0.6 * float(vel)
+    for mn, lo, hi in GAMELAN_GONG_MODES:
+        a = GAMELAN_GONG_AMP.get(mn, 0.06)
+        for f in {lo, hi}:
+            f *= k
+            if f >= 0.45 * sr:
+                continue
+            t60 = 3.0 * (f / 458.0) ** -0.5
+            y += a * bright ** (f / 2000.0) * np.exp(-6.91 * t / t60) * np.sin(2 * np.pi * f * t + rng.uniform(0, 2 * np.pi))
+    env = np.ones(n)
+    a0 = samples(0.002, sr)
+    env[:a0] = np.linspace(0.0, 1.0, a0)
+    _fade_out(env, sr, 0.3)
+    return y * env * (0.8 / max(float(np.max(np.abs(y))), 1e-12)) * (0.5 + 0.5 * vel)

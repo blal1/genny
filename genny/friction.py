@@ -25,7 +25,7 @@ import math
 
 import numba
 import numpy as np
-from scipy.signal import resample_poly
+from scipy.signal import butter, lfilter, resample_poly
 
 from . import filters as F
 from .core import DEFAULT_SR, samples
@@ -40,10 +40,10 @@ XI_CRISTAL = 0.0009             # modal damping ratio of the cristal resonator (
 BEND_BLOCK = 32
 MOBILITY_CRISTAL = 21.0         # phi^2/m [1/kg] of the playing mode: 20-22 reproduces both paper checks (g08 §1.3)
 
-CLAMPED = (1.0, 6.267, 17.55, 34.39)     # cantilever partial ratios (g09 §9, thesis L7814-7819)
-FREE = (1.0, 2.756, 5.404, 8.933)        # free-free bar (genny BarBody; g09 §26: not in the thesis)
+CLAMPED = (1.0, 6.267, 17.55, 34.39)     # cantilever partial ratios
+FREE = (1.0, 2.756, 5.404, 8.933)        # free-free bar
 _BETA = {"clamped": (1.8751, 4.6941, 7.8548, 10.9955), "free": (4.7300, 7.8532, 10.9956, 14.1372)}
-ALU_BLADE = (1.0, 2.71, 4.87, 8.67, 12.76)   # measured Ikedaphone aluminium blade A (g09 §3)
+ALU_BLADE = (1.0, 2.71, 4.87, 8.67, 12.76)   # measured Ikedaphone aluminium blade A
 ALU_BLADE_B = (1.0, 4.32, 5.45, 9.05, 13.53)
 IRON_BLADE = (1.0, 2.83, 6.35, 7.55)
 SQUARE_TUBE = (1.0, 2.67, 5.04, 8.0)
@@ -545,7 +545,8 @@ def _unit_bank(x, freqs, t60, gains, sr):
                  np.ascontiguousarray(g, float), float(sr))
 
 
-def _sheet(x, sr, thickness=0.5, size=1.5, drive=1.0, decay=1.5, mix=0.5, bright=1.0, seed=0, avoid=0.0, metal=""):
+def _sheet(x, sr, thickness=0.5, size=1.5, drive=1.0, decay=1.5, mix=0.5, bright=1.0, seed=0, avoid=0.0, metal="",
+           sectors=1, tilt=0.0, tuned_to=0.0, fragments=1):
     if metal not in SHEET_TOP:
         raise ValueError(f"metal must be one of {sorted(SHEET_TOP)}")
     rng = np.random.default_rng(seed)
@@ -553,10 +554,23 @@ def _sheet(x, sr, thickness=0.5, size=1.5, drive=1.0, decay=1.5, mix=0.5, bright
     size = float(np.clip(size, 0.3, 4.0))
     dec = float(np.clip(decay, 0.05, 8.0))
     top = min(SHEET_TOP[metal] * float(np.clip(bright, 0.25, 4.0)), 0.42 * sr)
-    f = _plate_modes(th, size, 40, 90.0, top, rng)
+    nsub = max(1, int(sectors)) * max(1, int(fragments))
+    if nsub > 1:       # petals (equal sectors) or fragments: smaller plates, so higher and denser modes that die sooner
+        sub = size / math.sqrt(nsub)
+        f = np.sort(np.concatenate([_plate_modes(th, sub if int(sectors) > 1 else sub * rng.uniform(0.7, 1.3), 40, 90.0, top, rng)
+                                    for _ in range(max(1, int(fragments)))]))
+        dec = dec * 0.7 ** math.log2(nsub)
+    else:
+        f = _plate_modes(th, size, 40, 90.0, top, rng)
     if avoid > 0:      # instruments: no sheet mode within 7 % of the note, so the sheet cannot beat against it
         f = f[np.abs(f / avoid - 1.0) > 0.07]
     g = rng.lognormal(0.0, 0.6, f.size)              # "uneven and unpredictable" response curve (g09 §20.6)
+    if tilt:           # dB per octave on the mode levels
+        g = g * (f / 400.0) ** (float(tilt) / 6.02)
+    if tuned_to > 0:   # a sheet cut to a note: the nearest mode sits on it, and louder
+        i = int(np.argmin(np.abs(f / float(tuned_to) - 1.0)))
+        f[i] = float(tuned_to)
+        g[i] = g.max() * 2.0
     t60 = dec * np.clip((400.0 / f) ** 0.5, 0.15, 1.5)
     # Level-dependent part. Thinner sheet = earlier saturation and more strident, thicker = fuller (g09 §20.6).
     # tanh shape, the (0.5 mm / thickness)^2 drive law and the quadratic "thunder" coupling are
@@ -615,13 +629,17 @@ def _mono_fx(fn, x):
         mix=(0.5, "0 dry .. 1 sheet only"), bright=(1.0, "upper limit of the modes = 4500 Hz x bright"),
         seed=(0, "int: which modes and how uneven"),
         metal=("", "'' (modes up to 4500 Hz x bright) | galvanized (up to about 7 kHz) | stainless (up to about 15 kHz)"),
-        mute=(0.0, "0..1 foam clamp pressed on the sheet (pedal): shorter ring and later saturation"))
+        mute=(0.0, "0..1 foam clamp pressed on the sheet (pedal): shorter ring and later saturation"),
+        sectors=(1, "petals: the sheet cut into this many equal sectors (smaller plates: higher, denser, shorter modes)"),
+        tilt=(0.0, "dB per octave added to the mode levels (negative = duller)"),
+        tuned_to=(0.0, "Hz: the nearest mode is moved onto this note and made louder (0 = none)"),
+        fragments=(1, "the sheet broken into this many pieces of unequal size"))
 def sheet_radiator(x, sr=DEFAULT_SR, thickness=0.5, size=1.5, drive=1.0, decay=1.5, mix=0.5, bright=1.0, seed=0, metal="",
-                   mute=0.0):
+                   mute=0.0, sectors=1, tilt=0.0, tuned_to=0.0, fragments=1):
     """g09 §20.6 / §25 ('a sheet of metal vibrates like thunder when injected with ... one of its partials')."""
     m = float(np.clip(mute, 0.0, 1.0))
     return _mono_fx(lambda c: _sheet(c, sr, thickness, size, drive * (1 - 0.7 * m), decay * (1 - 0.9 * m), mix, bright,
-                                     int(seed), metal=metal), x)
+                                     int(seed), metal=metal, sectors=sectors, tilt=tilt, tuned_to=tuned_to, fragments=fragments), x)
 
 
 @effect("cone_radiator", "Baschet cone / balloon radiator: dry formant colouring, low cut set by the cone size.",
@@ -762,7 +780,8 @@ def cristal(freq, dur, sr=DEFAULT_SR, vel=1.0, pressure=1.0, finger_speed=0.15, 
         # (g09 §12). its mix level (0.1 x bright).
         return r["vel"] + 0.1 * b * uf * F.highpass(r["force"], 2 * freq, FS) / MU_S     # grows with the pressure
 
-    y = _tone(_friction_note(run, freq, dur, sr, 0.5, 0.15), freq, sr, b)
+    harm = 6.0 * float(np.clip(fn, 0.25, 6.0)) ** 0.5        
+    y = _tone(_friction_note(run, freq, dur, sr, 0.5, 0.15), freq, sr, b, harm=harm)
     y = _radiate(y, sr, radiator, **({"mix": 0.35, "decay": 1.2, "bright": b, "avoid": freq} if radiator == "sheet" else {}))
     return _edges(y, sr) * _LEVEL["cristal"]
 
@@ -812,8 +831,11 @@ def _bow_force(force, freq, vb, w1):
                                    "bar locking onto a harmonic series n f, the bow point choosing f)"),
             force=(1.0, "bow force, relative (0.2-2.5): more = faster attack, harder tone"),
             position=(0.03, "bow point from the bar end as a fraction of length (0-0.15)"),
-            speed=(0.2, "bow speed, m/s (0.05-0.5): sets loudness"), bright=(1.0, "0.5 mellow .. 2 bright"))
-def bowed_bar(freq, dur, sr=DEFAULT_SR, vel=1.0, material="aluminium", force=1.0, position=0.03, speed=0.2, bright=1.0):
+            speed=(0.2, "bow speed, m/s (0.05-0.5): sets loudness"), bright=(1.0, "0.5 mellow .. 2 bright"),
+            partial=(1, "material comb: the rank k the bow locks on: the note sounds at k times the series' fundamental (1 = as before)"),
+            ranks=("", "material comb: the ranks kept, e.g. '1 2 3 4 6 8' (empty = 1..12)"))
+def bowed_bar(freq, dur, sr=DEFAULT_SR, vel=1.0, material="aluminium", force=1.0, position=0.03, speed=0.2, bright=1.0,
+              partial=1, ranks=""):
     """Bilbao Problem 7.17 in modal form (g02 §11.3) with the soft friction characteristic, a = 100 (g01 §3.6).
     Free-bar partials: measured Ikedaphone aluminium blade 1 : 2.71 : 4.87 : 8.67 (g09 §3) or theory."""
     if material not in _BAR_MATERIAL:
@@ -821,12 +843,21 @@ def bowed_bar(freq, dur, sr=DEFAULT_SR, vel=1.0, material="aluminium", force=1.0
     ratios, xi0 = _BAR_MATERIAL[material]
     ratios = np.array(ratios)
     w = beam_shape("free", float(np.clip(position, 0.0, 0.15))) ** 2
+    f_series = freq
+    if material == "comb":
+        k = int(np.clip(partial, 1, ratios.size))
+        w = np.sin(np.pi * ratios * (0.1 + float(np.clip(position, 0.0, 0.15)))) ** 2   # a rubbed series: the bow point weights each rank
+        w[k - 1] *= 2.0
+        if str(ranks).strip():
+            keep = sorted({int(r) for r in str(ranks).replace(",", " ").split() if 1 <= int(r) <= ratios.size} | {k})
+            ratios, w = ratios[np.array(keep) - 1], w[np.array(keep) - 1]
+        f_series = freq / k
     vb = float(np.clip(speed, 0.05, 0.5)) * (0.4 + 0.6 * float(np.clip(vel, 0.0, 1.5)))
-    fb = _bow_force(force, freq, vb, w[0])
+    fb = _bow_force(force, f_series, vb, w[0])
 
     def run(scale, t, n_on):
         n = int(t * FS)
-        return bowed_modal(freq * scale * ratios, xi0 * ratios, w, fb * _gate(n, n_on, 0.003, 0.03), vb, n / FS)["out"]
+        return bowed_modal(f_series * scale * ratios, xi0 * ratios, w, fb * _gate(n, n_on, 0.003, 0.03), vb, n / FS)["out"]
 
     return _edges(_tone(_friction_note(run, freq, dur, sr, 0.6, 0.2), freq, sr, bright), sr) * _LEVEL["bowed_bar"]
 
@@ -909,7 +940,12 @@ _ROD_SETS = {   # name -> ((ratio, level) ..., T60 factor of the upper partials,
     "bronto": (tuple(zip(BRONTO_BAR, (1.0, 0.6, 0.4, 0.25))), 0.5, 1.0),
     "sad": (tuple(zip(SAD_O + CLAMPED[1:], (1.0, 0.6, 0.3, 0.2, 0.1))), 0.5, 1.0),
     "fixed": (tuple(zip(CLAMPED, (1.0, 0.5, 0.3, 0.2))), 0.02, 0.033),
-    "paired": (tuple(zip(LAMINES_BLADE, (1.0, 0.5, 0.35))), 0.5, 1.0)}
+    "paired": (tuple(zip(LAMINES_BLADE, (1.0, 0.5, 0.35))), 0.5, 1.0),
+    "dead_weight": (((1.0, 1.0), (2.0, 0.6), (3.0, 0.4), (4.0, 0.25)), 0.5, 1.0),
+    "rigid_blade": (tuple(zip(CLAMPED, (1.0, 0.5, 0.3, 0.2))), 0.1, 1.0),         
+    "weighted_29": (((1.0, 1.0), (5.34, 0.5), (16.0, 0.3), (30.2, 0.2)), 0.5, 1.0),
+    "weighted_28": (((1.0, 1.0), (5.04, 0.5)), 0.5, 1.0),                         
+    "weighted_a": (((1.0, 1.0), (6.0, 0.5), (18.0, 0.3), (34.0, 0.2), (57.0, 0.12)), 0.5, 1.0)}
 
 
 @instrument("rod_bank", "Baschet percussion: struck clamped rod whose vibration crosses a shared collector, wakes "
@@ -918,16 +954,24 @@ _ROD_SETS = {   # name -> ((ratio, level) ..., T60 factor of the upper partials,
                         "weighted (re-harmonised 1 : 6 : 18) | mushroom (end weight: short, one clear tone) | "
                         "square (square tube 1 : 2.67 : 5.04 : 8, very long) | piano (Baschet piano rod, octave and "
                         "major sixth) | bronto (Brontosaure bar) | sad (SAD bundle bar O) | fixed (bolted blade: dry, "
-                        "short, vague pitch) | paired (centre-clamped blade: the other half answers (180/160)^2 higher)"),
+                        "short, vague pitch) | paired (centre-clamped blade: the other half answers (180/160)^2 higher) | "
+                        "dead_weight (1 : 2 : 3 : 4) | rigid_blade (upper partials die at a tenth) | weighted_29 (1 : 5.34 : 16 : 30.2) | "
+                        "weighted_28 (1 : 5.04) | weighted_a (1 : 6 : 18 : 34 : 57)"),
             strike=("normal", "normal | tangential (grazing hit along the rod: only the fundamental, a pure whistle)"),
             hardness=(0.5, "0 soft heavy rubber .. 1 hard wood: contact time 4 ms .. 0.3 ms"),
             decay=(3.0, "ring time of the struck rod, s (0.1-12)"),
             sympathetic=(0.35, "0-1: how much the other seven rods of the set ring along through the collector"),
             collector=(4.0, "collector mass / rod mass (0.5-20): under 3 the node at the clamp does not form, "
                             "the rod rings shorter and blurred"),
-            radiator=("sheet", "sheet | cone | balloon | metal | none"), seed=(0, "int: sheet modes"))
+            radiator=("sheet", "sheet | cone | balloon | metal | none"), seed=(0, "int: sheet modes"),
+            radiator_size=(0.8, "radiator size, m (0.1-3): the cone/balloon cuts below 60/size Hz, so a small one drops the low fundamental"),
+            feed=("seam", "seam | tip: where the rod meets the collector. Tip: the upper partials carry 1.5x more, seam: as before"),
+            mount=("rigid", "rigid | rubber: a rubber fixing takes the energy of the clamp, ring time x 0.6 and the collector's hum 4 dB down"),
+            damp=("none", "none | lead: a lead weight on the rod chokes it (ring time x 0.3)"),
+            body=("metal", "metal | wood: a wooden collector is warmer, a low-pass at 4 kHz"),
+            neighbours=("kit", "kit | random: the other rods tuned at random over an octave instead of the Kit Barres lengths"))
 def rod_bank(freq, dur, sr=DEFAULT_SR, vel=1.0, rod="kit", hardness=0.5, decay=3.0, sympathetic=0.35, radiator="sheet", seed=0,
-             strike="normal", collector=4.0):
+             strike="normal", collector=4.0, radiator_size=0.8, feed="seam", mount="rigid", damp="none", body="metal", neighbours="kit"):
     """Struck threaded rods in a collector (g09 §9-10, §16; g10 §8.1). The other rods are the Kit Barres
     set: their pitches follow f ~ 1/L^2 from the lengths 880 ... 610 mm, the struck rod being the 750 mm one."""
     if rod not in _ROD_SETS:
@@ -941,14 +985,18 @@ def rod_bank(freq, dur, sr=DEFAULT_SR, vel=1.0, rod="kit", hardness=0.5, decay=3
     if rod == "paired":         # the clamped centre: the other half is a second cantilever, woken by the struck one
         ratios = np.concatenate([ratios, LAMINES_PAIR * ratios])
         levels = np.concatenate([levels, 0.5 * levels])
-    dec = float(np.clip(decay, 0.1, 12.0)) * collector_loss(collector)
+    for v, ok, nm in ((feed, ("seam", "tip"), "feed"), (mount, ("rigid", "rubber"), "mount"), (damp, ("none", "lead"), "damp"),
+                      (body, ("metal", "wood"), "body"), (neighbours, ("kit", "random"), "neighbours")):
+        if v not in ok:
+            raise ValueError(f"{nm} must be one of {ok}")
+    dec = float(np.clip(decay, 0.1, 12.0)) * collector_loss(collector) * (0.6 if mount == "rubber" else 1.0) * (0.3 if damp == "lead" else 1.0)
     tail = float(min(1.5, dec))
     n = samples(dur + tail, sr)
     f = freq * ratios
     t60 = np.where(np.isin(ratios, (1.0, LAMINES_PAIR)), dec * fund, dec * upper / np.sqrt(ratios))
     ms = 4.0 * (0.3 / 4.0) ** float(np.clip(hardness, 0.0, 1.0))
     # partial levels (the tables give frequencies only); upper partials are kept 8 dB down
-    levels = np.where(ratios == 1.0, 1.0, 0.4 * levels)
+    levels = np.where(ratios == 1.0, 1.0, 0.4 * levels * (1.5 if feed == "tip" else 1.0))
     if rod == "paired":
         levels[ratios == LAMINES_PAIR] = 0.5
     y = _struck(f, t60, levels / (1.0 + (f / 3000.0) ** 2) * (1.0 + (freq / 3000.0) ** 2), n, sr, ms, amp=float(vel))
@@ -957,12 +1005,24 @@ def rod_bank(freq, dur, sr=DEFAULT_SR, vel=1.0, rod="kit", hardness=0.5, decay=3
         # ponytail: one-way coupling (struck rod -> collector -> neighbours); a two-way junction only if
         # energy exchange / beating between rods has to be modelled.
         others = np.array([freq * (750.0 / length) ** 2 for length in KIT_LENGTHS_MM if length != 750.0])
+        if neighbours == "random":
+            others = freq * 2.0 ** np.random.default_rng(int(seed)).uniform(-0.5, 0.5, others.size)
         fo = (others[:, None] * np.array(CLAMPED[:2])[None, :]).ravel()
         go = np.tile([1.0, 0.4], others.size) / (1.0 + (fo / 3000.0) ** 2)
-        y = y + s * 0.15 * _unit_bank(y, fo, dec * fund / np.sqrt(fo / fo.min()), go, sr)
-    y = _radiate(_note_tail(y, dur, sr, tail), sr, radiator, size=0.8,
+        y = y + s * 0.15 * (0.63 if mount == "rubber" else 1.0) * _unit_bank(y, fo, dec * fund / np.sqrt(fo / fo.min()), go, sr)
+    if body == "wood":
+        y = lfilter(*butter(1, min(4000.0, 0.45 * sr) / (0.5 * sr)), y)
+    y = _radiate(_note_tail(y, dur, sr, tail), sr, radiator, size=float(radiator_size),
                  **({"mix": 0.15, "decay": 0.8, "seed": int(seed), "avoid": freq} if radiator == "sheet" else {}))
     return _edges(y, sr, t_in=0.0005) * _LEVEL["rod_bank"]
+
+
+ROD_F_L2 = {"fork": 5.2, "m6_rod": 3.25}          # f L^2, Hz m^2: tuning fork-like rod of the Baschet set and the threaded M6 rod
+
+
+def rod_length_for(kind: str, freq: float) -> float:
+    """Free length (m) of a rod `kind` ("fork" | "m6_rod") that rings at `freq`: f L^2 = const."""
+    return math.sqrt(ROD_F_L2[kind] / float(freq))
 
 
 ANGELS_TUBES = {"c7": (1.0, 7902.1 / 2093.0, 4.0), "a6": (1.0, 2349.3 / 1760.0 * 2.0, 10548.1 / 1760.0)}
@@ -1060,6 +1120,17 @@ def _whistle_ratio(freq):
     return 2.0 ** (0.5 * (1 - 2 * t)) if t < 0.5 else 2.0 ** (-(2 * t - 1) / 3.0)
 
 
+def _spin_blades(y, sr, spin, radius=0.3, doppler=True):
+    """A rack turning ``spin`` turns/s (0-8): the dipole tremolo at twice the rate, and with ``doppler`` the delay
+    (r / c) sin(2 pi spin t) of a source on a circle of ``radius`` m (peak frequency deviation 2 pi spin r / c)."""
+    s = float(min(spin, 8.0))
+    i = np.arange(y.size)
+    t = i / sr
+    if doppler:
+        y = np.interp(i - radius / 343.0 * sr * np.sin(2 * np.pi * s * t), i, y, left=0.0, right=0.0)
+    return y * (0.65 + 0.35 * np.cos(2 * np.pi * 2 * s * t))
+
+
 @instrument("whistling_blades", "Baschet whistling blades: iron blades struck on the narrow edge, two high partials "
             "whose interval changes along the set, beating at the middle.", family="mallet", span=("F#6", "E8"),
             decay=(3.0, "ring time, s (0.2-12)"),
@@ -1081,7 +1152,7 @@ def whistling_blades(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=3.0, second=0.2, s
     ms = 1.5 * (0.2 / 1.5) ** float(np.clip(hardness, 0.0, 1.0))
     y = _struck(f, np.array([dec, dec * 0.8]), g, samples(dur + tail, sr), sr, ms, amp=float(vel))
     if spin > 0:
-        y = y * (0.65 + 0.35 * np.cos(2 * np.pi * 2 * float(min(spin, 8.0)) * np.arange(y.size) / sr))
+        y = _spin_blades(y, sr, spin)
     if sumtone > 0:
         y = y + float(np.clip(sumtone, 0, 1)) * sum_tone(y, freq, sr)
     return _edges(_note_tail(y, dur, sr, tail), sr, t_in=0.0005) * _LEVEL["whistling_blades"]
@@ -1161,8 +1232,9 @@ def marloye_harp(freq, dur, sr=DEFAULT_SR, vel=1.0, force=1.0, speed=0.15, mater
             pressure=(0.7, "0-1: how hard the balloon presses on the fork: louder without shortening the note"),
             swell=(0.0, "s: time over which the balloon pressure is applied after the strike (crescendo); 0 = from the start"),
             hardness=(0.25, "0 thick felt (pure tone) .. 1 bare hammer (clang partial at 6.27 x)"),
-            decay=(6.0, "ring time, s (0.3-20)"))
-def tuning_fork(freq, dur, sr=DEFAULT_SR, vel=1.0, radiator="balloon", pressure=0.7, swell=0.0, hardness=0.25, decay=6.0):
+            decay=(6.0, "ring time, s (0.3-20)"),
+            spin=(0.0, "turns/s (0-8) of the fork about its stem: the two prongs radiate as a dipole, so the level swells and fades twice a turn (the whirled fork)"))
+def tuning_fork(freq, dur, sr=DEFAULT_SR, vel=1.0, radiator="balloon", pressure=0.7, swell=0.0, hardness=0.25, decay=6.0, spin=0.0):
     """g10 §20: 44 aluminium forks G3-D7; felt is added to the hammers 'until the partials vanish'; balloon
     pressure raises loudness without damping. Each prong is a clamped bar, so the clang mode is at 6.267 f."""
     if radiator not in ("balloon", "cone", "none"):
@@ -1178,7 +1250,13 @@ def tuning_fork(freq, dur, sr=DEFAULT_SR, vel=1.0, radiator="balloon", pressure=
     if swell > 0:
         contact = 0.3 + 0.7 * p * np.clip(np.arange(y.size) / (float(swell) * sr), 0.0, 1.0) ** 2
     y = _note_tail(y * contact, dur, sr, tail)
-    return _edges(_radiate(y, sr, radiator, size=0.8), sr, t_in=0.0005) * _LEVEL["tuning_fork"]
+    y = _radiate(y, sr, radiator, size=0.8)
+    if spin > 0:
+        y = _spin_blades(y, sr, spin, doppler=False)
+    return _edges(y, sr, t_in=0.0005) * _LEVEL["tuning_fork"]
+
+
+BASCHET_SPIRAL = dict(wire=1.75, coil=4.75, turns=150)     # wire radius, helix radius (mm), turns: 3.5 mm piano wire wound in a 6 mm hole, about 4.5 m of wire
 
 
 @instrument("coil_spring", "Baschet coil spring, struck or scraped: a dispersive train of chirped echoes around a "
@@ -1292,6 +1370,7 @@ def oil_stribeck(oil, radius, pressure):
 _SQUEAK = {   # surface -> (mode Hz, mode ratios, damping, mobility 1/kg, roughness)   # tuned by ear, as in the book
     "hinge": (1500.0, (1.0, 2.1), 0.004, 200.0, 0.03),
     "shoe": (1100.0, (1.0, 1.6, 2.7), 0.02, 400.0, 0.08),
+    "snow_shoe": (900.0, (1.0, 1.6, 2.7), 0.02, 400.0, 0.08),
     "chalk": (2400.0, (1.0, 1.45), 0.006, 300.0, 0.15)}
 
 
@@ -1302,7 +1381,7 @@ def thoret_friction(f0, dur, sr=DEFAULT_SR, eps=1.0, wander=0.1, cutoff=10.0, se
     """Additive non-linear friction source: e(t) = sum_k AM_k sin(phi_k), dphi_k/dt = 2 pi k f0(t), f0(t) = (1 + eps eta(t))
     Gamma, eta a low-pass noise (``cutoff`` Hz, std ``wander``). eps = 1 squeaks and creaks, 0 a self-sustained tone
     locked on ``f0``. AM_k = 1 / k; with ``diameter`` (m) and ``speed`` (m/s) the singing-glass beat
-    AM_k = sin(2 pi int v / D dt) / k."""
+    AM_k = sin(2 pi int v / (pi D) dt) / k."""
     n = int(round(float(dur) * sr))
     rng = np.random.default_rng(seed)
     eta = F.lowpass(rng.standard_normal(n + int(sr)), float(cutoff), sr, order=2)[int(sr):]
@@ -1311,7 +1390,7 @@ def thoret_friction(f0, dur, sr=DEFAULT_SR, eps=1.0, wander=0.1, cutoff=10.0, se
     phi = 2 * np.pi * np.cumsum(fi) / sr
     am = np.ones(n)
     if diameter and speed:
-        am = np.sin(2 * np.pi * np.cumsum(np.broadcast_to(np.asarray(speed, float), (n,))) / (float(diameter) * sr))
+        am = np.sin(2 * np.pi * np.cumsum(np.broadcast_to(np.asarray(speed, float), (n,))) / (np.pi * float(diameter) * sr))
     out = np.zeros(n)
     for k in range(1, int(0.45 * sr / (float(f0) * (1 + 3 * float(wander)))) + 1):
         out += np.sin(k * phi) / k
@@ -1319,7 +1398,7 @@ def thoret_friction(f0, dur, sr=DEFAULT_SR, eps=1.0, wander=0.1, cutoff=10.0, se
 
 
 @sfx("squeak", "Squeak of a hinge, a rubber sole or chalk: friction locking onto one resonance, with glides.",
-     surface=("hinge", "hinge | shoe | chalk"), pressure=(1.0, "normal force, relative (0.2-4): more = rougher, louder"),
+     surface=("hinge", "hinge | shoe | snow_shoe (a sole squeaking in cold snow, about 900 Hz) | chalk"), pressure=(1.0, "normal force, relative (0.2-4): more = rougher, louder"),
      speed=(1.0, "rubbing speed, relative (0.2-3)"), pitch=(1.0, "resonance multiplier (0.5-2)"),
      dur=(0.6, "s"), seed=(0, "int"), model=("physical", "physical (bristle friction on the modes) | additive (harmonic source with a wandering pitch through the same modes)"))
 def squeak(sr=DEFAULT_SR, surface="hinge", pressure=1.0, speed=1.0, pitch=1.0, dur=0.6, seed=0, model="physical"):
@@ -1441,3 +1520,19 @@ def rub(sr=DEFAULT_SR, surface="balloon", pressure=1.0, speed=1.0, strokes=3, du
     fn = 0.6 * float(np.clip(pressure, 0.2, 4.0)) * (0.25 + 0.75 * np.abs(stroke)) * _wander(n, rng, 0.2, 4.0)
     r = _rub_engine(fr, xi * np.sqrt(fr / fr[0]), mob / (fr / fr[0]) ** 2, np.ones(fr.size), fn, v, rng, rough, mus, mud)
     return _sfx_out(r["out"], sr, 0.12)
+
+
+def wineglass_mode_freq(h: float, r: float, height: float, m: float = 1.875, n: int = 2, e: float = 6.2e10, rho: float = 2500.0) -> float:
+    """Frequency [Hz] of the wine-glass mode with n azimuthal nodes pairs (cos n theta, n >= 2) and vertical flexure m
+    (1.875, 4.694, 7.855 ...) of the cylinder model: (1 / 12 pi) sqrt(3 E / rho) (h / r^2)
+    sqrt(((n^2 - 1)^2 + (m r / H)^4) / (1 + 1 / n^2)). n = 2, m = 1.875 is `wineglass_f0`."""
+    if n < 2:
+        raise ValueError("n must be at least 2")
+    k = ((n * n - 1.0) ** 2 + (m * r / height) ** 4) / (1.0 + 1.0 / (n * n))
+    return math.sqrt(3.0 * e / rho) * h / (r * r) * math.sqrt(k) / (12.0 * math.pi)
+
+
+def wineglass_torsion_freq(height: float, shear: float = 2.5e10, rho: float = 2500.0) -> float:
+    """Torsion about the vertical axis of the thin cylinder fixed at its base: (1 / 2 pi) sqrt(3 G / rho) / H, whatever
+    the wall: far above the elliptical modes (a factor R / a or more)."""
+    return math.sqrt(3.0 * shear / rho) / height / (2.0 * math.pi)

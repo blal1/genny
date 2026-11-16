@@ -202,11 +202,11 @@ def test_sections_grow_3_db_per_doubling_on_request():
         assert abs(lv[1] - lv[0] - 3.01) < 1.0 and abs(lv[2] - lv[1] - 3.01) < 1.0, lv
 
 
-def test_sordino_takes_about_6_db_off():
+def test_sordino_cuts_the_bridge_hill_not_the_low_register():
     f = 440.0
     a = np.asarray(render_note("violin", f, 1.0, SR, 0.8), float)
     b = np.asarray(render_note("violin", f, 1.0, SR, 0.8, sordino=1), float)
-    assert -9.0 < rms_db(b) - rms_db(a) < -5.0, rms_db(b) - rms_db(a)
+    assert -2.5 < rms_db(b) - rms_db(a) < 0.0, rms_db(b) - rms_db(a)
 
 
 def test_lifted_bow_rings_on_partial_by_partial():

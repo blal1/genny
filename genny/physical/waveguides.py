@@ -238,6 +238,28 @@ def _bowtable(x, offset, slope):
     return r
 
 
+@njit(cache=True)
+def _pasp_bowtable(x, vc):
+    """Piecewise-linear bow table: 1 (stuck, total reflection) for |x| <= vc, falling linearly to 0 at |x| = 1."""
+    a = abs(x)
+    if a <= vc:
+        return 1.0
+    if a >= 1.0:
+        return 0.0
+    return (1.0 - a) / (1.0 - vc)
+
+
+@njit(cache=True)
+def _pasp_reedtable(h, hc, k):
+    """Piecewise-linear reed table: 1 - m (hc - h), m = 1 / (hc + 1), for -1 <= h < hc; 1 (reed shut) above;
+    raised to the power k >= 1 (brighter)."""
+    if h >= hc:
+        return 1.0
+    if h <= -1.0:
+        return 0.0
+    return (1.0 - (hc - h) / (hc + 1.0)) ** k
+
+
 # ==========================================================================================
 # Plucked strings: extended Karplus-Strong (JOS) and STK Twang / Mandolin
 # ==========================================================================================
@@ -515,8 +537,9 @@ def mandolin(f0: float, dur: float, rng: np.random.Generator, velocity: float = 
 # ==========================================================================================
 
 @njit(cache=True)
-def _bowed_kernel(f0, slope, down, bowvel, vib, beta, pole, fs, maxlen):
-    """STK Bowed::tick (Bowed.h) with per-sample setFrequency / bow position."""
+def _bowed_kernel(f0, slope, down, bowvel, vib, beta, pole, fs, maxlen, table=0):
+    """STK Bowed::tick (Bowed.h) with per-sample setFrequency / bow position. ``table`` 1: the piecewise-linear
+    table, ``slope`` then holds the capture velocity vc."""
     n = f0.shape[0]
     L = maxlen + 8
     neck = np.zeros(L)
@@ -539,7 +562,10 @@ def _bowed_kernel(f0, slope, down, bowvel, vib, beta, pole, fs, maxlen):
         dv = bowvel[i] - (bridge_refl + nut_refl)
         nv = 0.0
         if down[i] > 0.0:
-            nv = dv * _bowtable(dv, 0.001, slope[i])
+            if table == 1:
+                nv = dv * _pasp_bowtable(dv, slope[i])
+            else:
+                nv = dv * _bowtable(dv, 0.001, slope[i])
         neck[w] = bridge_refl + nv
         bridge[w] = nut_refl + nv
         neck_last = _dl_read(neck, w, nd)
@@ -594,6 +620,38 @@ def body_sos(kind: str = "violin") -> np.ndarray:
     return sos
 
 
+A0B0_Q = (80.0, 25.0)
+A0B0_EPS = 0.02
+
+
+def a0b0_modes(ratio=1.0, eps=A0B0_EPS, f_air=280.0, q_body=A0B0_Q[0], q_air=A0B0_Q[1]):
+    """Two coupled violin modes, the bending mode B0 (stiffness k = ratio * mu) and the air mode A0 (mu from `f_air`),
+    coupled by `eps`. Returns ((f_low, f_high), (q_low, q_high)); the pair avoids crossing at ratio = 1."""
+    mu = (2.0 * math.pi * f_air) ** 2
+    k = ratio * mu
+    s = mu + k + mu * eps ** 2
+    root = math.sqrt(max(s * s - 4.0 * mu * k, 0.0))
+    w2 = np.array([(s - root) / 2.0, (s + root) / 2.0])
+    d = (mu - w2) ** 2
+    inv_q = (d * k / q_body + eps ** 2 * w2 ** 2 * mu / q_air) / (w2 * (mu ** 2 * eps ** 2 + d))
+    return tuple(np.sqrt(w2) / (2.0 * math.pi)), tuple(1.0 / inv_q)
+
+
+def a0b0_admittance(f, ratio=1.0, eps=A0B0_EPS, f_air=280.0, q_body=A0B0_Q[0], q_air=A0B0_Q[1], alpha=1.0, beta=0.0):
+    """Bridge driving-point admittance of the A0-B0 pair at frequencies `f` (Hz); `alpha` / `beta` weight the bridge
+    motion of A0 and B0 (beta = 0: B0 does not move the bridge in the bowing plane)."""
+    (f1, f2), (q1, q2) = a0b0_modes(ratio, eps, f_air, q_body, q_air)
+    mu = (2.0 * math.pi * f_air) ** 2
+    k = ratio * mu
+    w = 2.0 * math.pi * np.asarray(f, float)
+    w1, w2 = (2.0 * math.pi * f1) ** 2, (2.0 * math.pi * f2) ** 2
+
+    def res(a, b):
+        return (alpha ** 2 * (k + mu * eps ** 2 - a) + beta ** 2 * (mu - a) - 2.0 * alpha * beta * mu * eps) / (a - b)
+
+    return 1j * w * (res(w1, w2) / (w ** 2 - 1j * w * math.sqrt(w1) / q1 - w1) + res(w2, w1) / (w ** 2 - 1j * w * math.sqrt(w2) / q2 - w2))
+
+
 def _bow_noise(n, rng, depth):
     """Low-passed noise on the bow velocity (Cook §7.2 'noise in the bow junction'; rjlib s_hstr
     noise -> lop~ x2). 2 kHz cutoff, depth."""
@@ -605,7 +663,8 @@ def _bow_noise(n, rng, depth):
 
 def bowed_string(f0_env, bow_pressure_env, bow_velocity_env, dur: float,
                  rng: np.random.Generator, body: str = "cello", position: float = 0.127236,
-                 vibrato: bool = True, bow_noise: float = 0.08, tune: bool = True) -> np.ndarray:
+                 vibrato: bool = True, bow_noise: float = 0.08, tune: bool = True,
+                 bow_table: str = "stk", capture: float = 0.3) -> np.ndarray:
     """STK Bowed (Bowed.cpp/.h, research 07 §5; Faust violinModel research 08 §2.5).
 
     ``bow_pressure_env`` in [0, 1] maps to the bow-table slope 5 - 4 p (CC2); p <= 0 lifts the
@@ -618,6 +677,8 @@ def bowed_string(f0_env, bow_pressure_env, bow_velocity_env, dur: float,
     slope 3 (p = 0.5) and bow_envelope(amp=0.8) cello/bass notes fall into double slip (sounding
     the octave); p >= 0.8 gives Helmholtz motion from 55 to 440 Hz. ``tune`` removes the
     remaining few-cent offset of the fs/f - 4 delay rule (cached calibration).
+    ``bow_table`` 'pasp': piecewise-linear table instead of STK's, its capture velocity vc = ``capture`` * p
+    (more bow force, wider stuck plateau).
     """
     n = _n(dur)
     f0 = _as_env(f0_env, n)
@@ -626,16 +687,17 @@ def bowed_string(f0_env, bow_pressure_env, bow_velocity_env, dur: float,
     if bow_noise > 0.0:
         vel = vel * (1.0 + _bow_noise(n, rng, bow_noise))
     vib = delayed_vibrato(n) if vibrato else np.zeros(n)
-    slope = 5.0 - 4.0 * p
+    table = 1 if bow_table == "pasp" else 0
+    slope = capture * p if table else 5.0 - 4.0 * p
     down = (p > 0.0).astype(np.float64)
     pole = 0.75 - 0.2 * 22050.0 / SR
     ratio = 1.0
     if tune:
         ratio = _bowed_tuning(float(np.median(f0)), float(np.median(p[p > 0])) if np.any(p > 0) else 0.5,
-                              float(np.max(vel)), position, pole)
+                              float(np.max(vel)), position, pole, table, capture)
     fr = f0 * ratio
     maxlen = int(SR / np.min(fr)) + 16
-    y = _bowed_kernel(fr, slope, down, vel, vib, position, pole, float(SR), maxlen)
+    y = _bowed_kernel(fr, slope, down, vel, vib, position, pole, float(SR), maxlen, table)
     if body != "none":
         y = signal.sosfilt(body_sos(body), y)
     return 0.1248 * y
@@ -644,14 +706,14 @@ def bowed_string(f0_env, bow_pressure_env, bow_velocity_env, dur: float,
 _TUNE_CACHE: dict = {}
 
 
-def _bowed_tuning(f, p, v, beta, pole) -> float:
-    key = ("bowed", round(f, 3), round(p, 3), round(v, 4), round(beta, 4))
+def _bowed_tuning(f, p, v, beta, pole, table=0, capture=0.3) -> float:
+    key = ("bowed", round(f, 3), round(p, 3), round(v, 4), round(beta, 4)) + ((table, round(capture, 4)) if table else ())
     if key not in _TUNE_CACHE:
         n = int(0.7 * SR)
         fr = np.full(n, f)
         env = np.minimum(np.arange(n) / (0.05 * SR), 1.0) * v
-        y = _bowed_kernel(fr, np.full(n, 5.0 - 4.0 * p), np.ones(n), env, np.zeros(n), beta, pole,
-                          float(SR), int(SR / f) + 16)
+        y = _bowed_kernel(fr, np.full(n, capture * p if table else 5.0 - 4.0 * p), np.ones(n), env, np.zeros(n),
+                          beta, pole, float(SR), int(SR / f) + 16, table)
         fm = measure_f0(y[int(0.3 * SR):], f)
         _TUNE_CACHE[key] = f / fm if fm > 0 and abs(math.log2(f / fm)) < 0.1 else 1.0
     return _TUNE_CACHE[key]
@@ -994,12 +1056,11 @@ def _brass_kernel(f0, lipf, breath, scale, r, dcp, fs, maxlen, tune, inward, rat
 
 def _brass_constants(f_ref: float, lip_q: float | None = None) -> tuple[float, float]:
     """Lip pole radius and DC-blocker pole. STK: 0.997 / 0.99 at 44.1 kHz (rate_radius), i.e. a
-    fixed ~44 Hz lip bandwidth. the lip bandwidth is scaled with f so the lip keeps
+    fixed ~44 Hz lip bandwidth. Here the lip bandwidth is scaled with f so the lip keeps
     the Q it has at 220 Hz at every pitch, and the DC blocker cut-off is scaled down below
     220 Hz. Measured: with STK's fixed radius low notes never speak and notes above ~330 Hz
     turn quasi-periodic (subharmonic) for p >= 0.7; with constant Q every note 110-880 Hz speaks
-    cleanly for p 0.3-0.8. That radius is Q 5.2. ``lip_q`` sets it, r = exp(-pi f / (Q fs)): measured human lips 1.2-1.8,
-    latex 8-10, glycerine 4-6 (Newton, Campbell & Gilbert 2008); artificial 6-12 (Cullen 2000). Measured here: the
+    cleanly for p 0.3-0.8. That radius is Q 5.2. ``lip_q`` sets it, r = exp(-pi f / (Q fs)) (measured lip Q values in SOURCES.md). Measured here: the
     speaking threshold climbs as Q falls, p 0.3 speaks from Q 5, 0.45 from Q 3, 0.6 from Q 2, Q 1.5 is silent at 0.6."""
     r0 = rate_radius(0.997, STK_FS)
     d0 = rate_radius(0.99, STK_FS)
@@ -1018,7 +1079,7 @@ def brass(f0_env, lip_tension, pressure_env, dur: float, rng: np.random.Generato
     gain 0.03, output area = lip^2 clipped at 1, bore DelayA 2 fs/f + 3, DC blocker 0.99.
 
     ``pressure_env`` p (0..1) is the breath in units of the lip's static opening: the STK
-    breath is p / (0.3 G_dc(f_lip)), G_dc = lip-filter DC gain. normalisation, found by
+    breath is p / (0.3 G_dc(f_lip)), G_dc = lip-filter DC gain. The normalisation was found by
     measurement: STK's unnormalised lip filter has G_dc ~ 1/f^2 (36 at 220 Hz, 140 at 110 Hz), so
     at STK's own noteOn pressures (0.5-1.0) the lip is always saturated open and the loop dies;
     it self-oscillates only while the static lip value 0.3 G_dc breath is ~0.3-1. The output is
@@ -1070,12 +1131,13 @@ def brass(f0_env, lip_tension, pressure_env, dur: float, rng: np.random.Generato
 
 
 @njit(cache=True)
-def _clarinet_kernel(f0, bp, noise, vib, slope, fs, maxlen, a1, legato):
+def _clarinet_kernel(f0, bp, noise, vib, slope, fs, maxlen, a1, legato, hc=-2.0, kpow=1.0):
     """STK Clarinet::tick: pd = -0.95 R(delay) - bp; delay <- bp + pd*Reed(pd).
 
     R is STK's OneZero [0.5, 0.5] when ``a1[0]`` > 0, else the PASP one-pole
-    -(1 + a1) / (1 - a1 z^-1) with a per-sample ``a1`` (vibrato on the bell). ``legato``
-    samples > 0 crossfade two read pointers on a pitch step instead of jumping."""
+    (1 + a1) / (1 + a1 z^-1) with a per-sample ``a1`` (vibrato on the bell). ``legato``
+    samples > 0 crossfade two read pointers on a pitch step instead of jumping.
+    ``hc`` > -1: piecewise-linear reed table indexed by h = -pd, closure at hc, power ``kpow``."""
     n = f0.shape[0]
     L = maxlen + 8
     buf = np.zeros(L)
@@ -1106,11 +1168,14 @@ def _clarinet_kernel(f0, bp, noise, vib, slope, fs, maxlen, a1, legato):
             fo = 0.5 * last + 0.5 * fx1
             fx1 = last
         pd = -0.95 * fo - b
-        refl = 0.7 + slope * pd
-        if refl > 1.0:
-            refl = 1.0
-        if refl < -1.0:
-            refl = -1.0
+        if hc > -1.0:
+            refl = _pasp_reedtable(-pd, hc, kpow)
+        else:
+            refl = 0.7 + slope * pd
+            if refl > 1.0:
+                refl = 1.0
+            if refl < -1.0:
+                refl = -1.0
         buf[w] = b + pd * refl
         if k < legato:
             g = k / legato
@@ -1176,7 +1241,8 @@ def clarinet(f0_env, breath_env, dur: float, rng: np.random.Generator, amp: floa
              reed_stiffness: float | None = None, noise_gain: float = 0.2,
              vibrato_gain: float = 0.1, vibrato_freq: float = 5.735,
              reflection: str = "stk", bell_vibrato: float = 0.03, bell_vibrato_freq: float = 5.0,
-             legato: float = 0.0) -> np.ndarray:
+             legato: float = 0.0, reed_table: str = "stk", embouchure: float = 0.9,
+             reed_power: float = 1.0) -> np.ndarray:
     """STK Clarinet (Clarinet.cpp, research 07 §7.4): reed table offset 0.7, slope -0.3
     (or -0.44 + 0.26 v for ``reed_stiffness`` v, CC2 / Faust clarinetModel); delay
     0.5 fs/f - 1.5; noise 0.2 and vibrato 0.1 at 5.735 Hz multiply the breath; output
@@ -1185,6 +1251,10 @@ def clarinet(f0_env, breath_env, dur: float, rng: np.random.Generator, amp: floa
     ``reflection="pasp"``: bell = one-pole lowpass, a1(t) = v(t) - 0.642 with
     v = ``bell_vibrato`` sin(2 pi ``bell_vibrato_freq`` t). ``legato`` (s): crossfade time
     between the old and new delay read pointers when ``f0_env`` steps.
+
+    ``reed_table="pasp"``: piecewise-linear reed table 1 - (hc - h) / (hc + 1) below the closure
+    point hc = ``embouchure`` (in (-1, 1): higher = reed closes later; a breath above it shuts the reed and
+    the note stops), 1 above, raised to ``reed_power`` (>= 1, brighter as the reed opens).
     """
     n = _n(dur)
     f0 = _as_env(f0_env, n)
@@ -1198,8 +1268,11 @@ def clarinet(f0_env, breath_env, dur: float, rng: np.random.Generator, amp: floa
         a1 = np.ones(1)
     else:
         raise ValueError(f"reflection must be 'stk' or 'pasp', got {reflection!r}")
+    if reed_table not in ("stk", "pasp"):
+        raise ValueError(f"reed_table must be 'stk' or 'pasp', got {reed_table!r}")
+    hc = float(np.clip(embouchure, -0.99, 0.99)) if reed_table == "pasp" else -2.0
     y = _clarinet_kernel(f0, bp, noise, vib, slope, float(SR), int(0.5 * SR / f0.min()) + 8,
-                         a1, int(max(legato, 0.0) * SR))
+                         a1, int(max(legato, 0.0) * SR), hc, max(float(reed_power), 1.0))
     return (amp + 0.001) * y
 
 
@@ -1233,7 +1306,7 @@ def nl_allpass(x, g, mode=0):
 
 
 @njit(cache=True)
-def _recorder_kernel(f0, pf, noise, fs, noise_gain, tb0, ta1, ta2, psi, maxlen, jetmax, tune, y0=0.0, turb=0):
+def _recorder_kernel(f0, pf, noise, fs, noise_gain, tb0, ta1, ta2, psi, maxlen, jetmax, tune, y0=0.0, turb=0, k_tr=0.0):
     """STK Recorder::tick (Recorder.cpp), verbatim physics (Verge 1997 / Bredholt 2023)."""
     rho = 1.2041
     c0 = 343.21
@@ -1294,6 +1367,7 @@ def _recorder_kernel(f0, pf, noise, fs, noise_gain, tb0, ta1, ta2, psi, maxlen, 
     poutm1 = 0.0
     poutm2 = 0.0
     Uj = 0.0
+    fired = 0
     Qj = 0.0
     Qjm1 = 0.0
     Qjm2 = 0.0
@@ -1366,6 +1440,9 @@ def _recorder_kernel(f0, pf, noise, fs, noise_gain, tb0, ta1, ta2, psi, maxlen, 
         ty2 = ty1
         ty1 = pt
         dp = pjd + pa + pt
+        if k_tr > 0.0 and fired == 0 and Uj > 0.5 * Ujs and Ujs > 1.0:
+            fired = 1
+            dp += k_tr * 0.5 * rho * Uj * Uj
         pout = ((b3 - b1 * b2 - 1) * pin + (2 * b1 * b2 - b3) * (pinm1 - poutm1)
                 + b1 * b2 * (poutm2 - pinm2) - b1 * (Qj - 2 * Qjm1 + Qjm2)
                 + b4 * (Qj - Qjm1) + dp) / (1 - b1 * b2 + b3)
@@ -1510,7 +1587,7 @@ def recorder(f0_env, breath_env, dur: float, rng: np.random.Generator, amp: floa
              softness: float = 1.0, jet_ratio: float = 0.32, vibrato_gain: float = 0.05,
              tune: bool = True, jet_offset: float = 0.0, jet_angle: float | None = None,
              jet_shape: str = "cubic", jet_filter: str = "onepole", convection: float = 0.4,
-             register: bool = False, skill: float = 0.0, turbulence: str = "stk", **auvray) -> np.ndarray:
+             register: bool = False, skill: float = 0.0, turbulence: str = "stk", attack_pulse: float = 0.0, **auvray) -> np.ndarray:
     """Breathy end-blown flute. ``breath_env=None`` -> the STK noteOn envelope of the model.
 
     ``model='verge'``: STK Recorder (Recorder.cpp, research 07 §17; Verge/Hirschberg/Causse 1997,
@@ -1589,7 +1666,7 @@ def recorder(f0_env, breath_env, dur: float, rng: np.random.Generator, amp: floa
             _TUNE_CACHE[key] = mf / fm if mf > 0 and abs(math.log2(mf / fm)) < 0.2 else 1.0
         k = _TUNE_CACHE[key]
     y = _recorder_kernel(f0, pf, noise, float(SR), noise_gain, tb0, ta1, ta2, softness,
-                         int(maxlen * 1.3), jetmax, k, y0, turb)
+                         int(maxlen * 1.3), jetmax, k, y0, turb, float(attack_pulse))
     return (amp / 40.0) * y
 
 
@@ -1707,9 +1784,9 @@ def felt_piano(f0: float, velocity: float, dur: float, rng: np.random.Generator,
     1. Hammer: key n = 12 log2(f0/27.5) + 1; Q0 = 183 e^(0.045 n) N/mm^p, p = 3.7 + 0.015 n,
        alpha = 248 + 1.83 n - 0.055 n^2 us, m = 11.074 - 0.074 n + 0.0001 n^2 g, integrated
        against the strings' 2R load (JOS 'mass into (m s + 2R)') -> force pulse; the string
-       gets velocity f/2R. ``felt`` softens Q0 (moderator felt; amount).
+       gets velocity f/2R. ``felt`` softens Q0 (moderator felt).
     2. Excitation = pulse + ``soundboard`` * pulse convolved with a noise tail whose low-pass
-       contracts (JOS 'soundboard tap', numbers), then the strike-position comb at
+       contracts (soundboard tap), then the strike-position comb at
        0.12 of the string (Chaigne & Askenfelt 1994 Table I, C2/C4).
     3. Three unison strings detuned [-0.05, 0, 0.04] semitones (SC synthetic piano). Each loop:
        DelayA + K first-order allpasses fitted to f_n = n f0 sqrt(1 + B n^2) (B =
@@ -1733,7 +1810,7 @@ def felt_piano(f0: float, velocity: float, dur: float, rng: np.random.Generator,
     F = _hammer_force(int(0.05 * SR), float(SR), m, Q0, p, alpha, v0, R2, 16)
     F = np.trim_zeros(F, "b")
     vinj = F / (2 * R)
-    nt = int(0.3 * SR)  # soundboard tap (JOS PASP/Excitation_Synthesis). numbers.
+    nt = int(0.3 * SR)  # soundboard tap
     tail = _tv_lowpass_noise(nt, 6000.0, 300.0, rng) * np.exp(-6.91 * np.arange(nt) / SR / 0.1)
     tail /= np.sqrt(np.sum(tail ** 2))
     sb = soundboard * np.convolve(vinj, tail) * math.sqrt(SR / 1000.0)

@@ -1,0 +1,63 @@
+schema = "genny.preset/1"
+family = "lofi"
+
+[nes]
+rate = 33144
+bits = 7
+law = "linear"
+hold = true
+adpcm = false
+
+[snes]
+rate = 32000
+bits = 16
+law = "linear"
+band = [20, 7000]
+hold = false
+adpcm = true
+
+[gameboy]
+rate = 8192
+bits = 4
+law = "linear"
+hold = true
+adpcm = false
+
+[amiga]
+rate = 16726
+bits = 8
+law = "linear"
+band = [20, 4000]
+hold = true
+adpcm = false
+
+[sp1200]
+rate = 26040
+bits = 12
+law = "linear"
+hold = true
+adpcm = false
+
+[telephone]
+rate = 8000
+bits = 8
+law = "mu"
+band = [200, 3200]
+hold = false
+adpcm = false
+
+[voicemail]
+rate = 8000
+bits = 16
+law = "linear"
+band = [300, 3000]
+hold = false
+adpcm = true
+
+[walkie]
+rate = 8000
+bits = 6
+law = "mu"
+band = [400, 2800]
+hold = false
+adpcm = false

@@ -79,9 +79,26 @@ def bubble_modes(r, mu, rho=RHO_MUD, sigma=SIGMA_MUD):
     return w0, beta, math.sqrt(w0 * w0 - beta * beta), d
 
 
-def burst_freq(r):
-    """Fundamental of the burst: falls linearly with size [CPB]. Chosen: 900 Hz and 25 kHz/m, the source's abstract has no figures; r held in 2-30 mm where the line stays positive."""
-    return 900.0 - 25000.0 * float(np.clip(r, 0.002, 0.03))
+JET_RATIO = 0.1
+
+
+BURST_MEASURED = (49.4, 1333.0)
+
+
+BURST_FILM = 1e-6                                           # m, film thickness of the inertial opening
+BURST_CAL = {"cpb": (2.376e-5, 1.115e-3), "liu": (4.333e-6, 1.343e-3)}     # (h_cap m, R0 m) of the viscous opening, fitted
+
+
+def burst_freq(r, mu=MU_MUD, rho=RHO_MUD, sigma=SIGMA_MUD, calibration="cpb", measured: bool = False):
+    """Fundamental of the burst, 1 / opening time of the film: inertial retraction pi r / (2 v) with v = sqrt(2 sigma / (rho h)), plus the viscous opening (mu h_cap / sigma) ln(r / R0), the logarithm held at 0 below R0.
+    ``calibration``: `cpb` (about 30 Hz at r 10 mm, mu 30 Pa s) or `liu` (about 140 Hz there).
+    ``measured``: the straight line through the points of Fig. 5 instead, 49.4 Hz - 1.333 Hz/mm * r."""
+    r = float(np.clip(r, 5e-4, 0.08))
+    if measured:
+        return BURST_MEASURED[0] - BURST_MEASURED[1] * float(np.clip(r, 0.002, 0.03))
+    h_cap, r0 = BURST_CAL[calibration]
+    tau = math.pi * r / (2.0 * math.sqrt(2.0 * sigma / (rho * BURST_FILM))) + float(mu) * h_cap / sigma * max(math.log(r / r0), 0.0)
+    return 1.0 / tau
 
 
 def rupture_time(r, mu):
@@ -129,15 +146,15 @@ def _thin(r, mu, rho=RHO_MUD, sigma=SIGMA_MUD):
 
 
 def _burst(r, mu, rho=RHO_MUD, sigma=SIGMA_MUD):
-    """The N-shaped wave, one period at the fundamental, then the jet wave at the same fundamental [CPB]. Amplitude falls as the film takes longer [Vidal]. Chosen: jet's 4 periods and .5 level, the 5 ms."""
+    """The N-shaped wave, one period at the fundamental, then the jet wave at the same fundamental [CPB]. Amplitude falls as the film takes longer [Vidal]. Jet at JET_RATIO of the N wave [CPL Fig 5]. Chosen: jet's 4 periods, the 5 ms."""
     th = _thin(r, mu, rho, sigma)
-    f = burst_freq(r) * th
+    f = burst_freq(r, mu, rho, sigma) * th
     per = _n(1.0 / f)
     u = np.arange(per) / per
     nw = np.sin(2.0 * np.pi * u) * np.sin(np.pi * u) ** 2
     jn = 3 * per + _n(4.0 / f)
     t = np.arange(jn) / P
-    jet = 0.5 * np.sin(2.0 * np.pi * f * t) * np.exp(-t * f / 1.5) * _smooth(jn, per / 4)
+    jet = JET_RATIO * np.sin(2.0 * np.pi * f * t) * np.exp(-t * f / 1.5) * _smooth(jn, per / 4)
     y = np.zeros(per + jn)
     y[:per] = nw
     y[per:] += jet

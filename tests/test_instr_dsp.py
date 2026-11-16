@@ -149,7 +149,7 @@ def test_thoret_additive_friction_source():
     assert abs(s[200] - 1.0) < 1e-3 and abs(s[600] - 1 / 3) < 1e-3 and abs(s[1000] - 0.2) < 1e-3
     a = thoret_friction(200.0, 1.0, SR, eps=1.0, wander=0.1, seed=2)   # squeaking: the fundamental wanders
     assert np.max(np.abs(np.fft.rfft(a))) < 0.7 * np.max(np.abs(np.fft.rfft(e)))
-    g = thoret_friction(200.0, 1.0, SR, eps=0.0, diameter=0.08, speed=0.2)   # singing glass: beats at v / D = 2.5 Hz
+    g = thoret_friction(200.0, 1.0, SR, eps=0.0, diameter=0.08, speed=0.6)   # singing glass: beats at v / (pi D) = 2.39 Hz
     env = np.abs(np.fft.rfft(np.abs(g) - np.mean(np.abs(g))))
     assert abs(np.argmax(env[1:20]) + 1 - 5) <= 1                # |sin| of 2.5 Hz -> 5 Hz envelope
     y = squeak(SR, model="additive")

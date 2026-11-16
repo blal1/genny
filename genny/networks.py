@@ -61,6 +61,23 @@ class DynamicToneHole:
         return 1.0/y
 
 
+BLOWHOLE = dict(rb=0.0075, rth=0.003, rrh=0.0015, te_k=1.4, c=347.23, rho=1.1769)
+
+
+def blowhole_coefficients(fs: float, rb: float = BLOWHOLE["rb"], rth: float = BLOWHOLE["rth"], rrh: float = BLOWHOLE["rrh"],
+                          xi: float = 0.0) -> dict:
+    """One-pole constants of a tone hole of radius ``rth`` and of a register vent of radius ``rrh`` on a bore of radius ``rb`` at
+    sample rate ``fs``: scatter = -rth^2 / (rth^2 + 2 rb^2); thCoeff = (2 te fs - c) / (2 te fs + c), te = 1.4 rth;
+    vent zeta = c + 2 pi rb^2 xi / rho, psi = 2 pi rb^2 (1.4 rrh) / (pi rrh^2), rhCoeff = (zeta - 2 fs psi) / (zeta + 2 fs psi),
+    rhGain = -c / (zeta + 2 fs psi)."""
+    c, rho, k = BLOWHOLE["c"], BLOWHOLE["rho"], BLOWHOLE["te_k"]
+    te = k * rth
+    zeta = c + 2.0 * math.pi * rb * rb * xi / rho
+    psi = 2.0 * math.pi * rb * rb * (k * rrh) / (math.pi * rrh * rrh)
+    return dict(scatter=-rth * rth / (rth * rth + 2.0 * rb * rb), th_coeff=(2.0 * te * fs - c) / (2.0 * te * fs + c),
+                rh_coeff=(zeta - 2.0 * fs * psi) / (zeta + 2.0 * fs * psi), rh_gain=-c / (zeta + 2.0 * fs * psi))
+
+
 @dataclass
 class MultiHoleBore:
     """Cylindrical bore with a chain of continuously-openable side holes.
@@ -80,6 +97,9 @@ class MultiHoleBore:
     bell_cutoff_hz: float=900.0
     f_ref_hz: float=0.0
     nonlinear_holes: bool=False
+    vent_position: float=0.0
+    vent_radius_m: float=BLOWHOLE["rrh"]
+    vent_open: float=0.0
 
     def __post_init__(self):
         n=len(self.hole_positions)
@@ -88,13 +108,25 @@ class MultiHoleBore:
         pos=np.asarray(self.hole_positions,float)
         if n and (np.any(pos<=0) or np.any(pos>=1) or np.any(np.diff(pos)<=0)):
             raise ValueError("hole_positions must be strictly increasing inside (0,1)")
+        self._vent_at=None
+        if self.vent_position:
+            if not 0.0<self.vent_position<1.0 or np.any(pos==self.vent_position):
+                raise ValueError("vent_position must lie inside (0,1), away from the tone holes")
+            self._vent_at=int(np.searchsorted(pos,self.vent_position))
+            pos=np.insert(pos,self._vent_at,self.vent_position)
+        radii=list(self.hole_radii_m); chim=list(self.hole_chimneys_m)
+        if self._vent_at is not None:
+            radii.insert(self._vent_at,self.vent_radius_m); chim.insert(self._vent_at,BLOWHOLE["te_k"]*self.vent_radius_m)
         rho,c=1.2041,343.0
         self.zb=rho*c/(math.pi*self.bore_radius_m**2)
         boundaries=np.concatenate(([0.0],pos,[1.0]))
         lengths=np.diff(boundaries)*self.length_m
         fref=self.f_ref_hz or c/(4.0*self.length_m)
         self.holes=[DynamicToneHole(r,ch,0.0,bore_radius_m=self.bore_radius_m,f_ref=fref,nonlinear=self.nonlinear_holes)
-                    for r,ch in zip(self.hole_radii_m,self.hole_chimneys_m)]
+                    for r,ch in zip(radii,chim)]
+        self.vent=self.holes[self._vent_at] if self._vent_at is not None else None
+        self.finger_holes=[h for h in self.holes if h is not self.vent]
+        if self.vent is not None: self.vent.openness=float(np.clip(self.vent_open,0,1))
         for j,h in enumerate(self.holes):   # each closed hole shortens the bore by its series length (negative)
             lengths[j]+=0.5*h.series_length; lengths[j+1]+=0.5*h.series_length
         # One-way delays per segment. A minimum >1 sample keeps interpolation safe.
@@ -111,8 +143,12 @@ class MultiHoleBore:
 
     def set_fingering(self, openings):
         vals=np.asarray(openings,float)
-        if vals.shape!=(len(self.holes),): raise ValueError("fingering length mismatch")
-        for h,o in zip(self.holes,vals): h.openness=float(np.clip(o,0,1))
+        if vals.shape!=(len(self.finger_holes),): raise ValueError("fingering length mismatch")
+        for h,o in zip(self.finger_holes,vals): h.openness=float(np.clip(o,0,1))
+
+    def set_vent(self, openness: float):
+        if self.vent is None: raise ValueError("this bore has no vent (vent_position)")
+        self.vent.openness=float(np.clip(openness,0,1))
 
     def _propagate(self, seg, outgoing_left, outgoing_right):
         seg['rl'].write(seg['loss_rl'].process(outgoing_left))
@@ -151,7 +187,7 @@ class MultiHoleBore:
         if fingering is not None:
             f=np.asarray(fingering,float)
             dynamic=(f.ndim==2)
-            if dynamic and f.shape!=(n,len(self.holes)): raise ValueError("dynamic fingering shape mismatch")
+            if dynamic and f.shape!=(n,len(self.finger_holes)): raise ValueError("dynamic fingering shape mismatch")
             if not dynamic: self.set_fingering(f)
         else: dynamic=False
         for i,x in enumerate(drive):
@@ -180,7 +216,7 @@ class MultiHoleClarinet:
         pm=800.+4200.*np.clip(self.breath,0,1.5)
         drive=np.zeros(n); p_hist=np.zeros(n); flow=np.zeros(n)
         # Close all holes by default; fingering may open them.
-        if fingering is None: fingering=np.zeros(len(self.bore.holes))
+        if fingering is None: fingering=np.zeros(len(self.bore.finger_holes))
         y=np.zeros(n)
         rho=1.2041; reed_k=3.5e-8
         for i in range(n):
@@ -211,7 +247,7 @@ class MultiHoleFlute:
 
     def note(self,dur:float,fingering=None):
         n=max(1,int(round(dur*self.sr))); y=np.zeros(n); flow=np.zeros(n); p=np.zeros(n)
-        if fingering is None: fingering=np.zeros(len(self.bore.holes))
+        if fingering is None: fingering=np.zeros(len(self.bore.finger_holes))
         rho=1.2041; area=math.pi*self.bore.bore_radius_m**2
         for i in range(n):
             if np.asarray(fingering).ndim==2: self.bore.set_fingering(np.asarray(fingering)[i])
@@ -229,7 +265,10 @@ class MultiHoleFlute:
 class CoupledStringBank:
     """Several strings coupled through a shared bridge state.
 
-    Useful for piano unisons, mandolin courses and sympathetic strings.
+    Useful for piano unisons, mandolin courses and sympathetic strings. Each string's reflection at the
+    bridge loses the bridge motion: v_k <- v_k - coupling * bridge, bridge = low-passed mean of the
+    incoming waves. The in-phase mode moves the bridge and decays fast; the antiphase mode leaves it
+    still and rings on (two-stage decay).
     """
     frequencies: tuple[float,...]=(440.0,440.7,439.3)
     sr: int=48000
@@ -244,6 +283,23 @@ class CoupledStringBank:
             self.lines.append((ThiranDelay(d,max(64,int(self.sr/20))),FrequencyDependentLoss(self.loss_dc,self.loss_hf,.45)))
         self.bridge=0.0
 
+    @staticmethod
+    def weinreich_coupling(freq: float, n: int = 3, y_bridge: float | None = None) -> float:
+        """Coupling for n unison strings of the piano key at ``freq`` from the bridge admittance: the in-phase mode
+        loses eta = w sqrt(T0 mu) Y / pi per second on each string, i.e. n eta in all, and a pass loses the fraction
+        c per period, so c = 1 - exp(-n eta / f)."""
+        from .physical.bank_piano import Y_BRIDGE, _row
+        r = _row(69.0 + 12.0 * math.log2(max(float(freq), 1.0) / 440.0))
+        mu = r["rho"] * math.pi * r["d"] ** 2 / 4.0
+        eta = 2.0 * math.pi * float(freq) * math.sqrt(r["T0"] * mu) * (Y_BRIDGE if y_bridge is None else float(y_bridge)) / math.pi
+        return 1.0 - math.exp(-int(n) * eta / float(freq))
+
+    @classmethod
+    def from_bridge(cls, freq: float, detune_cents=(-0.9, 0.0, 0.7), sr: int = 48000, **kw):
+        """A course of unison strings at ``freq`` whose coupling is the bridge's, not a free constant."""
+        f = tuple(float(freq) * 2.0 ** (c / 1200.0) for c in detune_cents)
+        return cls(frequencies=f, sr=sr, coupling=cls.weinreich_coupling(freq, len(f)), **kw)
+
     def render(self,dur:float,velocity=.8,excite_index:int=0):
         n=max(1,int(round(dur*self.sr))); y=np.zeros(n)
         excite=max(0,min(int(excite_index),len(self.lines)-1))
@@ -254,7 +310,7 @@ class CoupledStringBank:
             bridge=float(np.mean(incoming)); self.bridge=.92*self.bridge+.08*bridge
             out=[]
             for k,((dl,loss),x) in enumerate(zip(self.lines,incoming)):
-                coupled=(1-self.coupling)*x+self.coupling*self.bridge
+                coupled=x-self.coupling*self.bridge
                 v=loss.process(coupled)
                 dl.write(v); out.append(v)
             y[i]=self.bridge
@@ -388,6 +444,49 @@ class ModalSoundboard:
         return float(np.sum(self._y1*self._y1 + self._y2*self._y2))
 
 
+def loaded_junction(v_plus, R, Rb=0.0, f_d=0.0):
+    """N strings of wave impedances ``R`` meeting at a bridge of real load ``Rb`` driven by the force ``f_d``: the common
+    velocity v_J = (2 sum R_i v_i+ - f_d) / (sum R_i + Rb), the reflections v_i- = v_J - v_i+. ``v_plus`` is (N,) or
+    (n, N); returns (v_minus, v_J). Rb -> inf is the rigid end, Rb = 0 a free one; |I - 2 R 1^T / (sum R + Rb)| <= 1."""
+    v = np.asarray(v_plus, float)
+    R = np.asarray(R, float)
+    vj = (2.0 * (v * R).sum(axis=-1) - f_d) / (R.sum() + float(Rb))
+    return vj[..., None] - v, vj
+
+
+def passive_bridge(freqs, bws, g=0.9, method=1, sr=48000):
+    """Bridge reflectance rho(z) = B/A of strings on a body with resonances at ``freqs`` Hz of bandwidth ``bws`` Hz,
+    passive by construction (|rho| <= g <= 1 on the unit circle). Method 1: A = prod (1 - 2 R_i cos(theta_i) z^-1 +
+    R_i^2 z^-2), rho = g flip(A) / A; the admittance is then (A - g flip(A)) / (A + g flip(A)), real positive.
+    Method 2: admittance Gamma = (1 - 0.995 z^-1) sum 1 / (1 + a1_i z^-1 + a2_i z^-2), its phase inside +-90 degrees,
+    rho = (1 - Gamma) / (1 + Gamma). Returns (b, a) of rho in direct form: with resonances far below ``sr`` (a few Hz at
+    48 kHz) the coefficients lose their precision, so give a low ``sr`` or cascade the sections."""
+    T = 1.0 / float(sr)
+    secs = []
+    for F, B in zip(np.atleast_1d(freqs), np.atleast_1d(bws)):
+        r, th = math.exp(-math.pi * float(B) * T), 2.0 * math.pi * float(F) * T
+        secs.append(np.array([1.0, -2.0 * r * math.cos(th), r * r]))
+    if int(method) == 1:
+        A = np.array([1.0])
+        for s in secs:
+            A = np.convolve(A, s)
+        return g * A[::-1], A
+    if int(method) != 2:
+        raise ValueError("method must be 1 or 2")
+    den = np.array([1.0])
+    for s in secs:
+        den = np.convolve(den, s)
+    num = np.zeros(2 * len(secs) - 1)
+    for k in range(len(secs)):
+        rest = np.array([1.0])
+        for j, t in enumerate(secs):
+            if j != k:
+                rest = np.convolve(rest, t)
+        num += rest
+    num = np.concatenate((np.convolve(num, [1.0, -0.995]), [0.0]))
+    return den - num, den + num
+
+
 @dataclass
 class SympatheticPiano:
     """Reduced piano network with unison strings, sympathetic strings and one
@@ -408,8 +507,12 @@ class SympatheticPiano:
     sr: int = 48000
     loss_dc: float = .99965
     loss_hf: float = .989
+    junction: str = "mix"          # mix | loaded: the bridge as the loaded N-port junction (common velocity v_J)
+    bridge_load: float = 20.0      # loaded: real load of the bridge in multiples of the string impedance
 
     def __post_init__(self):
+        if self.junction not in ("mix","loaded"):
+            raise ValueError("junction must be mix or loaded")
         base=max(float(self.struck_frequency),20.0)
         unison=[base*(2.0**(c/1200.0)) for c in self.unison_detune_cents]
         sympathetic=[base*float(r) for r in self.sympathetic_ratios if base*float(r) < .45*self.sr]
@@ -426,6 +529,26 @@ class SympatheticPiano:
         self.last_bridge_energy_j=0.0
         self.last_soundboard_energy=0.0
 
+    def _scatter(self, incoming, z, c):
+        """One sample at the bridge. The strings' summed force z * sum(v) drives the bridge and the board; each
+        string's reflection loses the common velocity u they take: v_k <- v_k - c u. The in-phase mode moves
+        the bridge and decays fast, the antiphase mode leaves it still and rings on."""
+        if self.junction=="loaded":
+            _,u=loaded_junction(incoming,np.full(len(incoming),z),self.bridge_load*z)
+            board_rad,_=self.soundboard.step(self.bridge_load*z*float(u))
+            nv=np.array([loss.process(float(v)-float(u)) for (dl,loss),v in zip(self.lines,incoming)])
+            for (dl,_),x in zip(self.lines,nv):
+                dl.write(float(x))
+            return nv,board_rad
+        force=z*float(np.sum(incoming))
+        board_rad,board_v=self.soundboard.step(force)
+        u=self.bridge.step(force)+board_v
+        out=np.empty_like(incoming)
+        for k,((dl,loss),v) in enumerate(zip(self.lines,incoming)):
+            nv=loss.process(v-c*u)
+            dl.write(nv); out[k]=nv
+        return out,board_rad
+
     def render(self, dur: float, velocity: float=.8, return_stems: bool=False):
         n=max(1,int(round(float(dur)*self.sr)))
         y=np.zeros(n); stems=np.zeros((len(self.lines),n)) if return_stems else None
@@ -440,20 +563,8 @@ class SympatheticPiano:
             if i<hit_n:
                 for k in range(self.struck_count):
                     incoming[k]+=hit[i]*(1.0-.035*k)
-            # Treat line states as reduced transverse velocities.  Their net
-            # reaction force drives the physical bridge.
-            string_force=-z*float(np.sum(incoming))
-            board_rad,board_reaction_v=self.soundboard.step(-string_force)
-            bridge_v=self.bridge.step(string_force)
-            common_v=bridge_v+board_reaction_v
-            out=np.empty_like(incoming)
-            for k,((dl,loss),v) in enumerate(zip(self.lines,incoming)):
-                # Velocity scattering against a common bridge.  Convex blending
-                # keeps the reduced loop passive for the supported coupling range.
-                nv=(1.0-c)*v + c*common_v
-                nv=loss.process(nv)
-                dl.write(nv); out[k]=nv
-                if stems is not None: stems[k,i]=nv
+            out,board_rad=self._scatter(incoming,z,c)
+            if stems is not None: stems[:,i]=out
             # Bridge + board radiation; direct string component retains attack.
             y[i]=0.18*float(np.sum(out[:self.struck_count])) + 0.82*board_rad
         if stems is not None:

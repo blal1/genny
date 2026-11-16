@@ -88,18 +88,28 @@ def yield_stress(hardness):
     return float(hardness) / 3.0
 
 
+def _wedge_psi(alpha_deg):
+    a = math.radians(float(np.clip(alpha_deg, 1.0, 90.0)))
+    return a, brentq(lambda s: math.cos(2.0 * a - s) * (1.0 + math.sin(s)) - math.cos(s), 0.0, math.pi / 2.0)
+
+
 def wedge_pressure(alpha_deg, k=1.0):
     """pm = 2 k (1 + psi), cos(2 alpha - psi) = cos psi / (1 + sin psi): 2.61 k at 30 degrees, 5.14 k at 90."""
-    a = math.radians(float(np.clip(alpha_deg, 1.0, 90.0)))
-    psi = brentq(lambda s: math.cos(2.0 * a - s) * (1.0 + math.sin(s)) - math.cos(s), 0.0, math.pi / 2.0)
-    return 2.0 * k * (1.0 + psi)
+    return 2.0 * k * (1.0 + _wedge_psi(alpha_deg)[1])
+
+
+def wedge_half_width(alpha_deg, depth):
+    """Half-width in m of the wedge's contact ``depth`` m below the original surface, with the piled-up lip:
+    face length l = depth / (cos alpha - sin(alpha - psi)), half-width l sin alpha (wider than depth tan alpha)."""
+    a, psi = _wedge_psi(alpha_deg)
+    return depth * math.sin(a) / (math.cos(a) - math.sin(a - psi))
 
 
 def blade_force(alpha_deg, length, depth, Y, mu=0.0):
-    """Force in N to hold a wedge ``depth`` m into a plastic solid along ``length`` m: pm 2 a L, a = depth tan alpha, k = Y / 2.
-    pm = pw (1 + mu cot alpha); pw kept frictionless. # ponytail: no pile-up on a, the true contact is a little wider."""
+    """Force in N to hold a wedge ``depth`` m into a plastic solid along ``length`` m: pm 2 a L, a = `wedge_half_width`, k = Y / 2.
+    pm = pw (1 + mu cot alpha); pw kept frictionless."""
     a = math.radians(float(np.clip(alpha_deg, 1.0, 90.0)))
-    return wedge_pressure(alpha_deg, Y / 2.0) * (1.0 + mu / math.tan(a)) * 2.0 * depth * math.tan(a) * length
+    return wedge_pressure(alpha_deg, Y / 2.0) * (1.0 + mu / math.tan(a)) * 2.0 * wedge_half_width(alpha_deg, depth) * length
 
 
 def blade_contact(alpha_deg, mass, speed, length, Y, mu=0.0):

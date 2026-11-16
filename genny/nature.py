@@ -255,6 +255,12 @@ TORNADO_GAINS = (1.0, 0.7, 0.6, 0.5, 0.45)
 TORNADO_BAND = (40.0, 200.0)
 
 
+def tornado_peak_hz(wind=67.5, roughness=0.1):
+    """Centre (Hz) of the broad tornado peak for a ground wind (m/s) over a surface of roughness height (m): 45 Hz at
+    67.5 m/s over 0.1 m, 150 Hz over 0.03 m, falling as 1/roughness and rising with the wind."""
+    return 45.0 * (float(wind) / 67.5) * (0.1 / float(roughness))
+
+
 def _infrasound(n: int, rng) -> np.ndarray:
     """Noise under the upper envelope of the measured peaks: summed band-passes would move the 8.3 Hz peak up on the skirt of the 18 Hz one."""
     f = np.maximum(np.fft.rfftfreq(n, 1 / P), 1e-3)
@@ -262,9 +268,9 @@ def _infrasound(n: int, rng) -> np.ndarray:
     return _nm(np.fft.irfft(np.fft.rfft(rng.standard_normal(n)) * h, n))
 
 
-def _tornado_roar(n: int, rng) -> np.ndarray:
+def _tornado_roar(n: int, rng, scale: float = 1.0) -> np.ndarray:
     """Band-pass with its -3 dB points on the band: centre sqrt(40 x 200) = 89 Hz, inside the 80-100 Hz centre; Q = 89 / 160."""
-    lo, hi = TORNADO_BAND
+    lo, hi = (b * scale for b in TORNADO_BAND)
     c = math.sqrt(lo * hi)
     f = np.maximum(np.fft.rfftfreq(n, 1 / P), 1e-3)
     h = 1.0 / np.sqrt(1.0 + (c / (hi - lo) * (f / c - c / f)) ** 2)
@@ -277,13 +283,29 @@ def _unit_rms(x) -> np.ndarray:
 
 
 @sfx("tornado", "Tornado: infrasound peak at 8.3 Hz and its overtones, roar in a 40-200 Hz band, wind above it, debris when close.",
-     distance=(500.0, "m: farther = air takes the top off, less debris"), dur=(12.0, "s"), seed=(0, "variation"))
-def tornado(sr=DEFAULT_SR, distance=500.0, dur=12.0, seed=0):
+     distance=(500.0, "m: farther = air takes the top off, less debris"), dur=(12.0, "s"), seed=(0, "variation"),
+     spectrum=("bands", "bands | psd: one noise shaped by the measured pressure spectrum (wind noise, the turbulence peak near 15 Hz, a floor)"),
+     roughness=(0.0, "m, 0 = off: ground roughness height; > 0 moves the roar band to the peak of `tornado_peak_hz(wind, roughness)` (45 Hz at 67.5 m/s over 0.1 m)"),
+     wind=(67.5, "m/s, with roughness"), approach=(0.0, "m/s, 0 = off: speed toward the listener, Doppler-raises the roar band"))
+def tornado(sr=DEFAULT_SR, distance=500.0, dur=12.0, seed=0, spectrum="bands", roughness=0.0, wind=67.5, approach=0.0):
     rng = np.random.default_rng([abs(int(seed)), 165])
     n, d = _n(dur), max(float(distance), 10.0)
-    roar = _tornado_roar(n, rng) * (0.75 + 0.25 * Ma._lfn(rng, n, 0.3))
+    if spectrum not in ("bands", "psd"):
+        raise ValueError("tornado spectrum must be bands or psd")
+    scale = 1.0
+    if roughness > 0.0:
+        scale = tornado_peak_hz(wind, roughness) / 45.0
+    if approach:
+        scale *= doppler_shift(1.0, approach)
+    scale = float(np.clip(scale, 0.1, 0.45 * P / TORNADO_BAND[1]))
+    roar = _tornado_roar(n, rng, scale) * (0.75 + 0.25 * Ma._lfn(rng, n, 0.3))
     wind = Ma._lp(_sos(rng.standard_normal(n), "highpass", 300.0), 1800.0) * (0.6 + 0.4 * np.abs(Ma._lfn(rng, n, 0.5)))
-    y = 0.6 * _unit_rms(_infrasound(n, rng)) + _unit_rms(roar) + 0.15 * _unit_rms(wind)
+    if spectrum == "psd":
+        f = np.fft.rfftfreq(n, 1 / P)
+        y = _unit_rms(np.fft.irfft(np.fft.rfft(rng.standard_normal(n)) * np.sqrt(tornado_psd(f)), n))
+        y = y + 0.15 * _unit_rms(roar)
+    else:
+        y = 0.6 * _unit_rms(_infrasound(n, rng)) + _unit_rms(roar) + 0.15 * _unit_rms(wind)
     near = min(100.0 / d, 1.0)
     if near > 0.05:
         y += near * _b(FO.shake, n, preset="rocks", energy=0.8, rate=6.0, dur=dur, seed=int(seed))
@@ -299,10 +321,75 @@ def _tremor(n, rng) -> np.ndarray:
     return _nm(_sos(Ma._bp(rng.standard_normal(n), 6.0, 0.7) + 0.5 * Ma._bp(rng.standard_normal(n), 14.0, 2.0), "lowpass", 20.0, 4))
 
 
+DOUBLE_PULSE = dict(f1=5.0, f2=4.0, gap=(1.5, 2.5), rate=0.4, a2=0.25)
+DOUBLE_PULSE_MEASURED = dict(f1=5.0, f2=4.0, gap=(1.5, 2.0), rate=1.0 / 4.9, a2=0.25, sd=2.2)
+
+
+def double_pulse_tremor(n: int, rng, f1=5.0, f2=4.0, gap=(1.5, 2.5), rate=0.4, a2=0.25, glide=None, sd=None) -> np.ndarray:
+    """Harmonic tremor from discrete events, no resonator and no periodic comb: at random times (Poisson, `rate` per s) a
+    Ricker pulse of centre frequency f1, then a second one at f2 and a2 x its amplitude after a gap drawn once in `gap`
+    (s) and kept for the whole sound, or, with `glide` = (gap at the start, gap at the end), moved linearly between the two so
+    the spectral peaks glide. The spectrum of the double pulse peaks at multiples of 1 / gap. `sd` (s): standard deviation of the
+    interval between events, gamma distributed around 1 / rate; None = Poisson."""
+    def ricker(f):
+        t = np.arange(-1.0 / f * 1.5, 1.0 / f * 1.5, 1.0 / P)
+        a = (np.pi * f * t) ** 2
+        return (1.0 - 2.0 * a) * np.exp(-a)
+    y = np.zeros(n)
+    wait = (lambda: rng.exponential(1.0 / rate)) if sd is None else (lambda: rng.gamma((1.0 / rate / sd) ** 2, sd * sd * rate))
+    t = wait()
+    r1, r2, g2 = ricker(f1), ricker(f2), rng.uniform(*gap)
+    while t < n / P:
+        g2 = g2 if glide is None else glide[0] + (glide[1] - glide[0]) * t / (n / P)
+        for dt, r, g in ((0.0, r1, 1.0), (g2, r2, a2)):
+            i = int((t + dt) * P) - r.size // 2
+            if i >= 0 and i + r.size <= n:
+                y[i:i + r.size] += g * r
+        t += wait()
+    return y
+
+
+TORNADO_PSD = dict(af=1.16e-2, a_s=0.251, zeta=1.57, an=5.11e-4, f_n=14.8)
+
+
+def tornado_psd(f, f_n=14.8, af=1.16e-2, a_s=0.251, zeta=1.57, an=5.11e-4) -> np.ndarray:
+    """Pressure power density (Pa^2 per rad/s) of a tornado at frequency ``f`` (Hz): wind noise w^(-7/3), a broad turbulence
+    peak a_s wn^2 w^2 / (w^4 + 4 zeta wn^2 w^2 + wn^4) around ``f_n`` Hz, and a floor ``an``."""
+    w = 2.0 * math.pi * np.maximum(np.asarray(f, float), 1e-3)
+    wn = 2.0 * math.pi * f_n
+    return af * w ** (-7.0 / 3.0) + a_s * wn ** 2 * w ** 2 / (w ** 4 + 4.0 * zeta * wn ** 2 * w ** 2 + wn ** 4) + an
+
+
+def doppler_shift(f0: float, v: float, c: float = AIR) -> float:
+    """Frequency of a source of frequency f0 moving at v m/s toward the listener: f0 / (1 - v / c)."""
+    return float(f0) / (1.0 - float(v) / float(c))
+
+
+def reduced_pressure(p: float, r: float, r_red: float = 1000.0) -> float:
+    """Pressure of a compact source brought to another distance: p r / r_red."""
+    return float(p) * float(r) / float(r_red)
+
+
+def eruption_infrasound(n: int, volume=5000.0, r=325.0, dipole=0.0, theta=0.0, rise=0.25, rho=0.8, c=320.0, relax=0.5) -> np.ndarray:
+    """Pressure (Pa) at r m of a lava-lake bubble burst: the gas volume `volume` (m3) leaves with a Gaussian flux of time
+    constant `rise` (s), half-space monopole p = rho V''/(2 pi r). `dipole` 0..1 is the share of a directional part, gain
+    2 cos(theta) on the axis angle `theta` (deg), that relaxes to the monopole with time constant `relax` (s) as the film
+    tears open. Starts at 0.3 s."""
+    t = np.arange(n) / P - 0.3
+    g1 = -t / rise ** 2 * np.exp(-0.5 * (t / rise) ** 2) / (rise * math.sqrt(2.0 * math.pi))
+    w = float(np.clip(dipole, 0.0, 1.0)) * np.exp(-np.maximum(t, 0.0) / relax)
+    y = rho * float(volume) * g1 / (2.0 * math.pi * float(r)) * ((1.0 - w) + w * 2.0 * math.cos(math.radians(theta)))
+    return y
+
+
 @sfx("volcano", "A volcano by stage: tremor (below 20 Hz, a rumble over it), eruption (blast, roaring column), retombees (ash and stones falling), complet (the three in order).",
-     stage=("complet", " | ".join(VOLCANO)), dur=(16.0, "s, whatever the stage"), seed=(0, "variation"))
-def volcano(sr=DEFAULT_SR, stage="complet", dur=16.0, seed=0):
+     stage=("complet", " | ".join(VOLCANO)), dur=(16.0, "s, whatever the stage"), seed=(0, "variation"),
+     tremor=("noise", "noise | double_pulse | double_pulse_measured: random double Ricker events (5 Hz then 4 Hz, 1.5-2.5 s apart) whose spectrum is harmonic; the measured one comes every 4.9 s (sd 2.2 s), 1.5-2 s apart"),
+     infra=(0.0, "0..1: level of the infrasonic pressure pulse (about 2 Hz) of the bubble burst under the blast"))
+def volcano(sr=DEFAULT_SR, stage="complet", dur=16.0, seed=0, tremor="noise", infra=0.0):
     k = _kind(stage, VOLCANO, "volcano")
+    if tremor not in ("noise", "double_pulse", "double_pulse_measured"):
+        raise ValueError("tremor must be noise, double_pulse or double_pulse_measured")
     rng = np.random.default_rng([abs(int(seed)), 166])
     s, n = int(seed), _n(dur)
     y = np.zeros(n)
@@ -310,13 +397,17 @@ def volcano(sr=DEFAULT_SR, stage="complet", dur=16.0, seed=0):
     span = 0.4 * dur if k == "complet" else dur
     m = _n(span)
     if k in ("tremor", "complet"):
-        tr = _nm(_unit_rms(_tremor(m, rng)) + 0.3 * _unit_rms(_fit(_rumble(span, 25.0, 60.0, s), m))) * (0.5 if k == "complet" else 1.0)
+        tr = _nm(_unit_rms(_tremor(m, rng) if tremor == "noise" else double_pulse_tremor(m, rng, **(DOUBLE_PULSE_MEASURED if tremor == "double_pulse_measured" else DOUBLE_PULSE))) + 0.3 * _unit_rms(_fit(_rumble(span, 25.0, 60.0, s), m))) * (0.5 if k == "complet" else 1.0)
         FO._put(y, tr * _pts(m, [(0, 0), (0.4 * span, 1), (span - 0.3, 1), (span, 0)]), t[0])
     if k in ("eruption", "complet"):
         e = _n(max(1.2 * span, 3.0))
         bl = _fit(np.asarray(explosion(sr=P, dur=3.0, energy=50.0, distance=300.0, debris=0.2, enclosure=0.0, seed=s), float), e)
         col = _b(Ma.fire, e, dur=e / P, size=1.0, crackle=30.0, wet=0.0, wind=0.8, seed=s) * _pts(e, [(0, 0), (0.2, 1), (e / P * 0.6, 1), (e / P, 0)])
-        FO._put(y, _nm(bl) + 0.5 * col + 0.5 * _fit(_rumble(e / P, 20.0, 60.0, s + 1), e) * _pts(e, [(0, 0), (0.1, 1), (e / P, 0)]), t[1])
+        ev = _nm(bl) + 0.5 * col + 0.5 * _fit(_rumble(e / P, 20.0, 60.0, s + 1), e) * _pts(e, [(0, 0), (0.1, 1), (e / P, 0)])
+        if infra > 0.0:
+            ip = eruption_infrasound(e, volume=rng.uniform(1000.0, 24000.0), dipole=rng.uniform(0.0, 0.6), theta=rng.uniform(0.0, 80.0))
+            ev = ev + float(np.clip(infra, 0.0, 1.0)) * ip / (np.max(np.abs(ip)) + 1e-12)
+        FO._put(y, ev, t[1])
     if k in ("retombees", "complet"):
         f = _b(K.hail, m, dur=span, rate=120.0, size=14.0, decay=0.8, hardness=0.8, body="rect_plate", material="stone", surface_size=3.0, bright=0.4, seed=s)
         FO._put(y, 0.6 * f * _pts(m, [(0, 0), (0.1 * span, 1), (span, 1)]), t[2])
@@ -499,6 +590,38 @@ def glass_window(x, bands=(2007.0, 1994.0, 1986.0, 1969.0), rings=(254.0, 669.0,
 
 
 RAIN = ("vitre", "toit", "bois", "sol", "eau", "feuilles")
+RAIN_FORCE = {"round": (3.596, 3.333, 0.500), "flat": (6.0413, 4.5860, 0.5274)}   # A, B, C of A t^C exp(-B t)
+RAIN_ROUND_D = 2.6          # mm: up to here a falling drop stays nearly spherical
+RAIN_D_RANGE = (0.5, 5.0)   # mm
+ROOF_PITCH = 30.0           # degrees
+RAIN_MM_H = (4.0, 40.0)     # mm/h at intensity 0 and 1
+
+
+def drop_force(d_mm: float, v: float, sr: int = P, pitch: float = ROOF_PITCH) -> np.ndarray:
+    """Force (N) of one water drop of diameter ``d_mm`` landing at ``v`` m/s on a plate tilted ``pitch`` degrees:
+    F = rho D^2 u^2 A s^C exp(-B s), s = t u / D, u = v cos(pitch); its impulse is the drop's normal momentum."""
+    D = float(d_mm) * 1e-3
+    u = float(v) * math.cos(math.radians(pitch))
+    A, B, C = RAIN_FORCE["round" if d_mm <= RAIN_ROUND_D else "flat"]
+    s = np.arange(max(2, int(math.ceil(12.0 / B * D / u * sr)))) / sr * u / D
+    f = A * s ** C * np.exp(-B * s)
+    return f * (998.0 * math.pi / 6.0 * D ** 3 * u) / (f.sum() / sr)
+
+
+def _rain_plate(material: str, n: int, mm_h: float, seed: int) -> np.ndarray:
+    """Rain on a 2 m plate drop by drop: Marshall-Palmer sizes at terminal speed, each drop its measured force pulse."""
+    dur = n / P
+    y = np.zeros(n)
+    for k, (p1, p2) in enumerate(((0.31, 0.37), (0.53, 0.71), (0.77, 0.23))):
+        t, d = amb.rain_drops(dur, np.random.default_rng([abs(seed), 172, k]), mm_h, 1.0 / 3.0, *RAIN_D_RANGE)
+        f = np.zeros(n)
+        for ti, di in zip(t, d):
+            x = drop_force(di, float(amb._v_term(di)))
+            seg = f[int(ti * P):int(ti * P) + len(x)]
+            seg += x[:len(seg)]
+        b = K._make_body("rect_plate", material, 2.0, p1, p2, modes=200, seed=seed + k, fmax=min(16000.0, 0.45 * P))
+        y += K.modal_bank(f, b, P, 0.5)[0]
+    return _nm(y)
 
 
 def _rain(surface: str, n: int, intensity: float, wetness: float, seed: int) -> np.ndarray:
@@ -532,9 +655,17 @@ def _rain(surface: str, n: int, intensity: float, wetness: float, seed: int) -> 
 @sfx("rain_on", "Rain on one surface: vitre (dispersive window), toit (tin), bois, sol (dry ground to puddles with wetness), eau, feuilles.",
      surface=("vitre", " | ".join(RAIN)), intensity=(0.5, "0..1"), wetness=(0.0, "0 dry .. 1 puddles, ground only"), wind=(1.0, "x density: wind drives the rain"),
      rate=(0.0, "mm/h, eau only: > 0 = drop by drop, each drop by its size class (rain_water); 0 = bubble bed from intensity"),
+     model=("hail", "toit and bois only: hail (small hard stones) | drops (water drops by size, each its measured force pulse; rate mm/h, 0 = 4..40 from intensity)"),
      dur=(4.0, "s"), seed=(0, "variation"))
-def rain_on(sr=DEFAULT_SR, surface="vitre", intensity=0.5, wetness=0.0, wind=1.0, rate=0.0, dur=4.0, seed=0):
+def rain_on(sr=DEFAULT_SR, surface="vitre", intensity=0.5, wetness=0.0, wind=1.0, rate=0.0, model="hail", dur=4.0, seed=0):
     k = _kind(surface, RAIN, "rain_on")
+    if model not in ("hail", "drops"):
+        raise ValueError("model must be hail or drops")
+    if model == "drops" and k in ("toit", "bois"):
+        lo, hi = RAIN_MM_H
+        mm_h = float(rate) if rate > 0 else lo * (hi / lo) ** float(np.clip(intensity, 0.0, 1.0))
+        y = _rain_plate("metal" if k == "toit" else "wood", _n(dur), min(mm_h * max(float(wind), 0.0), 300.0), int(seed))
+        return _end(y, sr, 0.7, fade=0.02, tail=0.1)
     if k == "eau" and rate > 0:
         y = amb.rain_on_water(float(dur), np.random.default_rng([abs(int(seed)), 60]), rate_mm_h=float(np.clip(rate, 0.1, 300.0)))
         return _end(_fit(y, _n(dur)), sr, 0.7, fade=0.02, tail=0.1)
@@ -622,9 +753,27 @@ def _rustle(n, rng, rate, lo, hi, width) -> np.ndarray:
     return Ma._lp(Ma._hp(rng.standard_normal(n), lo), hi) * g
 
 
+def _canopy(sr, dur, wind, leaf, s):
+    if leaf not in ("green", "dry"):
+        raise ValueError("foliage leaf must be green or dry")
+    n = _n(dur)
+    rng = np.random.default_rng([abs(s), 175])
+    u = float(np.clip(wind, 0.1, 30.0))
+    g = np.clip(1.0 + 0.4 * Ma._lfn(rng, n, 0.3), 0.2, 2.0)
+    hi = (3500.0 if leaf == "green" else 9000.0) * (0.6 + 0.4 * min(u / 8.0, 2.0))
+    lo = 600.0 if leaf == "green" else 1500.0
+    y = _rustle(n, rng, 25.0 * min(u, 10.0) * (1.0 if leaf == "green" else 1.6), lo, min(hi, 0.45 * sr), 0.03 if leaf == "dry" else 0.06)
+    y = _nm(y + 0.4 * _nm(Ma._lp(Ma._hp(rng.standard_normal(n), 200.0), hi)) * g) * g
+    return _end(y * min((u / 6.0) ** 3, 4.0), sr, 0.6 + 0.2 * min(u / 10.0, 1.0), fade=0.05, tail=0.1)
+
+
 @sfx("foliage", "Plants handled or walked through, no wind: herbe (fine hiss), feuilles (papery rustle), branches (twigs, creak), passage (someone pushing through).",
-     kind=("feuilles", " | ".join(FOLIAGE)), dur=(2.0, "s"), seed=(0, "variation"))
-def foliage(sr=DEFAULT_SR, kind="feuilles", dur=2.0, seed=0):
+     kind=("feuilles", " | ".join(FOLIAGE)), dur=(2.0, "s"), seed=(0, "variation"),
+     wind=(0.0, "m/s of wind in the canopy: 0 = none (the kind alone); above, a canopy rustle whose level goes as U^3 (dipole noise, power U^6) and whose band rises with U"),
+     leaf=("green", "green (supple, the rustle stays under 3-4 kHz) | dry (stiff, crackling, up to 9 kHz) leaves of the canopy"))
+def foliage(sr=DEFAULT_SR, kind="feuilles", dur=2.0, seed=0, wind=0.0, leaf="green"):
+    if wind > 0:
+        return _canopy(sr, dur, float(wind), str(leaf), int(seed))
     k = _kind(kind, FOLIAGE, "foliage")
     n, s = _n(dur), int(seed)
     rng = np.random.default_rng([abs(s), 173])
@@ -753,13 +902,17 @@ def wind_kind(sr=DEFAULT_SR, kind="interieur", dur=6.0, seed=0):
 # WATER
 # =============================================================================================
 @sfx("rapids", "Rapids and whirlpools: dense bubbles over a low roar, surging harder with turbulence.",
-     turbulence=(0.5, "0..1: more bubbles, more surge, deeper"), dur=(6.0, "s"), seed=(0, "variation"))
-def rapids(sr=DEFAULT_SR, turbulence=0.5, dur=6.0, seed=0):
+     turbulence=(0.5, "0..1: more bubbles, more surge, deeper"), dur=(6.0, "s"), seed=(0, "variation"),
+     bedload=(0.0, "0..1 level of the pebbles knocking on the bed (0 = none)"), pebble=(30.0, "mm pebble diameter, 1..300"))
+def rapids(sr=DEFAULT_SR, turbulence=0.5, dur=6.0, seed=0, bedload=0.0, pebble=30.0):
     tu = float(np.clip(turbulence, 0.0, 1.0))
     n, s = _n(dur), int(seed)
     b = _b(Ma.babble, n, dur=dur, flow=0.8 + 1.8 * tu, size=1.0 + 0.8 * tu, turbulence=tu, seed=s)
     w = _b(Ma.waterfall, n, dur=dur, height=1.0 + 6.0 * tu, distance=8.0, seed=s)
-    return _end(b + 0.6 * w + (0.1 + 0.8 * tu) * _fit(_rumble(dur, 30.0, 100.0, s), n), sr, 0.8, fade=0.05, tail=0.2)
+    y = b + 0.6 * w + (0.1 + 0.8 * tu) * _fit(_rumble(dur, 30.0, 100.0, s), n)
+    if bedload > 0:
+        y = y + float(np.clip(bedload, 0.0, 1.0)) * _nm(Ma.bedload_impacts(n, Ma._rng(s, 17), pebble))
+    return _end(y, sr, 0.8, fade=0.05, tail=0.2)
 
 
 def fall_time(height: float) -> float:
@@ -768,9 +921,9 @@ def fall_time(height: float) -> float:
 
 
 @sfx("fountain", "A fountain: jets hissing up, then the water reaching the basin after its flight, 2 sqrt(2h/g), as a shower of bubbles.",
-     jets=(3, "number of jets"), height=(2.0, "m, 1..5: later and harder fall"), dur=(6.0, "s"), seed=(0, "variation"))
+     jets=(3, "number of jets, 1..64 (a big fountain: 28 jets fed by 56 taps)"), height=(2.0, "m, 1..5: later and harder fall"), dur=(6.0, "s"), seed=(0, "variation"))
 def fountain(sr=DEFAULT_SR, jets=3, height=2.0, dur=6.0, seed=0):
-    j, h, s = int(np.clip(jets, 1, 30)), float(np.clip(height, 0.2, 10.0)), int(seed)
+    j, h, s = int(np.clip(jets, 1, 64)), float(np.clip(height, 0.2, 10.0)), int(seed)
     n = _n(dur)
     tf = fall_time(h)
     jet = _sos(_b(Ma.steam, n, dur=dur, pressure=0.3, orifice=12.0, wet=0.8, tone=7000.0, seed=s), "highpass", 1000.0)
@@ -784,3 +937,8 @@ RECIPES = {
     "suikinkutsu": {"layers": [{"type": "sfx", "kind": "drops", "params": {"dur": 8.0, "rate": 1.2, "jitter": 0.8, "size": 0.25, "seed": 3}}],
                     "fx": [{"type": "cavity", "shape": "sphere", "size": 0.35, "wall": 0.2, "mix": 0.9, "tail": 1.5}, {"type": "reverb", "mix": 0.1, "size": 0.2}], "normalize": -3.0},
 }
+
+
+from .geo import _alias  # noqa: E402
+
+_alias("branch_break", "tree", "A branch giving way: fibres going faster and faster to the break (`tree` kind craquement).", kind="craquement")

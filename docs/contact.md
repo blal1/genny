@@ -465,3 +465,22 @@ surface as a negative radius), `crater_radius`, `mud_contact_radius` (a³ = 3 r 
 elastic waves sent into the struck body, Hunter's loss: close to 1, steel on steel 0.997 at 1 m/s, so a metal impact
 loses its energy to internal damping, not waves), `patch_average(profile, a, dx)` (mean height of a looped profile
 over a contact of half-length a: each wavelength scaled by sin(ka)/(ka)).
+
+## Added in 1.3.0
+
+- `layer_k(e, nu, b, r, bonded)`: a sphere on a thin layer, F = k d^2 with k = pi K R / b (bonded incompressible
+  layer: F = k d^3). `layer_line_k` is the old per-length law for a cylinder (d^1.5; d^2.5).
+- `elastoplastic_mean_pressure`: Hertz, then the cavity law pm/Y = 1.52 + (2/3) ln(E* a / (3 Y R)), 3Y in full
+  plasticity. `elastoplastic_contact`: the contact radius grows from sqrt(R d) to sqrt(2 R d).
+- `wavy_contact(two_d=True)` follows the numerical solutions (`WAVY_2D`).
+- `hail_impulses(..., measured=False)` with `HAIL_D0`, `HAIL_DE`.
+- `melee.blade_force` counts the material piled up beside the blade: blade contacts are about 14 % shorter.
+## Newer options (1.3.0)
+
+- `roll slip=`: partial slipping (the scraper model); `rest_force=`: the force that holds the object. `scrape rest_force=`
+  damps by gamma F phi^2 / 2m (contact damping) instead of the fixed 8 /s.
+- `impact assembly=`: assembly multipliers on the decay rates (welded 10, bolted 45, elastomer 447...), from the table of
+  zeta; also `radius2`, `radiate`, `foundation`, `tip="roller"`.
+- `wood_moisture_factors(moisture)` (moisture 0-3.7): the measured factors on speed and loss of spruce; `moisture` on
+  `impact` follows it. `contact.wood_from_density` (Wegst 2006), `play_events`, `surface_texture` accepts an array,
+  `hertz_elliptic(fit="regression")`, `sphere_cavity_modes`.

@@ -1,0 +1,27 @@
+schema = "genny.preset/1"
+family = "interior"
+# rpm_per_kmh: engine rpm per km/h. cylinders. vibration: floor level. shell_m: cabin shell thickness.
+
+[car]
+rpm_per_kmh = 28.0
+cylinders = 4
+vibration = 0.3
+shell_m = 0.002
+
+[ev]
+rpm_per_kmh = 0.0
+cylinders = 4
+vibration = 0.2
+shell_m = 0.002
+
+[truck]
+rpm_per_kmh = 15.0
+cylinders = 6
+vibration = 0.6
+shell_m = 0.0015
+
+[bus]
+rpm_per_kmh = 15.0
+cylinders = 6
+vibration = 0.5
+shell_m = 0.001

@@ -1,0 +1,60 @@
+schema = "genny.preset/1"
+family = "case_of"
+# case: the key of the `case` family whose geometry this cartridge ejects.
+
+[9x19]
+case = "9x19"
+
+[9x19_sub]
+case = "9x19"
+
+[45acp]
+case = "45acp"
+
+[40sw]
+case = "9x19"
+
+[10mm]
+case = "9x19"
+
+[357]
+case = "9x19"
+
+[38spl]
+case = "9x19"
+
+[22lr]
+case = "9x19"
+
+[22lr_sub]
+case = "9x19"
+
+[556]
+case = "556"
+
+[762x39]
+case = "762x51"
+
+[762x51]
+case = "762x51"
+
+[308]
+case = "762x51"
+
+[762x54]
+case = "762x51"
+
+[300blk]
+case = "556"
+
+[300blk_sub]
+case = "556"
+
+[50bmg]
+case = "50bmg"
+
+[12_buck]
+case = "12ga"
+
+[12_slug]
+case = "12ga"

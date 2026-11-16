@@ -1,0 +1,27 @@
+schema = "genny.preset/1"
+family = "ev"
+# speed_kmh: km/h. wheel_m: wheel radius. reduction: motor to wheel. poles: pole pairs. slots: stator slots. tyre: tyre gain.
+
+[voiture_electrique]
+speed_kmh = 50.0
+wheel_m = 0.33
+reduction = 9.0
+poles = 4
+slots = 48
+tyre = 0.8
+
+[trottinette]
+speed_kmh = 20.0
+wheel_m = 0.1
+reduction = 1.0
+poles = 15
+slots = 27
+tyre = 0.3
+
+[voiturette]
+speed_kmh = 20.0
+wheel_m = 0.23
+reduction = 12.0
+poles = 2
+slots = 24
+tyre = 0.5

@@ -92,11 +92,11 @@ def test_mode_two_relative_spread():
 
 
 def test_footsteps_stop_and_fractal_gait():
-    # Friberg & Sundberg 1999: stopping runners, v(x) = [1 + (v_end^q - 1) x]^(1/q), q 3, v_end 0.27 (Table V);
+    # Friberg & Sundberg 1999: stopping runners, curve q 3; step rate ends near 0.72 (Fig. 3), speed via step length;
     # Hausdorff 1995: stride intervals with DFA alpha about 0.76
     from genny import creatures as K
     t = K.footsteps_plan("walk", 120.0, 9, 0.0, stop=4)
-    f = C.ritard_map({"beats": 4, "q": 3.0, "v_end": 0.27}, 8.0)
+    f = C.ritard_map({"beats": 4, "q": 3.0, "v_end": K.STOP_RATE_END}, 8.0)
     assert np.allclose(np.diff(t), 0.5 * np.diff([f(i) for i in range(9)]))
     assert math.isclose(t[-1] - t[-2], 0.5 * (f(8) - f(7))) and np.allclose(np.diff(t)[:4], 0.5)
     x = K._fractal(4096, 0.76, np.random.default_rng(0))
@@ -209,13 +209,13 @@ def test_zwicker_iso532_annex_b():
 
 
 def test_voiced_vot_by_place():
-    # velar voiced VOT about twice the labial (Lisker & Abramson 1964; Cho & Ladefoged 1999)
+    # voiced VOT rises labial < alveolar < velar (Lisker & Abramson 1964)
     from genny import speech as S
     segs = S._build_segments(S.text_to_phrases("bah dah gah"), 1.0, 0.1)
     S._durations(segs, 1.0)
     heads = [sg.get("head", 0.0) for sg in segs if sg["ph"] != "_" and S.PH[sg["ph"]]["k"] in S.SONORANT]
     heads = [h for h in heads if h > 0]
-    assert np.allclose(heads[:3], [0.006, 0.008, 0.012])
+    assert np.allclose(heads[:3], [0.001, 0.005, 0.021])        # Lisker & Abramson 1964 (LU9_01: was 6/8/12 ms)
 
 
 def test_belt_style_presses_and_raises_f1():

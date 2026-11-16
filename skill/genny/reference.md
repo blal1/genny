@@ -106,7 +106,7 @@ Common keys for every layer: `"at"` (start seconds, default 0), `"gain"` (linear
 {"type": "seq",   "inst": "piano", "steps": [{"note": "C4", "dur": 0.2}, {"notes": ["E4", "G4"], "dur": 0.4, "vel": 0.7}, {"note": "-", "dur": 0.1}]}
 {"type": "drum",  "kind": "kick", "vel": 1.0, "params": {"tune": 50}}
 {"type": "pattern", "kind": "hihat", "steps": "x-x-xXx-", "step": 0.125}      // x hit, X accent, o ghost; or "hits": [0, 0.5, 0.75]
-{"type": "sfx",   "kind": "whoosh", "params": {"dur": 0.4, "direction": "down"}}
+{"type": "sfx",   "kind": "whoosh", "params": {"dur": 0.4, "direction": "down"}, "level": -18}   // optional layer key `level` (= param `out_level`): dBFS RMS of the loudest 400 ms, "-23lufs" or "match" (per-sfx table gain); such a layer is not normalised to -1 dB unless `normalize` is set. CLI: `genny sfx NAME --level -18|match|-23lufs`. `params.level` of firearm, minigun, bullet_impact, bullet_pass is a different parameter.
 {"type": "speech", "text": "fuel low", "params": {"voice": "female"}}          // spoken words (see "Speech")
 {"type": "file",  "path": "existing.wav"}                                      // import a sample
 {"type": "silence", "dur": 0.5}
@@ -166,7 +166,7 @@ each sound, and each module has a page with recipes.
 - **friction** (`docs/friction.md`) — instruments: `cristal`, `rubbed_glass`, `bowed_bar`, `bowed_sheet`, `rod_bank`, `whistling_blades`, `tuning_fork`, `coil_spring`; sfx: `stick_slip`, `squeak`, `brake_squeal`, `rub`; fx: `sheet_radiator`, `cone_radiator`, `sympathetic`
 - **matter** (`docs/matter.md`) — sfx: `fire`, `pour`, `drip`, `drops`, `splash`, `babble`, `bubbles`, `boil`, `sizzle`, `fizz`, `gurgle`, `drain`, `surf`, `cave_drips`, `waterfall`, `underwater_ambience`, `steam`, `air_leak`, `spray`, `kettle`, `balloon`, `gust`, `flame`, `match`, `spark`, `arc`, `mains_hum`, `tesla`, `neon`, `lightning`, `ice_crack`, `ice_cubes`, `freeze`, `rain_water`
 - **foley** (`docs/foley.md`) — instruments: `church_bell` (`type` measured = a recorded bell), `handbell`, `china_bell`, `glass_harmonica`, `bowed_bowl`, `hurdy_gurdy`, `wind_chime`; drums: `cabasa`, `sekere`, `maraca`, `bamboo_chimes`, `sandpaper`, `sleigh_bells`, `agogo`, `anvil`, `brake_drum`, `wind_chimes`; sfx: `hit`, `clang`, `clink`, `thud`, `knock`, `shake`, `chain`, `keys`, `cloth`, `creak`, `zipper`, `velcro`, `paper`, `coin_spin`, `dice`, `cork_pop`, `boing`, `ratchet`, `drawer`, `book_drop`, `gunshot`, `reload`, `casing`, `sword`, `cavity_tone` (wind over an opening), `aeolian_harp` (strings singing in the wind), `clash`, `stab`, `slash`, `bow_shot`, `whip`, `shield_bash`, `clock`, `switch`, `button`, `keyboard_typing`, `mouse_click`, `camera_shutter`, `servo`, `printer`, `drill`, `saw`, `hammering`, `ratchet_wrench`, `piston`, `steam_engine`, `train`, `sonar`, `dtmf`, `phone_tone`, `phone_bell`, `siren_wail`, `car_horn`, `bike_bell`, `buzzer`, `shepard`, `transporter`, `robot_babble`, `red_alert`, `dark_drone`, `force_field`, `teleport`, `energy_blade`, `warp`, `charge_up`, `scanner`, `explosion_layers`, `pulse_dial`, `shield_up`
-- **arms** (`docs/arms.md`) — sfx: `firearm` (33 weapons: distance, azimuth, miss, suppressor, subsonic, pov; `level` relative by default = measured differences between weapons, `peak` = every file at 0.9; `echo` 0 by default: add a `room` or `echo`), `minigun`, `gun_mech` (handling, `reload_*`, `reload_musket`, `jam_clear`, `revolver_eject`), `bullet_impact` (`level`), `ricochet`, `bullet_pass`, `casing_ricochet`; `casing caliber=` for real cases
+- **arms** (`docs/arms.md`) — sfx: `firearm` (33 weapons: distance, azimuth, miss, suppressor, subsonic, pov; `level` relative by default = measured differences between weapons, `peak` = every file at 0.9; `echo` 0 by default; `env` open_field|forest|urban|range|indoor|dict|anechoic = the venue field, `place` none by default), `minigun` (`env`), `gun_mech` (handling, `reload_*`, `reload_musket`, `jam_clear`, `revolver_eject`), `bullet_impact` (`level`), `ricochet`, `bullet_pass`, `casing_ricochet`; `casing caliber=` for real cases
 - **ordnance** (`docs/arms.md`) — sfx: `blast` (`kind`), `grenade`, `molotov`, `mine`, `launcher`, `missile`, `rocket_salvo`, `rocket_flyby`, `launcher_handling`, `mortar`, `howitzer`, `tank_gun`, `shell_incoming`, `shell_crack_overhead`, `aerial_bomb`, `flamethrower`, `torpedo`, `depth_charge`, `sea_mine`; fx: `earplug`
 - **melee** — sfx: `melee` (10 kinds), `knife`, `spear`, `armor`, `grab`, `gouge`, `crossbow`, `arrow`, `sling`, `slingshot_weapon`, `catapult`, `siege_impact`
 - **energy_arms** — sfx: `stun_gun`, `taser`, `cattle_prod`, `arc_weapon`, `energy_weapon`, `plasma`, `railgun`, `coilgun`, `gauss_rifle`, `laser_impact`
@@ -224,6 +224,14 @@ Changed from earlier versions: `pour` takes `fill_start` / `fill_end` (was `fill
 with `rate` and `dur`; `flanger`, `phaser`, `chorus`, `roll`, `scrape`, `hit`, `fire` are new models that still accept
 their old parameters; plucked strings (`guitar`, `harp`, `banjo`, basses...) now ring for their natural decay after
 the note ends, so write shorter notes or lower `gain` if a line smears.
+
+## Added in 1.3 (instruments and sounds)
+
+- Chips: `scc`, `namco_wsg`, `huc6280`, `vrc6`, `n163`, `fds`, `paula`, `opl2`, `opl3`, `opll`, `snes`, `saa1099`, `wonderswan`, plus `ppg_wave`, `optigan`, `chamberlin`, `dx7`.
+- World and reeds: `balafon`, `bansuri`, `bonang`, `duduk`, `erhu`, `guzheng`, `ney`, `oud`, `qanun`, `santur`, `shakuhachi`, `morin_khuur`; free reeds `harmonica_reed`, `accordion_reed`, `melodica_reed`, `sho_reed`, `khaen_reed`; `guitar_modal`, `violin_modal`, `steelpan`, `trautonium`, `ondes_martenot`, `slide_clarinet`, `unison_strings`, `rhodes_fd`.
+- Their level is matched like the others (`genny/_levels.py`); the free reeds, `morin_khuur` and `trautonium` also carry a per-register gain (`REGISTER_DB`) so the low and high notes are about as loud as the middle.
+- `mesh_vowel` (2-D vocal-tract mesh) is now damped at its walls so the vowel keeps its formants, not only its low modes.
+- Presets: `genny presets` lists the TOML presets (see `docs/presets.md`). Reading measured `.sofa` HRIRs needs the extra: `pip install genny[sofa]`.
 
 ## Instruments: register, brightness, loudness
 
@@ -394,5 +402,5 @@ Set `"loop": true` (or `"loop": 0.08` for a custom crossfade in seconds) at the 
 
 ## Changing genny's code
 
-- No source citation in the code: no paper, author, table or figure number in comments or docstrings. The source of every constant, or the fact that it has none (UNSOURCED), goes in `research/SOURCES.md`, one line per value under its module. Most modules still carry citations and UNSOURCED markers (`creatures` and `fauna` are clean): move them there when you touch them, do not add new ones.
+- No source citation in the code: no paper, author, table or figure number in comments or docstrings. The source of every constant, or the fact that it has none (`connaissance`), goes in `research/SOURCES.md`, one line per value under its module. The code carries no citation or unsourced marker: do not add any.
 - How to add an entry, and the rules the tests enforce: `docs/README.md`, "Extending genny". Afterwards: `uv run python examples/level_match.py`, `uv run python examples/build_docs.py`, and a line in `CHANGELOG.md` (say it when a default sound changes).

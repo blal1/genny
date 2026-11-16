@@ -20,7 +20,9 @@ a cubic part for a shell (softening at small amplitude). Two time schemes, both 
 * "conservative": the Airy amplitudes are averaged over n+1, n-1 (s_k = z^n H^k z^(n+-1)), linear in q^(n+1),
   solved with a Woodbury identity of rank N_W per step.
 
-Both conserve a discrete energy without losses (returned with `energy=True`).
+Both conserve a discrete energy without losses (returned with `energy=True`). A third, "explicit", is the second-order
+explicit modal scheme: the nonlinear force is evaluated at step n (one product per step, no inversion, no energy
+conservation, stable for moderate strikes; a hard strike on a light plate can blow up, use sav then).
 """
 from __future__ import annotations
 
@@ -155,7 +157,7 @@ def build(size=0.4, thickness_mm=1.0, eps=1.0, bc="ssss", material=(8800.0, 1.24
         lam, C = eigh(S.T @ (K @ S), (S * mass[:, None]).T @ S)
         lam, V = lam[:nm], S @ C[:, :nm]
     else:
-        lam, V = eigsh(K, k=min(nm, K.shape[0] - 2), M=sp.diags(mass), sigma=-1.0)
+        lam, V = eigsh(K, k=min(nm, K.shape[0] - 2), M=sp.diags(mass), sigma=-1.0, v0=np.ones(K.shape[0]))
     o = np.argsort(lam)
     lam, V = lam[o], V[:, o]
     ok = lam > (2.0 * math.pi) ** 2
@@ -165,7 +167,7 @@ def build(size=0.4, thickness_mm=1.0, eps=1.0, bc="ssss", material=(8800.0, 1.24
     Phi = Phi.reshape(-1, Nx + 1, Ny + 1)
     Ew, keepw, _ = _energy(Nx, Ny, hx, hy, "cccc", -nu, 1.0 / (E * h))
     selw = np.nonzero(keepw.ravel())[0]
-    kap, W = eigsh(Ew[selw][:, selw], k=int(airy), M=sp.diags(wq[selw]), sigma=0.0)
+    kap, W = eigsh(Ew[selw][:, selw], k=int(airy), M=sp.diags(wq[selw]), sigma=0.0, v0=np.ones(selw.size))
     Psi = np.zeros((W.shape[1], (Nx + 1) * (Ny + 1)))
     Psi[:, selw] = W.T
     Psi = Psi.reshape(-1, Nx + 1, Ny + 1)[:, 1:-1, 1:-1]
@@ -286,6 +288,12 @@ def _run(H, kap, ca, a, om2, mu, pin, pout, force, k, scheme, out, en, eps):
                 for kk in range(NW):
                     acc += Hz[kk, i] * v[kk]
                 qp[i] = y[i] - acc / Dv[i]
+        elif scheme == 3:
+            for i in range(NU):
+                acc = 0.0
+                for kk in range(NW):
+                    acc += s[kk] / kap[kk] * Hz[kk, i]
+                qp[i] = (r[i] - 0.5 * acc) / Dv[i]
         else:
             for i in range(NU):
                 qp[i] = r[i] / Dv[i]
@@ -327,7 +335,7 @@ def simulate(m, force, fs, exc=(0.4, 0.45), pickups=((0.63, 0.41),), scheme="sav
     force = np.ascontiguousarray(force, dtype=np.float64)
     out = np.zeros((force.shape[0], len(pickups)))
     en = np.zeros(force.shape[0] if energy else 0)
-    sid = {"sav": 0, "conservative": 1}.get(scheme, 2)
+    sid = {"sav": 0, "conservative": 1, "explicit": 3}.get(scheme, 2)
     _run(np.ascontiguousarray(m.H), m.kappa.copy(), ca, m.a.copy(), om2, mu.copy(), pin, pout, force, k, sid, out,
          en, 1e-24)
     return (out, en) if energy else out

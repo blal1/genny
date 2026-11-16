@@ -296,18 +296,22 @@ def tsa(x: np.ndarray, period: float, n: int | None = None) -> np.ndarray:
     return np.mean([np.interp(i * period + grid, idx, x) for i in range(k)], axis=0)
 
 
-def drs(x: np.ndarray, delay: int, nfft: int = 4096) -> tuple[np.ndarray, np.ndarray]:
+def drs(x: np.ndarray, delay: int, nfft: int = 4096, window: str = "hann") -> tuple[np.ndarray, np.ndarray]:
     """Discrete random separation: (deterministic, random). H(f) = E{Y Y_D*} / E|Y_D|^2 between blocks of x and of x
     delayed by ``delay`` samples (longer than the random part's correlation, a few hundred periods of the band
     centre), averaged over nfft-point blocks; the deterministic part is x delayed by D through H, so the periodic
     lines pass with gain 1 and the random part with about 0. The delay is applied in time (D may exceed nfft);
-    the first D samples, which have no past, use x D samples ahead instead."""
+    the first D samples, which have no past, use x D samples ahead instead. ``window``: block taper, hann or parzen
+    (lower side lobes, wider band: twice the nfft gives the resolution of hann)."""
     from scipy.signal import fftconvolve
     x = np.asarray(x, float)
     d = int(delay)
     if len(x) < d + 2 * nfft:
         raise ValueError("drs: the signal is too short for this delay and block size")
-    w = np.hanning(nfft)
+    if window not in ("hann", "parzen"):
+        raise ValueError("window must be hann or parzen")
+    from scipy.signal.windows import parzen
+    w = np.hanning(nfft) if window == "hann" else parzen(nfft)
     num = np.zeros(nfft // 2 + 1, complex)
     den = np.zeros(nfft // 2 + 1)
     for i in range(d, len(x) - nfft + 1, nfft // 2):
@@ -320,6 +324,21 @@ def drs(x: np.ndarray, delay: int, nfft: int = 4096) -> tuple[np.ndarray, np.nda
     xd = np.concatenate((x[d:2 * d], x[:len(x) - d])) if d > 0 else x
     det = fftconvolve(xd, h, mode="full")[nfft // 2:nfft // 2 + len(x)]
     return det, x - det
+
+
+def sanc_order(spacing_hz: float, sr: float) -> int:
+    """Shortest SANC filter that separates two lines `spacing_hz` apart: N = 1 / B, B the spacing over the sample rate."""
+    return int(math.ceil(float(sr) / float(spacing_hz)))
+
+
+def sanc_delay(noise_bandwidth_hz: float, sr: float) -> int:
+    """Prediction depth that outlasts the random part: its correlation length, 1 / (narrowest noise bandwidth)."""
+    return int(math.ceil(float(sr) / float(noise_bandwidth_hz)))
+
+
+def sanc_static_gain(snr: float, order: int) -> float:
+    """Gain of the SANC filter on a line of signal-to-noise power ratio `snr` (A^2 / 2 sigma^2): rN / (rN + 1)."""
+    return snr * order / (snr * order + 1.0)
 
 
 def sanc(x: np.ndarray, delay: int, order: int, mu: float = 0.01) -> tuple[np.ndarray, np.ndarray]:
@@ -336,15 +355,16 @@ def sanc(x: np.ndarray, delay: int, order: int, mu: float = 0.01) -> tuple[np.nd
     return pred, x - pred
 
 
-def med(x: np.ndarray, order: int = 30, iters: int = 30) -> tuple[np.ndarray, np.ndarray]:
+def med(x: np.ndarray, order: int = 30, iters: int = 30, damp: float = 1e-6) -> tuple[np.ndarray, np.ndarray]:
     """Minimum entropy deconvolution (Wiggins): the FIR f of ``order`` taps that maximizes the kurtosis
     sum y^4 / (sum y^2)^2 of y = f * x, by the fixed point R f = (sum y^2 / sum y^4) sum y^3 x(n - l).
-    Returns (y, f): impulses smeared by the transmission path come back sharp."""
+    ``damp``: relative increase of the zero-lag term of R (0.001-0.005 keeps a near-singular R solvable; more blurs
+    the spikes). Returns (y, f): impulses smeared by the transmission path come back sharp."""
     from scipy.linalg import solve_toeplitz
     x = np.asarray(x, float)
     L = int(order)
     r = np.correlate(x, x, "full")[len(x) - 1:len(x) - 1 + L]
-    r[0] *= 1.0 + 1e-6
+    r[0] *= 1.0 + float(damp)
     f = np.zeros(L)
     f[L // 2] = 1.0
     X = np.lib.stride_tricks.sliding_window_view(np.r_[np.zeros(L - 1), x], L)[:, ::-1]

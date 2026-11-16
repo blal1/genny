@@ -70,13 +70,17 @@ def _svf_kernel(x, fc, sr, r, mode, k=0.0):
     y = np.empty_like(x)
     s1 = 0.0
     s2 = 0.0
+    fp = -1.0
+    g = 0.0
     for n in range(x.shape[0]):
-        f = min(max(fc[n], 10.0), 0.49 * sr)
-        g = math.tan(math.pi * f / sr)
-        if mode == 7:
-            g = g / math.sqrt(k)
-        elif mode >= 8:
-            g = g * math.sqrt(k)
+        if fc[n] != fp:
+            fp = fc[n]
+            f = min(max(fp, 10.0), 0.49 * sr)
+            g = math.tan(math.pi * f / sr)
+            if mode == 7:
+                g = g / math.sqrt(k)
+            elif mode >= 8:
+                g = g * math.sqrt(k)
         hp = (x[n] - (2.0 * r + g) * s1 - s2) / (1.0 + 2.0 * r * g + g * g)
         v1 = g * hp
         bp = v1 + s1
@@ -165,6 +169,96 @@ def _moog_kernel(x, fc, sr, k, drive, nl=0):
     return y
 
 
+def ladder_k_max(order: int = 4) -> float:
+    """Loop gain at which an ``order``-stage ladder 1 / ((1 + s)^N + k) goes unstable: sec(pi/N)^N (4 for N = 4;
+    no limit below N = 3, 4 is returned)."""
+    return 4.0 if order < 3 else 1.0 / math.cos(math.pi / order) ** order
+
+
+def ladder_poles(order: int, k: float, fc: float) -> np.ndarray:
+    """Poles (rad/s) of the N-stage ladder 1 / ((1 + s / w)^N + k), w = 2 pi fc: the circle of radius w k^(1/N)
+    centred on -w, at angles pi (2 i + 1) / N."""
+    w = 2.0 * math.pi * float(fc)
+    i = np.arange(order)
+    return w * (-1.0 + float(k) ** (1.0 / order) * np.exp(1j * math.pi * (2 * i + 1) / order))
+
+
+def ladder_resonance(order: int, k: float, fc: float) -> tuple[float, float]:
+    """(Hz, Q) of the leading pole pair of ``ladder_poles`` (the pair nearest the imaginary axis, angle pi / N); k = 0 gives (fc, 0.5)."""
+    p = ladder_poles(order, k, fc)
+    p = p[np.argmax(np.where(p.imag > 0, p.real, -1e30))] if order > 1 else p[0]
+    return abs(p) / (2.0 * math.pi), abs(p) / (-2.0 * p.real) if p.real < 0 else float("inf")
+
+
+def ladder_pole_ratio(order: int, k: float) -> float:
+    """Ratio of the leading-pole frequency to the natural cut-off of the N-stage ladder: A0(k) = sqrt(1 + k^(2/N)
+    - 2 k^(1/N) cos(pi / N)); 1 at k = 0."""
+    r = float(k) ** (1.0 / order)
+    return math.sqrt(max(1.0 + r * r - 2.0 * r * math.cos(math.pi / order), 0.0))
+
+
+def ladder_k_from_q(order: int, q: float) -> float:
+    """Loop gain k that gives the leading poles of the N-stage ladder (N >= 2) the quality factor ``q`` (>= 1/2);
+    q -> infinity gives ``ladder_k_max``."""
+    c, sn = math.cos(math.pi / order), math.sin(math.pi / order)
+    q2 = 4.0 * q * q
+    return ((((q2 - 1.0) * c - math.sqrt(q2 - 1.0) * sn) / (q2 * c * c - 1.0)) ** order) if q2 * c * c != 1.0 else float("nan")
+
+
+DIODE_K_MAX = 17.0     # the diode ladder 1 / (8 (1 + s)^4 - 8 (1 + s)^2 + 1 + k) self-oscillates at k = 17, resonance at fc / sqrt(2)
+
+
+def diode_ladder_poles(k: float, fc: float) -> np.ndarray:
+    """Poles (rad/s) of the 4-stage diode ladder, the roots of 8 (1 + s/w)^4 - 8 (1 + s/w)^2 + 1 + k, w = 2 pi fc;
+    at k = 0: -w (0.07612, 0.61732, 1.38268, 1.92388)."""
+    u = np.roots([8.0, 0.0, -8.0, 0.0, 1.0 + float(k)])
+    return 2.0 * math.pi * float(fc) * (u - 1.0)
+
+
+LADDER_LIMITS = {"lp4": 4.0, "lp8": 1.0 / math.cos(math.pi / 8) ** 8, "bp4": 4.0, "bp4_stable": 16.0, "bp8": 16.0, "bp8_negative": -64.0, "diode": DIODE_K_MAX}
+
+
+def ladder_dc_gain(k: float) -> float:
+    """DC gain of the ladder, 1 / (1 + k) (the same for every number of stages)."""
+    return 1.0 / (1.0 + float(k))
+
+
+def ladder_cutoff_error(order: int, k: float) -> float:
+    """Relative error |1 - 1 / A0(k)| between the natural cut-off and the leading-pole frequency; its maximum over k is
+    1 for N <= 6 and csc(pi / N) - 1 above (N = 4: zero at k = k_max)."""
+    return abs(1.0 - 1.0 / ladder_pole_ratio(order, k))
+
+
+@numba.njit(cache=True)
+def _dangelo_kernel(x, fc, sr, k, drive, order):
+    """Explicit N-stage ladder, one tanh per stage and no delay in the loops: each stage w = p0 [(1 + g) w' - 2 g tanh w'
+    + g (u + u')], p0 = 1 / (1 + g), exact in small signal for the trapezoidal ladder; the global loop is solved from
+    the chain's free response, u = (x - k w_free) / (1 + k (g / (1 + g))^N). Output w_N / drive."""
+    y = np.empty_like(x)
+    w = np.zeros(order)
+    t = np.zeros(order)
+    xp = np.zeros(order)
+    wf = np.zeros(order)
+    for n in range(x.shape[0]):
+        g = math.tan(math.pi * min(max(fc[n], 10.0), 0.45 * sr) / sr)
+        p0 = 1.0 / (1.0 + g)
+        gam = g * p0
+        u = 0.0
+        for i in range(order):
+            wf[i] = p0 * ((1.0 + g) * w[i] - 2.0 * g * t[i] + g * (u + xp[i]))
+            u = math.tanh(wf[i])
+        a = (drive * x[n] - k * wf[order - 1]) / (1.0 + k * gam ** order)
+        u = math.tanh(a)
+        for i in range(order):
+            wi = p0 * ((1.0 + g) * w[i] - 2.0 * g * t[i] + g * (u + xp[i]))
+            xp[i] = u
+            w[i] = wi
+            t[i] = math.tanh(wi)
+            u = t[i]
+        y[n] = w[order - 1] / drive
+    return y
+
+
 HUOVILAINEN_THERMAL = 0.000025
 HUOVILAINEN_SCALE = 32768.0
 
@@ -196,6 +290,49 @@ def _huovilainen_kernel(x, fc, sr, res, scale, th):
             delay[5] = (stg[3] + delay[4]) * 0.5
             delay[4] = stg[3]
         y[n] = delay[5] / scale
+    return y
+
+
+LEVIEN_SQUARINGS = 10
+
+
+@numba.njit(cache=True)
+def _levien_kernel(x, fc, sr, k, drive, nl, squarings):
+    """Levien's matrix ladder: the Euler step of y0' = a(x - k y3 - y0), yi' = a(y(i-1) - yi) over 1/2^N sample,
+    raised to 2^N by N squarings (x held over the sample). nl: y += B tanh(x - k y3) + C tanh(y), C = A - I with
+    k B added to its last column, so the small-signal case is the linear one."""
+    y = np.empty_like(x)
+    s = np.zeros(4)
+    t = np.zeros(4)
+    A = np.zeros((4, 4))
+    B = np.zeros(4)
+    C = np.zeros((4, 4))
+    last = -1.0
+    for n in range(x.shape[0]):
+        f = min(max(fc[n], 10.0), 0.49 * sr)
+        if f != last:
+            a = 2.0 * math.pi * f / sr / (1 << squarings)
+            M = np.eye(5)
+            for i in range(4):
+                M[i + 1, i] = a
+                M[i + 1, i + 1] = 1.0 - a
+            M[1, 4] = -k * a
+            for _ in range(squarings):
+                M = M @ M
+            B[:] = M[1:, 0]
+            A[:, :] = M[1:, 1:]
+            C[:, :] = A - np.eye(4)
+            C[:, 3] += k * B
+            last = f
+        xin = drive * x[n]
+        if nl:
+            for i in range(4):
+                t[i] = math.tanh(s[i])
+            u = math.tanh(xin - k * s[3])
+            s = s + B * u + C @ t
+        else:
+            s = A @ s + B * xin
+        y[n] = s[3] / drive
     return y
 
 
@@ -283,12 +420,17 @@ def faust_q_to_k(kind: str, q: float, norm_freq: float = 0.0) -> float:
 
 
 def ladder(x: np.ndarray, cutoff, sr: int = DEFAULT_SR, res: float = 0.5, kind: str = "moog", drive: float = 1.0,
-           solver: str = "node", q: float | None = None) -> np.ndarray:
+           solver: str = "node", q: float | None = None, order: int = 4, pole_cutoff: bool = False) -> np.ndarray:
     """Transistor (``moog``) or diode (``diode``, TB-303 type) ladder low-pass; ``res`` 1 is the edge of self-oscillation
     (k = 4 and 17). ``cutoff`` is a number or per-sample; ``drive`` is the level into the tanh.
     ``lpf18``: the 3-pole LPF18 (18 dB/oct), ``res`` 0..1 as in Soundpipe, ``drive`` its distortion (default there 2).
     ``huovilainen``: Huovilainen's 2x-oversampled tanh-per-stage Moog (Soundpipe moogladder), ``res`` 0..1, ``drive``
     the input level against the thermal voltage (1 = full scale 32768, as Csound).
+    ``dangelo``: explicit ``order``-stage ladder (D'Angelo & Valimaki), one tanh per stage, ``res`` 0..1 of ``ladder_k_max(order)``,
+    ``drive`` the level into the tanh, output / drive; ``pole_cutoff`` makes ``cutoff`` the frequency of the leading poles
+    (``ladder_pole_ratio``) instead of the natural cut-off, so the resonance stays where it is set whatever ``res``.
+    ``levien_linear``: Levien's exact sample-and-hold matrix ladder (tuning exact up to Nyquist, no oversampling);
+    ``levien``: the same matrix with tanh on the input and on each stage; ``drive`` scales into the tanh, output / drive.
     ``solver`` (moog): ``node`` tanh of the linear node estimate, ``newton`` the delay-free loop solved by Newton,
     ``adaa`` the same loop with an antiderivative-antialiased tanh. ``q`` (moog, diode): a Faust Q 0.7071..25 in place
     of ``res`` (``faust_q_to_k``); the diode then pre-saturates its input as Faust does (x 1.5, cubic)."""
@@ -305,8 +447,24 @@ def ladder(x: np.ndarray, cutoff, sr: int = DEFAULT_SR, res: float = 0.5, kind: 
                                        float(np.clip(res, 0.0, 1.0)), HUOVILAINEN_SCALE * float(max(drive, 1e-6)),
                                        HUOVILAINEN_THERMAL)
         return _per_channel(oneh, np.asarray(x, float))
+    if kind == "dangelo":
+        n_st = int(np.clip(order, 1, 16))
+        kd = ladder_k_max(n_st) * float(np.clip(res, 0.0, 1.05))
+        ratio = ladder_pole_ratio(n_st, kd) if pole_cutoff and n_st >= 2 and kd > 0.0 else 1.0
+        def oned(sig):
+            fc = np.broadcast_to(np.asarray(cutoff, dtype=np.float64) / max(ratio, 1e-3), sig.shape)
+            return _dangelo_kernel(np.ascontiguousarray(sig, dtype=np.float64), np.ascontiguousarray(fc), float(sr),
+                                   kd, float(max(drive, 1e-6)), n_st)
+        return _per_channel(oned, np.asarray(x, float))
+    if kind in ("levien", "levien_linear"):
+        kl = 4.0 * float(np.clip(res, 0.0, 1.05))
+        def onel(sig):
+            fc = np.broadcast_to(np.asarray(cutoff, dtype=np.float64), sig.shape)
+            return _levien_kernel(np.ascontiguousarray(sig, dtype=np.float64), np.ascontiguousarray(fc), float(sr),
+                                  kl, float(max(drive, 1e-6)), kind == "levien", LEVIEN_SQUARINGS)
+        return _per_channel(onel, np.asarray(x, float))
     if kind not in ("moog", "diode"):
-        raise ValueError("kind must be moog|diode|lpf18|huovilainen")
+        raise ValueError("kind must be moog|diode|lpf18|huovilainen|levien|levien_linear|dangelo")
     if solver not in ("node", "newton", "adaa"):
         raise ValueError("solver must be node|newton|adaa")
     top = 17.0 if kind == "diode" else 4.0
@@ -328,11 +486,21 @@ def ladder(x: np.ndarray, cutoff, sr: int = DEFAULT_SR, res: float = 0.5, kind: 
     return _per_channel(one, x)
 
 
-def svf(x: np.ndarray, kind: str, cutoff, sr: int = DEFAULT_SR, q: float = 0.707, gain_db: float = 0.0) -> np.ndarray:
+def svf_peak_gain(q: float) -> float:
+    """Peak gain of the 2-pole lowpass/highpass: Q / sqrt(1 - 1/(4 Q^2)) above Q = 1/sqrt 2, else 1."""
+    q = max(float(q), 0.05)
+    return q / math.sqrt(1.0 - 0.25 / (q * q)) if q > 0.7072 else 1.0
+
+
+def svf(x: np.ndarray, kind: str, cutoff, sr: int = DEFAULT_SR, q: float = 0.707, gain_db: float = 0.0,
+        level: str = "none") -> np.ndarray:
     """TPT state-variable filter (lowpass, highpass, bandpass, notch, allpass, resonance = LP - HP, bandshelf with
     `gain_db` at the centre; lowshelf M^2 LP + M 2R BP + HP with g / sqrt M, highshelf LP + M 2R BP + M^2 HP with
     g sqrt M, tilt LP / M + 2R BP + M HP with g sqrt M: -gain_db/2 below, +gain_db/2 above, M = 10^(gain_db/40)) with a scalar or
-    per-sample cutoff, so a shelf or a tilt can be swept."""
+    per-sample cutoff, so a shelf or a tilt can be swept. level="peak": lowpass/highpass divided by their resonant
+    peak, so raising Q does not raise the level."""
+    if level == "peak" and kind in ("lowpass", "highpass"):
+        return svf(x, kind, cutoff, sr, q, gain_db) / svf_peak_gain(q)
     k = 10.0 ** (float(gain_db) / 40.0) if kind in ("lowshelf", "highshelf", "tilt") else 10.0 ** (float(gain_db) / 20.0) - 1.0
     def one(sig):
         fc = np.broadcast_to(np.asarray(cutoff, dtype=np.float64), sig.shape)
@@ -358,8 +526,12 @@ def _onepole_kernel(x, fc, sr, mode):
     """Zavalishin's TPT one-pole: v = (x - s) G, lp = v + s, s = lp + v, G = g / (1 + g); hp = x - lp, ap = lp - hp."""
     y = np.empty_like(x)
     s = 0.0
+    fp = -1.0
+    g = 0.0
     for n in range(x.shape[0]):
-        g = math.tan(math.pi * min(max(fc[n], 1.0), 0.49 * sr) / sr)
+        if fc[n] != fp:
+            fp = fc[n]
+            g = math.tan(math.pi * min(max(fp, 1.0), 0.49 * sr) / sr)
         v = (x[n] - s) * g / (1.0 + g)
         lp = v + s
         s = lp + v
@@ -381,11 +553,16 @@ def _resonz_kernel(x, fc, q, sr, norm):
     """R = exp(-pi (fc / Q) / sr), H = g (1 - z^-2) / (1 - 2 R cos(theta) z^-1 + R^2 z^-2) (rjlib e_resonzq)."""
     y = np.empty_like(x)
     x1 = x2 = y1 = y2 = 0.0
+    fp = -1.0
+    R = g = c = 0.0
     for n in range(x.shape[0]):
-        f = min(max(fc[n], 1.0), 0.49 * sr)
-        R = math.exp(-math.pi * (f / q) / sr)
-        g = 1.0 if norm == 0 else ((1.0 - R * R) / 2.0 if norm == 1 else math.sqrt((1.0 - R * R) / 2.0))
-        v = g * (x[n] - x2) + 2.0 * R * math.cos(2.0 * math.pi * f / sr) * y1 - R * R * y2
+        if fc[n] != fp:
+            fp = fc[n]
+            f = min(max(fp, 1.0), 0.49 * sr)
+            R = math.exp(-math.pi * (f / q) / sr)
+            g = 1.0 if norm == 0 else ((1.0 - R * R) / 2.0 if norm == 1 else math.sqrt((1.0 - R * R) / 2.0))
+            c = math.cos(2.0 * math.pi * f / sr)
+        v = g * (x[n] - x2) + 2.0 * R * c * y1 - R * R * y2
         x2, x1 = x1, x[n]
         y2, y1 = y1, v
         y[n] = v
@@ -453,12 +630,43 @@ def _korg35_kernel(x, fc, sr, res, sat):
     return y
 
 
-def korg35(x: np.ndarray, cutoff, sr: int = DEFAULT_SR, res: float = 1.0, sat: float = 1.0) -> np.ndarray:
-    """Korg 35 (MS-20) low-pass, scalar or per-sample cutoff; `res` 0..2 (2 is the edge of self-oscillation, Soundpipe default 1)."""
+@numba.njit(cache=True)
+def _korg35_hp_kernel(x, fc, sr, res, sat):
+    """Korg 35 high-pass: one-pole HP on the input, loop u = alpha (y1 - G zh / (1 + g) + zl / (1 + g)), y = res tanh(sat u),
+    y feeds a one-pole HP then a one-pole LP whose states are the feedback; output y / res."""
+    y = np.empty_like(x)
+    z1 = zh = zl = 0.0
+    for n in range(x.shape[0]):
+        g = math.tan(math.pi * min(max(fc[n], 10.0), 0.45 * sr) / sr)
+        G = g / (1.0 + g)
+        a = 1.0 / (1.0 - res * G + res * G * G)
+        v = (x[n] - z1) * G
+        lp = v + z1
+        z1 = lp + v
+        y1 = x[n] - lp
+        u = a * (y1 - zh * G / (1.0 + g) + zl / (1.0 + g))
+        if sat > 0.0:
+            u = math.tanh(sat * u)
+        o = res * u
+        v = (o - zh) * G
+        lp = v + zh
+        zh = lp + v
+        h = o - lp
+        v = (h - zl) * G
+        lp = v + zl
+        zl = lp + v
+        y[n] = o / res
+    return y
+
+
+def korg35(x: np.ndarray, cutoff, sr: int = DEFAULT_SR, res: float = 1.0, sat: float = 1.0, kind: str = "lowpass") -> np.ndarray:
+    """Korg 35 (MS-20) low-pass or high-pass, scalar or per-sample cutoff; `res` 0..2 (2 is the edge of self-oscillation,
+    Soundpipe default 1)."""
+    kern = _korg35_hp_kernel if kind == "highpass" else _korg35_kernel
     def one(sig):
         fc = np.broadcast_to(np.asarray(cutoff, dtype=np.float64), sig.shape)
-        return _korg35_kernel(np.ascontiguousarray(sig, dtype=np.float64), np.ascontiguousarray(fc), float(sr),
-                              float(np.clip(res, 1e-3, 1.999)), float(sat))
+        return kern(np.ascontiguousarray(sig, dtype=np.float64), np.ascontiguousarray(fc), float(sr),
+                    float(np.clip(res, 1e-3, 1.999)), float(sat))
     return _per_channel(one, np.asarray(x, float))
 
 
@@ -594,12 +802,14 @@ def peak(x, center, sr=DEFAULT_SR, q=1.0, gain_db=6.0):
     return biquad(x, "peak", center, sr, q, gain_db)
 
 
-def lowshelf(x, cutoff, sr=DEFAULT_SR, gain_db=6.0):
-    return biquad(x, "lowshelf", cutoff, sr, 0.707, gain_db)
+def lowshelf(x, cutoff, sr=DEFAULT_SR, gain_db=6.0, q=0.707):
+    """Low shelf; `q` above 0.707 makes the shelf overshoot before it levels, below 0.707 it is gentler."""
+    return biquad(x, "lowshelf", cutoff, sr, q, gain_db)
 
 
-def highshelf(x, cutoff, sr=DEFAULT_SR, gain_db=6.0):
-    return biquad(x, "highshelf", cutoff, sr, 0.707, gain_db)
+def highshelf(x, cutoff, sr=DEFAULT_SR, gain_db=6.0, q=0.707):
+    """High shelf; `q` as for `lowshelf`."""
+    return biquad(x, "highshelf", cutoff, sr, q, gain_db)
 
 
 def dc_block(x, sr=DEFAULT_SR):
@@ -622,6 +832,24 @@ def matched_shelf(x: np.ndarray, kind: str, fc: float, sr: int = DEFAULT_SR, gai
         raise ValueError("kind must be lowshelf|highshelf")
     s0, d0 = h0 * (1.0 - p), hn * (1.0 + p)
     return lfilter([0.5 * (s0 + d0), 0.5 * (s0 - d0)], [1.0, -p], x, axis=0)
+
+
+def shelf1(x: np.ndarray, kind: str, fc: float, sr: int = DEFAULT_SR, gain_db: float = 6.0) -> np.ndarray:
+    """First-order plateau from the one-pole design rules: H = (1 - q z^-1) / (1 - p z^-1) with d = 2 pi fc / sr,
+    p = 1 - d / sqrt(g), q = 1 - d sqrt(g), so the DC gain is exactly g and the gain far above fc is 1 (lowshelf);
+    highshelf is the same plateau with gain 1 / g scaled by g. Cheaper and less warped near Nyquist than the bilinear
+    shelves, but the corner is only accurate for fc well under sr / 4."""
+    g = 10.0 ** (float(gain_db) / 20.0)
+    d = 2.0 * math.pi * float(np.clip(fc, 1.0, 0.25 * sr)) / sr
+    if kind == "lowshelf":
+        k = g
+    elif kind == "highshelf":
+        k = 1.0 / g
+    else:
+        raise ValueError("kind must be lowshelf|highshelf")
+    p, q = 1.0 - d / math.sqrt(k), 1.0 - d * math.sqrt(k)
+    y = lfilter([1.0, -q], [1.0, -p], x, axis=0)
+    return y if kind == "lowshelf" else y * g
 
 
 @numba.njit(cache=True)
@@ -907,3 +1135,175 @@ def onepole4(x: np.ndarray, cutoff: float, sr: int = DEFAULT_SR) -> np.ndarray:
     fc/sr) (the 2 pi of one stage, widened so the cascade is -3 dB at fc)."""
     z = math.exp(-FOUR_STAGE_K * float(cutoff) / sr)
     return lfilter([(1.0 - z) ** 4], [1.0, -4.0 * z, 6.0 * z * z, -4.0 * z ** 3, z ** 4], np.asarray(x, float), axis=0)
+
+
+def guard(x: np.ndarray, limit: float | None = None) -> np.ndarray:
+    """Non-finite samples to 0; with `limit`, clip to +-limit. Leaves a finite buffer untouched."""
+    x = np.asarray(x)
+    if not np.all(np.isfinite(x)):
+        x = np.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
+    return np.clip(x, -limit, limit) if limit is not None else x
+
+
+def biquad_stable(a) -> bool:
+    """Stability triangle of 1 + a1 z^-1 + a2 z^-2: |a2| < 1 and |a1| < 1 + a2."""
+    a1, a2 = float(a[1]) / float(a[0]), float(a[2]) / float(a[0])
+    return abs(a2) < 1.0 and abs(a1) < 1.0 + a2
+
+
+LOG001 = math.log(0.001)
+
+
+def _t60_pole(t, sr, unit):
+    t = np.asarray(t, dtype=np.float64)
+    k = LOG001 if unit == "t60" else -1.0
+    with np.errstate(divide="ignore"):
+        return np.where(np.abs(t) > 0.0, np.exp(k / (np.abs(t) * sr)), 0.0)
+
+
+@numba.njit(cache=True)
+def _ring_kernel(x, w, R):
+    y = np.empty_like(x)
+    y1 = y2 = 0.0
+    for n in range(x.shape[0]):
+        y0 = x[n] + 2.0 * R[n] * math.cos(w[n]) * y1 - R[n] * R[n] * y2
+        y[n] = 0.5 * (y0 - y2)
+        y2, y1 = y1, y0
+    return y
+
+
+def ringz(x: np.ndarray, freq, decay, sr: int = DEFAULT_SR, unit: str = "t60") -> np.ndarray:
+    """Two-pole resonator set by its ring time: R = exp(ln 0.001 / (decay sr)) (unit="tau": exp(-1 / (decay sr))),
+    y0 = x + 2R cos(w) y1 - R^2 y2, out = (y0 - y2) / 2. freq and decay scalar or per-sample; the gain grows with decay."""
+    def one(sig):
+        w = 2.0 * np.pi * np.clip(np.broadcast_to(np.asarray(freq, dtype=np.float64), sig.shape), 0.0, 0.5 * sr) / sr
+        R = np.broadcast_to(_t60_pole(decay, sr, unit), sig.shape)
+        return _ring_kernel(np.ascontiguousarray(sig, dtype=np.float64), np.ascontiguousarray(w), np.ascontiguousarray(R))
+    return _per_channel(one, np.asarray(x, float))
+
+
+def formlet(x: np.ndarray, freq, attack: float = 0.005, decay: float = 0.05, sr: int = DEFAULT_SR, unit: str = "t60") -> np.ndarray:
+    """FOF-like resonator: ringz(decay) - ringz(attack), halved, so an impulse gives a sine with a smooth attack.
+    unit="tau" (1/e times) is the Csound fofilter form."""
+    return 0.5 * (ringz(x, freq, decay, sr, unit) - ringz(x, freq, attack, sr, unit))
+
+
+def fofilter(x: np.ndarray, freq, attack: float = 0.003, decay: float = 0.02, sr: int = DEFAULT_SR) -> np.ndarray:
+    return formlet(x, freq, attack, decay, sr, unit="tau")
+
+
+def decay(x: np.ndarray, time, sr: int = DEFAULT_SR) -> np.ndarray:
+    """Exponential decay of each input impulse to -60 dB in `time`: y = x + b y[n-1], b = exp(ln 0.001 / (time sr))."""
+    b = float(_t60_pole(time, sr, "t60"))
+    return lfilter([1.0], [1.0, -b], np.asarray(x, float), axis=0)
+
+
+def decay2(x: np.ndarray, attack: float = 0.01, time: float = 1.0, sr: int = DEFAULT_SR) -> np.ndarray:
+    """decay(time) - decay(attack): impulses become smooth attack-decay envelopes."""
+    return decay(x, time, sr) - decay(x, attack, sr)
+
+
+@numba.njit(cache=True)
+def _slop_kernel(x, k, n_dn, k_dn, n_up, k_up):
+    y = np.empty_like(x)
+    s = 0.0
+    for i in range(x.shape[0]):
+        d = x[i] - s
+        if d > n_up:
+            s += k * n_up + k_up * (d - n_up)
+        elif d < -n_dn:
+            s += -k * n_dn + k_dn * (d + n_dn)
+        else:
+            s += k * d
+        y[i] = s
+    return y
+
+
+def slop(x: np.ndarray, freq: float = 1000.0, max_down: float = 1e9, down_freq: float = 0.0, max_up: float = 1e9,
+         up_freq: float = 0.0, sr: int = DEFAULT_SR) -> np.ndarray:
+    """Slew-limiting low-pass: one-pole at `freq` while |x - y| stays inside [-max_down, max_up], beyond it the excess
+    follows a one-pole at down_freq / up_freq (0 = hard slew limit). Coefficients min(1, 2 pi f / sr)."""
+    c = lambda f: min(1.0, 2.0 * math.pi * max(float(f), 0.0) / sr)
+    def one(sig):
+        return _slop_kernel(np.ascontiguousarray(sig, dtype=np.float64), c(freq), float(max_down), c(down_freq),
+                            float(max_up), c(up_freq))
+    return _per_channel(one, np.asarray(x, float))
+
+
+@numba.njit(cache=True)
+def _bob_deriv(y, u, wc, k, sat, d):
+    t0 = sat * math.tanh((u - k * y[3]) / sat)
+    t1 = sat * math.tanh(y[0] / sat)
+    t2 = sat * math.tanh(y[1] / sat)
+    t3 = sat * math.tanh(y[2] / sat)
+    t4 = sat * math.tanh(y[3] / sat)
+    d[0] = wc * (t0 - t1)
+    d[1] = wc * (t1 - t2)
+    d[2] = wc * (t2 - t3)
+    d[3] = wc * (t3 - t4)
+
+
+@numba.njit(cache=True)
+def _bob_kernel(x, fc, sr, k, sat, os):
+    out = np.empty_like(x)
+    y = np.zeros(4)
+    k1, k2, k3, k4, tmp = np.zeros(4), np.zeros(4), np.zeros(4), np.zeros(4), np.zeros(4)
+    h = 1.0 / (sr * os)
+    for n in range(x.shape[0]):
+        wc = 2.0 * math.pi * min(max(fc[n], 1.0), 0.45 * sr)
+        for _ in range(os):
+            _bob_deriv(y, x[n], wc, k, sat, k1)
+            for i in range(4):
+                tmp[i] = y[i] + 0.5 * h * k1[i]
+            _bob_deriv(tmp, x[n], wc, k, sat, k2)
+            for i in range(4):
+                tmp[i] = y[i] + 0.5 * h * k2[i]
+            _bob_deriv(tmp, x[n], wc, k, sat, k3)
+            for i in range(4):
+                tmp[i] = y[i] + h * k3[i]
+            _bob_deriv(tmp, x[n], wc, k, sat, k4)
+            for i in range(4):
+                y[i] += h * (k1[i] + 2.0 * k2[i] + 2.0 * k3[i] + k4[i]) / 6.0
+            if not math.isfinite(y[3]):
+                y[:] = 0.0
+        out[n] = y[3]
+    return out
+
+
+def bob(x: np.ndarray, cutoff, sr: int = DEFAULT_SR, res: float = 0.5, sat: float = 3.0, oversample: int = 2) -> np.ndarray:
+    """Moog ladder as its ODE, yi' = wc (S(y(i-1)) - S(yi)), y0 = x - 4 res y4, S(v) = sat tanh(v / sat), integrated by RK4
+    with `oversample` steps per sample. res 1 is the edge of self-oscillation."""
+    def one(sig):
+        fc = np.broadcast_to(np.asarray(cutoff, dtype=np.float64), sig.shape)
+        return _bob_kernel(np.ascontiguousarray(sig, dtype=np.float64), np.ascontiguousarray(fc), float(sr),
+                           4.0 * float(np.clip(res, 0.0, 1.2)), float(max(sat, 1e-3)), max(int(oversample), 1))
+    return _per_channel(one, np.asarray(x, float))
+
+
+def cascade(x: np.ndarray, kind: str, cutoff, order: int = 4, design: str = "butter", ripple: float = 1.0,
+            sr: int = DEFAULT_SR) -> np.ndarray:
+    """Butterworth or Chebyshev I low/high-pass of any order as SVF sections (+ one one-pole if odd), so the cutoff can
+    be per-sample. Analog poles p = -sinh(v) sin(t) + j cosh(v) cos(t), t = (2i - 1) pi / 2N (Butterworth: sinh = cosh = 1):
+    section frequency |p| (1/|p| for high-pass), Q = |p| / (2 sinh(v) sin t). Each section is prewarped on its own."""
+    if kind not in ("lowpass", "highpass"):
+        raise ValueError("cascade kind must be lowpass|highpass")
+    N = max(int(order), 1)
+    if design == "butter":
+        sh, ch, gain = 1.0, 1.0, 1.0
+    elif design == "cheby1":
+        eps = math.sqrt(10.0 ** (float(ripple) / 10.0) - 1.0)
+        v = math.asinh(1.0 / eps) / N
+        sh, ch = math.sinh(v), math.cosh(v)
+        gain = 1.0 / math.sqrt(1.0 + eps * eps) if N % 2 == 0 else 1.0
+    else:
+        raise ValueError("design must be butter|cheby1")
+    fc = np.asarray(cutoff, dtype=np.float64)
+    y = np.asarray(x, float)
+    for i in range(1, N // 2 + 1):
+        t = (2 * i - 1) * math.pi / (2 * N)
+        re, im = sh * math.sin(t), ch * math.cos(t)
+        w0 = math.hypot(re, im)
+        y = svf(y, kind, fc * (w0 if kind == "lowpass" else 1.0 / w0), sr, w0 / (2.0 * re))
+    if N % 2:
+        y = onepole(y, kind, fc * (sh if kind == "lowpass" else 1.0 / sh), sr)
+    return y * gain

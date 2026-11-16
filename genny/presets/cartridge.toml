@@ -1,0 +1,382 @@
+schema = "genny.preset/1"
+family = "cartridge"
+# d_mm, l_mm, bore_mm: mm. m_g, m_c_g: g (bullet, charge). v_ref: m/s at the barrel length l_ref (m). v_c_cm3: cm3.
+# p_max_mpa: MPa. trim_db, supp_db: dB (supp_db absent = default suppressor). b: blast shape. t_flame: K.
+# legacy_peak_pa: Pa, on-axis blast at 3 m; legacy_dir_db: dB; legacy_e_j: J, muzzle energy.
+
+[22lr]
+d_mm = 5.7
+l_mm = 11.0
+m_g = 2.6
+v_ref = 390.0
+l_ref = 0.508
+v_c_cm3 = 0.25
+m_c_g = 0.13
+p_max_mpa = 165.0
+trim_db = -12.0
+supp_db = 22.0
+bore_mm = 0.0
+pellets = 1
+b = 0.88
+t_flame = 2800.0
+legacy_peak_pa = 380.0
+legacy_dir_db = 30.0
+legacy_e_j = 197.0
+
+[22lr_sub]
+d_mm = 5.7
+l_mm = 11.0
+m_g = 2.6
+v_ref = 320.0
+l_ref = 0.508
+v_c_cm3 = 0.25
+m_c_g = 0.1
+p_max_mpa = 165.0
+trim_db = -12.0
+supp_db = 22.0
+bore_mm = 0.0
+pellets = 1
+b = 0.88
+t_flame = 2800.0
+legacy_peak_pa = 300.0
+legacy_dir_db = 30.0
+legacy_e_j = 133.0
+
+[9x19]
+d_mm = 9.0
+l_mm = 15.5
+m_g = 7.45
+v_ref = 360.0
+l_ref = 0.118
+v_c_cm3 = 0.62
+m_c_g = 0.36
+p_max_mpa = 235.0
+trim_db = -0.4
+supp_db = 25.0
+bore_mm = 0.0
+pellets = 1
+b = 0.83
+t_flame = 2800.0
+legacy_peak_pa = 3307.0
+legacy_dir_db = 15.0
+legacy_e_j = 481.0
+
+[9x19_sub]
+d_mm = 9.0
+l_mm = 18.0
+m_g = 9.5
+v_ref = 297.0
+l_ref = 0.118
+v_c_cm3 = 0.55
+m_c_g = 0.3
+p_max_mpa = 235.0
+trim_db = -0.4
+supp_db = 25.0
+bore_mm = 0.0
+pellets = 1
+b = 0.83
+t_flame = 2800.0
+legacy_peak_pa = 2600.0
+legacy_dir_db = 15.0
+legacy_e_j = 420.0
+
+[45acp]
+d_mm = 11.5
+l_mm = 17.0
+m_g = 14.9
+v_ref = 255.0
+l_ref = 0.127
+v_c_cm3 = 1.1
+m_c_g = 0.36
+p_max_mpa = 135.0
+trim_db = 3.5
+supp_db = 25.0
+bore_mm = 0.0
+pellets = 1
+b = 0.83
+t_flame = 2800.0
+legacy_peak_pa = 5123.0
+legacy_dir_db = 10.0
+legacy_e_j = 483.0
+
+[40sw]
+d_mm = 10.2
+l_mm = 16.0
+m_g = 10.7
+v_ref = 340.0
+l_ref = 0.102
+v_c_cm3 = 0.9
+m_c_g = 0.4
+p_max_mpa = 235.0
+trim_db = 0.0
+supp_db = 25.0
+bore_mm = 0.0
+pellets = 1
+b = 0.83
+t_flame = 2800.0
+legacy_peak_pa = 4000.0
+legacy_dir_db = 15.0
+legacy_e_j = 618.0
+
+[10mm]
+d_mm = 10.2
+l_mm = 16.0
+m_g = 11.7
+v_ref = 400.0
+l_ref = 0.117
+v_c_cm3 = 1.2
+m_c_g = 0.55
+p_max_mpa = 235.0
+trim_db = 0.0
+supp_db = 25.0
+bore_mm = 0.0
+pellets = 1
+b = 0.83
+t_flame = 2800.0
+legacy_peak_pa = 4000.0
+legacy_dir_db = 12.0
+legacy_e_j = 933.0
+
+[357]
+d_mm = 9.1
+l_mm = 16.0
+m_g = 10.1
+v_ref = 380.0
+l_ref = 0.102
+v_c_cm3 = 1.7
+m_c_g = 0.9
+p_max_mpa = 270.0
+trim_db = 0.7
+bore_mm = 0.0
+pellets = 1
+b = 0.83
+t_flame = 2800.0
+legacy_peak_pa = 6491.0
+legacy_dir_db = 15.0
+legacy_e_j = 731.0
+
+[38spl]
+d_mm = 9.1
+l_mm = 16.0
+m_g = 8.1
+v_ref = 290.0
+l_ref = 0.102
+v_c_cm3 = 1.2
+m_c_g = 0.32
+p_max_mpa = 150.0
+trim_db = 0.0
+bore_mm = 0.0
+pellets = 1
+b = 0.83
+t_flame = 2800.0
+legacy_peak_pa = 3500.0
+legacy_dir_db = 10.0
+legacy_e_j = 340.0
+
+[556]
+d_mm = 5.7
+l_mm = 23.0
+m_g = 4.0
+v_ref = 948.0
+l_ref = 0.508
+v_c_cm3 = 1.85
+m_c_g = 1.6
+p_max_mpa = 430.0
+trim_db = -0.3
+supp_db = 26.0
+bore_mm = 0.0
+pellets = 1
+b = 0.88
+t_flame = 2800.0
+legacy_peak_pa = 8137.0
+legacy_dir_db = 15.0
+legacy_e_j = 1797.0
+
+[762x39]
+d_mm = 7.9
+l_mm = 26.0
+m_g = 8.0
+v_ref = 715.0
+l_ref = 0.415
+v_c_cm3 = 2.3
+m_c_g = 1.6
+p_max_mpa = 355.0
+trim_db = 0.0
+supp_db = 25.0
+bore_mm = 0.0
+pellets = 1
+b = 0.88
+t_flame = 2800.0
+legacy_peak_pa = 6780.0
+legacy_dir_db = 15.0
+legacy_e_j = 2045.0
+
+[762x51]
+d_mm = 7.8
+l_mm = 29.0
+m_g = 9.5
+v_ref = 853.0
+l_ref = 0.61
+v_c_cm3 = 3.5
+m_c_g = 2.9
+p_max_mpa = 415.0
+trim_db = -3.5
+supp_db = 26.0
+bore_mm = 0.0
+pellets = 1
+b = 0.88
+t_flame = 2800.0
+legacy_peak_pa = 6780.0
+legacy_dir_db = 15.0
+legacy_e_j = 3469.0
+
+[308]
+d_mm = 7.8
+l_mm = 29.0
+m_g = 10.9
+v_ref = 802.0
+l_ref = 0.61
+v_c_cm3 = 3.5
+m_c_g = 2.9
+p_max_mpa = 415.0
+trim_db = -3.5
+supp_db = 26.0
+bore_mm = 0.0
+pellets = 1
+b = 0.88
+t_flame = 2800.0
+legacy_peak_pa = 6780.0
+legacy_dir_db = 15.0
+legacy_e_j = 3505.0
+
+[762x54]
+d_mm = 7.9
+l_mm = 29.0
+m_g = 9.6
+v_ref = 825.0
+l_ref = 0.605
+v_c_cm3 = 4.1
+m_c_g = 3.1
+p_max_mpa = 390.0
+trim_db = 0.0
+supp_db = 26.0
+bore_mm = 0.0
+pellets = 1
+b = 0.88
+t_flame = 2800.0
+legacy_peak_pa = 6780.0
+legacy_dir_db = 15.0
+legacy_e_j = 3267.0
+
+[300blk]
+d_mm = 7.8
+l_mm = 28.0
+m_g = 8.1
+v_ref = 675.0
+l_ref = 0.406
+v_c_cm3 = 1.35
+m_c_g = 1.25
+p_max_mpa = 380.0
+trim_db = 0.0
+supp_db = 26.0
+bore_mm = 0.0
+pellets = 1
+b = 0.88
+t_flame = 2800.0
+legacy_peak_pa = 6000.0
+legacy_dir_db = 15.0
+legacy_e_j = 1840.0
+
+[300blk_sub]
+d_mm = 7.8
+l_mm = 35.0
+m_g = 14.1
+v_ref = 310.0
+l_ref = 0.406
+v_c_cm3 = 1.1
+m_c_g = 0.65
+p_max_mpa = 380.0
+trim_db = 0.0
+supp_db = 30.0
+bore_mm = 0.0
+pellets = 1
+b = 0.88
+t_flame = 2800.0
+legacy_peak_pa = 3000.0
+legacy_dir_db = 15.0
+legacy_e_j = 675.0
+
+[50bmg]
+d_mm = 12.9
+l_mm = 58.0
+m_g = 41.9
+v_ref = 928.0
+l_ref = 1.143
+v_c_cm3 = 19.5
+m_c_g = 15.5
+p_max_mpa = 395.0
+trim_db = 0.0
+supp_db = 32.0
+bore_mm = 0.0
+pellets = 1
+b = 0.88
+t_flame = 2800.0
+legacy_peak_pa = 12000.0
+legacy_dir_db = 8.0
+legacy_e_j = 18050.0
+
+[12_buck]
+d_mm = 8.4
+l_mm = 8.4
+m_g = 34.0
+v_ref = 404.0
+l_ref = 0.457
+v_c_cm3 = 4.0
+m_c_g = 1.75
+p_max_mpa = 79.0
+trim_db = 0.0
+supp_db = 20.0
+bore_mm = 18.5
+pellets = 9
+b = 0.88
+t_flame = 2800.0
+legacy_peak_pa = 6780.0
+legacy_dir_db = 16.0
+legacy_e_j = 2775.0
+
+[12_slug]
+d_mm = 18.5
+l_mm = 20.0
+m_g = 28.0
+v_ref = 396.0
+l_ref = 0.457
+v_c_cm3 = 4.0
+m_c_g = 1.75
+p_max_mpa = 79.0
+trim_db = 0.0
+supp_db = 20.0
+bore_mm = 0.0
+pellets = 1
+b = 0.88
+t_flame = 2800.0
+legacy_peak_pa = 6780.0
+legacy_dir_db = 16.0
+legacy_e_j = 2300.0
+
+[musket]
+d_mm = 19.0
+l_mm = 19.0
+m_g = 30.0
+v_ref = 300.0
+l_ref = 1.0
+v_c_cm3 = 6.0
+m_c_g = 6.0
+p_max_mpa = 30.0
+trim_db = 0.0
+bore_mm = 0.0
+pellets = 1
+b = 0.88
+t_flame = 2000.0
+legacy_peak_pa = 3000.0
+legacy_dir_db = 12.0
+legacy_e_j = 1500.0

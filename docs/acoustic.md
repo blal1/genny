@@ -61,7 +61,8 @@ instruments, the options added to the existing ones and the Python helpers behin
   also the packet pitch) plus a windowed resonance packet restarted every cycle (`res` 0.3, `attack` 0.3 s, `release`
   0.8 s).
 - `harpsichord`: `pluck` 0 = by register (12 % of the string in the bass to 50 % in the treble), `phantom`
-  (longitudinal resonances: a bright, metallic onset).
+  (longitudinal resonances: a bright, metallic onset), `timbre` 0..1 (one-pole darkening of the release knock; 0, the
+  default, leaves the sound as it was: at 0.8 the centroid of the release goes from 1.8 to 1.1 kHz).
 - `violin`: `model="commuted"` (body response relaunched every period), `direction` (0 facing the violin .. 1 beside
   it: the body's directivity heard through the vibrato).
 - Winds: `meyer=1` on `flute` (attack by register and velocity, 120 ms release) and `clarinet` (attack), and on the
@@ -113,3 +114,48 @@ body b), `mix` (1).
   the modes, each at half the mobility), `action_kind` tones | noise (board knock at 90 Hz and a 300-600 Hz shock,
   100 ms in the bass to 40 ms in the treble). Keys above MIDI 89 have no damper. Functions: `bridge_admittance`,
   `long_coupling`, `harmonic_weight`, `place_longitudinal`, `sympathetic`, `lid`, `damped`.
+
+## Added in 1.3.0
+
+- `accordion bend=` (Hz of pitch drop per kPa of bellows pressure, 2.5 with the key fully down, 5.1 half down) and
+  `pressure=` (kPa); new instrument `harmonium` (Indian hand harmonium, C3-C6, from the measured free-reed source
+  spectrum; `tubes.free_reed(reed="harmonium")` is its Python preset).
+- `gamelan bar=saron|jegogan`: the saron has partials 1 : 2.71 : 4.84 (measured; the third was 5.15), the Balinese
+  jegogan 1 : 2.7 : 5.2 : 8.4 : 12.2.
+- `tubular_bell` uses measured loaded-tube partials (0.63, 1.22, 2, 2.93, 4.01, 5.21); `glockenspiel` is a steel-bar
+  modal model (1 : 2.71 : 5.15 : 8.43 : 12.21); `singing_bowl` follows the measured qing modes 1 : 2.75 : 5.06 :
+  7.78 : 10.83; `vibraphone` puts partials 2 and 3 where the register says and its motor vibrato is 6 dB deep;
+  `glass` has partials at 1.89 and 3.21.
+- New instrument `pea_whistle` (referee or police whistle with a pea, `spin` = trill, wind family). It is not the
+  sports sfx of the same name (`sports.md`), which is a one-shot blast.
+- `tabla`: the loaded skin has 9 modes on 5 harmonic tones (1, 2, 3, 3, 4, 4, 5, 5, 5), not 1 to 9.
+- `violin sordino=1` filters with the measured mute shape: the bridge hump (1-2.5 kHz) loses 5 to 13 dB and the low
+  range keeps its level.
+- `physical.bank_piano.note`: `ribs` (above 1.15 kHz the table seen from the bridge has 0.4x the modes but stronger;
+  above 2.5 kHz its mean mobility is 3.5x), `bridge_profile` (bridge conductance follows the key: -9 dB on the bass
+  bridge, -10 dB at the top of the treble, relative to the middle), `orth_profile` (with `polarisations=2`, the
+  horizontal plane radiates 27 dB under the vertical in the bass and level with it above 2 kHz instead of a flat
+  -10 dB; `ORTH_PROFILE_DB`, `orth_radiation_gain`), `HORIZ_CENTS` 0.1.
+- Bowed strings and brass speed their vibrato up at the end of a held note along the measured tail; `bass_drum` felt
+  mallet contact is 4 ms; `trumpet model=lip2d` takes the mouth pressures of the published simulation (+0.5-1 kPa);
+  `SympatheticPiano` couples at a passive bridge in the right direction (two-stage decay).
+## Newer options (1.3.0)
+
+- `koto` and `sitar loss="guitar"|"air"`; `rhodes hysteresis`; `guitar glide_couple`, `lam` = 0.5 - size; `harpsichord
+  plectrum=` (`graphsolver.PlectrumJunction`, `pluck(...) -> (out, t_rel, f_pk)`); `mandolin plectrum=`;
+  `church_organ voicing="light"`, `mouth=`, `grey_chiff(ping=)`; `organ crosstalk=`; `clarinet model="worman"|"map"`,
+  `lattice=`; `cello` and `violin` `torsion`, `wolf` (elastoplastic); `trumpet mute_kind="straight"|"cup"|"harmon"`;
+  `filled_glass partials="french"` (f0 / sqrt(1 + 2.61 fill^4), 11 semitones at full); `flute jet_peak=` (the jet noise peak
+  at f = St U / h, St from 0.08 to 0.03 with the pressure); `recorder attack_pulse=`, `jet_offset`, `jet_angle`.
+- Measured blowing conditions of a flue pipe: jet angle 39 +- 2 degrees, labium distance l/h 5.6, offset y/h 0.24 +- 0.25,
+  flow 16 L/min, flue height 1.2 mm, jet speed 21.5 +- 2.7 m/s. With `recorder(jet_offset=0.24, jet_angle=39)` the jet sits
+  that far off the labium (the even harmonics come up); `physical.winds.jet_regime(freq, W, Uj)` says which Strouhal regime
+  the blow is in and `graphsolver.jet_bore(pressure=, bound=True)` keeps St in the first gain region.
+- Instruments added in 1.3.0: `unison_strings` (`strings`, `detune` 1.6 cents), `slide_clarinet`, `steelpan`, `trautonium`,
+  `ondes_martenot`, `harmonica_reed`, `accordion_reed`, `melodica_reed`, `sho_reed`, `khaen_reed`, `guitar_modal`,
+  `violin_modal`, `rhodes_fd`; world instruments in `world.md`. `harmonium` is softened (corner 1.8-3 kHz) and `unison_strings`
+  has a gain by register (+3 dB at MIDI 53-58 up to +16 dB at 84).
+- Formants of the winds (Meyer): `french_horn` and `natural_horn` main formant 340 Hz (was 450), `oboe` + 4500 Hz,
+  `bassoon` + 2000 and 3500 Hz, `contrabassoon` 250, 450, 800, `bass_trombone` 370 Hz (`HORN_BODY`).
+- `PianoHammerAction(hysteresis=, voicing=, strike_ratio=)`; Python `acoustic.flue_harmonics`.
+- `vibrato model="scanner"` and `compose emotion=`: see `dsp.md` and `compose.md`.

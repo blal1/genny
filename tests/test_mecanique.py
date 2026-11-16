@@ -48,7 +48,7 @@ def test_train_horn_is_the_k5la():
     y = FO.train(sr=SR, dur=2.0, horn=1.5)[:SR]
     for f in (311.0, 370.0, 415.0, 494.0, 622.0):                  # vehicules_terre.md:231 [K5]
         assert abs(peak(y, f - 12, f + 12) - f) <= 1.0
-    assert db(y, 470.0) < db(y, 494.0) - 10                        # the old UNSOURCED 470 Hz is gone
+    assert db(y, 470.0) < db(y, 494.0) - 10                        # the old 470 Hz is gone
 
 
 def test_train_without_options_does_not_change():

@@ -1,0 +1,82 @@
+schema = "genny.preset/1"
+family = "two_stroke"
+# rpm, idle, tuned_rpm, limit: rpm. ports: exhaust opens deg, transfer opens deg, exhaust width mm, transfer width mm, stroke mm, rod mm, bore mm.
+# induct: port | reed. band: 0..1. cut: limiter | soft. no_pipe = true: no tuned pipe. header, pipe: ms.
+
+[default]
+rpm = 7000.0
+
+[chainsaw]
+rpm = 9400.0
+idle = 2800.0
+ports = "105,122,30,24,32,60,44"
+induct = "port"
+no_pipe = true
+band = 0.1
+limit = 13000.0
+cut = "limiter"
+
+[scooter]
+rpm = 7000.0
+idle = 1900.0
+ports = "95,120,28,22,39.2,85,40"
+induct = "reed"
+tuned_rpm = 7500.0
+band = 0.1
+limit = 9000.0
+cut = "limiter"
+
+[mx125]
+rpm = 11500.0
+idle = 1900.0
+ports = "82,113,37.8,30,54.5,110,54"
+induct = "reed"
+tuned_rpm = 11500.0
+band = 0.4
+limit = 12500.0
+cut = "limiter"
+
+[mx250]
+rpm = 8500.0
+idle = 1600.0
+ports = "86,115,46.5,38,72,130,66.4"
+induct = "reed"
+tuned_rpm = 8500.0
+band = 0.4
+limit = 9500.0
+cut = "limiter"
+
+[outboard]
+rpm = 5500.0
+idle = 750.0
+ports = "95,120,50,40,65,125,72"
+induct = "reed"
+tuned_rpm = 5500.0
+band = 0.2
+limit = 6000.0
+cut = "soft"
+
+[snowmobile]
+rpm = 7000.0
+ports = "92,120,50,40,68,120,69.5"
+induct = "reed"
+tuned_rpm = 7000.0
+band = 0.3
+limit = 8500.0
+cut = "limiter"
+
+[mower]
+rpm = 3000.0
+ports = "100,125,27,21,35,70,40"
+induct = "port"
+no_pipe = true
+band = 0.0
+limit = 3800.0
+cut = "limiter"
+
+[vintage]
+rpm = 600.0
+ports = "88,118,70,55,110,200,100"
+induct = "port"
+no_pipe = true
+band = 0.0

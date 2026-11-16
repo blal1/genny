@@ -18,7 +18,7 @@ def one_take(monkeypatch):
 KINDS = sorted(Sc.SCENES) + sorted(Am.ACT_BEDS)
 
 # Each cause below was read sample by sample on the render (L20.md). A mix click traced to anything else, or to nothing, fails: the assembly makes none of its own.
-ATTACKS = {"firearm", "howitzer", "shell_incoming", "blast", "sand_storm", "fire", "eat", "truck", "slot_machine", "excavator", "saw", "conveyor", "applause", "swarm", "force_field", "foliage", "servo"}    # hits, grains, saw edges of the sound itself; servo: the rotor edge (ph % 1)**4 once per turn at full speed, not servo_env
+ATTACKS = {"firearm", "howitzer", "shell_incoming", "blast", "sand_storm", "fire", "eat", "truck", "slot_machine", "excavator", "saw", "conveyor", "applause", "swarm", "force_field", "foliage", "servo", "hard_drive", "medical", "keyboard_typing", "door_family"}    # head ticks, piston and beep edges, keystrokes, latches; hits, grains, saw edges of the sound itself; servo: the rotor edge (ph % 1)**4 once per turn at full speed, not servo_env
 KNOWN_DEFECTS = {"crowd_murmur"}     # NOT normal: almost_speech's 4 Hz phasor wraps on the same sample in every voice (L20.md, reported to the owner of creatures.py / voice.py)
 # Beds: rain (parabolic drops), wind_scene's leaves (thresholded noise), stream grains (1 ms bursts through vcf~).
 BEDS_WITH_GRAINS = {"seaside", "nautical", "shore", "fantasy", "forest", "wildfire", "swamp", "tropical", "park", "suburban", "farm", "grassland", "lakeside", "birdsong", "insect", "rural"}

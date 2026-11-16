@@ -1,0 +1,107 @@
+{
+  "name": "taqsim_dimashq",
+  "sr": 48000,
+  "bpm": 84,
+  "beats": 96,
+  "normalize": -3.0,
+  "layers": [
+    {
+      "type": "seq",
+      "inst": "pan_flute",
+      "step": 1,
+      "steps": "D5:0.75 Eb5:0.25 D5:0.5 C5:0.5 Bb4:0.5 A4:0.5 G4:0.5 F#4:0.5 Eb4:1 D4:1 -:2 | D4:1 A4:0.5 D5:0.5 A4:1 F#4:0.5 Eb4:0.5 | D4:1 Eb4:0.5 F#4:0.5 G4:1 A4:1 | Bb4:1 A4:0.5 G4:0.5 F#4:1 Eb4:1 | D4:2 -:1 -:1 | D5:1 A4:0.5 F#4:0.5 Eb4:1 D4:1 | D4:1 A4:0.5 D5:0.5 F#5:1 G5:1 | F#5:1 Eb5:0.5 D5:0.5 C5:1 Bb4:1 | A4:1 G4:0.5 F#4:0.5 D4:2 | -:16 | D5:1 A5:0.5 D6:0.5 A5:1 F#5:0.5 Eb5:0.5 | D5:1 Eb5:0.5 F#5:0.5 G5:1 A5:1 | Bb5:1 A5:0.5 G5:0.5 F#5:1 Eb5:1 | D5:2 -:1 -:1 | D6:1 A5:0.5 F#5:0.5 Eb5:1 D5:1 | D5:1 A5:0.5 D6:0.5 F#6:1 G6:1 | F#6:1 Eb6:0.5 D6:0.5 C6:1 Bb5:1 | A5:1 G5:0.5 F#5:0.5 D5:2 | A4:0.5 Bb4:0.5 A4:0.5 G4:0.5 F#4:0.5 Eb4:0.5 D4:1 F#4:0.5 G4:0.5 A4:1 D4:2",
+      "gain": 0.7,
+      "params": {"breath": 0.45, "vibrato": 0.15},
+      "fx": [
+        {"type": "eq", "freq": 2500, "gain": -1.5, "q": 1.2},
+        {"type": "reverb", "mix": 0.32, "size": 0.85, "damp": 0.5}
+      ]
+    },
+    {
+      "type": "seq",
+      "inst": "guitar",
+      "at": 8,
+      "step": 0.5,
+      "steps": "D3:1 A3:1 D3:1 A3:1 D3:1 A3:1 D3:1 A3:1",
+      "repeat": 20,
+      "gain": 0.45,
+      "fx": [
+        {"type": "lowpass", "cutoff": 3500},
+        {"type": "eq", "freq": 200, "gain": 2.0, "q": 1.2},
+        {"type": "reverb", "mix": 0.15, "size": 0.7}
+      ]
+    },
+    {
+      "type": "seq",
+      "inst": "harp",
+      "at": 8,
+      "step": 0.5,
+      "steps": "D4:1 F#4:1 A4:1 D5:1 A4:1 F#4:1 D4:1 A3:1",
+      "repeat": 20,
+      "gain": 0.3,
+      "fx": [
+        {"type": "eq", "freq": 5000, "gain": -2.0, "q": 1.0},
+        {"type": "reverb", "mix": 0.28, "size": 0.75, "damp": 0.5}
+      ]
+    },
+    {
+      "type": "seq",
+      "inst": "violin",
+      "at": 40,
+      "step": 1,
+      "steps": "F#5:1 G5:0.5 A5:0.5 Bb5:1 A5:1 | G5:1 F#5:0.5 Eb5:0.5 D5:2 | Eb5:1 D5:0.5 Eb5:0.5 F#5:2 | G5:1 A5:0.5 Bb5:0.5 A5:2",
+      "gain": 0.55,
+      "params": {"vibrato": 1.5, "attack": 0.15},
+      "fx": [
+        {"type": "eq", "freq": 3000, "gain": 1.0, "q": 1.0},
+        {"type": "reverb", "mix": 0.35, "size": 0.85, "damp": 0.4}
+      ]
+    },
+    {
+      "type": "seq",
+      "inst": "strings",
+      "at": 8,
+      "step": 1,
+      "steps": "D3:32 A2:16 D3:32",
+      "gain": 0.22,
+      "params": {"attack": 1.5, "players": 8}
+    },
+    {
+      "type": "seq",
+      "inst": "sub",
+      "at": 0,
+      "step": 1,
+      "steps": "D2:96",
+      "gain": 0.5,
+      "fx": [
+        {"type": "lowpass", "cutoff": 200}
+      ]
+    },
+    {
+      "type": "compose",
+      "role": "drums",
+      "at": 8,
+      "kit": {
+        "djembe:stroke=bass": "x---x---",
+        "tabla:stroke=na": "--x-x-x-",
+        "tambourine": "x-x-x-x-"
+      },
+      "bars": 20,
+      "fill_every": 4,
+      "seed": 42,
+      "gain": 0.5,
+      "humanize": 0.15,
+      "fx": [
+        {"type": "eq", "freq": 300, "gain": 1.0, "q": 1.0},
+        {"type": "reverb", "mix": 0.2, "size": 0.6, "damp": 0.5}
+      ]
+    }
+  ],
+  "fx": [
+    {"type": "eq", "freq": 200, "gain": 1.0, "q": 0.8},
+    {"type": "eq", "freq": 3000, "gain": -1.5, "q": 1.0},
+    {"type": "compressor", "threshold": -18, "ratio": 2.5, "attack": 0.01, "release": 0.2, "makeup": 1.0},
+    {"type": "reverb", "mix": 0.12, "size": 0.75, "damp": 0.5},
+    {"type": "limiter", "ceiling": -0.8}
+  ]
+}

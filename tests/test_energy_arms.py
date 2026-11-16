@@ -1,4 +1,4 @@
-"""Electric and sci-fi weapons: what the spec sources, measured on the signal. Timbre is UNSOURCED, only checked by measure.
+"""Electric and sci-fi weapons: what the spec sources, measured on the signal. Timbre is a design choice, only checked by measure.
 
 Clicks: every variant is scanned whole. Where a shock front exists by physics (N-wave, blast), each flagged sample must lie on a front computed from the model; anything else fails.
 """
@@ -269,7 +269,7 @@ def test_real_laser_is_short_and_up_near_20_khz():
     assert _share(y, 10000, 24000) > 0.5 and _centroid(y) > 12000
 
 
-# Plasma, all UNSOURCED: the spec's structure
+# Plasma, all design choices: the spec's structure
 def test_plasma_bolt_structure():
     y = E.plasma(sr=SR, seed=1)
     a, b = int(E.PLASMA_CHARGE * SR), int((E.PLASMA_CHARGE + E.PLASMA_FLIGHT) * SR)

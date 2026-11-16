@@ -216,7 +216,7 @@ def test_early_reflections_geometry():
 def test_room_presets_ordered_by_decay():
     indoor = ["closet", "studio", "bedroom", "bathroom", "hall", "church", "priory", "cave"]
     outdoor = ["forest", "street", "canyon"]
-    sourced = ["practice_room", "orchestra_studio", "opera", "concert_hall", "arena", "amphitheater"]    # tests/test_espaces.py
+    sourced = ["practice_room", "orchestra_studio", "opera", "concert_hall", "arena", "amphitheater", "baroque"]    # tests/test_espaces.py; baroque: LOT34_G
     assert set(indoor + outdoor + sourced) == set(R.ROOM_PRESETS)
     sab = {p: float(np.mean(R.room_info(p)["t60"][2:4])) for p in indoor + outdoor}
     meas = {p: decay_time(R.room(impulse(SR // 10, 10), SR, preset=p, mix=1.0).mean(axis=1), SR) for p in indoor + outdoor}

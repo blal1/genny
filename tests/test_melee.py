@@ -106,10 +106,22 @@ def test_blade_force_follows_the_wedge():
     Y = M.yield_stress(3e7)
     assert Y == 1e7                                                     # Y = H / 3 of 6.29
     f = M.blade_force(30.0, 0.05, 0.01, Y)
-    assert abs(f - 2.61 * (Y / 2) * 2 * 0.01 * math.tan(math.radians(30)) * 0.05) / f < 0.01
+    assert abs(f - 2.61 * (Y / 2) * 2 * M.wedge_half_width(30.0, 0.01) * 0.05) / f < 0.01
     assert M.blade_force(30.0, 0.05, 0.01, Y, mu=0.2) > f               # pm = pw (1 + mu cot alpha)
     narrow, wide = M.blade_contact(10.0, 1.0, 20.0, 0.05, Y), M.blade_contact(45.0, 1.0, 20.0, 0.05, Y)
     assert narrow[0] > wide[0] and narrow[1] < wide[1]                  # a sharp edge pushes less and for longer
+
+
+@pytest.mark.parametrize("alpha", [10.0, 30.0, 60.0])
+def test_wedge_lip_holds_the_displaced_volume(alpha):
+    """Lip BC = AB = l: the lip area above the original surface equals the area the wedge pushed aside."""
+    a, psi = M._wedge_psi(alpha)
+    half = M.wedge_half_width(alpha, 1.0)
+    l = half / math.sin(a)
+    h = l * math.sin(a - psi)
+    base = half - math.tan(a) + math.sqrt(l * l - h * h)
+    assert abs(0.5 * base * h - 0.5 * math.tan(a)) < 1e-9
+    assert half > math.tan(a)
 
 
 @pytest.mark.parametrize("name", ["knife", "axe"])

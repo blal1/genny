@@ -238,3 +238,16 @@ describes it only in words); partial levels of the rod tables (only frequencies 
 spring's mode law (Bilbao's §7.9 helical-spring equations are not used here); `cristal`'s
 `wetness` mapping, pitch-proportional mobility and harmonic mix. The whistling-blade beat uses the quoted
 4-6 Hz; the thesis also prints a measured pair 2870/2917 Hz (47 Hz apart) that contradicts it.
+
+## Added in 1.3.0
+
+- `thoret_friction(diameter=, speed=)`: the singing-glass beat is sin(2 pi * integral of v / (pi D) dt), pi D being
+  the rim circumference (it was v/D, a factor pi too fast).
+## Newer options (1.3.0)
+
+- `squeak surface="snow_shoe"` (900 Hz); the `geo` sfx `snow_rub` (a stick rubbed in cold snow, torsion modes
+  f_n = n 636 / 2L).
+- `rod_bank feed= mount= damp= body= neighbours=` and `radiator_size=` (0.8): how the rods are driven and mounted, five
+  sets; `bowed_bar partial= ranks=` (`material="comb"` renders again); `sheet_radiator sectors= tilt= tuned_to= fragments=`;
+  `cristal` harmonics follow the pressure; `tuning_fork spin=`; `whistling_blades spin>0` adds the Doppler of the rotation.
+- Spring-reverb recipe: `{"type": "spring_reverb", "decay": 8, "mix": 0.5}`.

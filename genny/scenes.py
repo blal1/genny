@@ -10,6 +10,7 @@ import numpy as np
 from scipy.signal import resample as _fft_resample
 
 from . import fx as Fx
+from . import presets
 from . import reverbs as Rv
 from .core import DEFAULT_SR
 from .instruments import render_chord
@@ -17,6 +18,7 @@ from .notes import to_hz
 from .ordnance import earplug
 from .physical import ambience as Am
 from .physical.core import pan_gains
+from .presets import F
 from .sfx import REGISTRY, render_sfx, sfx
 
 REF = 0.1                # RMS of a layer at 0 dB, room to sum about ten of them under full scale
@@ -35,20 +37,6 @@ EAR_HOLD_S = 1.0         # s of full cotton after the blast
 EAR_S = 3.0              # s for the ears to clear after that
 
 
-def L(name, db, wide=True, opt=False, **params):
-    """A layer sounding all along. wide = one take per channel (independent, so mono-safe); else one centred take."""
-    return dict(sfx=name, db=db, wide=wide, opt=opt, every=None, params=params)
-
-
-def E(name, db, every, opt=False, **params):
-    """Events every (lo, hi) s. opt = skipped when this sfx is not registered."""
-    return dict(sfx=name, db=db, wide=False, opt=opt, every=every, params=params)
-
-
-def C(inst, db, notes):
-    """A held chord from an instrument."""
-    return dict(inst=inst, sfx=inst, db=db, wide=False, opt=False, every=None, notes=notes, params={})
-
 
 TEXT = {    # text bed_generic reads: its keywords pick the emitters
     "open": "open air", "alpine": "mountain peak snow pass pine", "meadow": "grass meadow", "forest": "forest tree",
@@ -57,91 +45,44 @@ TEXT = {    # text bed_generic reads: its keywords pick the emitters
     "war": "battle war burn stone", "lake": "lake grass", "town": "town stone", "burn": "burn forest tree wind",
 }
 
-CROWD = dict(people=12)
-TALK = dict(mood=0.3, distance=0.6, **CROWD)
-BUSY = dict(mood=0.8, distance=0.4, **CROWD)
 
-# Scene: bed = key of TEXT, or None for the quiet air of ambience.room_tone. room = reverbs.room preset for everything but the bed.
-SCENES = {
-    "air": dict(bed="open", layers=[L("noise_bed", -12, kind="rumble"), E("gust", -4, (6, 12), through="gap")]),
-    "alpine": dict(bed="alpine", layers=[E("gust", -3, (6, 12), through="canyon"), E("bird_kind", -14, (10, 22), kind="rapaces"),
-                                         E("distant_bell", -20, (14, 28), distance=800.0)]),
-    "amusement": dict(bed=None, layers=[L("crowd_murmur", -3, mood=0.9, distance=0.3, **CROWD), E("ride", -6, (9, 16), kind="manege", dur=8.0),
-                                        E("slot_machine", -12, (5, 11), state="spin"), E("crowd", -6, (7, 14), kind="ah"), E("scream", -14, (9, 20), syllables=2)]),
-    "birdsong": dict(bed="meadow", layers=[L("dawn_chorus", 3)]),
-    "celebration": dict(bed=None, layers=[L("crowd_murmur", -2, mood=1.0, distance=0.3, **CROWD), E("applause", -6, (9, 18), dur=3.0), E("cork_pop", -10, (6, 14)),
-                                          E("party_horn", -13, (5, 11)), E("firework", -14, (8, 16), kind="pop", distance=400.0)]),
-    "construction": dict(bed="town", layers=[E("jackhammer", -3, (6, 12), dur=2.5), E("power_tool", -6, (5, 10), kind="disqueuse", dur=2.0), E("hammering", -6, (4, 8), strikes=5),
-                                             E("saw", -10, (7, 13), strokes=5), E("backup_beeper", -16, (10, 20), dur=3.0), E("excavator", -8, (10, 18), dur=4.0)]),
-    "desert": dict(bed="desert", layers=[L("sand_storm", -6, wind=0.42, hard=0.3), L("night_insects", -20, density=0.15, temp=30.0), E("gust", -5, (7, 14), through="gap")]),
-    "designed": dict(bed=None, act="awakening", layers=[L("dark_drone", -2, wide=False), L("shepard", -16, wide=False, direction="down", rate=0.05)]),
-    "emergency": dict(bed="city", layers=[E("siren_wail", -3, (7, 13), kind="ambulance", dur=5.0, echo=0.8), L("crowd", -8, kind="panique", voices=12), E("shout", -10, (5, 10), kind="hurlement"),
-                                          E("alarm_bell", -16, (8, 16), dur=2.0)]),
-    "fantasy": dict(bed="forest", layers=[L("dark_drone", -8, wide=False, note=45.0), E("magic_kind", -8, (5, 11), kind="shimmer"), E("wings", -14, (8, 15), dur=2.0),
-                                          E("creature", -16, (12, 24), kind="fantome", dur=2.5)]),
-    "farm": dict(bed="meadow", layers=[E("moo", -6, (7, 15)), E("chicken", -10, (3, 7), kind="caquet"), E("farm_animal", -10, (6, 13), kind="mouton"), E("pig", -12, (8, 16)),
-                                       E("horse", -12, (12, 24)), E("birdsong", -12, (12, 24), species="rooster"), E("tractor", -18, (15, 30), dur=4.0)]),
-    "forest": dict(bed="forest", layers=[L("dawn_chorus", -6, birds=6), E("foliage", -8, (6, 12), kind="branches"), E("wild_animal", -18, (14, 28), kind="cerf"), E("crack", -18, (11, 22), kind="branche")]),
-    "grassland": dict(bed="meadow", layers=[L("night_insects", -7, density=0.4), E("foliage", -8, (4, 9), kind="herbe"), E("bird_kind", -18, (12, 24), kind="rapaces")]),
-    "historical": dict(bed="town", layers=[L("crowd_murmur", -5, **TALK), E("footsteps", -9, (5, 10), ground="cobblestone", steps=6), E("door_family", -12, (10, 20), kind="donjon"),
-                                           E("wagon", -8, (8, 16), dur=4.0), E("distant_bell", -15, (12, 24), distance=300.0)]),
-    "hitech": dict(bed=None, layers=[L("hvac", -5, wide=False, state="fan"), L("room_tone", -14, wide=False, kind="bureau"), E("cyber_ui", -12, (4, 9), kind="scan"), E("hard_drive", -14, (6, 12), dur=1.5), E("servo", -14, (7, 14))], room="studio"),
-    "hospital": dict(bed=None, layers=[L("hvac", -8, wide=False, state="cool"), L("medical", -10, wide=False, kind="moniteur"), L("medical", -14, wide=False, kind="respirateur"),
-                                       E("crowd_murmur", -14, (8, 16), people=4, mood=0.15, dur=4.0), E("cart", -12, (9, 18), kind="chariot", dur=3.0), E("elevator", -14, (15, 28), kind="carillon"),
-                                       E("door_family", -12, (10, 20), kind="coulissante")], room="hall"),
-    "industrial": dict(bed=None, layers=[L("industrial", -2, wide=False, kind="usine"), L("conveyor", -6, wide=False), L("transformer", -12, wide=False, loose=0.3), E("industrial", -3, (5, 10), kind="presse", dur=2.0),
-                                         E("air_system", -10, (7, 14), kind="air_dryer_purge")], room="hall"),
-    "insect": dict(bed="meadow", layers=[L("night_insects", 2, density=0.8), L("swarm", -6, kind="cigales", count=8)]),
-    "lakeside": dict(bed="lake", layers=[L("lap", -2, kind="clapot"), L("dawn_chorus", -8, birds=5), E("frog", -13, (7, 14), kind="ribbit"), E("farm_bird", -14, (10, 20), kind="canard")]),
-    "market": dict(bed=None, layers=[L("crowd_murmur", -1, **BUSY), E("coins", -11, (4, 8), kind="comptage"), E("shout", -9, (5, 11), kind="encouragement"), E("cart", -9, (7, 14), kind="charrette"),
-                                     E("chicken", -15, (9, 17), kind="caquet"), E("clink", -15, (5, 11))]),
-    "nautical": dict(bed="harbour", layers=[L("lap", -3, kind="quai"), L("sailboat", -6), E("creak", -11, (6, 12), material="wood"), E("ship_bell", -14, (12, 24), ring=1.5), E("foghorn", -12, (15, 30), distance=800.0),
-                                            E("bird_kind", -15, (8, 16), kind="marins")]),
-    "office": dict(bed=None, layers=[L("hvac", -8, wide=False, state="fan"), L("crowd_murmur", -14, people=5, mood=0.3, distance=0.7), E("keyboard_typing", -9, (5, 9), keys=20), E("printer", -13, (12, 22), lines=2),
-                                     E("office", -13, (7, 15), kind="agrafeuse"), E("phone_bell", -15, (14, 26))], room="studio"),
-    "park": dict(bed="meadow", layers=[L("dawn_chorus", -4, birds=6), L("crowd_murmur", -12, people=8, mood=0.5, distance=0.9), L("fountain", -13), E("bicycle", -11, (10, 18), dur=4.0),
-                                       E("bark", -16, (11, 20), size="small", count=2), E("ball_bounce", -16, (8, 15), opt=True, kind="foot", surface="turf")]),
-    "prison": dict(bed=None, layers=[L("crowd_murmur", -10, people=8, mood=0.25, distance=0.8), E("chain", -8, (6, 13), dur=2.0), E("door_family", -5, (10, 20), kind="prison"), E("lock", -9, (9, 18), kind="verrou"),
-                                     E("footsteps", -11, (6, 11), ground="concrete", shoe="boot", steps=6), E("shout", -13, (8, 16), kind="hurlement")], room="hall"),
-    "protest": dict(bed="city", layers=[L("crowd", -1, kind="chants", voices=12), E("shout", -8, (4, 9), kind="cri de guerre", people=4), E("crowd", -6, (9, 16), kind="huee", dur=3.0), E("applause", -10, (12, 22), dur=3.0),
-                                        E("siren_wail", -18, (15, 28), kind="police_fr", dur=4.0, bright=0.5)]),
-    "public": dict(bed=None, layers=[L("crowd_murmur", -2, **TALK), E("footsteps", -9, (4, 8), ground="hard_floor", steps=6), E("alert_tone", -15, (14, 26), preset="information"), E("door_family", -14, (10, 20), kind="tournante", dur=3.0)], room="hall"),
-    "religious": dict(bed=None, layers=[C("church_organ", -6, ("C3", "G3", "C4", "E4")), L("crowd_murmur", -15, people=8, mood=0.1, distance=0.8), E("distant_bell", -12, (9, 18), distance=100.0), E("cough", -18, (9, 18))], room="church"),
-    "residential": dict(bed=None, layers=[L("room_tone", 0, kind="salon"), L("clock", -14, wide=False, size="mantle"), L("appliance", -12, wide=False, kind="frigo"), E("door_family", -10, (12, 24), kind="battante"),
-                                          E("faucet", -13, (10, 22), dur=2.0), E("kettle", -18, (20, 40), dur=4.0)], room="bedroom"),
-    "restaurant": dict(bed=None, layers=[L("crowd_murmur", -1, **BUSY), E("clink", -10, (2, 5)), E("eat", -15, (6, 12)), E("cork_pop", -14, (12, 24)), E("frying_pan", -14, (9, 18)),
-                                         E("footsteps", -14, (7, 13), ground="wood", steps=5)], room="studio"),
-    "room": dict(bed=None, layers=[L("room_tone", 0, kind="salon")]),
-    "rural": dict(bed="meadow", layers=[L("dawn_chorus", -6, birds=5), E("moo", -14, (9, 18)), E("tractor", -18, (15, 30), dur=4.0), E("bark", -20, (11, 22), count=2)]),
-    "school": dict(bed=None, layers=[L("crowd", -2, kind="enfants", voices=12), E("alarm_bell", -12, (16, 30), dur=2.0), E("ball_bounce", -14, (6, 12), opt=True, kind="basket", surface="concrete"),
-                                     E("door_family", -12, (9, 18), kind="battante"), E("footsteps", -11, (5, 9), ground="hard_floor", gait="run", steps=6)], room="hall"),
-    "scifi": dict(bed=None, layers=[L("dark_drone", -3, wide=False, note=40.0), L("force_field", -12, wide=False, freq=80), L("hvac", -12, wide=False, state="fan"), E("cyber_ui", -12, (4, 9), kind="scan"), E("servo", -13, (7, 14)),
-                                    E("door_family", -9, (10, 19), kind="hi_tech")]),
-    "seaside": dict(bed="sea", layers=[L("surf", -2, distance=60.0), E("bird_kind", -10, (5, 11), kind="marins"), E("birdsong", -14, (7, 15), species="gull"), L("crowd_murmur", -19, people=8, mood=0.6, distance=1.0)]),
-    "sport": dict(bed=None, layers=[L("crowd", -1, kind="ovation", voices=16), E("crowd", -4, (7, 13), kind="oh"), E("applause", -8, (9, 16), dur=3.0), E("pea_whistle", -8, (9, 16), opt=True, blasts=2),
-                                    E("ball_bounce", -14, (4, 8), opt=True, kind="basket")]),
-    "suburban": dict(bed="meadow", layers=[L("dawn_chorus", -7, birds=5), E("pass_by", -6, (8, 15), dur=5.0, speed=45.0), E("bark", -16, (10, 20), count=2), E("mower", -17, (16, 30), dur=4.0), E("car_door", -14, (11, 20))]),
-    "swamp": dict(bed="swamp", layers=[L("night_insects", -3, density=0.7, temp=26.0), E("frog", -5, (4, 9), kind="croak", calls=4), E("frog", -9, (5, 10), kind="trill", calls=2), E("bubbles", -14, (8, 15), dur=2.0),
-                                       E("mud", -14, (9, 18), opt=True, kind="bulles", dur=2.0)]),
-    "town": dict(bed="town", layers=[L("crowd_murmur", -5, **TALK), E("pass_by", -5, (7, 14), dur=5.0, speed=40.0), E("distant_bell", -14, (12, 24), distance=300.0), E("bike_bell", -14, (10, 20)),
-                                     E("footsteps", -12, (6, 11), ground="stone", steps=6)]),
-    "traffic": dict(bed="city", layers=[L("tyre_roll", -7, speed=60.0), E("pass_by", 0, (2, 5), dur=4.0), E("truck", -1, (8, 15), kind="truck_passby", dur=5.0), E("motorcycle", -4, (9, 18), kind="passby", dur=4.0),
-                                        E("car_horn", -12, (8, 16), dur=0.5)]),
-    "transportation": dict(bed=None, layers=[L("crowd_murmur", -3, **TALK), L("escalator", -13, wide=False), E("rail", -2, (14, 24), kind="metro_start"), E("alert_tone", -14, (12, 22), preset="information"),
-                                             E("footsteps", -10, (4, 8), ground="hard_floor", steps=6)], room="hall"),
-    "tropical": dict(bed="jungle", layers=[L("night_insects", -4, density=0.7, temp=28.0), L("rain_on", -9, surface="feuilles", intensity=0.3), E("bird_kind", -8, (4, 9), kind="tropicaux"), E("primate", -13, (11, 20), kind="singe"),
-                                           E("birdsong", -14, (8, 15), species="cuckoo")]),
-    "tundra": dict(bed="tundra", layers=[L("snowfall", -10, hiss=0.3), E("gust", -3, (7, 14), through="canyon"), E("wild_animal", -14, (15, 28), kind="loup"), E("ice_crack", -14, (11, 22), distance=80.0)]),
-    "underground": dict(bed="cave", layers=[L("cave_drips", -3), L("noise_bed", -10, kind="rumble"), E("rail", -9, (15, 25), kind="metro_start")]),
-    "underwater": dict(bed=None, layers=[L("underwater_ambience", 3), E("bubbles", -8, (6, 12), dur=2.0, underwater=1), E("whale", -15, (12, 24)), E("submarine", -14, (16, 28), dur=6.0)]),
-    "urban": dict(bed="city", layers=[L("crowd_murmur", -6, **TALK), E("pass_by", -2, (4, 8), dur=4.0, speed=50.0), E("bus", -8, (14, 26), dur=5.0), E("siren_wail", -18, (15, 28), kind="police_fr", dur=4.0, bright=0.5), E("car_horn", -14, (8, 16), dur=0.5),
-                                      E("air_system", -14, (12, 22), kind="air_dryer_purge")]),
-    "warfare": dict(bed="war", climax=0.7, layers=[E("firearm", -6, (3, 7), distance=120.0, shots=4, echo=0.3, render="pressure"), E("firearm", -9, (4, 9), weapon="ak47", distance=200.0, shots=3, echo=0.3, render="pressure"), E("howitzer", -5, (7, 13), distance=900.0),
-                                                   E("shell_incoming", -7, (8, 15), distance=300.0), E("crowd", -11, (9, 17), kind="combat", voices=8, dur=3.0), E("shout", -13, (7, 13), kind="cri de guerre", people=3)], room="street"),
-    "wildfire": dict(bed="burn", layers=[L("fire", 2, size=1.0, wind=0.6), E("crack", -6, (3, 7), kind="branche"), E("tree", -9, (11, 22), kind="chute"), E("gust", -5, (7, 13), through="leaves")]),
-    "cacophony": dict(bed="city", layers=[L("crowd", -2, kind="panique", voices=12), E("car_alarm", -4, (5, 9), seq="01", motif=3.0), E("air_horn", -4, (3, 6), dur=1.2), E("siren_wail", -4, (5, 9), dur=4.0), E("jackhammer", -5, (4, 8), dur=2.0), E("alarm_bell", -7, (4, 8), dur=2.0)]),
-    "environmental": dict(bed="open", layers=[L("noise_bed", -9, kind="hum"), E("pass_by", -9, (7, 14), dur=4.0), E("flyby_jet", -13, (18, 30), dur=8.0, closest=800.0)]),
-}
+def _layer(d):
+    """A layer as the code reads it. every = (lo, hi) s for events, none for a layer sounding all along; inst + notes = a held chord."""
+    every = tuple(d["every"]) if "every" in d else None
+    params = dict(d.get("params", {}))
+    if ("inst" in d) == ("sfx" in d):
+        raise presets.PresetError(f"layer {d!r} : exactement une des clés sfx ou inst est attendue")
+    if every is not None and not (len(every) == 2 and 0 < every[0] <= every[1]):
+        raise presets.PresetError(f"layer {d!r} : every = [lo, hi] avec 0 < lo <= hi (s)")
+    if "inst" in d:
+        return dict(inst=d["inst"], sfx=d["inst"], db=d["db"], wide=d["wide"], opt=d["opt"], every=every, notes=tuple(d.get("notes", ())), params=params)
+    return dict(sfx=d["sfx"], db=d["db"], wide=d["wide"], opt=d["opt"], every=every, params=params)
+
+
+def _scene(d):
+    out = dict(bed=d.get("bed"))
+    for key in ("act", "climax"):
+        if key in d:
+            out[key] = d[key]
+    out["layers"] = [_layer(x) for x in d["layers"]]
+    if "room" in d:
+        out["room"] = d["room"]
+    return out
+
+
+# One scene = a bed (a key of TEXT, or none for the quiet air of ambience.room_tone) and its layers; room = reverbs.room preset for everything but the bed.
+SCENES = presets.schema("scene", {
+    "bed": F(str, choices=tuple(TEXT), required=False),
+    "act": F(str, required=False),
+    "climax": F(float, lo=0.0, hi=1.0, required=False),
+    "layers": F(list, max_len=32, of={
+        "sfx": F(str, required=False), "inst": F(str, required=False),
+        "db": F(float, lo=-60.0, hi=24.0, unit="dB"),
+        "wide": F(bool, default=False), "opt": F(bool, default=False),
+        "every": F(tuple, of=float, required=False), "notes": F(tuple, of=str, required=False),
+        "params": F(dict, required=False)}),
+    "room": F(str, required=False),
+}, shape=_scene)
 
 UCS = {
     "AMBAir": "air", "AMBAlpn": "alpine", "AMBAmus": "amusement", "AMBBird": "birdsong", "AMBCele": "celebration", "AMBCnst": "construction", "AMBDsrt": "desert", "AMBDsgn": "designed",
@@ -391,3 +332,6 @@ def room_tone(sr=DEFAULT_SR, kind="salon", mains=50.0, dur=6.0, seed=0):
     y[:e] *= (np.arange(e) / e)[:, None]
     y[n - e:] *= (1 - np.arange(e) / e)[:, None]
     return y / np.abs(y).max() * 0.5
+
+
+presets.enable_patches()

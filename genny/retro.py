@@ -1391,7 +1391,7 @@ PSG_CLOCK = 1_773_450.0   # ZX Spectrum 128: 35.469 MHz crystal / 20 (MAME sincl
 
 
 def psg_tone_period(freq: float, clock: float = PSG_CLOCK) -> int:
-    """12-bit tone period TP for a pitch: f = clock / (16 * TP) (datasheet, g15 §2)."""
+    """12-bit tone period TP for a pitch: f = clock / (16 * TP)."""
     return int(min(max(round(clock / (16.0 * max(freq, 1e-3))), 1), 4095))
 
 

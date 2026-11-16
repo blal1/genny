@@ -14,7 +14,7 @@ def test_acfw_matches_skating_recording():
 def test_ice_sing_is_a_precursor_at_the_coupled_frequency():
     y = M.ice_sing(60.0, 0.05)
     f = np.fft.rfftfreq(len(y), 1.0 / SR)
-    assert abs(f[np.argmax(np.abs(np.fft.rfft(y)))] / M.acfw_frequency(0.05, M.C_AIR) - 1.0) < 0.05
+    assert abs(f[np.argmax(np.abs(np.fft.rfft(y)))] / M.acfw_frequency(0.05) - 1.0) < 0.05
     air = int(0.3 * SR)
     assert np.abs(y[:air]).max() > 10 * np.abs(y[air + int(0.02 * SR):]).max()    # rises before the air wave, not after
 

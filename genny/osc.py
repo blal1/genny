@@ -1,6 +1,9 @@
 """Oscillators and noise. All accept a scalar frequency or a per-sample frequency array (for sweeps)."""
 from __future__ import annotations
 
+import math
+
+import numba
 import numpy as np
 from numpy.polynomial import Polynomial as _Poly
 from scipy.signal import lfilter
@@ -9,7 +12,7 @@ from .core import DEFAULT_SR, samples
 
 WAVES = ["sine", "saw", "square", "pulse", "triangle", "supersaw", "fm", "noise", "pink", "brown", "organ", "wavefold", "gendyn",
          "jp8000", "cz", "gbuzz", "dpw_saw", "dpw_triangle", "dpw_square", "blit", "blit_saw", "blit_square", "sync",
-         "pitched_noise", "held_noise"]
+         "pitched_noise", "held_noise", "vco2_saw", "vco2_square", "vco2_triangle", "vco2_pulse", "squine", "fm_tree"]
 
 
 def _freq_array(freq, n: int) -> np.ndarray:
@@ -236,14 +239,56 @@ def reflect(x, lo, hi):
     return lo + np.where(y > w, 2.0 * w - y, y)
 
 
+GENDY_DISTS = ("uniform", "cauchy", "logist", "hyperbcos", "arcsine", "expon")
+GENDY_PRESETS = {
+    "xenakis": dict(amp_dist="cauchy", dur_dist="cauchy", amp_param=1.0, dur_param=1.0, dur_spread=0.3),
+    "buzz": dict(amp_dist="logist", amp_param=0.6, amp_step=0.3, dur_spread=0.0),
+    "drift": dict(amp_dist="arcsine", dur_dist="arcsine", amp_param=0.8, dur_param=0.8, amp_step=0.15, dur_spread=0.05),
+    "growl": dict(amp_dist="expon", dur_dist="hyperbcos", amp_param=0.9, dur_param=0.5, dur_spread=0.5),
+}
+
+
+def xenakis_dist(u, kind: str = "uniform", a: float = 0.5) -> np.ndarray:
+    """Maps uniform u in [0, 1] to [-1, 1] through one of the Xenakis distributions of dynamic stochastic
+    synthesis; ``a`` (0..1) sets the spread."""
+    u = np.asarray(u, float)
+    a = float(np.clip(a, 1e-4, 1.0))
+    if kind == "cauchy":
+        return 0.1 * np.tan(np.arctan(10.0 * a) * (2.0 * u - 1.0)) / a
+    if kind == "logist":
+        c = 0.5 + 0.499 * a
+        v = (u - 0.5) * 0.998 * a + 0.5
+        return np.log((1.0 - v) / v) / np.log((1.0 - c) / c)
+    if kind == "hyperbcos":
+        t = np.tan(1.5692255 * a * u) / np.tan(1.5692255 * a)
+        return 2.0 * np.log(t * 0.999 + 0.001) * -0.1447648 - 1.0
+    if kind == "arcsine":
+        return np.sin(np.pi * (u - 0.5) * a) / np.sin(0.5 * np.pi * a)
+    if kind == "expon":
+        return 2.0 * np.log(1.0 - u * 0.999 * a) / np.log(1.0 - 0.999 * a) - 1.0
+    if kind == "uniform":
+        return 2.0 * u - 1.0
+    raise ValueError(f"distribution: {' | '.join(GENDY_DISTS)}")
+
+
 def gendyn(freq, n: int, sr: int = DEFAULT_SR, points: int = 12, amp_step: float = 0.5, dur_spread: float = 0.0,
-           seed: int = 0, curve: float = 0.0) -> np.ndarray:
+           seed: int = 0, curve: float = 0.0, amp_dist: str = "uniform", dur_dist: str = "uniform",
+           amp_param: float = 0.5, dur_param: float = 0.5, minfreq: float | None = None, maxfreq: float | None = None,
+           preset: str | None = None) -> np.ndarray:
     """Dynamic stochastic synthesis: a cycle of ``points`` breakpoints, each with an amplitude and a segment length
     that move every cycle by a second-order random walk (a random walk sets the step of another), both walls
     reflecting. Amplitudes stay in [-1, 1] with steps in [-amp_step, amp_step]; segment lengths in
     (1 +- dur_spread) of period / points, their steps in +- dur_spread / 2 of it, so the pitch wanders
-    around ``freq`` (0: fixed pitch, the timbre alone walks). Segments are straight lines, or with ``curve`` > 0
+    around ``freq`` (0: fixed pitch, the timbre alone walks). ``minfreq`` / ``maxfreq`` replace the length walls
+    so the cycle stays between those pitches. Steps are drawn from ``amp_dist`` / ``dur_dist`` (uniform, cauchy,
+    logist, hyperbcos, arcsine, expon; spread ``amp_param`` / ``dur_param``); ``preset`` xenakis, buzz, drift or
+    growl sets them together. Segments are straight lines, or with ``curve`` > 0
     exponential bends a + (b - a)(1 - e^(c u)) / (1 - e^c), c drawn per segment in [-curve, curve]."""
+    if preset:
+        p = GENDY_PRESETS[preset]
+        amp_dist, dur_dist = p.get("amp_dist", amp_dist), p.get("dur_dist", dur_dist)
+        amp_param, dur_param = p.get("amp_param", amp_param), p.get("dur_param", dur_param)
+        amp_step, dur_spread = p.get("amp_step", amp_step), p.get("dur_spread", dur_spread)
     f = _freq_array(freq, n)
     rng = np.random.default_rng(seed)
     P = max(2, int(points))
@@ -255,10 +300,22 @@ def gendyn(freq, n: int, sr: int = DEFAULT_SR, points: int = 12, amp_step: float
     xs, ys = [0.0], [a[0]]
     t = 0.0
     while t < n:
-        da = reflect(da + rng.uniform(-b, b, P), -b, b)
+        if amp_dist == "uniform":
+            da = reflect(da + rng.uniform(-b, b, P), -b, b)
+        else:
+            da = reflect(da + b * xenakis_dist(rng.random(P), amp_dist, amp_param), -b, b)
         a = reflect(a + da, -1.0, 1.0)
-        du = reflect(du + rng.uniform(-s / 2, s / 2, P), -s / 2, s / 2)
-        u = reflect(u + du, 1.0 - s, 1.0 + s)
+        if dur_dist == "uniform":
+            du = reflect(du + rng.uniform(-s / 2, s / 2, P), -s / 2, s / 2)
+        else:
+            du = reflect(du + s / 2 * xenakis_dist(rng.random(P), dur_dist, dur_param), -s / 2, s / 2)
+        if minfreq or maxfreq:
+            fc = max(f[min(int(t), n - 1)], 1e-3)
+            lo = fc / float(maxfreq) if maxfreq else 1.0 - s
+            hi = fc / float(minfreq) if minfreq else 1.0 + s
+            u = reflect(u + du, min(lo, hi), max(lo, hi))
+        else:
+            u = reflect(u + du, 1.0 - s, 1.0 + s)
         seg = u * sr / (max(f[min(int(t), n - 1)], 1e-3) * P)
         xs += list(t + np.cumsum(seg))
         ys += list(np.roll(a, -1))
@@ -359,17 +416,25 @@ def phase_distortion(freq, n: int, sr: int = DEFAULT_SR, amount: float = 0.5, bi
 
 def gbuzz(freq, n: int, sr: int = DEFAULT_SR, nharm: int = 4, lharm: int = 1, mul: float = 0.1,
           phase0: float = 0.0) -> np.ndarray:
-    """Closed-form buzz: ``nharm`` cosine harmonics from ``lharm``, each ``mul`` times the one below, scaled by
-    (1 - |r|) / (1 - |r^n|) (1 / n when |r| = 1). nharm is cut so the top harmonic stays under Nyquist."""
-    f = _freq_array(freq, n)
+    """Closed-form buzz: ``nharm`` cosine harmonics from ``lharm``, each ``mul`` times the one below, scaled so the
+    amplitudes sum to 1. The count follows the pitch sample by sample: a harmonic fades out linearly over its last
+    f Hz below Nyquist, so a glissando adds and drops harmonics without clicks or aliasing."""
+    f = np.maximum(_freq_array(freq, n), 1e-6)
     k = max(int(lharm), 1)
-    nh = max(1, min(int(nharm), int(sr / 2 / max(float(np.max(f)), 1e-6)) - k + 1))
+    x = sr / 2.0 / f - k + 1.0
+    fl = np.floor(x)
+    m = np.clip(fl, 1, max(int(nharm), 1)).astype(np.int64)
+    g = np.where(fl > m, 1.0, np.clip(x - m, 0.0, 1.0))
     r = float(mul)
     p = 2 * np.pi * phase(f, n, sr, phase0)
+    top = r ** (m - 1) * np.cos((k + m - 1) * p)
     if abs(abs(r) - 1.0) < 1e-6:
-        return sum(r ** i * np.cos((k + i) * p) for i in range(nh)) / nh
-    num = np.cos(k * p) - r * np.cos((k - 1) * p) - r ** nh * np.cos((k + nh) * p) + r ** (nh + 1) * np.cos((k + nh - 1) * p)
-    return num / (1.0 + r * r - 2.0 * r * np.cos(p)) * (1.0 - abs(r)) / (1.0 - abs(r ** nh))
+        s = sum(np.where(i < m, r ** i * np.cos((k + i) * p), 0.0) for i in range(int(m.max())))
+        return (s - (1.0 - g) * top) / np.maximum(m - (1.0 - g), 1e-12)
+    num = np.cos(k * p) - r * np.cos((k - 1) * p) - r ** m * np.cos((k + m) * p) + r ** (m + 1) * np.cos((k + m - 1) * p)
+    s = num / (1.0 + r * r - 2.0 * r * np.cos(p))
+    total = (1.0 - abs(r) ** m) / (1.0 - abs(r)) - (1.0 - g) * abs(r) ** (m - 1)
+    return (s - (1.0 - g) * top) / np.maximum(total, 1e-12)
 
 
 def _dpw_poly(order: int, wave: str):
@@ -414,7 +479,8 @@ def _bspline3(t: np.ndarray) -> np.ndarray:
 
 def blit(freq, n: int, sr: int = DEFAULT_SR, harmonics: int = 0, kernel: str = "sinc", phase0: float = 0.0) -> np.ndarray:
     """Band-limited impulse train, one unit-area pulse per period. ``kernel`` sinc: closed form
-    sin(M pi x) / (P sin(pi x)) with M odd = 2 floor(P / 2) + 1 harmonics (``harmonics`` > 0 sets fewer);
+    sin(M pi x) / (P sin(pi x)) with M odd = 2 H + 1, H = floor(P / 2) harmonics (``harmonics`` > 0 sets fewer),
+    the top one faded linearly over its last f Hz below Nyquist so a glissando changes H without clicks;
     bspline: each pulse a cubic B-spline at its exact fractional position (spectrum sinc^4, -3 dB at 10 kHz at
     44.1 kHz); thiran: the pulse on a sample, its fractional part D in [0.418, 1.418] by a first-order allpass
     a1 = (1 - D) / (1 + D)."""
@@ -422,13 +488,17 @@ def blit(freq, n: int, sr: int = DEFAULT_SR, harmonics: int = 0, kernel: str = "
     ph = phase(f, n, sr, phase0)
     if kernel == "sinc":
         P = sr / np.maximum(f, 1e-6)
-        M = 2 * np.floor(P / 2) + 1
+        H = np.maximum(np.floor(P / 2), 1.0)
+        g = np.clip(P / 2 - H, 0.0, 1.0)
         if harmonics:
-            M = np.minimum(M, 2 * int(harmonics) + 1)
+            g = np.where(H > int(harmonics), 1.0, g)
+            H = np.minimum(H, int(harmonics))
+        M = 2 * H + 1
         x = ph % 1.0
         den = np.sin(np.pi * x)
         small = np.abs(den) < 1e-9
-        return np.where(small, M, np.sin(M * np.pi * x) / np.where(small, 1.0, den)) / P
+        d = np.where(small, M, np.sin(M * np.pi * x) / np.where(small, 1.0, den))
+        return (d - 2.0 * (1.0 - g) * np.cos(2 * np.pi * H * x)) / P
     out = np.zeros(n + 64)
     k0, k1 = int(np.ceil(ph[0])), int(np.floor(ph[-1]))
     s = np.arange(n, dtype=np.float64)
@@ -544,15 +614,128 @@ def wavetable_from_spectrum(harmonics, n: int = WAVETABLE_N) -> np.ndarray:
     return np.fft.irfft(c * (n / 2.0), n)
 
 
-def wavetable_osc(freq, n: int, sr: int = DEFAULT_SR, harmonics=(1.0,), phase0: float = 0.0) -> np.ndarray:
-    """Table oscillator read with linear interpolation; harmonics above 0.45 sr are dropped from the table at the
-    highest frequency of `freq`."""
+def table_read(tab, pos, interp: str = "lagrange", rows=None) -> np.ndarray:
+    """Periodic read of a table (or of row ``rows[i]`` of a 2-D stack) at fractional index ``pos``: ``lagrange``
+    = 4-point cubic Lagrange (points i-1..i+2), ``linear``."""
+    tab = np.asarray(tab, float)
+    N = tab.shape[-1]
+    pos = np.asarray(pos, float)
+    i = np.floor(pos).astype(np.int64)
+    f = pos - i
+    get = (lambda j: tab[j % N]) if rows is None else (lambda j: tab[rows, j % N])
+    if interp == "linear":
+        return get(i) + f * (get(i + 1) - get(i))
+    fp, fm, f2 = f + 1.0, f - 1.0, f - 2.0
+    return (-f * fm * f2 / 6.0 * get(i - 1) + fp * fm * f2 / 2.0 * get(i)
+            - fp * f * f2 / 2.0 * get(i + 1) + fp * f * fm / 6.0 * get(i + 2))
+
+
+MIP_PER_OCTAVE = 12
+MIP_LIMIT = 0.45
+
+
+def mipmap(shape=None, harmonics=None, coeffs=None, per_octave: int = MIP_PER_OCTAVE, size: int = WAVETABLE_N):
+    """Band-limited family of one period: table j keeps the harmonics up to floor(2^(j / per_octave)). The period is
+    given as samples (``shape``, any length, its harmonics found by FFT, DC dropped), as cosine amplitudes
+    (``harmonics``) or as complex coefficients c_k of sum Re(c_k e^(2 pi i k t)) (``coeffs``)."""
+    K = size // 2 - 1
+    C = np.zeros(size // 2 + 1, complex)
+    if shape is not None:
+        s = np.asarray(shape, float)
+        X = np.fft.rfft(s) * (2.0 / len(s))
+        m = min(len(X) - 1, K + 1)
+        C[1:m] = X[1:m]
+    else:
+        c = np.asarray(coeffs if coeffs is not None else harmonics, complex)[:K]
+        C[1:1 + c.size] = c
+    top = int(np.max(np.nonzero(np.abs(C) > 0)[0], initial=1))
+    J = int(np.floor(per_octave * np.log2(max(top, 1)))) + 1
+    H = np.minimum(np.floor(2.0 ** (np.arange(J) / per_octave)).astype(int), top)
+    uniq, inv = np.unique(H, return_inverse=True)
+    spec = np.where(np.arange(C.size)[None, :] <= uniq[:, None], C[None, :], 0.0)
+    return np.fft.irfft(spec * (size / 2.0), size, axis=1), inv, per_octave
+
+
+def mip_read(mm, freq, ph, sr: int, limit: float = MIP_LIMIT, interp: str = "lagrange") -> np.ndarray:
+    """Reads a ``mipmap`` at phase ``ph`` (cycles) for pitch ``freq``: the richest table whose harmonics stay under
+    limit x sr and the one below it, crossfaded by the fractional table index, so the bandwidth follows the pitch
+    smoothly."""
+    tabs, inv, ppo = mm
+    J = len(inv)
+    f = np.abs(np.asarray(freq, float)) + 1e-9
+    c = np.clip(ppo * np.log2(np.maximum(limit * sr / f, 1.0)), 0.0, J - 1.0)
+    j = np.floor(c).astype(np.int64)
+    w = np.where(j >= J - 1, 1.0, c - j)
+    pos = (np.asarray(ph, float) % 1.0) * tabs.shape[1]
+    hi = table_read(tabs, pos, interp, rows=inv[j])
+    lo = table_read(tabs, pos, interp, rows=inv[np.maximum(j - 1, 0)])
+    return lo + w * (hi - lo)
+
+
+def wavetable_osc(freq, n: int, sr: int = DEFAULT_SR, harmonics=(1.0,), phase0: float = 0.0, interp: str = "lagrange",
+                  mip: bool = True) -> np.ndarray:
+    """Table oscillator from cosine harmonic amplitudes. ``mip``: a band-limited table per 1/12 octave, the pair
+    around the current pitch crossfaded, so harmonics above 0.45 sr drop out sample by sample (a sweep keeps its
+    top end); off: one table cut at the highest frequency of ``freq``. Read by 4-point Lagrange (``interp``
+    lagrange) or linearly."""
     f = _freq_array(freq, n)
+    ph = phase(f, n, sr, phase0)
+    if mip:
+        return mip_read(mipmap(harmonics=harmonics), f, ph, sr, interp=interp)
     h = np.asarray(harmonics, float)
-    keep = max(1, int(0.45 * sr / max(float(np.max(f)), 1e-9)))
-    tab = wavetable_from_spectrum(h[:keep])
-    ph = (phase(f, n, sr, phase0) % 1.0) * WAVETABLE_N
-    return np.interp(ph, np.arange(WAVETABLE_N + 1), np.append(tab, tab[0]))
+    keep = max(1, int(MIP_LIMIT * sr / max(float(np.max(f)), 1e-9)))
+    return table_read(wavetable_from_spectrum(h[:keep]), (ph % 1.0) * WAVETABLE_N, interp)
+
+
+def wavetable_morph(freq, n: int, sr: int = DEFAULT_SR, tables=(), position=0.0, phase0: float = 0.0,
+                    per_octave: int = MIP_PER_OCTAVE) -> np.ndarray:
+    """Morphing table oscillator: ``tables`` is a list of one-period shapes (any length each), ``position`` (scalar or
+    per sample, 0 .. len - 1) slides between neighbours by linear crossfade. Each table is band-limited by its own
+    mip-map, so the morph never aliases."""
+    f = _freq_array(freq, n)
+    ph = phase(f, n, sr, phase0)
+    pos = np.clip(_freq_array(position, n), 0.0, len(tables) - 1.0)
+    out = np.zeros(n)
+    for k, tab in enumerate(tables):
+        w = np.clip(1.0 - np.abs(pos - k), 0.0, 1.0)
+        live = np.nonzero(w > 0)[0]
+        if live.size:
+            out[live] += w[live] * mip_read(mipmap(shape=tab, per_octave=per_octave), f[live], ph[live], sr)
+    return out
+
+
+def _vco2_coeffs(wave: str, K: int = WAVETABLE_N // 2 - 1) -> np.ndarray:
+    k = np.arange(1, K + 1, dtype=float)
+    odd = (k % 2) == 1
+    if wave == "saw":
+        return 2j / (np.pi * k)
+    if wave == "square":
+        return np.where(odd, -4j / (np.pi * k), 0.0)
+    if wave == "triangle":
+        return np.where(odd, 8.0 / (np.pi * k) ** 2, 0.0)
+    raise ValueError("vco2 wave: saw | square | triangle | pulse")
+
+
+_VCO2_CACHE: dict = {}
+
+
+def vco2(freq, n: int, sr: int = DEFAULT_SR, wave: str = "saw", width=0.5, shape=None, phase0: float = 0.0,
+         per_octave: int = MIP_PER_OCTAVE) -> np.ndarray:
+    """Band-limited table oscillator: a family of tables per 1/``per_octave`` octave (``mipmap``) read at the pitch,
+    from a classic ``wave`` (saw, square, triangle; pulse = two saws ``width`` of a period apart, so the width can
+    move per sample without aliasing; zero mean, swing 2) or from any one-period ``shape``."""
+    f = _freq_array(freq, n)
+    ph = phase(f, n, sr, phase0)
+    if shape is not None:
+        return mip_read(mipmap(shape=shape, per_octave=per_octave), f, ph, sr)
+    key = ("saw" if wave == "pulse" else wave, per_octave)
+    if key not in _VCO2_CACHE:
+        _VCO2_CACHE[key] = mipmap(coeffs=_vco2_coeffs(key[0]), per_octave=per_octave)
+    mm = _VCO2_CACHE[key]
+    if wave != "pulse":
+        return mip_read(mm, f, ph, sr)
+    w = np.clip(_freq_array(width, n), 0.01, 0.99)
+    return mip_read(mm, f, ph, sr) - mip_read(mm, f, ph - (1.0 - w), sr)
 
 
 def minblep_table(zc: int = _SINC_ZC, over: int = _SINC_OVER) -> np.ndarray:
@@ -627,6 +810,40 @@ def corner_clip(x, limit: float = 1.0, mode: str = "clip") -> np.ndarray:
     return y
 
 
+def pulse_train(freq, n: int, sr: int = DEFAULT_SR, index=1.0, shape: str = "gauss", carrier=0.0, copies: int = 1,
+                phase0: float = 0.0) -> np.ndarray:
+    """Buzz source, a pulse of adjustable width once per period, mean removed.
+
+    ``shape`` gauss: e^(index (cos w n - 1)), the Gaussian train whose width falls as the index rises (harmonics
+    e^-a [I0(a) + 2 sum In(a) cos k w n]); hann: the raised cosine read ``index`` times faster, duty 1/index, index >= 1;
+    sine: a comparison sine-shaped hump (1 + cos w n) / 2 raised to ``index``. ``carrier``: ratio of a cosine locked to
+    the pulse (a formant at carrier x freq, a wave packet). ``copies`` 2: a second pulse half a period later with the
+    carrier continuing in phase, for a band narrower than the fundamental."""
+    from scipy.special import ive
+    ph = np.mod(phase(freq, n, sr, phase0), 1.0)
+    a = np.maximum(_freq_array(index, n), 0.0 if shape == "gauss" else 1.0)
+    c = _freq_array(carrier, n)
+
+    def one(p, shift):
+        x = 2 * np.pi * (p - 0.5)
+        if shape == "gauss":
+            y = np.exp(-a * (1.0 + np.cos(x)))
+        elif shape == "hann":
+            y = 0.5 * (1.0 + np.cos(np.clip(a * x, -np.pi, np.pi)))
+        elif shape == "sine":
+            y = (0.5 * (1.0 - np.cos(x))) ** a
+        else:
+            raise ValueError(f"pulse_train shape {shape!r}: gauss, hann or sine")
+        return y * np.cos(c * x + shift) if np.any(c) else y
+
+    y = one(ph, 0.0)
+    if int(copies) == 2:
+        y = y + one(np.mod(ph + 0.5, 1.0), np.pi * c)
+    if shape == "gauss" and not np.any(c):
+        return y - ive(0, a) * (2 if int(copies) == 2 else 1)       # e^-a I0(a) is the mean of one pulse per period
+    return y - np.mean(y)
+
+
 def noise(n: int, color: str = "white", seed: int | None = None, sr: int = DEFAULT_SR) -> np.ndarray:
     if color == "white":
         return white(n, seed)
@@ -674,11 +891,17 @@ def osc(wave: str, freq, n: int, sr: int = DEFAULT_SR, **kw) -> np.ndarray:
         return blit_square(freq, n, sr, kernel=str(kw.get("kernel", "sinc")))
     if wave == "sync":
         return hard_sync(freq, n, sr, ratio=float(kw.get("ratio", 2.5)))
+    if wave.startswith("vco2_"):
+        return vco2(freq, n, sr, wave=wave[5:], width=kw.get("width", 0.5))
+    if wave == "squine":
+        return squinewave(freq, n, sr, clip=kw.get("clip", 0.5), skew=kw.get("skew", 0.0))
     # Noise is seeded (0 unless the caller passes one): the same spec always renders the same file.
     seed = kw.get("seed")
     seed = 0 if seed is None else int(seed)
     if wave == "gendyn":
         return gendyn(freq, n, sr, seed=seed)
+    if wave == "fm_tree":
+        return fm_tree(freq, n, sr, seed=seed, index=float(kw.get("index", 2.0)))
     if wave == "pitched_noise":
         return pitched_noise(freq, n, sr, color=str(kw.get("color", "white")), seed=seed)
     if wave == "held_noise":
@@ -700,3 +923,301 @@ def sweep(start_hz: float, end_hz: float, dur: float, sr: int = DEFAULT_SR, curv
     start_hz = max(start_hz, 1e-3)
     end_hz = max(end_hz, 1e-3)
     return start_hz * (end_hz / start_hz) ** np.linspace(0, 1, n)
+
+
+def sync_phasor(freq, n: int, sr: int = DEFAULT_SR, sync=None, phase0: float = 0.0):
+    """Phasor (0..1) with a sync input and output: it restarts at 0 on every sample where ``sync`` > 0, and returns
+    (phase, sync_out) with sync_out = 1 where it wrapped or restarted, ready to drive another phasor."""
+    f = _freq_array(freq, n)
+    E = np.concatenate(([0.0], np.cumsum(f / sr)[:-1]))
+    reset = np.zeros(n, bool) if sync is None else pad_bool(sync, n)
+    last = np.maximum.accumulate(np.where(reset, np.arange(n), -1))
+    u = np.where(last >= 0, E - E[np.maximum(last, 0)], E + phase0)
+    wrap = np.zeros(n, bool)
+    wrap[1:] = np.floor(u[1:]) > np.floor(u[:-1])
+    return u % 1.0, (wrap | reset).astype(np.float64)
+
+
+def pad_bool(x, n: int) -> np.ndarray:
+    x = np.asarray(x, float)[:n] > 0
+    return np.concatenate((x, np.zeros(n - x.size, bool)))
+
+
+def squinewave(freq, n: int, sr: int = DEFAULT_SR, clip=0.0, skew=0.0, minsweep: float | None = None,
+               phase0: float = 0.0) -> np.ndarray:
+    """Sine-square-saw morph: each cycle is a rising half-cosine sweep, a hold at +1, a falling sweep and a hold at
+    -1. ``clip`` 0..1 shortens the sweeps (sine to square), ``skew`` -1..1 moves the turning point (towards a
+    ramp); no sweep is shorter than ``minsweep`` samples (default clip(sr / 3000, 8, sr / 100)), which keeps the
+    edges band-limited. Both accept per-sample arrays."""
+    f = np.abs(_freq_array(freq, n))
+    t = phase(f, n, sr, phase0) % 1.0
+    ms = float(minsweep) if minsweep else float(np.clip(sr / 3000.0, 8.0, sr * 0.01))
+    msw = np.clip(ms * f / sr, 1e-9, 0.5)
+    c = np.clip(_freq_array(clip, n), 0.0, 1.0)
+    s = np.clip(_freq_array(skew, n), -1.0, 1.0)
+    h1 = np.clip((1.0 + s) / 2.0, msw, 1.0 - msw)
+    h2 = 1.0 - h1
+    w1 = np.clip((1.0 - c) * h1, msw, h1)
+    w2 = np.clip((1.0 - c) * h2, msw, h2)
+    return np.where(t < w1, -np.cos(np.pi * t / w1),
+                    np.where(t < h1, 1.0, np.where(t < h1 + w2, np.cos(np.pi * (t - h1) / w2), -1.0)))
+
+
+@numba.njit(cache=True)
+def _vactrol(x, a_base, t_up, t_down):
+    y = np.empty(x.size)
+    s1 = 0.0
+    for i in range(x.size):
+        d = x[i] - s1
+        if d >= 0.0:
+            a = a_base / (1.0 + t_up * (1.0 - 0.999 * s1))
+        else:
+            a = a_base / (10.0 + t_down * (1.0 - 0.9 * s1))
+        v = d * a / (1.0 + a)
+        y[i] = v + s1
+        s1 = y[i] + v
+    return y
+
+
+def vactrol(x, sr: int = DEFAULT_SR, up: float = 20.0, down: float = 3000.0) -> np.ndarray:
+    """Vactrol (lamp + photoresistor) response of a control signal (0..1): a one-pole lowpass whose time constant
+    depends on its own state, 1 + up (1 - 0.999 s) ms rising and 10 + down (1 - 0.9 s) ms falling, so it opens fast
+    and lets go slowly with a long tail (the low-pass-gate decay)."""
+    return _vactrol(np.ascontiguousarray(x, dtype=np.float64), 1000.0 * np.pi / sr, float(up), float(down))
+
+
+def exp_shape(x, index: float = 3.0) -> np.ndarray:
+    """Exponential waveshaper exp(index (x - 1)): 1 at x = 1, a sine in gives the modified Bessel spectrum
+    I_k(index) (brighter as index grows); not DC-free."""
+    return np.exp(float(index) * (np.asarray(x, float) - 1.0))
+
+
+def quartic_line(levels, times, n: int, sr: int = DEFAULT_SR) -> np.ndarray:
+    """Envelope through ``levels`` with segment durations ``times`` (s), drawn straight on the fourth root of the
+    level and raised to the fourth power: quick, click-free rises and natural-sounding decays."""
+    lv = np.asarray(levels, float) ** 0.25
+    xs = np.concatenate(([0.0], np.cumsum(np.asarray(times, float)))) * sr
+    return np.interp(np.arange(n), xs[:lv.size], lv) ** 4
+
+
+FM_TREE_RATIOS = (0.5, 1.0, 1.0, 2.0, 2.0, 3.0, 4.0, 5.0, 7.0, 1.4142, 3.5, 0.25)
+
+
+def fm_tree_spec(seed: int = 0, operators: int = 4, carriers: int = 1, index: float = 2.0) -> list:
+    """Random phase-modulation tree: a list of (parent, ratio, level); carriers have parent -1 and level 1,
+    every other operator modulates an earlier one with an index drawn in [0.2, 1] x ``index``."""
+    rng = np.random.default_rng(int(seed))
+    ops = []
+    for i in range(max(1, int(operators))):
+        if i < max(1, int(carriers)):
+            ops.append((-1, 1.0 if i == 0 else float(rng.choice((0.5, 1.0, 2.0, 3.0))), 1.0))
+        else:
+            ops.append((int(rng.integers(0, i)), float(rng.choice(FM_TREE_RATIOS)), float(rng.uniform(0.2, 1.0) * index)))
+    return ops
+
+
+def fm_tree(freq, n: int, sr: int = DEFAULT_SR, tree=None, seed: int = 0, operators: int = 4, carriers: int = 1,
+            index: float = 2.0, phase0: float = 0.0) -> np.ndarray:
+    """Phase-modulation network from ``tree`` (see ``fm_tree_spec``, drawn from ``seed`` when None): each operator
+    is a sine at ratio x freq plus the sum of its modulators; the carriers are averaged. One seed = one timbre
+    family, the pitch free."""
+    f = _freq_array(freq, n)
+    tree = tree or fm_tree_spec(seed, operators, carriers, index)
+    mod = [np.zeros(n) for _ in tree]
+    out = np.zeros(n)
+    for i in range(len(tree) - 1, -1, -1):
+        parent, ratio, level = tree[i]
+        y = np.sin(2 * np.pi * phase(f * ratio, n, sr, phase0) + mod[i])
+        if parent < 0:
+            out += y
+        else:
+            mod[parent] += level * y
+    return out / sum(1 for p in tree if p[0] < 0)
+
+
+CHAOS_MAPS = ("logistic", "henon", "lorenz", "latoocarfian", "cusp", "gingerbreadman", "standard", "quad", "fbsine",
+              "lincong", "crackle")
+CHAOS_PARAMS = {"logistic": (3.9,), "henon": (1.4, 0.3), "lorenz": (10.0, 28.0, 8.0 / 3.0, 0.01),
+                "latoocarfian": (1.0, 3.0, 0.5, 0.5), "cusp": (1.0, 1.9), "gingerbreadman": (), "standard": (1.0,),
+                "quad": (1.0, -1.0, -0.75), "fbsine": (1.0, 0.1, 1.1, 0.5), "lincong": (1.1, 0.13, 1.0),
+                "crackle": (1.5,)}
+CHAOS_INIT = {"logistic": (0.5, 0.0), "henon": (0.0, 0.0), "lorenz": (0.1, 0.0), "latoocarfian": (0.5, 0.5),
+              "cusp": (0.0, 0.0), "gingerbreadman": (1.2, 2.1), "standard": (0.5, 0.0), "quad": (0.0, 0.0),
+              "fbsine": (0.1, 0.1), "lincong": (0.0, 0.0), "crackle": (0.3, 0.0)}
+
+
+@numba.njit(cache=True)
+def _lorenz_d(x, y, z, s, r, b):
+    return s * (y - x), x * (r - z) - y, x * y - b * z
+
+
+@numba.njit(cache=True)
+def _chaos_run(kind, m, p, x0, y0):
+    out = np.empty(m)
+    x, y, z = x0, y0, 0.0
+    for i in range(m):
+        if kind == 0:
+            x = p[0] * x * (1.0 - x)
+        elif kind == 1:
+            xn = 1.0 - p[0] * x * x + p[1] * y
+            y = x
+            x = xn
+        elif kind == 2:
+            h = p[3]
+            k1 = _lorenz_d(x, y, z, p[0], p[1], p[2])
+            k2 = _lorenz_d(x + 0.5 * h * k1[0], y + 0.5 * h * k1[1], z + 0.5 * h * k1[2], p[0], p[1], p[2])
+            k3 = _lorenz_d(x + 0.5 * h * k2[0], y + 0.5 * h * k2[1], z + 0.5 * h * k2[2], p[0], p[1], p[2])
+            k4 = _lorenz_d(x + h * k3[0], y + h * k3[1], z + h * k3[2], p[0], p[1], p[2])
+            x += h / 6.0 * (k1[0] + 2.0 * k2[0] + 2.0 * k3[0] + k4[0])
+            y += h / 6.0 * (k1[1] + 2.0 * k2[1] + 2.0 * k3[1] + k4[1])
+            z += h / 6.0 * (k1[2] + 2.0 * k2[2] + 2.0 * k3[2] + k4[2])
+        elif kind == 3:
+            xn = math.sin(p[1] * y) + p[2] * math.sin(p[1] * x)
+            y = math.sin(p[0] * x) + p[3] * math.sin(p[0] * y)
+            x = xn
+        elif kind == 4:
+            x = p[0] - p[1] * math.sqrt(abs(x))
+        elif kind == 5:
+            xn = 1.0 - y + abs(x)
+            y = x
+            x = xn
+        elif kind == 6:
+            y = (y + p[0] * math.sin(x) + math.pi) % (2.0 * math.pi) - math.pi
+            x = (x + y + math.pi) % (2.0 * math.pi) - math.pi
+        elif kind == 7:
+            x = p[0] * x * x + p[1] * x + p[2]
+        elif kind == 8:
+            xn = math.sin(p[0] * y + p[1] * x)
+            y = (p[2] * y + p[3]) % (2.0 * math.pi)
+            x = xn
+        elif kind == 9:
+            x = (p[0] * x + p[1]) % p[2]
+        else:
+            xn = abs(x * p[0] - y - 0.05)
+            y = x
+            x = xn
+        if not (abs(x) < 1e6) or not (abs(y) < 1e6) or not (abs(z) < 1e6):
+            x, y, z = x0, y0, 0.0
+        out[i] = x
+    return out
+
+
+def chaos(kind: str, rate, n: int, sr: int = DEFAULT_SR, interp: str = "cubic", params=None, x0=None,
+          y0=None) -> np.ndarray:
+    """Chaotic map iterated ``rate`` times a second (scalar or per sample) and read as audio: ``interp`` none
+    (held), linear or cubic between iterations. ``kind`` logistic (r), henon (a, b), lorenz (s, r, b, h; RK4),
+    latoocarfian (a, b, c, d), cusp (a, b), gingerbreadman, standard (k), quad (a, b, c), fbsine (im, fb, a, c),
+    lincong (a, c, m), crackle (p); ``params`` overrides the defaults in order. Mean removed, peak 1."""
+    if kind not in CHAOS_MAPS:
+        raise ValueError(f"chaos kind: {' | '.join(CHAOS_MAPS)}")
+    r = np.abs(_freq_array(rate, n))
+    pos = np.concatenate(([0.0], np.cumsum(r / sr)[:-1]))
+    m = int(pos[-1]) + 4
+    p = list(CHAOS_PARAMS[kind]) + [0.0] * 4
+    for i, v in enumerate(params or ()):
+        p[i] = float(v)
+    ix, iy = CHAOS_INIT[kind]
+    seq = _chaos_run(CHAOS_MAPS.index(kind), m, np.asarray(p[:4], float),
+                     float(ix if x0 is None else x0), float(iy if y0 is None else y0))
+    seq = seq - seq.mean()
+    seq /= max(float(np.max(np.abs(seq))), 1e-12)
+    if interp == "none":
+        return seq[pos.astype(np.int64)]
+    return table_read(np.concatenate((seq[:1], seq, seq[-2:])), pos + 1.0, "linear" if interp == "linear" else "lagrange")
+
+
+@numba.njit(cache=True)
+def _scan_run(x, v, ei, ej, k, c, d, F):
+    M = x.size
+    frames = np.empty((F, M))
+    acc = np.empty(M)
+    for s in range(F):
+        frames[s] = x
+        for i in range(M):
+            acc[i] = -c * x[i] - d * v[i]
+        for e in range(ei.size):
+            dx = k * (x[ej[e]] - x[ei[e]])
+            acc[ei[e]] += dx
+            acc[ej[e]] -= dx
+        for i in range(M):
+            v[i] += acc[i]
+            x[i] += v[i]
+    return frames
+
+
+def scanned(freq, n: int, sr: int = DEFAULT_SR, masses: int = 128, rate: float = 200.0, stiffness: float = 0.3,
+            centering: float = 0.0, t60: float = 2.0, shape: str = "hammer", position: float = 0.3,
+            width: float = 0.15, connect: str = "ring", links: int = 0, seed: int = 0, top: float | None = None) -> np.ndarray:
+    """Scanned synthesis: a network of ``masses`` unit masses on springs (``connect`` ring, line, or ring plus
+    ``links`` random springs) moves slowly, ``rate`` updates per second (semi-implicit Euler, one step per
+    update); its displacement profile, read in mass order, is the wavetable played at ``freq``. Damping opposes
+    the velocity and is set by the motion's ``t60`` (s); ``stiffness`` and ``centering`` are fractions of the
+    stability limit (k deg + c < 4). Initial ``shape``: hammer (raised cosine at ``position``, ``width``), pluck
+    (triangle) or noise. Each frame is band-limited to the pitch (harmonics under 0.45 sr, or under ``top`` Hz) and crossfaded to the next."""
+    M = max(8, int(masses))
+    f = _freq_array(freq, n)
+    idx = np.arange(M)
+    ei, ej = (idx, (idx + 1) % M) if connect != "line" else (idx[:-1], idx[1:])
+    rng = np.random.default_rng(int(seed))
+    if links:
+        ei = np.concatenate((ei, rng.integers(0, M, int(links))))
+        ej = np.concatenate((ej, rng.integers(0, M, int(links))))
+    deg = np.bincount(np.concatenate((ei, ej)), minlength=M).max()
+    c = float(np.clip(centering, 0.0, 1.0)) * 0.5
+    k = float(np.clip(stiffness, 0.0, 1.0)) * (3.9 - c) / max(deg, 1)
+    d = min(13.8 / (max(float(t60), 1e-3) * float(rate)), 1.0)
+    u = idx / M
+    if shape == "hammer":
+        x0 = 0.5 + 0.5 * np.cos(np.clip((u - position) / max(width, 1e-3), -1.0, 1.0) * np.pi)
+    elif shape == "pluck":
+        x0 = np.where(u < position, u / max(position, 1e-3), (1.0 - u) / max(1.0 - position, 1e-3))
+    elif shape == "noise":
+        x0 = rng.uniform(-1.0, 1.0, M)
+    else:
+        raise ValueError("scanned shape: hammer | pluck | noise")
+    F = int(n * float(rate) / sr) + 3
+    fr = _scan_run(x0.astype(np.float64), np.zeros(M), ei.astype(np.int64), ej.astype(np.int64), k, c, d, F)
+    T = max(256, 1 << int(np.ceil(np.log2(M))))
+    X = np.fft.rfft(fr - fr.mean(axis=1, keepdims=True), axis=1)
+    lim = MIP_LIMIT * sr if top is None else min(MIP_LIMIT * sr, float(top))
+    X[:, max(1, int(lim / max(float(np.max(f)), 1e-6))) + 1:] = 0.0
+    tabs = np.fft.irfft(X, T, axis=1) * (T / M)
+    tabs /= max(float(np.max(np.abs(tabs[0]))), 1e-12)
+    pos = (phase(f, n, sr) % 1.0) * T
+    q = np.arange(n) * float(rate) / sr
+    i = q.astype(np.int64)
+    w = q - i
+    return (1.0 - w) * table_read(tabs, pos, rows=i) + w * table_read(tabs, pos, rows=i + 1)
+
+
+def loop_sampler(x, n: int, rate=1.0, start: float = 0.0, loop_start: float | None = None, loop_end: float | None = None,
+                 mode: str = "forward", release: int | None = None, xfade: int = 0) -> np.ndarray:
+    """Plays mono sample ``x`` for ``n`` samples at ``rate`` (scalar or per sample) from index ``start``; once past
+    ``loop_end`` it cycles between ``loop_start`` and ``loop_end`` (``forward`` or ``pingpong``). At sample ``release``
+    it leaves the loop and plays on to the end of the sample. ``xfade`` samples (forward): the end of the loop is
+    crossfaded (equal power) with the samples before ``loop_start``, so the joint does not click."""
+    from .reverbs import read_frac
+    x = np.asarray(x, float)
+    L = len(x)
+    ls = 0.0 if loop_start is None else float(loop_start)
+    le = float(L - 1) if loop_end is None else float(loop_end)
+    p = float(start) + np.concatenate(([0.0], np.cumsum(_freq_array(rate, n)[:-1])))
+    seg = p.copy()
+    W = max(le - ls, 1.0)
+    over = p >= le
+    if mode == "pingpong":
+        u = (p[over] - ls) % (2.0 * W)
+        seg[over] = ls + np.where(u < W, u, 2.0 * W - u)
+    else:
+        seg[over] = ls + (p[over] - ls) % W
+    if release is not None and 0 <= int(release) < n:
+        r = int(release)
+        seg[r:] = seg[r] + (p[r:] - p[r])
+    y = read_frac(x, seg)
+    xf = min(int(xfade), int(ls), int(W))
+    if xf > 0 and mode != "pingpong":
+        d = le - seg
+        m = (d < xf) & (seg >= ls) & (np.arange(n) < (n if release is None else int(release))) & (p >= ls)
+        g = np.clip(d[m] / xf, 0.0, 1.0)
+        y[m] = np.sqrt(g) * y[m] + np.sqrt(1.0 - g) * read_frac(x, seg[m] - W)
+    return y

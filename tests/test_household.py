@@ -332,10 +332,10 @@ def test_roller_contact_nearly_independent_of_speed():
 
 
 def test_filled_glass_falls():
-    assert H.fill_coef() == pytest.approx(1.25 * 1000.0 * 0.035 / (5 * 2500.0 * 0.0015))      # 2.33
-    assert H.fill_freq(1200.0, 1.0) == pytest.approx(1200.0 / math.sqrt(1.0 + 7.0 / 3.0))
+    assert H.fill_coef() == pytest.approx(1.4 * 1000.0 * 0.035 / (5 * 2500.0 * 0.0015))      # 2.61
+    assert H.fill_freq(1200.0, 1.0) == pytest.approx(1200.0 / math.sqrt(1.0 + 2.6133333333333337))
     a, b = (top(H.filled_glass(sr=HI, fill=x), HI, 400, 2000) for x in (0.0, 1.0))
-    assert a == pytest.approx(1200.0, abs=3) and b == pytest.approx(657.3, abs=3)
+    assert a == pytest.approx(1200.0, abs=3) and b == pytest.approx(631.3, abs=3)
 
 
 def test_fan_law_fifth_power():

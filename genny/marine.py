@@ -14,8 +14,10 @@ from .engines import _even, _events, _pulses, engine_mech, two_stroke
 from .fauna import _put
 from .foley import P, _fin, _n, church_bell, clink, cloth, creak, sonar
 from .foley import aeolian_harp as _aeolian_harp
+from . import presets
 from .matter import _lfn, _lp, _unit, air_leak, bubbles, gurgle, splash, surf
 from .plates import metal_plate
+from .presets import F
 from .reverbs import distance as _distance
 from .road import _band, _fit, _kind, _modes
 from .sfx import sfx
@@ -69,8 +71,14 @@ def _db_amp(db, ref):
 # =============================================================================================
 AIR_WATER_DB = 10.0 * np.log10(4.0 * 415.0 * 1.48e6 / (415.0 + 1.48e6) ** 2)   # -29.5 dB: applied as a gain, so a normalize that follows erases it
 LENGTH_REF = 300.0 * 0.3048                                 # m
-SHIPS = {"cargo": dict(model="wales", vref=14.0, rpm=100.0, blades=5, tons=30000.0, cb=0.65),
-         "tanker": dict(model="ross", vref=14.0, rpm=80.0, blades=4, tons=30000.0, cb=0.78)}
+SHIPS = presets.schema("ship", {      # the ``ship`` family: noise model, reference speed (kn), shaft rpm, blades, displacement (t), block coefficient
+    "model": F(str, choices=("wales", "sonic", "ross", "randi")),
+    "vref": F(float, lo=1.0, hi=60.0, unit="kn"),
+    "rpm": F(float, lo=1.0, hi=3000.0, unit="rpm"),
+    "blades": F(int, lo=1, hi=12),
+    "tons": F(float, lo=1.0, hi=1.0e6, unit="t"),
+    "cb": F(float, lo=0.1, hi=1.0),
+})
 VC, WITTEKIND_C = 9.0, (125.0, 0.35, -8e-3, 6e-5, -2e-7, 2.2e-10)   # kn; SL1 c0-c5, under 400 Hz
 WITTEKIND_DREF = 10000.0                                    # t
 WITTEKIND_SL2 = ((25.0, 40.0, 60.0, 100.0, 150.0, 200.0, 300.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 10000.0),
@@ -148,8 +156,7 @@ def _cavitation(speed, vc, bpf, n, rng, dur, seed, cb=0.65, tons=30000.0):
     y = _shaped(n, rng, level, SHIP_REF_DB) * am
     amps = []
     for k in range(1, int(400.0 / bpf) + 1):
-        f = k * bpf
-        amps.append(_db_amp(float(level(f)) + (10.0 if 50.0 <= f <= 150.0 else -10.0), SHIP_REF_DB))
+        amps.append(_db_amp(float(level(k * bpf)) + 10.0, SHIP_REF_DB) / k)     # first blade harmonic strongest
     crackle = bubbles(sr=P, dur=dur, rate=300.0, size=1.0, underwater=1.0, seed=seed)
     return y + _lines(n, bpf, amps, rng) + 0.3 * float(np.std(y)) * _unit(_fit(crackle, n)) * am
 
@@ -421,8 +428,8 @@ def _hull_slaps(rate, n, rng, seed):
 
 
 @sfx("outboard", "Outboard motor: exhaust through the hub under water (low-pass), propeller tone, light wake. Six cylinders 4-stroke or three 2-stroke, both 275 Hz at 5500 rpm. planing adds the hull's blows. listen=under: 70-400 Hz peak, 134 to 171 dB from 3 to 16 m/s.",
-     strokes=(4, "4 (6 cyl) | 2 (3 cyl, `two_stroke`)"), rpm=(5500.0, "crankshaft, 800-5500"), load=(0.7, "0..1"), speed=(10.0, "m/s"), planing=(0, "1 = on the plane: hull slamming"), slap=(SLAP_RATE, "planing: blows per second"), listen=("air", "air | under"), dur=(4.0, "s"), seed=(0, "variation"))
-def outboard(sr=DEFAULT_SR, strokes=4, rpm=5500.0, load=0.7, speed=10.0, planing=0, slap=SLAP_RATE, listen="air", dur=4.0, seed=0):
+     strokes=(4, "4 (6 cyl) | 2 (3 cyl, `two_stroke`)"), rpm=(5500.0, "crankshaft, 800-5500"), load=(0.7, "0..1"), speed=(10.0, "m/s"), planing=(0, "1 = on the plane: hull slamming"), slap=(SLAP_RATE, "planing: blows per second"), listen=("air", "air | under"), limiter=(0, "2-stroke: 1 = free revving into the soft ignition cut at 6000 rpm"), dur=(4.0, "s"), seed=(0, "variation"))
+def outboard(sr=DEFAULT_SR, strokes=4, rpm=5500.0, load=0.7, speed=10.0, planing=0, slap=SLAP_RATE, listen="air", limiter=0, dur=4.0, seed=0):
     if int(strokes) not in OUT_CYL:
         raise ValueError(f"outboard strokes {strokes!r}: use 4 | 2")
     if listen not in ("air", "under"):
@@ -439,7 +446,7 @@ def outboard(sr=DEFAULT_SR, strokes=4, rpm=5500.0, load=0.7, speed=10.0, planing
     C = OUT_CYL[int(strokes)]
     r = np.full(n, float(np.clip(rpm, 300.0, 9000.0)))
     if int(strokes) == 2:
-        eng = two_stroke(sr=P, rpm=r, cylinders=C, load=load, dur=dur, seed=seed)
+        eng = two_stroke(sr=P, rpm=r, cylinders=C, load=load, dur=dur, seed=seed, kind="outboard", cut="machine" if limiter else None)
     else:
         eng = pipe_engine(sr=P, dur=dur, rpm=r, cylinders=C, load=load, cycle=4, unequal=0.0, seed=seed)
     y = _unit(_lp(_fit(eng, n), 900.0, 2)) + 0.15 * prop + 0.2 * min(float(speed) / 10.0, 2.0) * _wake(speed, n, dur, seed)   # immersion low-pass
@@ -567,10 +574,13 @@ def submarine(sr=DEFAULT_SR, view="out", kind="electric", speed=4.0, dur=10.0, s
 # =============================================================================================
 # LAPPING WATER
 # =============================================================================================
-LAPS = {"clapot": dict(period=(1.2, 2.2), band=(120.0, 900.0), modes=(95.0, 170.0, 310.0), hollow=0.9, bubbles=40.0),       # against a hull
-        "quai": dict(period=(1.8, 3.0), band=(250.0, 2500.0), modes=(), hollow=0.0, bubbles=80.0),                           # on stone, gurgling back
-        "baignade": dict(period=(1.0, 1.8), band=(400.0, 3500.0), modes=(), hollow=0.0, bubbles=25.0)}                       # around a swimmer
-# Periods inside 1-3 s, a short wind chop.
+LAPS = presets.schema("lap", {        # the ``lap`` family: period between waves (s), noise band (Hz), hull modes (Hz), hollow level, bubble rate
+    "period": F(tuple, items=(F(float, lo=0.1, hi=30.0), F(float, lo=0.1, hi=30.0)), unit="s"),
+    "band": F(tuple, items=(F(float, lo=10.0, hi=20000.0), F(float, lo=10.0, hi=20000.0)), unit="Hz"),
+    "modes": F(tuple, of=F(float, lo=10.0, hi=5000.0), max_len=8, unit="Hz"),
+    "hollow": F(float, lo=0.0, hi=4.0),
+    "bubbles": F(float, lo=0.0, hi=1000.0, unit="1/s"),
+})
 
 
 @sfx("lap", "Water lapping: a slow beat of small waves with bubbles. clapot against a hull, with its hollow modes; quai on stone, gurgling back; baignade around a swimmer, small splashes.",

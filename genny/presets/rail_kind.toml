@@ -1,0 +1,27 @@
+schema = "genny.preset/1"
+family = "rail_kind"
+# speed_kmh: km/h of each kind of rail sound.
+
+[train_welded]
+speed_kmh = 300.0
+
+[train_diesel]
+speed_kmh = 60.0
+
+[train_diesel_4t]
+speed_kmh = 80.0
+
+[train_electric]
+speed_kmh = 60.0
+
+[metro_start]
+speed_kmh = 40.0
+
+[tram_roll]
+speed_kmh = 30.0
+
+[curve_squeal]
+speed_kmh = 19.0
+
+[train_brake]
+speed_kmh = 40.0

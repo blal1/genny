@@ -11,6 +11,7 @@ steep_bandpass overdrive wavefold mulaw codec dither lofi smooth tape wall dc_bl
 """
 from __future__ import annotations
 
+import itertools
 import math
 from fractions import Fraction
 from functools import lru_cache
@@ -22,6 +23,7 @@ from scipy.fft import dct, idct
 from scipy.interpolate import PchipInterpolator
 
 from . import filters as F
+from . import presets
 from .core import DEFAULT_SR, db_to_gain, read_wav, samples, to_mono
 from .fx import _per_channel, compressor as _compressor, effect
 from .sfx import sfx
@@ -633,6 +635,45 @@ def alaw_expand(y, a=A_LAW):
     return np.sign(y) * np.where(ay < 1 / k, ay * k / a, np.exp(ay * k - 1) / a)
 
 
+_G711_MU_END = np.array([0x3F, 0x7F, 0xFF, 0x1FF, 0x3FF, 0x7FF, 0xFFF, 0x1FFF])
+_G711_A_END = np.array([0x1F, 0x3F, 0x7F, 0xFF, 0x1FF, 0x3FF, 0x7FF, 0xFFF])
+
+
+def g711_mulaw_code(x):
+    """ITU G.711 mu-law byte of each sample of x (float, +-1): 14-bit magnitude, bias 33, 8 segments of 16 steps."""
+    p = np.right_shift(np.round(np.clip(np.asarray(x, float), -1.0, 1.0) * 32767.0).astype(np.int64), 2)
+    neg = p < 0
+    p = np.minimum(np.where(neg, -p, p), 8159) + 33
+    seg = np.searchsorted(_G711_MU_END, p, side="left")
+    u = np.where(seg >= 8, 0x7F, (seg << 4) | ((p >> (seg + 1)) & 0xF))
+    return (u ^ np.where(neg, 0x7F, 0xFF)).astype(np.int64)
+
+
+def g711_mulaw_value(code):
+    """Level (float, +-1) a G.711 mu-law byte decodes to."""
+    u = ~np.asarray(code, np.int64) & 0xFF
+    t = (((u & 0xF) << 3) + 0x84) << ((u & 0x70) >> 4)
+    return np.where(u & 0x80, 0x84 - t, t - 0x84) / 32768.0
+
+
+def g711_alaw_code(x):
+    """ITU G.711 A-law byte of each sample of x (float, +-1): 13-bit magnitude, 8 segments of 16 steps."""
+    p = np.right_shift(np.round(np.clip(np.asarray(x, float), -1.0, 1.0) * 32767.0).astype(np.int64), 3)
+    pos = p >= 0
+    p = np.where(pos, p, -p - 1)
+    seg = np.searchsorted(_G711_A_END, p, side="left")
+    a = np.where(seg >= 8, 0x7F, (seg << 4) | np.where(seg < 2, (p >> 1) & 0xF, (p >> np.minimum(seg, 7)) & 0xF))
+    return (a ^ np.where(pos, 0xD5, 0x55)).astype(np.int64)
+
+
+def g711_alaw_value(code):
+    """Level (float, +-1) a G.711 A-law byte decodes to."""
+    a = np.asarray(code, np.int64) ^ 0x55
+    seg = (a & 0x70) >> 4
+    t = np.where(seg == 0, ((a & 0xF) << 4) + 8, (((a & 0xF) << 4) + 0x108) << np.maximum(seg - 1, 0))
+    return np.where(a & 0x80, t, -t) / 32768.0
+
+
 @numba.njit(cache=True)
 def _shaped_quantize(v, d, lim):
     out = np.empty(v.shape[0])
@@ -859,13 +900,14 @@ _GSM_H = np.array([-134, -374, 0, 2054, 5741, 8192, 5741, 2054, 0, -374, -134]) 
 _GSM_XMAX = np.concatenate([np.arange(31, 512, 32)] + [np.arange(hi - 7 * st, hi + 1, st) for hi, st in ((1023, 64), (2047, 128), (4095, 256), (8191, 512), (16383, 1024), (32767, 2048))]) / 32768.0
 
 
-def gsm_like(x, pbits=3, order=8):
+def gsm_like(x, pbits=3, order=8, ltp=False):
     """GSM-full-rate-like coder for a signal ALREADY at 8 kHz: 20 ms frames, LPC (autocorrelation method,
     order 8), the prediction residual goes through the weighting filter and is kept on one of four grids of 13 pulses
     per 5 ms sub-frame (regular pulse excitation), each pulse quantised to `pbits` bits relative to the block
     maximum of Table 3.5, then re-synthesised through 1/A(z). The reflection coefficients go through log-area ratios,
-    quantised and interpolated over four zones of the frame like the real coder. Not bit-exact GSM 06.10: the
-    long-term predictor is omitted. Speech frame model: DSPG ch.22 / 27 (LPC = predict from past samples, store the error)."""
+    quantised and interpolated over four zones of the frame like the real coder. Not bit-exact GSM 06.10. With `ltp` each 5 ms sub-frame first subtracts a
+    quantised copy (gain 0.1 / 0.35 / 0.65 / 1) of the reconstructed residual 40-120 samples back, the lag that best correlates,
+    and the pulses code what is left; without it the long-term predictor is omitted. Speech frame model: DSPG ch.22 / 27 (LPC = predict from past samples, store the error)."""
     # 160-sample frames, 4 sub-frames of 40, LPC order 8 (LAR 1-8), RPE decimation 3, 3-bit pulses: ETSI ETS 300 961
     # (GSM 06.10 v5.2.1, 2000) §1.5 p.11-12 and Table 1.1. Weighting H, grids: §3.1.18-19, Table 3.4. xmax: Table 3.5.
     from .physical.analysis import _lattice_inverse, _lattice_synth, _levinson
@@ -888,27 +930,45 @@ def gsm_like(x, pbits=3, order=8):
         for lo, hi, wc in _GSM_INTERP:
             K[s + lo: min(s + hi, n)] = lar_to_k((1.0 - wc) * k_to_lar(prev) + wc * k_to_lar(Kf[f]))
     e_all = _lattice_inverse(x, K, 1)
-    eq_all = np.zeros(n)
-    for s in range(0, n, 160):
-        e = e_all[s: s + 160]
-        eq = eq_all[s: s + 160]
-        for b in range(0, e.shape[0], 40):
-            sub = np.convolve(e[b: b + 40], _GSM_H, "same")[:40]
-            m = int(np.argmax([np.sum(sub[k: k + 39: 3] ** 2) for k in range(4)]))
-            pulses = sub[m: m + 39: 3]
-            xmax = np.max(np.abs(pulses)) if pulses.size else 0.0
-            if xmax > 1e-9:
-                xmax = _GSM_XMAX[min(int(np.searchsorted(_GSM_XMAX, xmax)), 63)]
-                p = np.clip(np.floor(pulses / xmax * levels / 2), -levels / 2, levels / 2 - 1) + 0.5
-                eq[b + m: b + m + pulses.size * 3: 3] = p * xmax * 2 / levels      # H(0) = 2.779 makes up for keeping one sample in three
+    dq = np.zeros(n)                              # reconstructed short-term residual, what the decoder's long-term predictor sees
+    for pos in range(0, n, 40):
+        d = e_all[pos: pos + 40]
+        past = np.zeros(d.shape[0])
+        if ltp and pos >= 40:
+            lags = np.arange(40, min(120, pos) + 1)
+            cc = np.array([np.dot(d, dq[pos - N: pos - N + d.shape[0]]) for N in lags])
+            N = int(lags[int(np.argmax(cc))])
+            seg = dq[pos - N: pos - N + d.shape[0]]
+            en = float(np.dot(seg, seg))
+            ratio = float(np.max(cc)) / en if en > 1e-12 and np.max(cc) > 0 else 0.0
+            past = seg * _GSM_LTP_Q[int(np.searchsorted(_GSM_LTP_D, ratio, side="right"))]
+        sub = np.convolve(d - past, _GSM_H, "same")[:d.shape[0]]
+        m = int(np.argmax([np.sum(sub[k: k + 39: 3] ** 2) for k in range(4)]))
+        pulses = sub[m: m + 39: 3]
+        xmax = np.max(np.abs(pulses)) if pulses.size else 0.0
+        eq = np.zeros(d.shape[0])
+        if xmax > 1e-9:
+            xmax = _GSM_XMAX[min(int(np.searchsorted(_GSM_XMAX, xmax)), 63)]
+            p = np.clip(np.floor(pulses / xmax * levels / 2), -levels / 2, levels / 2 - 1) + 0.5
+            eq[m: m + pulses.size * 3: 3] = p * xmax * 2 / levels      # H(0) = 2.779 makes up for keeping one sample in three
+        dq[pos: pos + d.shape[0]] = eq + past
+    eq_all = dq
     return np.clip(_lattice_synth(eq_all, K, 1), -1.0, 1.0)
 
 
+_GSM_LTP_D = np.array([0.2, 0.5, 0.8])
+_GSM_LTP_Q = np.array([0.1, 0.35, 0.65, 1.0])
 _GSM_INTERP = ((0, 13, 0.25), (13, 27, 0.5), (27, 40, 0.75), (40, 160, 1.0))   # samples of the frame, weight of the new frame
 _GSM_LAR_A = np.array([20.0, 20.0, 20.0, 20.0, 13.637, 15.0, 8.334, 8.824])
 _GSM_LAR_B = np.array([0.0, 0.0, 4.0, -5.0, 0.184, -3.5, -0.666, -2.235])
 _GSM_LAR_MIC = np.array([-32, -32, -16, -16, -8, -8, -4, -4])
 _GSM_LAR_MAC = np.array([31, 31, 15, 15, 7, 7, 3, 3])
+
+
+def gsm_bitrate(pbits=3):
+    """Bit rate of the coder above: 36 bits of LARs per 20 ms frame plus, per sub-frame, 7 lag + 2 gain + 2 grid + 6 block maximum
+    + 13 pulses of `pbits` (13 kbit/s at 3 bits)."""
+    return (36 + 4 * (7 + 2 + 2 + 6 + 13 * int(pbits))) / 0.02
 
 
 def k_to_lar(k):
@@ -1058,6 +1118,32 @@ def vu_meter(x, sr=DEFAULT_SR, tau=0.06514):
     return np.sqrt(np.maximum(sg.lfilter([1 - r], [1, -r], np.square(to_mono(np.asarray(x, dtype=np.float64)))), 0.0))
 
 
+PPM_TYPES = {"I": (0.010, 20.0 / 1.7), "IIa": (0.005, 24.0 / 1.5), "IIb": (0.005, 24.0 / 2.8)}
+
+
+@numba.njit(cache=True)
+def _ppm_kernel(a, ka, fall):
+    y = np.empty(a.shape[0])
+    s = 0.0
+    for i in range(a.shape[0]):
+        if a[i] > s:
+            s += ka * (a[i] - s)
+        else:
+            s *= fall
+        y[i] = s
+    return y
+
+
+def ppm_meter(x, sr=DEFAULT_SR, kind="I"):
+    """Quasi-peak programme meter on the rectified signal: it rises as a one-pole that reaches 80 % of a steady tone in
+    the integration time of the type (I 10 ms, IIa and IIb 5 ms) and falls linearly in dB (I 20 dB in 1.7 s, IIa 24 dB in
+    1.5 s, IIb 24 dB in 2.8 s). Returns the level per sample, linear."""
+    t_int, db_s = PPM_TYPES[kind]
+    ka = 1.0 - math.exp(-1.0 / (t_int / math.log(5.0) * sr))
+    a = np.ascontiguousarray(np.abs(to_mono(np.asarray(x, dtype=np.float64))))
+    return _ppm_kernel(a, ka, 10.0 ** (-db_s / 20.0 / sr))
+
+
 # ======================================================================================================
 # 8. Registered effects
 # ======================================================================================================
@@ -1185,7 +1271,17 @@ _SHAPES = {
     "asinh": np.arcsinh,                                      # Zavalishin 6.4-6.5: unbounded, softest
     "asym": lambda v: 1.25 * v + 0.75 * (np.sqrt(v * v + 0.01) - 0.1),
     "tube_bendiksen": lambda v: _tube_bendiksen(v),
+    "cubic": lambda v: (lambda c: c - c ** 3 / 3.0)(np.clip(v, -1.0, 1.0)),
+    "atan": lambda v: (2.0 / np.pi) * np.arctan(v),
+    "symclip": lambda v: _symclip(v),
 }
+
+
+def _symclip(v):
+    """Odd-symmetric soft clip: 2|x| up to 1/3, (3 - (2 - 3|x|)^2) / 3 up to 2/3, then 1."""
+    a = np.abs(np.asarray(v, dtype=np.float64))
+    y = np.where(a < 1.0 / 3.0, 2.0 * a, np.where(a < 2.0 / 3.0, (3.0 - (2.0 - 3.0 * a) ** 2) / 3.0, 1.0))
+    return np.sign(v) * y
 
 
 def _tube_bendiksen(v, q=-0.2, dist=8.0):
@@ -1364,7 +1460,7 @@ def waveshape(x, shape="tanh", drive=4.0, bias=0.0, oversample=4, aa="none"):
 
 @effect("overdrive", "Alias-free waveshaping overdrive (oversampled; bias adds even harmonics).",
         drive=(4.0, "input gain 0.05..100"), bias=(0.0, "-1..1 DC offset before the curve: asymmetry = even harmonics"),
-        shape=("tanh", "tanh|tube|fuzz|fold|diode|hard|algebraic|hyper|asinh|asym (2x above 0, x/2 below, rounded)|tube_bendiksen (asymmetric tube, linear above, clipped below)"), tone=(4000, "post low-pass Hz (0 = off)"),
+        shape=("tanh", "tanh|tube|fuzz|fold|diode|hard|algebraic|hyper|asinh|asym (2x above 0, x/2 below, rounded)|tube_bendiksen (asymmetric tube, linear above, clipped below)|cubic (x - x^3/3, flat at +-2/3 past full scale)|atan|symclip (linear to 1/3, parabolic to 2/3, flat above)"), tone=(4000, "post low-pass Hz (0 = off)"),
         mix=(1.0, "wet 0..1"), oversample=(4, "1|2|4|8 (1 = naive, aliases)"),
         aa=("none", "none | adaa1 | adaa2 | adaa3 (shapes hard, fold) | vicanek (shape algebraic): antiderivative anti-aliasing on top of the oversampling"))
 def overdrive(x, sr=DEFAULT_SR, drive=4.0, bias=0.0, shape="tanh", tone=4000, mix=1.0, oversample=4, aa="none"):
@@ -1611,14 +1707,56 @@ def k_meter(x, k=14, sr=DEFAULT_SR):
     return 10.0 * math.log10(max(float(e.max()), 1e-20)) + float(k), 20.0 * math.log10(max(float(np.abs(m).max()), 1e-10)) + float(k)
 
 
+@lru_cache(maxsize=16)
+def _hilbert_pair(order, lo):
+    """Coefficients a_k of the two allpass chains (c - z^-2) / (1 - c z^-2), c = a^2, the second behind one delay, whose phases differ by 90 degrees (minimax) from lo x Nyquist to Nyquist / 2 and back."""
+    from scipy.optimize import least_squares, minimize
+    n = int(order) // 2
+    w = np.pi * np.geomspace(lo, 0.5, 200)
+
+    def diff(p):
+        ph = lambda a: np.unwrap(np.angle((a * a - np.exp(-2j * w)) / (1.0 - a * a * np.exp(-2j * w))))   # noqa: E731
+        return np.degrees(sum(ph(a) for a in p[:n]) - (-w + sum(ph(a) for a in p[n:]))) - 90.0
+    a0 = np.clip(1.0 - np.geomspace(0.45, max(lo * 2.0, 1e-4), 2 * n), 0.05, 0.99999)
+    r = least_squares(diff, np.concatenate([a0[0::2], a0[1::2]]), bounds=(0.0, 0.999999), max_nfev=200)
+    e = float(np.abs(diff(r.x)).max())
+    cons = [{"type": "ineq", "fun": lambda q: q[-1] - diff(q[:-1])}, {"type": "ineq", "fun": lambda q: q[-1] + diff(q[:-1])}]
+    m = minimize(lambda q: q[-1], np.append(r.x, e), constraints=cons, method="SLSQP",
+                 bounds=[(0.0, 0.999999)] * (2 * n) + [(0.0, None)], options=dict(maxiter=200, ftol=1e-10))
+    ok = float(np.abs(diff(m.x[:-1])).max()) < e
+    return tuple(float(v) for v in (m.x[:-1] if ok else r.x)), (float(np.abs(diff(m.x[:-1])).max()) if ok else e)
+
+
+def phase_splitter(x, sr=DEFAULT_SR, order=8, lo=20.0):
+    """Two signals 90 degrees apart (Hilbert pair of allpass chains, Zavalishin ch. 10): returns (in-phase, quadrature), the second leading the first, over `lo` Hz to sr / 2 - lo.
+    `order` = total allpass sections (even): 8 reaches a fraction of a degree from 100 Hz at 44.1 kHz, more sections or a larger `lo` narrow the error; the error in degrees comes from `phase_splitter_error`."""
+    a, _ = _hilbert_pair(int(order), round(float(np.clip(2.0 * lo / sr, 1e-4, 0.4)), 5))
+    n = len(a) // 2
+    x = np.asarray(x, float)
+    sec = lambda c: [c * c, 0.0, -1.0, 1.0, 0.0, -c * c]   # noqa: E731
+    ia = sg.sosfilt(np.array([sec(c) for c in a[:n]]), x, axis=0)
+    qb = sg.sosfilt(np.array([sec(c) for c in a[n:]]), np.concatenate([np.zeros((1,) + x.shape[1:]), x])[:len(x)], axis=0)
+    return ia, qb
+
+
+def phase_splitter_error(order=8, lo=20.0, sr=DEFAULT_SR):
+    """Worst departure from 90 degrees (degrees) of `phase_splitter` over its band."""
+    return _hilbert_pair(int(order), round(float(np.clip(2.0 * lo / sr, 1e-4, 0.4)), 5))[1]
+
+
 def allpass_for_delay(D, w):
     """First-order allpass coefficient giving group delay D samples at w rad/sample: a = (-D cos w + sqrt(1 - D^2 + D^2 cos^2 w)) / (1 + D) (Parker, B41), the positive root."""
     return (-D * math.cos(w) + math.sqrt(max(1.0 - D * D + (D * math.cos(w)) ** 2, 0.0))) / (1.0 + D)
 
 
 @effect("mulaw", "Companded quantisation (telephone codec grain: noise follows the signal level).",
-        bits=(8, "2..16 bits in the compressed domain"), law=("mu", "mu (mu=255) | a (A=87.6)"))
+        bits=(8, "2..16 bits in the compressed domain (not used by g711)"),
+        law=("mu", "mu (mu=255) | a (A=87.6) | g711 (the segmented ITU G.711 mu-law byte codec) | g711a (G.711 A-law)"))
 def mulaw(x, sr=DEFAULT_SR, bits=8, law="mu"):
+    if law == "g711":
+        return g711_mulaw_value(g711_mulaw_code(x))
+    if law == "g711a":
+        return g711_alaw_value(g711_alaw_code(x))
     comp, exp = (alaw_compress, alaw_expand) if law == "a" else (mulaw_compress, mulaw_expand)
     S = float(2 ** (int(np.clip(bits, 2, 16)) - 1) - 1)
     return exp(np.round(comp(x) * S) / S)
@@ -1648,8 +1786,9 @@ def _geo(lo, hi, q):
 
 @effect("codec", "Speech/streaming codec artefacts.",
         kind=("adpcm", "adpcm (4-bit IMA) | cvsd | cvsd_irig (military voice: 16 kbps, 32 at quality > 0.5, its band limits) | delta | gsm (8 kHz LPC, GSM-like) | dct (block transform, streaming artefact)"),
-        quality=(0.5, "0..1: adpcm rate 6-32 kHz; cvsd clock 12-64 kHz; delta clock 48-192 kHz; gsm pulse bits 2-4; dct coarse-fine"))
-def codec(x, sr=DEFAULT_SR, kind="adpcm", quality=0.5):
+        quality=(0.5, "0..1: adpcm rate 6-32 kHz; cvsd clock 12-64 kHz; delta clock 48-192 kHz; gsm pulse bits 2-4; dct coarse-fine"),
+        ltp=(False, "gsm: long-term predictor (pitch lag 40-120 samples, gain 0.1-1) before the pulses"))
+def codec(x, sr=DEFAULT_SR, kind="adpcm", quality=0.5, ltp=False):
     q = float(np.clip(quality, 0.0, 1.0))
     if kind == "adpcm":
         return _at_rate(lambda s: adpcm_encode(s)[1], x, sr, min(_geo(6000, 32000, q), sr))
@@ -1668,7 +1807,7 @@ def codec(x, sr=DEFAULT_SR, kind="adpcm", quality=0.5):
         return _at_rate(lambda s: delta_encode(s, step)[1], x, sr, clock)
     if kind in ("gsm", "gsm-like"):
         y = steep_filter(x, "bandpass", 200.0, sr, 4, fc2=min(3400.0, 0.45 * sr))
-        return _at_rate(lambda s: gsm_like(s, int(round(2 + 2 * q))), y, sr, 8000)
+        return _at_rate(lambda s: gsm_like(s, int(round(2 + 2 * q)), ltp=bool(ltp)), y, sr, 8000)
     if kind == "dct":
         block = int(512 * sr / 44100)  # 11.6 ms blocks
         qmax, power, bits = _geo(128, 4, q), 2.0, int(round(5 + 4 * q))  # quality map
@@ -1676,23 +1815,14 @@ def codec(x, sr=DEFAULT_SR, kind="adpcm", quality=0.5):
     raise ValueError("codec kind must be adpcm|cvsd|cvsd_irig|delta|gsm|dct")
 
 
-# telephone = 8 kHz, 8-bit companded, 200-3200 Hz (DSPG ch.1/22, Table 22-2).
-# nes: DMC rate $F = 33143.9 Hz, 7-bit output counter (NESdev wiki, APU DMC). snes: S-DSP output 32000 Hz nominal,
-# 16-bit stereo DAC (SNESdev wiki, S-DSP). gameboy: 4-bit wave samples (Pan Docs, Audio Registers, CH3).
-# amiga: 3579545 / 214 (NTSC clock constant / period, Amiga Hardware Reference Manual, "Limitations on Selection
-# of Sampling Period"); low-pass "becomes active around 4 KHz" (HRM, "Low-Pass Filter"). sp1200: 26.04 kHz, 12-bit
-# linear (Rossum Electro-Music SP-1200 page, reissue of the original data format). gameboy rate,
-# snes band and ADPCM stand-in for BRR, amiga 8 bits, voicemail, walkie.
-LOFI_PRESETS = {
-    "nes": dict(rate=33144, bits=7, law="linear", band=None, hold=True, adpcm=False),
-    "snes": dict(rate=32000, bits=16, law="linear", band=(20, 7000), hold=False, adpcm=True),
-    "gameboy": dict(rate=8192, bits=4, law="linear", band=None, hold=True, adpcm=False),
-    "amiga": dict(rate=16726, bits=8, law="linear", band=(20, 4000), hold=True, adpcm=False),
-    "sp1200": dict(rate=26040, bits=12, law="linear", band=None, hold=True, adpcm=False),
-    "telephone": dict(rate=8000, bits=8, law="mu", band=(200, 3200), hold=False, adpcm=False),
-    "voicemail": dict(rate=8000, bits=16, law="linear", band=(300, 3000), hold=False, adpcm=True),
-    "walkie": dict(rate=8000, bits=6, law="mu", band=(400, 2800), hold=False, adpcm=False),
-}
+def _lofi(d):
+    return dict(rate=d["rate"], bits=d["bits"], law=d["law"], band=d.get("band"), hold=d["hold"], adpcm=d["adpcm"])
+
+
+LOFI_PRESETS = presets.schema("lofi", {
+    "rate": presets.F(int, lo=500, hi=192000, unit="Hz"), "bits": presets.F(int, lo=1, hi=16),
+    "law": presets.F(str, choices=("linear", "mu", "a")), "band": presets.F(tuple, of=int, max_len=2, required=False),
+    "hold": presets.F(bool), "adpcm": presets.F(bool)}, shape=_lofi)
 
 
 @effect("lofi", "Old-hardware sampler/DAC: band-limited sample-rate reduction, bit depth with dither, zero-order hold.",
@@ -1778,13 +1908,44 @@ def ja_hysteresis(x, sr=DEFAULT_SR, drive=1.0, Ms=380.0, a=720.0, k=380.0, alpha
     return one(x) if x.ndim == 1 else np.stack([one(x[:, i]) for i in range(x.shape[1])], axis=1)
 
 
+TAPE_SPACING = 20e-6
+TAPE_THICKNESS = 35e-6
+TAPE_GAP = 5e-6
+TAPE_LOSS_TAPS = 1023
+
+
+def playhead_loss_db(f, speed=7.5, spacing=TAPE_SPACING, thickness=TAPE_THICKNESS, gap=TAPE_GAP):
+    """Play-head losses of a tape at ``speed`` ips: spacing e^(-kd), thickness (1 - e^(-k delta))/(k delta),
+    gap sin(kg/2)/(kg/2), k = 2 pi f / v. Returns dB."""
+    k = 2 * np.pi * np.asarray(f, dtype=np.float64) / (float(speed) * 0.0254)
+    kd = np.maximum(k * thickness, 1e-12)
+    h = np.exp(-k * spacing) * (-np.expm1(-kd) / kd) * np.abs(np.sinc(k * gap / (2 * np.pi)))
+    return 20 * np.log10(np.maximum(h, 1e-12))
+
+
+def playhead_loss(x, sr=DEFAULT_SR, speed=7.5, spacing=TAPE_SPACING, thickness=TAPE_THICKNESS, gap=TAPE_GAP,
+                  taps=TAPE_LOSS_TAPS):
+    """The play-head losses as a linear-phase FIR (inverse DFT of the loss magnitude), delay removed."""
+    n = int(taps) | 1
+    nf = 8192
+    f = np.arange(nf // 2 + 1) * sr / nf
+    h = np.fft.irfft(10 ** (playhead_loss_db(f, speed, spacing, thickness, gap) / 20), nf)
+    h = np.roll(h, n // 2)[:n] * np.hanning(n + 2)[1:-1]
+    x = np.asarray(x, float)
+    y = sg.fftconvolve(x, h if x.ndim == 1 else h[:, None], mode="full", axes=0)
+    return y[n // 2:n // 2 + x.shape[0]]
+
+
 @effect("tape", "Tape machine: wow and flutter (band-limited variable-speed read), saturation, head bump, hiss.",
         wow=(0.15, "slow speed drift depth in percent (about 0.6 Hz)"), flutter=(0.08, "fast speed wobble depth in percent (about 7 Hz)"),
         drive=(1.5, "saturation input gain 0.1..10"), bump=(2.5, "head-bump boost in dB around 80 Hz"),
         hf=(12000, "high-frequency roll-off Hz"), hiss=(-58, "hiss level in dB RMS (-120 = none)"), seed=(0, "int"),
         model=("tanh", "tanh | hysteresis: Jiles-Atherton magnetisation, the loop real tape has"),
-        wow_rate=(0.6, "wow frequency Hz (0.556 = a record at 33 1/3 rpm, with wow about 0.5)"))
-def tape(x, sr=DEFAULT_SR, wow=0.15, flutter=0.08, drive=1.5, bump=2.5, hf=12000, hiss=-58, seed=0, model="tanh", wow_rate=0.6):
+        wow_rate=(0.6, "wow frequency Hz (0.556 = a record at 33 1/3 rpm, with wow about 0.5)"),
+        speed=(0.0, "tape speed ips for the play-head losses (3.75 | 7.5 | 15 | 30); 0 = off, hf only"),
+        bias=(0.0, "DC offset into the saturation, -1..1 (tanh model): an asymmetric curve adds the even harmonics (the 2nd); 0 = symmetric, odd harmonics only"))
+def tape(x, sr=DEFAULT_SR, wow=0.15, flutter=0.08, drive=1.5, bump=2.5, hf=12000, hiss=-58, seed=0, model="tanh", wow_rate=0.6,
+         speed=0.0, bias=0.0):
     rng = np.random.default_rng(int(seed))
     n = x.shape[0]
     t = np.arange(n) / sr
@@ -1800,9 +1961,12 @@ def tape(x, sr=DEFAULT_SR, wow=0.15, flutter=0.08, drive=1.5, bump=2.5, hf=12000
     if model == "hysteresis":
         y = ja_hysteresis(y, sr, d)
     else:
-        y = oversampled(lambda v: np.tanh(d * v) / math.tanh(d), y, 2)
+        b = float(np.clip(bias, -1.0, 1.0))
+        y = oversampled(lambda v: (np.tanh(d * (v + b)) - math.tanh(d * b)) / (math.tanh(d * (1.0 + b)) - math.tanh(d * b)), y, 2)
     if bump:
         y = F.peak(y, 80.0, sr, 1.0, float(np.clip(bump, -12, 12)))  # bump centre 80 Hz, Q 1
+    if speed and speed > 0:
+        y = playhead_loss(y, sr, speed)
     if hf and hf < 0.49 * sr:
         y = F.lowpass(y, hf, sr)
     if hiss > -119:
@@ -1820,6 +1984,7 @@ WALL_MATERIALS = {
     "drywall": dict(mass=10.65, m2=10.65, gap=0.09, stud=0.6, leak=52.0, coincidence=3000.0),  # stud partition, one 13 mm gypsum board each side
     "brick": dict(mass=211.0, leak=52.0, coincidence=0.0),      # 110 mm brick
     "concrete": dict(mass=345.0, leak=58.0, coincidence=125.0), # 150 mm concrete
+    "plexiglass": dict(mass=11.5, leak=30.0, coincidence=3080.0),  # 10 mm acrylic
 }
 
 
@@ -2150,6 +2315,143 @@ def is_unilossless(A, trials: int = 32, max_delay: int = 7, tol: float = 1e-6, s
     return True
 
 
+def fdn_echo_density(m, n: int) -> np.ndarray:
+    """Absolute echo density of an FDN with delays m (samples) at times 0..n: the number of q in N^N with q.m = t,
+    the echoes per sample whatever the feedback matrix (paths with a non-zero level)."""
+    c = np.zeros(int(n) + 1)
+    c[0] = 1.0
+    for mi in (int(v) for v in m):
+        for t in range(mi, c.size):
+            c[t] += c[t - mi]
+    return c
+
+
+def fdn_saturation_time(m) -> int:
+    """First sample from which every sample carries an echo (Frobenius number + 1 of the delays; the delays must
+    be coprime as a set, else -1)."""
+    m = [int(v) for v in m]
+    g = math.gcd(*m)
+    if g != 1:
+        return -1
+    n = 2 * max(m) * min(m)
+    a = fdn_echo_density(m, n) > 0
+    bad = np.flatnonzero(~a)
+    return int(bad[-1]) + 1 if bad.size else 0
+
+
+def fdn_echo_density_equilateral(m, n) -> np.ndarray:
+    """Polynomial part of the echo density with every delay at the geometric mean g of m:
+    A(n) = (1 / ((N-1)! g)) prod_{j=1}^{N-1} (n/g + j)."""
+    m = np.asarray(m, float)
+    g = float(np.exp(np.log(m).mean()))
+    x = np.asarray(n, float) / g
+    a = np.ones_like(x)
+    for j in range(1, m.size):
+        a = a * (x + j)
+    return a / (math.factorial(m.size - 1) * g)
+
+
+def fdn_mixing_time(m, sr: int = DEFAULT_SR, kind: str = "abel", threshold: float = 0.9) -> float:
+    """Mixing time (s) of an FDN from its delays: ``abel`` when A / (A + 1) reaches ``threshold`` (Abel & Huang's echo
+    density profile), ``defrance`` when the expected empirical density 1 - exp(-A) does, ``polack`` when 10 echoes per
+    24 ms are reached, all on the equilateral approximation of the echo density."""
+    if kind not in ("abel", "defrance", "polack"):
+        raise ValueError("kind must be abel|defrance|polack")
+    if kind == "polack":
+        target = -math.log(1.0 - min(10.0 / (0.024 * sr), 0.99))
+    else:
+        target = threshold / (1.0 - threshold) if kind == "abel" else -math.log(1.0 - threshold)
+    hi = 1.0
+    while fdn_echo_density_equilateral(m, hi) < target:
+        hi *= 2.0
+    lo = 0.0
+    for _ in range(60):
+        mid = 0.5 * (lo + hi)
+        lo, hi = (mid, hi) if fdn_echo_density_equilateral(m, mid) < target else (lo, mid)
+    return hi / sr
+
+
+def fdn_echo_density_polynomial(m, n) -> np.ndarray:
+    """Polynomial part of the echo density of an FDN with delays m (exact Ehrhart average, any delays):
+    the residue at s = 0 of e^(ns) / prod(1 - e^(-m_i s)), i.e. coefficient N-1 of e^(ns) prod_i sum_k B_k+ (m_i s)^k / k!
+    over prod m_i (B_1+ = +1/2). Equal to ``fdn_echo_density`` averaged over a period."""
+    m = [int(v) for v in m]
+    N = len(m)
+    bern = [Fraction(1)]
+    for k in range(1, N):
+        bern.append(-sum(math.comb(k + 1, j) * bern[j] for j in range(k)) / (k + 1))
+    bern[1:2] = [Fraction(1, 2)] if N > 1 else []
+    ser = [Fraction(1)] + [Fraction(0)] * (N - 1)
+    for mi in m:
+        g = [bern[k] * mi ** k / math.factorial(k) for k in range(N)]
+        ser = [sum(ser[a] * g[k - a] for a in range(k + 1)) for k in range(N)]
+    n = np.asarray(n, float)
+    out = np.zeros_like(n)
+    for k in range(N):
+        out = out + float(ser[k]) * n ** (N - 1 - k) / math.factorial(N - 1 - k)
+    return out / math.prod(m)
+
+
+def fdn_degeneration(m) -> dict:
+    """Degenerate delay patterns of an FDN: ``common_factor`` (gcd of all delays > 1: the density never reaches 1),
+    ``geometric_std`` (exp of the standard deviation of ln m / geometric mean; < 1.2 clusters the echoes),
+    ``coprime`` (pairwise relatively prime), ``order`` (smallest k = sum q1 of an integer relation q1.m = q2.m with
+    q1, q2 >= 0 of disjoint support, searched up to 5; None if none)."""
+    m = [int(v) for v in m]
+    g = math.gcd(*m)
+    lm = np.log(np.asarray(m, float))
+    gs = float(np.exp(np.sqrt(np.mean((lm - lm.mean()) ** 2))))
+    coprime = all(math.gcd(a, b) == 1 for i, a in enumerate(m) for b in m[i + 1:])
+    order = None
+    for k in range(1, 6):
+        for q in itertools.combinations_with_replacement(range(len(m)), k):
+            tot = sum(m[i] for i in q)
+            rest = [j for j in range(len(m)) if j not in q]
+            if rest and _reachable(tot, [m[j] for j in rest]):
+                order = k
+                break
+        if order:
+            break
+    return {"common_factor": g, "geometric_std": gs, "coprime": coprime, "order": order}
+
+
+def _reachable(total: int, parts) -> bool:
+    ok = np.zeros(total + 1, bool)
+    ok[0] = True
+    for p in parts:
+        for t in range(p, total + 1):
+            ok[t] |= ok[t - p]
+    return bool(ok[total])
+
+
+def fdn_delays_for_mixing(t_mix: float, lines: int = 8, sr: int = DEFAULT_SR, kind: str = "abel", threshold: float = 0.9) -> np.ndarray:
+    """Pairwise coprime delays (samples) for an FDN with mixing time ``t_mix`` (s): geometric mean from
+    ``fdn_mean_delay_for_mixing``, spread as mean x 3^((ln i - mean ln i) / std ln i), i = 1..lines (geometric std 3), each
+    raised to the next integer coprime with the previous ones."""
+    mean = fdn_mean_delay_for_mixing(t_mix, lines, sr, kind, threshold)
+    li = np.log(np.arange(1, lines + 1, dtype=float))
+    z = (li - li.mean()) / (li.std(ddof=1) if lines > 1 else 1.0)
+    out: list[int] = []
+    for v in np.floor(mean * 3.0 ** z).astype(int):
+        v = max(int(v), 2)
+        while any(math.gcd(v, o) != 1 for o in out):
+            v += 1
+        out.append(v)
+    return np.array(out, np.int64)
+
+
+def fdn_mean_delay_for_mixing(t_mix: float, lines: int, sr: int = DEFAULT_SR, kind: str = "abel", threshold: float = 0.9) -> float:
+    """Geometric-mean delay length (samples) that gives mixing time ``t_mix`` (s) with ``lines`` delay lines."""
+    lo, hi = 1.0, 1.0
+    while fdn_mixing_time([hi] * lines, sr, kind, threshold) < t_mix:
+        hi *= 2.0
+    lo = hi / 2.0
+    for _ in range(50):
+        mid = 0.5 * (lo + hi)
+        lo, hi = (mid, hi) if fdn_mixing_time([mid] * lines, sr, kind, threshold) < t_mix else (lo, mid)
+    return hi
+
+
 @numba.njit(cache=True)
 def _apdist_kernel(x, c):
     y = np.empty_like(x)
@@ -2174,7 +2476,12 @@ def _wg_osc_kernel(f, sr, r):
     y = np.empty(f.shape[0])
     x1, x2, gp = 1.0, 0.0, -1.0
     for n in range(f.shape[0]):
-        C = math.cos(2.0 * math.pi * min(max(f[n], 0.1), 0.49 * sr) / sr)
+        th = 2.0 * math.pi * min(max(f[n], 0.1), 0.49 * sr) / sr
+        C = math.cos(th)
+        if r[n] < 1.0:
+            d = r[n]
+            C = math.sqrt(d / (d + math.tan(th) ** 2 * (1.0 + d) ** 2 / 4.0 + (1.0 - d) ** 2 / 4.0))
+            C = math.copysign(C, math.cos(th))
         g = math.sqrt((1.0 - C) / (1.0 + C))
         if gp > 0.0:
             x2 *= r[n] * gp / g
@@ -2188,17 +2495,23 @@ def _wg_osc_kernel(f, sr, r):
 def wg_osc(freq, n: int, sr=DEFAULT_SR, tau=0.0):
     """Second-order waveguide oscillator (C = cos(2 pi f T), x1, x2 <- C (x1 + x2) - x2, C (x1 + x2) + x1) whose
     amplitude stays exact under FM: x2 is rescaled by the ratio of g = sqrt((1 - C)/(1 + C)) between samples.
-    ``tau`` > 0: exponential decay (s), r = exp(-T/tau) per sample. ``freq`` number or per-sample."""
+    ``tau`` > 0: amplitude decays as exp(-t/tau): one state is scaled by g = exp(-2T/tau) per sample and the
+    tuning coefficient is corrected for that damping. ``freq`` number or per-sample."""
     f = np.ascontiguousarray(np.broadcast_to(np.asarray(freq, np.float64), (int(n),)))
-    r = np.full(int(n), math.exp(-1.0 / (tau * sr)) if tau > 0 else 1.0)
+    r = np.full(int(n), math.exp(-2.0 / (tau * sr)) if tau > 0 else 1.0)
     return _wg_osc_kernel(f, float(sr), r)
 
 
-def wdf_port(kind: str, value: float, sr=DEFAULT_SR):
+def wdf_port(kind: str, value: float, sr=DEFAULT_SR, warp_hz=None):
     """Port resistance and reflection of a wave-digital element, force-velocity analogy, bilinear c = 2/T: mass m
-    (R = 2 m / T, b = -a z^-1), spring k (R = k T / 2, b = a z^-1), damper r (R = r, b = 0)."""
+    (R = c m, b = -a z^-1), spring k (R = k / c, b = a z^-1), damper r (R = r, b = 0). ``warp_hz``: pre-warp,
+    c = w0 / tan(w0 T / 2), so that frequency maps exactly."""
     T = 1.0 / sr
-    return {"mass": (2.0 * value / T, -1.0), "spring": (value * T / 2.0, 1.0), "damper": (float(value), 0.0)}[kind]
+    c = 2.0 / T
+    if warp_hz:
+        w0 = 2.0 * math.pi * min(float(warp_hz), 0.49 * sr)
+        c = w0 / math.tan(w0 * T / 2.0)
+    return {"mass": (c * value, -1.0), "spring": (value / c, 1.0), "damper": (float(value), 0.0)}[kind]
 
 
 def wdf_series(R):
@@ -2215,9 +2528,11 @@ def wdf_parallel(G):
 
 def wdf_oscillator(force, sr=DEFAULT_SR, m=0.01, k=4000.0, r=0.5):
     """Velocity of a mass-spring-damper driven by ``force`` (N per sample), as a wave digital filter: the three
-    elements on one series adaptor, the force entering as the damper's source (b = F). Resonance sqrt(k/m)/(2 pi)."""
-    Rm, sm = wdf_port("mass", m, sr)
-    Rk, sk = wdf_port("spring", k, sr)
+    elements on one series adaptor, the force entering as the damper's source (b = F). Resonance sqrt(k/m)/(2 pi),
+    exact (bilinear pre-warped at that frequency)."""
+    f0 = math.sqrt(k / m) / (2.0 * math.pi)
+    Rm, sm = wdf_port("mass", m, sr, f0)
+    Rk, sk = wdf_port("spring", k, sr, f0)
     Rr, _ = wdf_port("damper", r, sr)
     R = np.array([Rm, Rk, Rr])
     beta = wdf_series(R)
@@ -2369,3 +2684,19 @@ def modal_fft(freqs, decays, amps, dur, sr=DEFAULT_SR, bins=5, n=MODAL_FFT_N):
 def _win_dft(w, delta):
     n = w.size
     return np.sum(w * np.exp(-2j * np.pi * delta * np.arange(n) / n))
+
+
+def mode_lock(freqs, amps, coupling: float = 0.1) -> tuple:
+    """Mode locking of nearly harmonic partials driven by a nonlinear source. The common fundamental w is the amplitude-weighted
+    least-squares fit of the partials to n w (n the nearest harmonic number); a partial is pulled onto n w when its offset is
+    below ``coupling * (a / a_max) * f / (n + 1)``: the stronger the mode and the lower its order, the wider the capture range.
+    Returns (locked frequencies, boolean mask of the locked partials, w)."""
+    f = np.asarray(freqs, float)
+    a = np.abs(np.asarray(amps, float))
+    n = np.maximum(np.rint(f / f.min()), 1.0)
+    w = float(np.sum(a * n * f) / np.sum(a * n * n))
+    n = np.maximum(np.rint(f / w), 1.0)
+    tol = coupling * (a / a.max()) * f / (n + 1.0)
+    lock = np.abs(f - n * w) <= tol
+    return np.where(lock, n * w, f), lock, w
+from . import synth_s  # noqa: E402,F401  (DX7, Buchla, Serge)

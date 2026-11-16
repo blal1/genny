@@ -291,5 +291,15 @@ amplitude when r = 1.
   stencils (most of which are left as exercises). Lowest free-square-plate modes come out 0.3-0.9 % under
   the published values; lossless energy is conserved to 1e-13.
 - No modal fast path was needed: the linear plates are cheap enough on the grid.
-- Not implemented: circular (polar-grid) plates, the curved-shell cymbal, string-soundboard coupling,
+- Not implemented: circular (polar-grid) plates, the curved-shell cymbal,
   free edges for the nonlinear and the wooden plate.
+
+## Added in 1.3.0
+
+- `hihat` / `openhat model=farnell`: the FM hi-hat of Farnell's MEX. `bass_drum` felt mallet contact 4 ms.
+## Newer options (1.3.0)
+
+`plate_crash`, `plate_ride`, `plate_china`, `plate_gong`, `tam_tam`, `steel_cymbal` and `steel_gong` take `edges="supported"|"free"`
+(free edges no longer drift as a rigid body); `metal_plate ribs= rib_height= dome=`; drums `cymbal808` and `gamelan_gong`; `nl_plate(ulim)`;
+`vkmodal.build` is deterministic (the eigenvalue solver starts from a fixed vector), so `vk_plate`, `vk_gong` and `vk_cymbal` are reproducible.
+`string_bridge_plate` (see `fdstring.md`) is the string-soundboard coupling.

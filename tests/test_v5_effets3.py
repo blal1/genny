@@ -17,13 +17,13 @@ def _read_ints(path):
 
 def test_write_wav_default_is_plain_truncation(tmp_path):
     x = np.linspace(-0.9, 0.9, 1001)
-    a = _read_ints(write_wav(tmp_path / "a.wav", x, SR))
+    a = _read_ints(write_wav(tmp_path / "a.wav", x, SR, dither=None))
     assert np.array_equal(a, (x * 32767).astype("<i2").astype(int))
 
 
 def test_write_wav_tpdf_dither_linearises_below_one_lsb(tmp_path):
     x = np.full(40000, 0.3 / 32768)
-    plain = _read_ints(write_wav(tmp_path / "p.wav", x, SR))
+    plain = _read_ints(write_wav(tmp_path / "p.wav", x, SR, dither=None))
     d1 = _read_ints(write_wav(tmp_path / "d1.wav", x, SR, dither="tpdf", seed=3))
     d2 = _read_ints(write_wav(tmp_path / "d2.wav", x, SR, dither="tpdf", seed=3))
     assert not plain.any()

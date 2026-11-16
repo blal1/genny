@@ -388,6 +388,14 @@ def schroeder_frequency(t60: float, volume: float) -> float:
     return 2000.0 * math.sqrt(float(t60) / float(volume))
 
 
+def modal_density(volume: float, f, surface: float = 0.0, edges: float = 0.0, c: float = None):
+    """Eigenfrequencies per Hz of a box at ``f``: 4 pi V f^2 / c^3 + pi S f / (2 c^2) + L / (8 c) (the last two for the
+    walls' area ``surface`` and the sum of the edge lengths ``edges``); the leading term alone when both are 0."""
+    c = C_AIR if c is None else float(c)
+    f = np.asarray(f, float)
+    return 4.0 * math.pi * float(volume) * f ** 2 / c ** 3 + math.pi * float(surface) * f / (2.0 * c ** 2) + float(edges) / (8.0 * c)
+
+
 def room_modes(lx: float, ly: float, lz: float, fmax: float, c: float = None):
     """Eigenfrequencies of a rigid box up to ``fmax``, f = c/2 sqrt((nx/Lx)^2 + (ny/Ly)^2 + (nz/Lz)^2) (Kuttruff 3.15).
     Returns (frequencies, integer orders (m, 3)), sorted, without the (0, 0, 0) term."""
@@ -414,16 +422,17 @@ def piston_directivity(ka, theta: float) -> np.ndarray:
     return np.abs(2.0 * j1(u) / u)
 
 
-PIPE_END_KA = (0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.45, 3.6, 3.75, 3.82)
-PIPE_END_LA = (0.6133, 0.603, 0.582, 0.556, 0.527, 0.499, 0.472, 0.445, 0.417, 0.390, 0.363, 0.337, 0.309, 0.280,
-               0.251, 0.222, 0.183, 0.142)
+PIPE_END_KA = (0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.45, 3.6, 3.7, 3.75,
+               3.8, 3.82, 3.83)
+PIPE_END_LA = (0.6133, 0.6032, 0.5818, 0.5555, 0.5274, 0.4992, 0.4713, 0.4439, 0.4169, 0.3903, 0.3636, 0.3365,
+               0.3083, 0.2777, 0.2499, 0.2249, 0.2037, 0.1900, 0.1707, 0.1581, 0.1458)
 
 
 def pipe_reflection(ka) -> np.ndarray:
     """Reflection coefficient R (e^{+iwt}) at the open end of an unflanged pipe of radius a:
     |R| = 1 + 0.01336 ka - 0.59079 (ka)^2 + 0.33576 (ka)^3 - 0.06432 (ka)^4 up to ka = 1.5, then
-    sqrt(pi ka) e^(-ka) (1 + 3 / (32 (ka)^2)); end correction l/a read off ``PIPE_END_LA`` (0.6133 at ka = 0,
-    falling to 0.14 at the first cross mode, ka = 3.832), R = -|R| exp(-2 i k l)."""
+    sqrt(pi ka) e^(-ka) (1 + 3 / (32 (ka)^2)); end correction l/a from ``PIPE_END_LA`` (0.6133 at ka = 0,
+    falling to 0.15 at the first cross mode, ka = 3.832), R = -|R| exp(-2 i k l)."""
     ka = np.asarray(ka, float)
     kr = np.minimum(ka, 1.5)
     kh = np.maximum(ka, 1.5)
@@ -530,7 +539,7 @@ FOREST_FLOORS = {"red_pine": (49.63, 0.51, 0.020, 1350.0, 0.28), "hardwood": (32
 
 
 def ground_impedance(freqs: np.ndarray, sigma: float = 300.0, model: str = "miki", tortuosity: float = 1.0,
-                     porosity: float = 1.0) -> np.ndarray:
+                     porosity: float = 1.0, alpha: float = 0.0) -> np.ndarray:
     """Normalised characteristic impedance Z/rho c of a porous ground (e^{-iwt} convention), sigma = flow
     resistivity in cgs units (1 cgs = 1 kPa s/m^2), x = f/sigma (= 1000 f/sigma_MKS).
 
@@ -541,7 +550,9 @@ def ground_impedance(freqs: np.ndarray, sigma: float = 300.0, model: str = "miki
     kb/k0 = sqrt(g) [(4/3 - (g-1) Npr/g) T + i 2 sigma/(pi rho0 f)]^0.5, Z = (k0/kb) [(4/3) T + i 2 sigma/(pi rho0 f)] / W.
     ``slit``: identical slit-like pores, same three parameters, lambda = sqrt(3 rho0 w T / (W sigma)),
     rho = (rho0 T / W) / (1 - th(lambda s) / (lambda s)), C = (W / g P0) (1 + (g-1) th(lambda s') / (lambda s')),
-    s = sqrt(-i), s' = sqrt(-i Npr), Z = sqrt(rho / C) / (rho0 c0)."""
+    s = sqrt(-i), s' = sqrt(-i Npr), Z = sqrt(rho / C) / (rho0 c0).
+    ``variable_porosity``: porosity falling exponentially with depth, ``sigma`` = Re (cgs) and ``alpha`` = alpha_e (1/m):
+    Z = (1 + i) sqrt(Re / (pi g rho0 f)) + i c0 alpha_e / (8 pi g f)."""
     f = np.maximum(np.asarray(freqs, float), 1e-3)
     if model == "slit":
         T, W, s = float(tortuosity), float(porosity), 1000.0 * float(sigma)
@@ -557,12 +568,22 @@ def ground_impedance(freqs: np.ndarray, sigma: float = 300.0, model: str = "miki
         visc = 2j * s / (math.pi * RHO_AIR * f)
         kb = math.sqrt(GAMMA_AIR) * np.sqrt((4.0 / 3.0 - (GAMMA_AIR - 1.0) / GAMMA_AIR * PRANDTL_AIR) * T + visc)
         return (4.0 / 3.0 * T + visc) / (kb * W)
+    if model == "variable_porosity":
+        return ((1.0 + 1j) * np.sqrt(1000.0 * float(sigma) / (math.pi * GAMMA_AIR * RHO_AIR * f))
+                + 1j * C_GROUND * float(alpha) / (8.0 * math.pi * GAMMA_AIR * f))
     x = np.minimum(f / float(sigma), 1000.0)
     if model == "delany":
         return 1.0 + 9.08 * x ** -0.75 + 1j * 11.9 * x ** -0.73
     if model != "miki":
-        raise ValueError("model must be miki, delany, attenborough3 or slit")
+        raise ValueError("model must be miki, delany, attenborough3, slit or variable_porosity")
     return 1.0 + (5.50 + 8.43j) * x ** -0.632
+
+
+def foliage_attenuation(freqs: np.ndarray, density: float, radius: float, length: float) -> np.ndarray:
+    """Excess attenuation in dB of sound through ``length`` m of foliage: 0.1 sqrt(F L) [ka + 0.9 sqrt(ka)],
+    k = 2 pi f / c, ``density`` F in 1/m (stems or leaves met per metre), ``radius`` a in m (0.01-0.074)."""
+    ka = 2.0 * math.pi * np.asarray(freqs, float) / C_GROUND * float(radius)
+    return 0.1 * math.sqrt(float(density) * float(length)) * (ka + 0.9 * np.sqrt(ka))
 
 
 def layered_impedance(freqs: np.ndarray, sigma1: float, porosity1: float, depth: float, sigma2: float,
@@ -581,6 +602,13 @@ def layered_impedance(freqs: np.ndarray, sigma1: float, porosity1: float, depth:
     kd = k1 * float(depth)
     t = np.where(kd.imag > 20.0, 1j, np.tan(np.where(kd.imag > 20.0, 0.0, kd)))
     return z1 * (z2 - 1j * z1 * t) / (z1 - 1j * z2 * t)
+
+
+def ground_bounce_gain(d, h=0.9):
+    """Level of the floor bounce against the direct path for a source and a listener `h` m above a rigid floor, `d` m apart: d / sqrt(d^2 + 4 h^2)
+    (0.94 at 5 m, 0.49 at 1 m for h = 0.9)."""
+    d = np.asarray(d, dtype=float)
+    return d / np.sqrt(d * d + 4.0 * float(h) ** 2)
 
 
 def ground_effect(freqs: np.ndarray, d: float, h_source: float = 1.5, h_listener: float = 1.5, sigma: float = 300.0,
@@ -651,6 +679,15 @@ def _schroeder_t60(ir: np.ndarray, lo: float, hi: float, start_db: float = -5.0,
     t = np.arange(i0, i1) / SR
     slope = np.polyfit(t, edc[i0:i1], 1)[0]
     return float(-60.0 / slope)
+
+
+def loop_gain_from_edt(ir: np.ndarray, lo: float, hi: float, loop_s: float) -> dict:
+    """Feedback-loop gain that reproduces the early decay of a measured ``ir`` in the band [lo, hi]: the EDT (0 to -10 dB of the
+    Schroeder decay, extrapolated to 60 dB) gives T60, then the loss per round trip of ``loop_s`` seconds is
+    d = -60 loop_s / T60 dB and the linear gain g = 10^(d / 20)."""
+    t60 = _schroeder_t60(ir, lo, hi, 0.0, -10.0)
+    d = -60.0 * float(loop_s) / t60
+    return {"t60": t60, "db_per_trip": d, "gain": 10.0 ** (d / 20.0)}
 
 
 if __name__ == "__main__":

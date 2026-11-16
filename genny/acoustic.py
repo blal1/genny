@@ -18,10 +18,12 @@ import numpy as np
 
 from . import filters as F
 from . import osc as O
+
+HORN_BODY = [(340, 120, 1.5), (750, 200, 0.8), (1225, 250, 0.6), (2000, 400, 0.4), (3500, 600, 0.3)]
 from .core import DEFAULT_SR, mix
 from .env import adsr, apply, lfo, perc
 from .fx import effect
-from .instruments import (_cut, _harmonics, _ks, _kt, _modes, _n, _off, _roll, _spectrum, _string, _vibrato,
+from .instruments import (_cut, _harmonics, _ks, _kt, _modes, _n, _off, _roll, _soften, _spectrum, _string, _vibrato,
                           decay_env, instrument)
 
 
@@ -53,9 +55,10 @@ def wurli(freq, dur, sr=DEFAULT_SR, vel=1.0, tremolo=0.3, decay=1.4):
             magnetic=(0, "1 = the measured magnetic pickup law instead of the flux polynomial (with flux) or none"),
             tone=("", "tone rockers pressed, any of S M T B: Soft and Medium darken, Treble peaks near 1.6 kHz, "
                       "Brilliant cuts the bass ('' = none, the old sound)"),
-            beat=(0.0, "dB of beating on partials 1-3 below E4, 0.5-2 Hz per partial (0 = off, up to 15)"))
+            beat=(0.0, "dB of beating on partials 1-3 below E4, 0.5-2 Hz per partial (0 = off, up to 15)"),
+            knock=(0.0, "0..1 tangent knock: a 30 ms burst of noise through three modes under 1.2 kHz at the attack, a different low-pass per note (0 = off)"))
 def clav(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=0.9, bright=1.0, release_drop=1.0, flux=False, model="ks", pickup="A", magnetic=0,
-         tone="", beat=0.0):
+         tone="", beat=0.0, knock=0.0):
     """Hohner D6: pickup comb with notches every 4.67 partials, 3-semitone drop at key-off, amplifier
     shelves -3 dB at 130 Hz and +3 dB at 4 kHz."""
     t60 = decay * 1.5 * _kt(freq, 1.0, 0.45)
@@ -68,6 +71,8 @@ def clav(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=0.9, bright=1.0, release_drop=
         raise ValueError(f"clav model {model!r}: ks or dwg")
     if beat > 0 and freq < CLAV_BEAT_MAX_HZ:
         y = clav_beat(y, freq, sr, min(float(beat), 15.0), int(freq * 10) % 9973)
+    if knock > 0:
+        y = clav_knock(y, sr, float(np.clip(knock, 0.0, 1.0)), int(freq * 10) % 9973)
     n0 = min(len(y), int(round(dur * sr)))
     t = np.arange(len(y) - n0) / sr
     off = np.exp(-t / 0.03)                                     # the damper (the old 30 ms release)
@@ -94,7 +99,7 @@ def clav(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=0.9, bright=1.0, release_drop=
         w = lfilter([1.0], [1.0, -(1.0 - 2 * math.pi * 10.0 / sr)], y)
         w = w - np.mean(w)
         x = 0.5e-3 * (0.5 + 0.5 * float(np.clip(vel, 0.0, 1.0))) * w / (np.max(np.abs(w)) + 1e-12)
-        u = np.diff(np.polyval((1.817e5, -9.508e3, 1.818e2, -1.544, 0.7951), x), prepend=0.7951)
+        u = np.diff(np.polyval(CLAV_FLUX_POLY, x), prepend=CLAV_FLUX_POLY[-1])
         y = u * np.sqrt(np.mean(y ** 2)) / (np.sqrt(np.mean(u ** 2)) + 1e-12)
     tone = str(tone).upper()
     if tone:
@@ -105,6 +110,29 @@ def clav(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=0.9, bright=1.0, release_drop=
     return F.lowpass(y, top, sr, 0.7) * 0.8 / (np.max(np.abs(y)) + 1e-9) * (0.5 + 0.5 * vel)
 
 
+CLAV_KNOCK_MS = 30.0
+CLAV_KNOCK_TAU = 0.004
+CLAV_KNOCK_MAX_HZ = 1200.0
+
+
+def clav_knock(y, sr, amount, seed):
+    """The tangent's knock: noise decaying in CLAV_KNOCK_TAU through three modes (Q 4) drawn under a low-pass whose corner is
+    drawn per note between 500 Hz and CLAV_KNOCK_MAX_HZ, added to the first CLAV_KNOCK_MS ms at ``amount`` x half the string's
+    peak there."""
+    rng = np.random.default_rng(seed)
+    nk = min(len(y), int(CLAV_KNOCK_MS * 1e-3 * sr))
+    if nk < 16:
+        return y
+    x = rng.standard_normal(nk) * np.exp(-np.arange(nk) / sr / CLAV_KNOCK_TAU)
+    fc = rng.uniform(500.0, CLAV_KNOCK_MAX_HZ)
+    k = sum(F.bandpass(x, fm, sr, 4.0) for fm in rng.uniform(150.0, fc, 3))
+    k = F.lowpass(k, fc, sr)
+    out = np.array(y, float)
+    out[:nk] += k * amount * 0.5 * np.max(np.abs(y[:nk])) / (np.max(np.abs(k)) + 1e-12)
+    return out
+
+
+CLAV_FLUX_POLY = (1.817e5, -9.508e3, 1.818e2, -1.544, 0.7951)
 CLAV_TONE_RS = 1.0e4
 CLAV_TONE_RL = 1.0e6
 CLAV_TONE_Q = 5.0
@@ -221,9 +249,11 @@ _RHODES_Q = ((77.8, 949.0), (155.6, 731.0), (246.9, 1101.0), (261.6, 1238.0), (2
             tonebar=("fork", "fork | 2dof: tine and aluminium tonebar as two masses coupled through the clamp"),
             tonebar_cents=(0.0, "with 2dof: the tonebar's mistuning against the tine (the fork turns asymmetric)"),
             tuning_mass=(0.0, "tuning spring at the tine tip, as a fraction of the tine's effective mass: "
-                              "lowers the tine by 1/sqrt(1 + m)"))
+                              "lowers the tine by 1/sqrt(1 + m)"),
+            hysteresis=(0.0, "damping of the felt, F = k x^a (1 + mu v) with mu in s/m (0 = elastic; 0.3-1 for felt): "
+                             "the contact lasts longer, so the attack is softer and the bell weaker"))
 def rhodes(freq, dur, sr=DEFAULT_SR, vel=1.0, voicing=0.35, bell=1.0, decay=1.0, sustain=0.0, onset="hammer", tremolo=0.0,
-           tonebar="fork", tonebar_cents=0.0, tuning_mass=0.0):
+           tonebar="fork", tonebar_cents=0.0, tuning_mass=0.0, hysteresis=0.0):
     """Tine: cantilever modes 1, 6.267, 17.55 (clamped-free Euler-Bernoulli; the lowest keys, without tonebar, at the
     measured 7.11 and 20.25) excited by a felt hammer at RHODES_STRIKE of the tine: each overtone's level is the mode
     shape at the strike point times the hammer's force spectrum (contact time of the Hunt-Crossley hammer) over its
@@ -259,7 +289,7 @@ def rhodes(freq, dur, sr=DEFAULT_SR, vel=1.0, voicing=0.35, bell=1.0, decay=1.0,
     else:
         raise ValueError("rhodes tonebar must be fork or 2dof")
     b = float(np.clip(bell, 0.0, 2.0))
-    tc = rhodes_contact_time(0.5 + 3.5 * v)
+    tc = rhodes_contact_time(0.5 + 3.5 * v, hysteresis)
     if not swell and b > 0:
         for r, lvl, d in zip(rhodes_ratios(f0), rhodes_overtones(f0, tc), (0.04, 0.015)):
             if r * f0 < 0.45 * sr:
@@ -335,10 +365,14 @@ def rhodes_ratios(f0: float) -> tuple[float, float]:
     return a + (6.267 - a) * x, b + (17.55 - b) * x
 
 
-def rhodes_contact_time(v: float) -> float:
-    """Contact time s of a power-law hammer F = k x^alpha of mass m hitting at v m/s (elastic part of Hunt-Crossley):
-    2 (x_m / v) sqrt(pi) Gamma(1 + 1/n) / Gamma(1/2 + 1/n), n = alpha + 1, x_m = (n m v^2 / (2 k))^(1/n)."""
+def rhodes_contact_time(v: float, mu: float = 0.0) -> float:
+    """Contact time s of a power-law hammer F = k x^alpha (1 + mu v) of mass m hitting at v m/s. mu = 0 (elastic part
+    of Hunt-Crossley): 2 (x_m / v) sqrt(pi) Gamma(1 + 1/n) / Gamma(1/2 + 1/n), n = alpha + 1,
+    x_m = (n m v^2 / (2 k))^(1/n); mu > 0: the dissipative integral of ``contact.hc_contact_time``."""
     m, al, k = RHODES_HAMMER
+    if mu > 0.0:
+        from .contact import hc_contact_time
+        return float(hc_contact_time(m, k, al, float(mu), float(v)))
     nn = al + 1.0
     xm = (nn * m * v * v / (2.0 * k)) ** (1.0 / nn)
     return 2.0 * xm / v * math.sqrt(math.pi) * math.gamma(1.0 + 1.0 / nn) / math.gamma(0.5 + 1.0 / nn)
@@ -463,6 +497,8 @@ def _harpsi_string(freq, n, n_off, sr, exc, t60, B, a=-0.0296, r=-0.0015, rrate=
 
 
 PLECTRUM = {"L": 6e-3, "EI": 3e9 * 0.029e-12, "T": 92.0, "Ls": 0.5, "l0": 5e-3}
+MANDOLIN_PICK = {"k": 4000.0, "mu": 0.05, "f_max": 2.0, "R": 0.17, "beta": 0.2}
+PLECTRUM_R = 0.22                                                  # kg/s, string wave impedance sqrt(T mu_s)
 
 
 @functools.lru_cache(maxsize=64)
@@ -497,9 +533,12 @@ def plectrum_release(beta: float, steps: int = 400) -> tuple[float, float, float
                         "0 = by register, 12 % in the bass to 50 % in the treble"),
             phantom=(0.0, "0..1 longitudinal resonances driven by the square of the string's motion (bright, metallic onset)"),
             ripple_partial=(0, "partial (>= 2) whose loss the ripple filter aims at: rrate 1/k (r >= 0) or 1/(2k) (r < 0); "
-                               "0 = the measured 197 Hz key's 1/12 on every key"))
+                               "0 = the measured 197 Hz key's 1/12 on every key"),
+            plectrum=(0, "1 = the main string is plucked by a spring plectrum on a two-rail waveguide (contact, feathered stiffness, "
+                         "release at the quill's release force) instead of the commuted pulse; 0 = the pulse"),
+            timbre=(0.0, "0..0.95 pole of a one-pole low-pass on the string's excitation (darker, softer attack); 0 = off"))
 def harpsichord(freq, dur, sr=DEFAULT_SR, vel=1.0, octave=0.3, soundboard=0.35, stops=1, lid=1.0, pluck=0.0, phantom=0.0,
-                ripple_partial=0):
+                ripple_partial=0, plectrum=0, timbre=0.0):
     from scipy.signal import cheby1, lfilter, sosfilt
     from .reverbs import fdn_reverb
     beta = round(float(np.clip(pluck if pluck > 0 else harpsichord_pluck_point(freq), 0.04, 0.5)), 3)
@@ -513,11 +552,19 @@ def harpsichord(freq, dur, sr=DEFAULT_SR, vel=1.0, octave=0.3, soundboard=0.35, 
     exc = np.zeros(max(len(pulse), len(scrape)))
     exc[:len(pulse)] += pulse
     exc[:len(scrape)] += scrape
+    tp = float(np.clip(timbre, 0.0, 0.95))
+    if tp > 0.0:
+        exc = lfilter([1.0 - tp], [1.0, -tp], exc)
     lag = max(1, int(round(beta * sr / freq)))
     exc = np.concatenate([exc, np.zeros(lag)]) - np.concatenate([np.zeros(lag), exc])
     t60 = 20.0 * 1.4 ** -math.log2(freq / 130.81)                   # Meyer 2009, 3.5: about 20 s at C3, /1.4 per octave
     B = 1e-5 * _kt(freq, 1.0, 0.3, f_lo=65.0, f_hi=1200.0)          # Fig. 5: ~1e-5 on the low keys
     y1 = _harpsi_string(freq, n, n_off, sr, exc, t60, B, ripple_partial=ripple_partial)
+    if plectrum:
+        from .graphsolver import PlectrumJunction
+        yj = PlectrumJunction(k=3.0 * PLECTRUM["EI"] / PLECTRUM["L"] ** 3 / 1e-3, mu=0.02, f_max=plectrum_release(beta)[0],
+                              feather_p=2.0, R=PLECTRUM_R, sr=sr).pluck(freq, n / sr, vel, beta, t60)[0]
+        y1 = yj * np.sqrt(np.mean(y1 ** 2) / (np.mean(yj ** 2) + 1e-30))
     k = 10 if 10 * freq < 0.4 * sr else 2                           # beating against a low partial
     fb = k * freq * math.sqrt(1 + B * k * k) + 0.67
     rr = math.exp(-math.pi * fb / (math.sqrt(1 + B * k * k) * freq * t60 * 2.0))
@@ -610,10 +657,16 @@ def toy_piano(freq, dur, sr=DEFAULT_SR, vel=1.0):
 
 @instrument("church_organ", "Pipe organ: principal ranks at several octaves that speak slowly with a little chiff (add a long reverb).",
             family="keys", span=("C2", "C6"), sub=(0.35, "16-foot sub-octave rank 0..1"), mixture=(0.5, "upper ranks 0..1"),
-            chiff=("classic", "classic | grey: onset noise around 2-4 x f0, 30 ms, 20 dB under the steady tone"))
-def church_organ(freq, dur, sr=DEFAULT_SR, vel=1.0, sub=0.35, mixture=0.5, chiff="classic"):
+            chiff=("classic", "classic | grey: onset noise around 2-4 x f0, 30 ms, 20 dB under the steady tone"),
+            mouth=(-1.0, "0..1: mouth height of the flue pipes sets harmonics 1-4 (0 low mouth: rich second harmonic .. 1 high); -1 = off"),
+            voicing=("default", "default | light: the flue mouth sets the spectrum of every rank (mouth 0.5 when `mouth` is not given)"))
+def church_organ(freq, dur, sr=DEFAULT_SR, vel=1.0, sub=0.35, mixture=0.5, chiff="classic", mouth=-1.0, voicing="default"):
     if chiff not in ("classic", "grey"):
         raise ValueError("church_organ chiff must be classic or grey")
+    if voicing not in ("default", "light"):
+        raise ValueError("church_organ voicing must be default or light")
+    if voicing == "light" and mouth < 0.0:
+        mouth = 0.5
     rel = 0.2
     n = _n(dur, sr, rel)
     x = np.zeros(n)
@@ -621,7 +674,12 @@ def church_organ(freq, dur, sr=DEFAULT_SR, vel=1.0, sub=0.35, mixture=0.5, chiff
         f = freq * mult
         if g <= 0 or f > 5000:
             continue
-        x += g * _harmonics(f * tune, n, sr, _spectrum(f, sr, tilt=1.7, corner=2400.0, slope=2.5, top=5000.0, maxh=10))
+        amps = _spectrum(f, sr, tilt=1.7, corner=2400.0, slope=2.5, top=5000.0, maxh=10)
+        if mouth >= 0.0:
+            amps = np.array(amps, float)
+            k = min(4, len(amps))
+            amps[:k] = amps[0] * flue_harmonics(mouth)[:k]
+        x += g * _harmonics(f * tune, n, sr, amps)
     if chiff == "grey":
         noise = grey_chiff(n, sr, freq, float(np.sqrt(np.mean((x / 1.6) ** 2))))
     else:
@@ -629,30 +687,86 @@ def church_organ(freq, dur, sr=DEFAULT_SR, vel=1.0, sub=0.35, mixture=0.5, chiff
     return apply(x / 1.6 + noise, adsr(dur, 0.05, 0.0, 1.0, rel, sr, curve=1.2)) * 0.6
 
 
+UNISON_GAIN_MIDI = (33.0, 43.0, 53.0, 58.0, 63.0, 68.0, 73.0, 84.0)
+UNISON_GAIN_DB = (6.5, 4.0, 3.0, 3.5, 5.0, 11.0, 15.0, 16.0)
+
+
+@instrument("unison_strings", "A course of unison strings (piano key, mandolin course) coupled through the bridge, the coupling taken from the bridge admittance: a fast first decay then the antiphase mode rings on.",
+            family="plucked", span=("A1", "C6"), strings=(3, "number of unison strings, 2..4"),
+            detune=(1.6, "cents between the outer strings"))
+def unison_strings(freq, dur, sr=DEFAULT_SR, vel=1.0, strings=3, detune=1.6):
+    from .networks import CoupledStringBank
+    k = int(np.clip(strings, 2, 4))
+    cents = tuple(float(c) * float(detune) / 1.6 for c in np.linspace(-0.9, 0.7, k))
+    bank = CoupledStringBank.from_bridge(freq, detune_cents=cents, sr=int(sr))
+    y = bank.render(dur + 0.3, velocity=0.4 + 0.5 * float(vel))
+    y = F.lowpass(y, min(4500.0, 0.44 * sr), sr, 0.7)
+    m = 69.0 + 12.0 * math.log2(max(float(freq), 1.0) / 440.0)
+    g = 10.0 ** (float(np.interp(m, UNISON_GAIN_MIDI, UNISON_GAIN_DB)) / 20.0)
+    return _physical_note_fade(y / (np.max(np.abs(y)) + 1e-12), sr, 0.002, 0.3) * 0.6 * g
+
+
 CHIFF_BAND = (2.0, 4.0)
 CHIFF_S = 0.03
 CHIFF_DB = -20.0
 
 
-def grey_chiff(n, sr, freq, steady_rms, length=CHIFF_S, level_db=CHIFF_DB, seed=31):
+def grey_chiff(n, sr, freq, steady_rms, length=CHIFF_S, level_db=CHIFF_DB, seed=31, ping=0):
     """Onset noise of a flue pipe: noise in the band CHIFF_BAND x f0, rising in 2 ms and dying over `length` s,
-    its RMS over `length` set `level_db` under `steady_rms`."""
+    its RMS over `length` set `level_db` under `steady_rms`. ``ping`` = 3 or 5: instead an almost periodic burst at that
+    harmonic of f0 (xylophone-like attack of a stopped pipe)."""
     lo, hi = CHIFF_BAND[0] * freq, min(CHIFF_BAND[1] * freq, 0.45 * sr)
     if lo >= hi:
         return np.zeros(n)
     fc = math.sqrt(lo * hi)
-    w = F.bandpass(O.white(n, seed=seed), fc, sr, fc / (hi - lo))
     t = np.arange(n) / sr
+    if ping:
+        fp = int(ping) * freq
+        if fp >= 0.45 * sr:
+            return np.zeros(n)
+        w = np.sin(2 * np.pi * fp * t + 2 * np.pi * np.random.default_rng(seed).uniform())
+    else:
+        w = F.bandpass(O.white(n, seed=seed), fc, sr, fc / (hi - lo))
     w = w * np.minimum(t / 0.002, 1.0) * np.exp(-t / max(length, 1e-3))
     m = max(1, min(n, int(length * sr)))
     r = float(np.sqrt(np.mean(w[:m] ** 2))) + 1e-12
     return w * steady_rms * 10.0 ** (level_db / 20.0) / r
 
 
-@instrument("accordion", "Accordion: two or three reeds tuned slightly apart (musette shimmer) under bellows pressure (folk, tango, polka, chanson).",
-            family="keys", span=("C3", "C6"), musette=(9.0, "cents the reeds are tuned apart (0 = dry single reed)"))
-def accordion(freq, dur, sr=DEFAULT_SR, vel=1.0, musette=9.0):
+FLUE_HARMONICS = {"low": (1.0, 1.26, 0.092, 0.08), "high": (1.0, 0.355, 0.047, 0.09)}
+
+
+def flue_harmonics(mouth: float = 0.5):
+    """Pressure amplitudes of harmonics 1-4 of an open flue pipe relative to the fundamental, for a mouth height
+    from 0 (low: rich in the second harmonic) to 1 (high)."""
+    m = float(np.clip(mouth, 0.0, 1.0))
+    lo, hi = np.array(FLUE_HARMONICS["low"]), np.array(FLUE_HARMONICS["high"])
+    return (1.0 - m) * lo + m * hi
+
+
+ACCORDION_BEND_REF_HZ = 264.0  # the C4 reed at zero pressure; bend scales as a fraction of it
+HARMONIUM_PARTIALS = (1.0, 0.2121, 0.3841, 0.1315, 0.1009, 0.1501, 0.0503, 0.0593, 0.0834, 0.0297, 0.0408, 0.0623,
+                      0.0212, 0.0334, 0.0498, 0.0171, 0.0294, 0.0393, 0.0132, 0.024, 0.0329, 0.0089, 0.0186, 0.0267,
+                      0.069, 0.0154, 0.0203, 0.0046, 0.0126, 0.0162, 0.0031, 0.013, 0.0153, 0.0045, 0.0125, 0.0129, 0.0033)
+
+
+@instrument("harmonium", "Indian hand harmonium: a single free reed per key under hand bellows; bright, nasal, buzzy (Hindustani, devotional, drone).",
+            family="keys", span=("C3", "C6"))
+def harmonium(freq, dur, sr=DEFAULT_SR, vel=1.0):
     rel = 0.08
+    n = _n(dur, sr, rel)
+    amps = [a if k * freq < 0.45 * sr else 0.0 for k, a in enumerate(HARMONIUM_PARTIALS, 1)]
+    x = _soften(_harmonics(freq, n, sr, amps) / sum(amps), freq, sr, harm=6.0, lo=1800.0, hi=3000.0)
+    return apply(x, adsr(dur, 0.045, 0.1, 0.9, rel, sr, curve=1.3)) * 0.6 * (0.5 + 0.5 * vel)
+
+
+@instrument("accordion","Accordion: two or three reeds tuned slightly apart (musette shimmer) under bellows pressure (folk, tango, polka, chanson).",
+            family="keys", span=("C3", "C6"), musette=(9.0, "cents the reeds are tuned apart (0 = dry single reed)"),
+            bend=(0.0, "Hz/kPa the pitch drops with bellows pressure on a C4 reed (2.5 key fully down, 5.1 key half down; 0 = off)"),
+            pressure=(1.0, "kPa bellows pressure for bend (0-2.5)"))
+def accordion(freq, dur, sr=DEFAULT_SR, vel=1.0, musette=9.0, bend=0.0, pressure=1.0):
+    rel = 0.08
+    freq = freq * (1.0 - float(bend) * float(np.clip(pressure, 0.0, 2.5)) / ACCORDION_BEND_REF_HZ)
     n = _n(dur, sr, rel)
     amps = _spectrum(freq, sr, tilt=1.0, formants=[(900, 400, 0.8)], corner=2200.0, slope=2.5, top=5500.0, even=0.7)
     reeds = ((0.0, 1.0), (musette, 0.7), (-0.8 * musette, 0.5)) if musette else ((0.0, 1.0),)
@@ -703,21 +817,33 @@ def tubular_bell(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=3.5):
     return x * perc(ring, 0.002, sr, curve=1.2) * 0.5 * (0.6 + 0.4 * vel)
 
 
+GAMELAN_BARS = {"saron": ((1.0, 2.71, 4.84), (1.0, 0.4, 0.15), (1.3, 0.5, 0.12)),
+                "jegogan": ((1.0, 2.7, 5.2, 8.4, 12.2), (1.0, 0.4, 0.15, 0.08, 0.04), (1.3, 0.5, 0.12, 0.08, 0.06))}
+
+
 @instrument("gamelan", "Gamelan metallophone (saron/gender): bronze bars tuned in beating pairs, so every note shimmers.",
-            family="mallet", span=("C4", "C7"), ombak=(3.0, "beat rate Hz between the paired bars"))
-def gamelan(freq, dur, sr=DEFAULT_SR, vel=1.0, ombak=3.0):
+            family="mallet", span=("C4", "C7"), ombak=(3.0, "beat rate Hz between the paired bars"),
+            bar=("saron", "saron | jegogan: Balinese jegogan bar, partials 1 : 2.7 : 5.2 : 8.4 : 12.2"))
+def gamelan(freq, dur, sr=DEFAULT_SR, vel=1.0, ombak=3.0, bar="saron"):
     ring = max(dur, 2.0)
     n = _n(ring, sr)
-    x = _modes(freq, n, sr, [(1.0, 1.0, 1.3), (2.71, 0.4 * vel, 0.5), (5.15, 0.15 * vel, 0.12)], corner=3000.0, beat=ombak)
+    ratios, levels, taus = GAMELAN_BARS[str(bar)]
+    x = _modes(freq, n, sr, [(r, a * (vel if i else 1.0), t) for i, (r, a, t) in enumerate(zip(ratios, levels, taus))],
+               corner=3000.0, beat=ombak)
     return x * perc(ring, 0.001, sr, curve=1.0) * 0.7 * (0.6 + 0.4 * vel)
 
 
-@instrument("singing_bowl", "Singing bowl: very long ring with slowly beating partials (meditation, ambient, temple).",
+QING_RATIOS = (1.0, 2.75, 5.06, 7.78, 10.83)   # modes (2,0)..(6,0)
+
+
+@instrument("singing_bowl", "Singing bowl / qing: very long ring with slowly beating (m,0) partials 1 : 2.75 : 5.06 : 7.78 : 10.83 (meditation, ambient, temple).",
             family="mallet", span=("C3", "C5"), decay=(6.0, "seconds"))
 def singing_bowl(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=6.0):
     ring = max(dur, decay)
     n = _n(ring, sr)
-    x = _modes(freq, n, sr, [(1.0, 1.0, ring / 2.2), (2.71, 0.45, ring / 3.5), (5.0, 0.2 * vel, ring / 7)], corner=2600.0, beat=0.6)
+    r = QING_RATIOS
+    x = _modes(freq, n, sr, [(r[0], 1.0, ring / 2.2), (r[1], 0.45, ring / 3.5), (r[2], 0.2 * vel, ring / 7),
+                             (r[3], 0.1 * vel, ring / 10), (r[4], 0.05 * vel, ring / 14)], corner=2600.0, beat=0.6)
     return x * perc(ring, 0.015, sr, curve=1.3) * 0.7 * (0.6 + 0.4 * vel)
 
 
@@ -743,7 +869,7 @@ def timpani(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=1.6):
 # compensated, i.e. the body alone (Woodhouse et al. 2012, Fig. 7, red open squares read off the plot):
 # Helmholtz 91 Hz Q 52, top plate 192 Hz Q 44; the higher modes take Q 49, the mean of the 0-2 kHz band-averaged
 # Q over the same guitars (Fig. 8c). the higher modes' spacing (every ~70 Hz up to 3 kHz) and level
-# (falling as 1 / sqrt(f): "weaker and denser", Penttinen) and the size range l = +-0.12.
+# (falling as 1 / sqrt(f): "weaker and denser", Penttinen); the size range l = +-0.064 puts the lowest modes 1.29 apart, as the two bodies (87 and 112 Hz).
 _GUITAR_LOW = ((91.0, 52.0, 1.0), (192.0, 44.0, 0.8))
 
 
@@ -784,7 +910,7 @@ def guitar_body_modes(seed: int = 0, size: float = 0.5, sr: int = DEFAULT_SR, st
     if seed:
         f = f * np.exp(0.058 * rng.standard_normal(len(f)))
         q = q * np.exp(0.33 * rng.standard_normal(len(q)))
-    lam = 0.24 * (0.5 - float(np.clip(size, 0.0, 1.0)))
+    lam = 0.128 * (0.5 - float(np.clip(size, 0.0, 1.0)))
     w = 2 * np.pi * f / 48000.0                                     # warped at Penttinen's 48 kHz whatever sr is
     w = w + 2 * np.arctan(lam * np.sin(w) / (1 - lam * np.cos(w)))
     return w * 48000.0 / (2 * np.pi), q, g
@@ -1050,12 +1176,14 @@ def slap_bass(freq, dur, sr=DEFAULT_SR, vel=1.0):
 
 # ---------------------------------------------------------------- bowed / blown
 def _blown(freq, dur, sr, vel, soft, hard, attack=0.05, release=0.1, bloom=0.06, vib=(5.5, 0.1, 0.2), scoop=0.0,
-           sustain=0.9, top=6500.0, even_db=0.0, track=False):
+           sustain=0.9, top=6500.0, even_db=0.0, track=False, end_boost=-1.0):
     """Sustained harmonic voice. `soft` / `hard` are `_spectrum` kwargs for the quiet and the loud
     spectrum; the tone opens from soft towards hard as the note speaks (`bloom` seconds) and with
-    velocity, which is what makes bowed strings and brass sound played rather than switched on."""
+    velocity, which is what makes bowed strings and brass sound played rather than switched on.
+    `end_boost` -1: the vibrato speeds up over the last cycles along the measured mean tail (strings,
+    brass); the reed and flue winds pass 2.0, the older +2 Hz ramp over the last 0.5 s."""
     n = _n(dur, sr, release)
-    f = _vibrato(freq, n, sr, rate=vib[0], depth=vib[1], delay=vib[2], ramp=0.3, scoop=scoop, end_boost=2.0)
+    f = _vibrato(freq, n, sr, rate=vib[0], depth=vib[1], delay=vib[2], ramp=0.3, scoop=scoop, end_boost=end_boost)
     a0 = _spectrum(freq, sr, top=top, **soft)
     a1 = _spectrum(freq, sr, top=top, **hard)
     K = max(len(a0), len(a1))
@@ -1123,7 +1251,7 @@ def clarinet(freq, dur, sr=DEFAULT_SR, vel=1.0):
     even = _kt(freq, 0.08, 0.5)   # the upper register loses the hollow sound
     y = _blown(freq, dur, sr, vel, dict(tilt=1.7, even=even, corner=1500.0, slope=3.0),
                dict(tilt=1.2, even=even, formants=[(1500, 500, 0.5)], corner=2300.0, slope=3.0),
-               attack=0.04, release=0.08, bloom=0.05, vib=(5.0, 0.03, 0.3))
+               attack=0.04, release=0.08, bloom=0.05, vib=(5.0, 0.03, 0.3), end_boost=2.0)
     n = y.shape[0]
     return (y + _air(n, sr, _cut(freq, 3, 900, 2000), 1.5, 53) * 0.02 * np.abs(y)) * 0.6
 
@@ -1133,11 +1261,11 @@ def clarinet(freq, dur, sr=DEFAULT_SR, vel=1.0):
             even=(0.0, "dB on the even harmonics (negative = hollower, clarinet-like)"),
             precursor=(0.0, "0..1 the burst of high energy before the tone settles"))
 def oboe(freq, dur, sr=DEFAULT_SR, vel=1.0, meyer=0, even=0.0, precursor=0.0):
-    body = [(1150, 250, 2.5), (2700, 400, 0.8)]
+    body = [(1150, 250, 2.5), (2700, 400, 0.8), (4500, 700, 0.3)]
     y = _blown(freq, dur, sr, vel, dict(tilt=1.1, formants=body, corner=2200.0, slope=3.5),
                dict(tilt=0.7, formants=body, corner=4000.0, slope=3.5),
                attack=attack_ms("oboe", freq, vel) / 1000.0 if meyer else 0.03, release=0.08, bloom=0.04, vib=(5.5, 0.1, 0.25),
-               even_db=float(even))
+               even_db=float(even), end_boost=2.0)
     if meyer:
         y = dynamic_timbre(y, sr, "oboe", vel)
     return (_precursor(y, sr, "oboe", precursor) if precursor > 0 else y) * 0.55
@@ -1164,7 +1292,7 @@ def sax(freq, dur, sr=DEFAULT_SR, vel=1.0, breath=0.1, growl=0.0, model="formant
     c0, c1 = (SAX_LATTICE_FC[lattice], SAX_LATTICE_FC[lattice] * SAX_LATTICE_HARD) if lattice else (1700.0, 2600.0)
     y = _blown(freq, dur, sr, vel, dict(tilt=1.5, formants=body, corner=c0, slope=3.0),
                dict(tilt=0.9, formants=body, corner=c1, slope=3.0),
-               attack=0.035, release=0.1, bloom=0.07, vib=(5.0, 0.2, 0.2), scoop=0.5)
+               attack=0.035, release=0.1, bloom=0.07, vib=(5.0, 0.2, 0.2), scoop=0.5, end_boost=2.0)
     n = y.shape[0]
     t = np.arange(n) / sr
     if growl > 0:
@@ -1244,7 +1372,7 @@ def trumpet(freq, dur, sr=DEFAULT_SR, vel=1.0, mute=0.0):
 @instrument("french_horn", "French horn: round, noble, distant (film scores, heroic themes, warm pads of brass).",
             family="brass", span=("C2", "F5"))
 def french_horn(freq, dur, sr=DEFAULT_SR, vel=1.0):
-    body = [(450, 150, 1.5)]
+    body = HORN_BODY
     return _blown(freq, dur, sr, vel, dict(tilt=2.6, formants=body, corner=1000.0, slope=3.0),
                   dict(tilt=1.6, formants=body, corner=1600.0, slope=3.0),
                   attack=0.08, release=0.15, bloom=0.1, vib=(5.0, 0.03, 0.4), top=4500.0) * 0.6
@@ -1277,7 +1405,7 @@ def harmonica(freq, dur, sr=DEFAULT_SR, vel=1.0):
     body = [(1300, 350, 1.5), (2500, 400, 0.6)]
     y = _blown(freq, dur, sr, vel, dict(tilt=1.3, formants=body, corner=2000.0, slope=3.0, even=0.9),
                dict(tilt=0.9, formants=body, corner=2800.0, slope=3.0, even=0.9),
-               attack=0.03, release=0.08, bloom=0.05, vib=(5.5, 0.18, 0.25), scoop=0.6)
+               attack=0.03, release=0.08, bloom=0.05, vib=(5.5, 0.18, 0.25), scoop=0.6, end_boost=2.0)
     n = y.shape[0]
     t = np.arange(n) / sr
     wah = 1 - 0.25 * np.clip((t - 0.25) / 0.3, 0, 1) * (1 + np.sin(2 * np.pi * 5.5 * t)) / 2
@@ -1381,16 +1509,45 @@ def cello(freq, dur, sr=DEFAULT_SR, vel=1.0, attack=0.1, vibrato=1.0):
 
 
 @instrument("clarinet", "Physical clarinet: nonlinear reed coupled to a bore waveguide.", family="wind", span=("D3", "C6"),
-            model=("waveguide", "waveguide | impedance (Guillemain 2005 digital impedance, measured reed and mouthpiece: "
+            model=("waveguide", "waveguide | map (the lossy cylindrical bore as an iterated map: beating threshold and loss from map_limits) | worman (odd harmonics n of amplitude p1^n, p1 rising with velocity: the non-beating regime) | impedance (Guillemain 2005 digital impedance, measured reed and mouthpiece: "
                                 "the tone thickens and brightens with velocity)"),
             embouchure=(0.5, "impedance only: 0 loose .. 1 tight lip on the reed"),
             reed=("guillemain", "impedance only: guillemain | typical | squeak | van_walstijn"),
             stiffening=(0, "impedance with reed=van_walstijn: 1 = stiffness rises with pressure (van Walstijn & Avanzini 2007)"),
             lip_force=(0.0, "impedance only: N of lip force, lowers the closing pressure (Almeida 2013: 0.6 N = 20 mbar)"),
             meyer=(0, "waveguide: 1 = attack by register and velocity, dynamic timbre above 3 kHz (Meyer 2009)"),
-            precursor=(0.0, "waveguide: 0..1 the burst of high energy before the tone settles"))
+            precursor=(0.0, "waveguide: 0..1 the burst of high energy before the tone settles"),
+            lattice=(0, "worman and map models: 1 = tone-hole lattice cutoff 1300 Hz, rising 1.5 x with velocity"))
 def clarinet(freq, dur, sr=DEFAULT_SR, vel=1.0, model="waveguide", embouchure=0.5, reed="guillemain", stiffening=0, lip_force=0.0,
-             meyer=0, precursor=0.0):
+             meyer=0, precursor=0.0, lattice=0):
+    if model == "worman":
+        from .physical.winds import worman_level
+        rel = 0.07
+        n = _n(dur, sr, rel)
+        ns = np.arange(1, int(0.45 * sr / freq) + 1)
+        amps = np.array([worman_level(0.45 + 0.45 * float(vel), int(k)) * (1.0 if k % 2 else 0.02) for k in ns])
+        if lattice:
+            from .physical.winds import LATTICE_FC
+            amps = amps * _roll(ns * freq, LATTICE_FC["clarinet"] * (1.0 + 0.5 * float(vel)), 3.0)
+        y = _harmonics(freq, n, sr, amps / (np.sqrt(np.sum(amps ** 2)) + 1e-12))
+        y = F.lowpass(y, min(3600.0, 0.44 * sr), sr, 0.8)
+        return apply(y, adsr(dur, 0.035, 0.0, 1.0, rel, sr, curve=1.2)) * 0.85
+    if model == "map":
+        from .physical.winds import LATTICE_FC, iterated_map, map_limits
+        lam = 0.93
+        zeta = 0.2 + 0.8 * float(embouchure)
+        lim = map_limits(zeta, lam)
+        gamma = 0.34 + (max(lim["gamma_beat"], 0.4) - 0.34) * float(np.clip(vel, 0.0, 1.0))
+        rel = 0.07
+        steps = int((dur + rel) * 2.0 * freq) + 8
+        pp = iterated_map(gamma, zeta, lam, steps)
+        pt = pp - lam * np.concatenate(([0.0], pp[:-1]))
+        n = _n(dur, sr, rel)
+        y = pt[np.minimum((np.arange(n) * 2.0 * freq / sr).astype(int), steps - 1)]
+        y = y - np.mean(y)
+        fc = LATTICE_FC["clarinet"] * (1.0 + 0.5 * float(vel)) if lattice else 3600.0
+        y = F.lowpass(y, min(fc, 0.44 * sr), sr, 0.8)
+        return apply(y / (np.max(np.abs(y)) + 1e-12), adsr(dur, 0.035, 0.0, 1.0, rel, sr, curve=1.2)) * 0.85
     if model == "impedance":
         from .physical import impedance
         y = impedance.clarinet(freq, dur, float(sr), blow=vel, embouchure=embouchure, reed=reed, stiffening=bool(stiffening), lip_force=lip_force)
@@ -1498,30 +1655,41 @@ def _lifted_tail(y, n_off, freq, sr, kind, open_string, lo=196.0, hi=1319.0):
 
 @instrument("violin", "Hybrid physical bowed violin: bow/string waveguide anchored to the requested playing pitch.",
             family="bowed", span=("G3", "C7"), attack=(0.07, "s"), vibrato=(1.0, "0 = none .. 2 = wide"),
-            sordino=(0, "1 = mute on the bridge (about -6 dB, softer top; Meyer 2009, 3.3.1)"),
+            sordino=(0, "1 = mute on the bridge (the 1-2.5 kHz bridge hill drops 5-13 dB, the low register keeps its level)"),
             lifted=(0, "1 = bow lifted at note-off: the note rings on, partial by partial"),
             open_string=(0, "with lifted: an open string, 2-3 s"),
             model=("waveguide", "waveguide | commuted (body response relaunched every period: a real wooden attack, light) | elastoplastic (bristle friction on a violin A string, a real Helmholtz attack; attack and vibrato ignored)"),
-            direction=(0.0, "0 facing the violin .. 1 beside it: the body's directivity heard through the vibrato (partial 5 swings 20 dB)"))
+            direction=(0.0, "0 facing the violin .. 1 beside it: the body's directivity heard through the vibrato (partial 5 swings 20 dB)"),
+            torsion=(0.0, "elastoplastic only: Y'/Y, the string's torsional admittance relative to its transverse one (0 = off)"),
+            wolf=(0.0, "elastoplastic only: body resonance just under the note, as a share of the string's mobility (0.01 = a real wolf)"))
 def violin(freq, dur, sr=DEFAULT_SR, vel=1.0, attack=0.07, vibrato=1.0, sordino=0, lifted=0, open_string=0, model="waveguide",
-           direction=0.0):
-    y = _violin(freq, dur, sr, vel, attack, vibrato, sordino, lifted, open_string, model)
+           direction=0.0, torsion=0.0, wolf=0.0):
+    y = _violin(freq, dur, sr, vel, attack, vibrato, sordino, lifted, open_string, model, torsion, wolf)
     return vibrato_directivity(y, sr, freq, 5.8, direction) if direction > 0 and vibrato > 0 else y
 
 
-def _violin(freq, dur, sr, vel, attack, vibrato, sordino, lifted, open_string, model):
+VIOLIN_SORDINO = ((1580.0, 1.5, -12.0), (2500.0, -3.5))
+
+
+def violin_sordino(y, sr):
+    """Mute clamped on the bridge: the bridge-hill band (1-2.5 kHz) loses most, the low register almost nothing."""
+    (fc, q, g), (fs, gs) = VIOLIN_SORDINO
+    return F.highshelf(F.peak(y, fc, sr, q, g), fs, sr, gs)
+
+
+def _violin(freq, dur, sr, vel, attack, vibrato, sordino, lifted, open_string, model, torsion=0.0, wolf=0.0):
     if model == "commuted":
         y = commuted_bowed(freq, dur, sr, vel, vibrato)
-        return F.lowpass(y, 2500.0, sr, 0.7) * 0.5 if sordino else y
+        return violin_sordino(y, sr) if sordino else y
     if model == "elastoplastic":
         from .physical import bow
         v = float(np.clip(vel, 0.0, 1.0))
         y = bow.bowed(freq, dur, float(sr), force=0.3 + 1.2 * v, speed=0.1 + 0.2 * v, accel=0.35 + 1.7 * v, curve="violin",
-                      string=bow.VIOLIN_A, beta=0.1)
+                      string=bow.VIOLIN_A, beta=0.1, torsion=torsion, wolf=wolf)
         y = _body(y, sr, [(fc, fc / bw, 4.0 * g) for fc, bw, g in VIOLIN_BODY], min(4200., .44 * sr))   # 4 dB per gain unit
         lvl = bowed_level(0.1 + 0.2 * v, 0.1) / bowed_level(0.3, 0.1)
         y = _physical_note_fade(y / (np.max(np.abs(y)) + 1e-12), sr, 0.005, .10) * 1.2 * lvl
-        return F.lowpass(y, 2500.0, sr, 0.7) * 0.5 if sordino else y
+        return violin_sordino(y, sr) if sordino else y
     # One pitch source (see _ONE_SOURCE below): the BowedString branch that was mixed in at 40 % is not a pitched
     # string yet (72-79 % of its energy above 5 kHz, 26-60 % off the harmonics, and it cannot be retuned).
     y = _blown(freq, dur+.10, sr, vel,
@@ -1537,8 +1705,7 @@ def _violin(freq, dur, sr, vel, attack, vibrato, sordino, lifted, open_string, m
                    attack=attack, release=.01, bloom=attack, vib=(5.8,.25*vibrato,.12))
         y = _lifted_tail(y, int(dur*sr), freq, sr, "violin", open_string)
     y = _physical_note_fade(F.lowpass(y,min(4200.,.44*sr),sr,.7),sr,max(.005,attack),.10)*.62
-    # Meyer 2009, 3.3.1: "for most mutes a reduction of radiated sound power of the order of 6 dB". 2500 Hz
-    return F.lowpass(y, 2500.0, sr, 0.7) * 0.5 if sordino else y
+    return violin_sordino(y, sr) if sordino else y
 
 
 _JET_TUNE: dict = {}
@@ -1564,7 +1731,18 @@ def _jet_tune(freq: float, amp: float, jet: float) -> float:
     return _JET_TUNE[key]
 
 
-def _jet_voice(freq, dur, sr, vel, breath, vibrato, jet=.32, top=4200., gain=1.08, chiff=0.0, fade=(.03, .10), expert=0):
+JET_PEAK_ST, JET_PEAK_PRESSURE, JET_FLUE_H = (0.08, 0.03), 750.0, 1e-3
+
+
+def jet_peak_hz(amp: float) -> float:
+    """Centre of the jet-noise peak, f = St Uj / h, for a blowing pressure 400 Pa x ``amp`` (Uj = sqrt(2 p / rho), h = 1 mm):
+    St falls from 0.08 to 0.03 as the pressure goes up to 750 Pa."""
+    p = 400.0 * float(amp)
+    st = JET_PEAK_ST[0] + (JET_PEAK_ST[1] - JET_PEAK_ST[0]) * min(p / JET_PEAK_PRESSURE, 1.0)
+    return st * math.sqrt(2.0 * p / 1.2) / JET_FLUE_H
+
+
+def _jet_voice(freq, dur, sr, vel, breath, vibrato, jet=.32, top=4200., gain=1.08, chiff=0.0, fade=(.03, .10), expert=0, peak=0.0):
     """A flue instrument: the STK Flute jet model (jet delay, cubic jet table, bore waveguide with a one-pole
     reflection), blown at STK's noteOn pressure and held on the written pitch. One sound source.
 
@@ -1590,6 +1768,11 @@ def _jet_voice(freq, dur, sr, vel, breath, vibrato, jet=.32, top=4200., gain=1.0
     if abs(k - 1.) > 2e-4:                                         # a sharp note (k > 1) is read back slower, by 1 / k
         y = np.interp(np.arange(int(len(y) * k)) / k, np.arange(len(y)), y)
     y = _to_sr(y, sr)[:_n(dur + .10, sr)]
+    fj = jet_peak_hz(amp)
+    if peak > 0 and fj < .44 * sr:
+        b = F.bandpass(O.white(len(y), seed=7), fj, sr, 3.0)
+        e = F.lowpass(np.abs(y), 20., sr)
+        y = y + float(min(peak, 1.)) * .3 * np.std(y) * b / (np.std(b) + 1e-12) * e / (np.max(e) + 1e-12)
     return _physical_note_fade(F.lowpass(y, min(top, .44 * sr), sr, .8), sr, fade[0], fade[1]) * gain
 
 
@@ -1603,16 +1786,17 @@ def _jet_voice(freq, dur, sr, vel, breath, vibrato, jet=.32, top=4200., gain=1.0
             meyer=(0, "1 = attack by register and velocity, 120 ms release, dynamic timbre above 3 kHz (Meyer 2009)"),
             expert=(0, "1 = blown like an expert: jet speed up 1.35x per octave (pressure ~ f^0.866)"),
             novice=(0, "1 = blown like a beginner: jet Reynolds number 3000 at C4, x1.6 per octave up to 7000; "
-                       "past the laminar 2500 the breath noise grows as Re / 2500"))
+                       "past the laminar 2500 the breath noise grows as Re / 2500"),
+            jet_peak=(0.0, "0..1 the jet's own noise peak, band-passed at f = St Uj / h with the Strouhal number falling from 0.08 to 0.03 as the blowing pressure rises"))
 def flute(freq, dur, sr=DEFAULT_SR, vel=1.0, breath=0.15, vibrato=0.0, flutter=0.0, noise_peaks=0.0, precursor=0.0,
-          meyer=0, expert=0, novice=0):
+          meyer=0, expert=0, novice=0, jet_peak=0.0):
     """It used to be a mix of three sources that did not agree: the jet model under-blown (an octave low, up to
     80 cents flat), a 60.7 Hz `jet_bore` buzz, and a sine stack with band-passed white noise added on top (the
     `fffff` over a sinusoid). Their beating measured as a 31 % flutter in loudness on a held E5."""
     if novice:
         breath = breath * flute_noise_factor(novice_reynolds(freq))
     fade = (attack_ms("flute", freq, vel) / 1000.0, RELEASE_S["flute"]) if meyer else (.03, .10)
-    y = _jet_voice(freq, dur, sr, vel, breath, vibrato, fade=fade, expert=expert)
+    y = _jet_voice(freq, dur, sr, vel, breath, vibrato, fade=fade, expert=expert, peak=jet_peak)
     if vibrato > 0:
         y = band_vibrato_am(y, sr, "flute", FLUTE_VIB_HZ, min(float(vibrato), 1.0))
     if meyer:
@@ -1716,13 +1900,33 @@ def _brass_opts(name, freq, vel, attack, release, meyer):
     return attack, release
 
 
+TRUMPET_MUTES = {"straight": ("highpass", 1800.0, 0.0), "cup": ("bandpass", 800.0, 1200.0), "harmon": ("bandpass", 1500.0, 2000.0)}
+TRUMPET_MUTE_FLOOR_DB = -14.0
+
+
+def trumpet_mute(y, sr, kind, floor_db=TRUMPET_MUTE_FLOOR_DB):
+    """Radiation of a trumpet bell through a mute: only what the mute passes is left near its level (straight: above 1800 Hz, cup:
+    800-1200 Hz, harmon: 1500-2000 Hz), the rest ``floor_db`` down."""
+    if kind not in TRUMPET_MUTES:
+        raise ValueError("mute_kind: " + "|".join(TRUMPET_MUTES))
+    how, lo, hi = TRUMPET_MUTES[kind]
+    if how == "highpass":
+        p = F.highpass(y, lo, sr, order=2)
+    else:
+        p = F.bandpass(y, math.sqrt(lo * hi), sr, math.sqrt(lo * hi) / (hi - lo))
+    return 10.0 ** (floor_db / 20.0) * y + p
+
+
 @instrument("trumpet", "Trumpet: formant voice, or the lip-reed waveguide with model=physical.",
-            family="brass", span=("E3", "C6"), mute=(0.0, "0 = open .. 1 = harmon mute"), model=_MODEL_TP, lip_q=_LIP_Q, meyer=_MEYER, precursor=_PRECURSOR,
+            family="brass", span=("E3", "C6"), mute=(0.0, "0 = open .. 1 = harmon mute"), model=_MODEL_TP,
+            mute_kind=("", "'' = the blend above | straight | cup | harmon: the bell's radiation through that mute (`mute` 0..1 = how much of it)"), lip_q=_LIP_Q, meyer=_MEYER, precursor=_PRECURSOR,
             bell_up=(0.0, "0..1 bell raised: over 10 dB more above 2 kHz, less at 400-1200 Hz (Meyer 2009)"))
-def trumpet(freq,dur,sr=DEFAULT_SR,vel=1.0,mute=0.0,model="formant",lip_q=0.0,meyer=0,precursor=0.0,bell_up=0.0):
+def trumpet(freq,dur,sr=DEFAULT_SR,vel=1.0,mute=0.0,model="formant",lip_q=0.0,meyer=0,precursor=0.0,bell_up=0.0,mute_kind=""):
     a,r=_brass_opts("trumpet",freq,vel,.03,.08,meyer)
     y=_brass_hybrid(freq,dur,sr,vel,TRUMPET_BODY,2.2,.9,.45+.42*vel,.5,top=4800.,attack=a,release=r,seed=56,physical_mix=.38,model=model,lip_q=lip_q,inst="trumpet",meyer=meyer)
-    if mute>0:
+    if mute>0 and mute_kind:
+        y=(1-mute)*y+mute*trumpet_mute(y,sr,mute_kind)
+    elif mute>0:
         mm=F.peak(F.highpass(y,700,sr,order=2),1800,sr,1.5,8.)
         y=(1-mute)*y+mute*F.lowpass(mm,3200,sr)
     if bell_up>0:                               # Meyer: ">10 dB above 2000 Hz, loss between 400 and 1200". the loss, -3 dB, Q 1
@@ -1735,7 +1939,7 @@ def trumpet(freq,dur,sr=DEFAULT_SR,vel=1.0,mute=0.0,model="formant",lip_q=0.0,me
             span=("C2", "F5"), model=_MODEL, lip_q=_LIP_Q, meyer=_MEYER, precursor=_PRECURSOR)
 def french_horn(freq,dur,sr=DEFAULT_SR,vel=1.0,model="formant",lip_q=0.0,meyer=0,precursor=0.0):
     a,r=_brass_opts("french_horn",freq,vel,.08,.14,meyer)
-    y=_brass_hybrid(freq,dur,sr,vel,[(450,150,1.5)],2.6,1.6,.40+.34*vel,.5,top=3000.,attack=a,release=r,seed=57,physical_mix=.32,model=model,lip_q=lip_q,inst="french_horn",meyer=meyer)
+    y=_brass_hybrid(freq,dur,sr,vel,HORN_BODY,2.6,1.6,.40+.34*vel,.5,top=3000.,attack=a,release=r,seed=57,physical_mix=.32,model=model,lip_q=lip_q,inst="french_horn",meyer=meyer)
     return (_precursor(y,sr,"french_horn",precursor) if precursor>0 else y)*.62
 
 
@@ -1764,26 +1968,32 @@ def xylophone(freq, dur, sr=DEFAULT_SR, vel=1.0):
     return F.lowpass(y, min(4000, .38*sr), sr, 1.15) * .9
 
 
-@instrument("glockenspiel", "Physical bright struck-metal bell/bar model.", family="mallet", span=("G5", "C8"))
+GLOCKENSPIEL_RATIOS = (1.0, 2.71, 5.15, 8.43, 12.21)
+GLOCKENSPIEL_LEVELS = (1.0, 0.28, 0.1, 0.05, 0.03)
+GLOCKENSPIEL_TAU = (2.5, 8.0, 16.0, 30.0, 50.0)     # ring / tau
+
+
+@instrument("glockenspiel", "Glockenspiel: steel bar modes 1 : 2.71 : 5.15 : 8.43 : 12.21.", family="mallet", span=("G5", "C8"))
 def glockenspiel(freq, dur, sr=DEFAULT_SR, vel=1.0):
-    from .physics import TunedPercussion
-    y = TunedPercussion("bell", decay=max(1.2, dur), hardness=.9).note(freq, max(dur, .8), velocity=vel, sr=sr, seed=72)
-    y = F.highpass(y, min(max(400.0, freq*.55), .2*sr), sr) * .32
-    # A quiet requested-pitch anchor keeps the legacy musical API tuned while
-    # retaining the inharmonic physical bell spectrum around it.
-    n=len(y); tt=np.arange(n)/sr
-    anchor=np.sin(2*np.pi*freq*tt)*np.exp(-tt/max(.18,min(.8,dur*.55+.15)))
-    y += .18*vel*anchor
-    return y
+    ring = max(dur, 1.4 * _kt(freq, 1.0, 0.6, f_lo=784.0, f_hi=4186.0))
+    n = _n(ring, sr)
+    x = _modes(freq, n, sr, [(r, a * (vel if i else 1.0), ring / t) for i, (r, a, t)
+                             in enumerate(zip(GLOCKENSPIEL_RATIOS, GLOCKENSPIEL_LEVELS, GLOCKENSPIEL_TAU))],
+               corner=3400.0, beat=0.8)
+    return x * perc(ring, 0.001, sr, curve=1.0) * 0.7 * (0.6 + 0.4 * vel)
 
 
-@instrument("tubular_bell", "Orchestral chime: free-free tube modes (2n+1)^2; modes 4, 5, 6 (81:121:169) carry the note an octave below mode 4.",
+TUBULAR_BELL_RATIOS = (0.63, 1.22, 2.0, 2.93, 4.01, 5.21)   # loaded tube, the note an octave below mode 4
+
+
+@instrument("tubular_bell", "Orchestral chime: loaded-tube modes 0.63, 1.22, 2, 2.93, 4.01, 5.21; modes 4, 5, 6 carry the note an octave below mode 4.",
             family="mallet", span=("C3", "C6"), decay=(3.5, "seconds"))
 def tubular_bell(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=3.5):
     ring = max(dur, decay)
     n = _n(ring, sr)
-    x = _modes(freq, n, sr, [(25 / 40.5, 0.25, ring / 2.5), (49 / 40.5, 0.45, ring / 3), (81 / 40.5, 1.0, ring / 3.5),
-                             (121 / 40.5, 0.8 * vel, ring / 5), (169 / 40.5, 0.5 * vel, ring / 8), (225 / 40.5, 0.25 * vel, ring / 12)],
+    r = TUBULAR_BELL_RATIOS
+    x = _modes(freq, n, sr, [(r[0], 0.25, ring / 2.5), (r[1], 0.45, ring / 3), (r[2], 1.0, ring / 3.5),
+                             (r[3], 0.8 * vel, ring / 5), (r[4], 0.5 * vel, ring / 8), (r[5], 0.25 * vel, ring / 12)],
                corner=3200.0, beat=0.5)
     return x * perc(ring, 0.002, sr, curve=1.2) * 0.5 * (0.6 + 0.4 * vel)
 
@@ -1921,10 +2131,17 @@ def finger_bass(freq,dur,sr=DEFAULT_SR,vel=1.0,tone=1700):
 # -----------------------------------------------------------------------------
 # Shared SI-property string-core wrappers (v0.19)
 @instrument("mandolin", "Shared-core double-course mandolin with physically derived string dispersion.",
-            family="plucked", span=("G3","E7"), tremolo=(0.0,"legacy tremolo amount"))
-def mandolin(freq,dur,sr=DEFAULT_SR,vel=1.0,tremolo=0.0):
+            family="plucked", span=("G3","E7"), tremolo=(0.0,"legacy tremolo amount"),
+            plectrum=(0,"1 = each string of the course is plucked by a stiff celluloid pick (spring-damper junction on a two-rail waveguide) instead of the commuted pluck"))
+def mandolin(freq,dur,sr=DEFAULT_SR,vel=1.0,tremolo=0.0,plectrum=0):
     from .physics import PluckedString
     y=PluckedString("mandolin",brightness=.68,position=.35,detune=.996).note(freq,max(dur,.08),velocity=vel,sr=sr,seed=74)
+    if plectrum:
+        from .graphsolver import PlectrumJunction
+        yj=sum(PlectrumJunction(k=MANDOLIN_PICK["k"],mu=MANDOLIN_PICK["mu"],f_max=MANDOLIN_PICK["f_max"],feather_p=1.0,
+                                R=MANDOLIN_PICK["R"],sr=sr).pluck(f,len(y)/sr,vel,MANDOLIN_PICK["beta"],1.4,rise=0.12)[0]
+               for f in (freq,freq*.996))
+        y=yj*np.sqrt(np.mean(y**2)/(np.mean(yj**2)+1e-30))
     if tremolo>0:
         t=np.arange(len(y))/sr; y*=.78+.22*np.sin(2*np.pi*(10+8*float(tremolo))*t)**2
     return F.lowpass(y,min(5800,.43*sr),sr,.72)*1.05
@@ -2020,14 +2237,16 @@ def sitar(freq,dur,sr=DEFAULT_SR,vel=1.0,buzz=.45):
             sordino=(0, "1 = mute (Meyer: less than on a violin, -4 dB here)"), lifted=(0, "1 = bow lifted at note-off"),
             open_string=(0, "with lifted: an open string, about 10 s"),
             body_am=(0, "1 = each partial's level follows the body resonances at its instantaneous frequency: the vibrato "
-                        "turns into amplitude modulation, as on a real instrument"))
-def cello(freq,dur,sr=DEFAULT_SR,vel=1.0,attack=.1,vibrato=1.0,model="waveguide",sordino=0,lifted=0,open_string=0,body_am=0):
+                        "turns into amplitude modulation, as on a real instrument"),
+            torsion=(0.0, "elastoplastic only: Y'/Y, the string's torsional admittance relative to its transverse one (0 = off)"),
+            wolf=(0.0, "elastoplastic only: body resonance just under the note, as a share of the string's mobility (0.01 = a real wolf, the Helmholtz motion stutters)"))
+def cello(freq,dur,sr=DEFAULT_SR,vel=1.0,attack=.1,vibrato=1.0,model="waveguide",sordino=0,lifted=0,open_string=0,body_am=0,torsion=0.0,wolf=0.0):
     if model == "elastoplastic":
         from .physical import bow
         v = float(np.clip(vel, 0.0, 1.0))
         # their Guettler-diagram transients: f_N 0.8-3.9 N, a 0.35-2.1 m/s^2 (Tables IV-V); bow speed 0.1-0.3 m/s,
         # the soft end of the 0.10-1.25 m/s playing range (Meyer, Acoustics and the Performance of Music 2009, 3.3.1.2)
-        y = bow.bowed(freq, dur, float(sr), force=0.8 + 3.1 * v, speed=0.1 + 0.2 * v, accel=0.35 + 1.7 * v)
+        y = bow.bowed(freq, dur, float(sr), force=0.8 + 3.1 * v, speed=0.1 + 0.2 * v, accel=0.35 + 1.7 * v, torsion=torsion, wolf=wolf)
         y = _body(y, sr, [(fc, fc / bw, 4.0 * g) for fc, bw, g in CELLO_BODY], min(3000., .38 * sr))   # 4 dB per gain unit
         return _physical_note_fade(y / (np.max(np.abs(y)) + 1e-12), sr, 0.005, .13) * 1.93   # as loud as the waveguide cello
     T = (10.0 if open_string else 3.0) if lifted else .13
@@ -2178,7 +2397,7 @@ def tension_glide_cents(amp_m, position, length_m, alpha=GLIDE_EA_T):
 
 def _pluck_string(freq, dur, sr, vel, *, material="steel", kind="pick", hardness=0.6, position=0.2, t60=3.0,
                   tail=1.2, release=0.1, wound=None, length=None, detune=0.0, mute=0.0, glide=0.0, measured=True,
-                  worn=False, glide_mm=0.0, tau0=None, f_half=None):
+                  worn=False, glide_mm=0.0, tau0=None, f_half=None, glide_couple=0.0):
     """One plucked note. `t60` is the mid-register ring time (higher strings ring shorter, as they
     do); `tail` seconds are rendered past note-off and `release` is the damper's time constant.
     `wound` = winding material for wound bass strings; `detune` (cents) adds the second string of a
@@ -2216,7 +2435,7 @@ def _pluck_string(freq, dur, sr, vel, *, material="steel", kind="pick", hardness
             s.y_delay.delay = s.loop_delay(f * 2.0 ** (props.polarization_split_cents / 1200.0), plane="y")
         return s.render_exciter(ring, StringExciter(kind, hard, pos), velocity=1.0, palm_mute=mute,
                                 glide_cents=(tension_glide_cents(glide_mm * 1e-3 * float(vel), pos, props.length_m) if glide_mm
-                                             else float(glide) * float(vel) ** 2))
+                                             else float(glide) * float(vel) ** 2), glide_couple=glide_couple)
 
     y = one(freq, position)
     if detune:
@@ -2262,10 +2481,11 @@ def harp(freq, dur, sr=DEFAULT_SR, vel=1.0, glide=0.0, position=0.38):
             rattle=(0.0, "0..1 a screw or paper clip touching the string (prepared buzz); see also `cloth`"),
             cloth=(0.0, "0..1 cloth on the rattling stop: softer clicks"),
             glide_mm=(0.0, "pluck amplitude in mm at full velocity; sets the tension glide from the string (EA/T0 766): "
-                           "2 mm about 7 cents, 4 mm about 28 (replaces `glide`)"))
+                           "2 mm about 7 cents, 4 mm about 28 (replaces `glide`)"),
+            glide_couple=(0.0, "0..1: how much the glide refills partials the pluck point cancels (0 = each partial glides alone)"))
 def guitar(freq, dur, sr=DEFAULT_SR, vel=1.0, glide=0.0, body=0, body_size=0.5, radiation=0, air_q=0.0, pluck="nail", rattle=0.0, cloth=0.0,
-           glide_mm=0.0):
-    y = _pluck_string(freq, dur, sr, vel, glide=glide, glide_mm=glide_mm, material="nylon", kind="flesh" if pluck == "finger" else pluck, hardness=0.5, position=0.24, t60=3.0, tail=1.4, release=0.12)
+           glide_mm=0.0, glide_couple=0.0):
+    y = _pluck_string(freq, dur, sr, vel, glide=glide, glide_mm=glide_mm, glide_couple=glide_couple, material="nylon", kind="flesh" if pluck == "finger" else pluck, hardness=0.5, position=0.24, t60=3.0, tail=1.4, release=0.12)
     if rattle > 0:
         y = string_rattle(y, sr, gap=0.9 - 0.6 * float(np.clip(rattle, 0.0, 1.0)), cloth=cloth)
     return F.lowpass(guitar_body(y, sr, int(body), body_size, radiation=bool(radiation), air_q=air_q), min(3500.0, 0.42 * sr), sr, 0.7)
@@ -2389,21 +2609,25 @@ def mandolin(freq, dur, sr=DEFAULT_SR, vel=1.0, tremolo=0.0, glide=0.0):
     return F.lowpass(F.highpass(y, 150, sr), min(4500.0, 0.42 * sr), sr, 0.7)
 
 
-@instrument("koto", "Koto: string plucked hard near the bridge with ivory picks (Japanese, East Asian).", family="plucked", span=("C3", "C6"), glide=(0.0, "cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible)"))
-def koto(freq, dur, sr=DEFAULT_SR, vel=1.0, glide=0.0):
-    y = _pluck_string(freq, dur, sr, vel, glide=glide, material="nylon", kind="pick", hardness=0.85, position=0.07, t60=2.6, tail=1.4, release=0.15)
+@instrument("koto", "Koto: string plucked hard near the bridge with ivory picks (Japanese, East Asian).", family="plucked", span=("C3", "C6"), glide=(0.0, "cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible)"),
+            loss=("guitar", "guitar (the losses measured on classical-guitar strings) | air (the string's own T60 plus the Stokes air drag, which grows with frequency)"))
+def koto(freq, dur, sr=DEFAULT_SR, vel=1.0, glide=0.0, loss="guitar"):
+    y = _pluck_string(freq, dur, sr, vel, glide=glide, material="nylon", kind="pick", hardness=0.85, position=0.07, t60=2.6, tail=1.4, release=0.15,
+                      measured=loss != "air")
     return _body(y, sr, [(300, 1.5, 3.0)], min(4200.0, 0.42 * sr))
 
 
 @instrument("sitar", "Sitar: long string over a buzzing bridge, the buzz blooms just after the pluck (Indian classical, psychedelic).",
             family="plucked", span=("C3", "C5"), buzz=(0.45, "0..1 amount of bridge buzz"), glide=(0.0, "cents a hard pluck starts sharp and glides down as it rings (tension modulation; 0 off, 10-40 audible)"),
             model=("waveguide", "waveguide | fd (Siddiq 2012: a stiff string striking its curved flat bridge; the buzz "
-                                "grows with velocity; glide ignored)"))
-def sitar(freq, dur, sr=DEFAULT_SR, vel=1.0, buzz=0.45, glide=0.0, model="waveguide"):
+                                "grows with velocity; glide ignored)"),
+            loss=("guitar", "guitar (the losses measured on steel guitar strings) | air (the string's own T60 plus the Stokes air drag, which grows with frequency)"))
+def sitar(freq, dur, sr=DEFAULT_SR, vel=1.0, buzz=0.45, glide=0.0, model="waveguide", loss="guitar"):
     if model == "fd":
         from .fdstring import sitar_fd
         return sitar_fd(freq, dur, sr, vel, buzz)
-    y = _pluck_string(freq, dur, sr, vel, glide=glide, material="steel", kind="pick", hardness=0.8, position=0.06, t60=3.5, tail=1.6, release=0.2)
+    y = _pluck_string(freq, dur, sr, vel, glide=glide, material="steel", kind="pick", hardness=0.8, position=0.06, t60=3.5, tail=1.6, release=0.2,
+                      measured=loss != "air")
     t = np.arange(y.shape[0]) / sr
     b = F.peak(F.highpass(np.tanh(6.0 * y), 700, sr), 2400, sr, 1.2, 4.0) * (1 - np.exp(-t / 0.05)) * np.exp(-t / 0.9)
     return F.lowpass(y + float(np.clip(buzz, 0, 1)) * b, 4200, sr, 0.7, order=2) * 0.8
@@ -2732,7 +2956,8 @@ def string_scrape(freq, dur, sr=DEFAULT_SR, vel=1.0, speed=0.4, pitch_mm=0.4):
     s = DispersiveString(WoundStringPhysicalProperties.from_frequency(freq), sr=sr)
     body = np.array([s.step(0.0, excitation=0.05 * c) for c in clicks])
     y = F.highpass(0.5 * body + F.bandpass(clicks, min(float(speed) / (float(pitch_mm) * 1e-3), 0.4 * sr), sr, 3.0), 200.0, sr)
-    return y / (np.max(np.abs(y)) + 1e-9) * (0.4 + 0.5 * vel)
+    y = _soften(F.lowpass(y, 2400.0, sr, 0.707), freq, sr, harm=6.0, lo=1500.0, hi=2400.0)
+    return y / (np.max(np.abs(y)) + 1e-9) * (0.4 + 0.5 * vel) * 0.735
 
 
 @numba.njit(cache=True)

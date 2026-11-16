@@ -15,3 +15,7 @@ the entries whose model is not obvious from their parameters.
 
 `swim_rates(stroke, rate=1.0)`, `hertz_patch(mass, radius, e1, nu1, e2, nu2)`. Sources of every constant:
 `research/SOURCES.md`.
+## Newer options (1.3.0)
+
+`ball_bounce modes=` (extra modes at weight 0.5), `sphere_cavity_modes` (24 modes); `pea_whistle` is also an instrument (`spin` = trill); the pea
+drops the pitch by 7 % on part of the orbit.

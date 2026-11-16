@@ -1,0 +1,91 @@
+{
+  "name": "hero_theme",
+  "sr": 48000,
+  "bpm": 96,
+  "beats": 96,
+  "normalize": -3.0,
+  "layers": [
+    {
+      "type": "seq",
+      "inst": "trumpet",
+      "step": 1,
+      "steps": "-:4 | -:4 | D4:0.5 F4:0.5 A4:1 D5:0.5 F5:0.5 A5:2 | A5:0.5 G5:0.5 F5:0.5 E5:0.5 D5:1 A4:1 D5:2 | D5:0.5 F5:0.5 A5:0.5 C6:0.5 Bb5:1 A5:1 G5:1 | F5:0.5 E5:0.5 D5:0.5 E5:0.5 F5:2 E5:1 D5:1 | D5:0.5 F5:0.5 A5:0.5 D6:0.5 C6:1 A5:1 F5:1 | G5:0.5 A5:0.5 Bb5:0.5 A5:0.5 G5:1 F5:1 E5:1 | D5:0.5 F5:0.5 A5:1 F5:0.5 A5:0.5 D6:2 | E6:0.5 D6:0.5 C6:0.5 A5:0.5 D6:1 A5:1 F5:1 | G5:1 A5:1 Bb5:1 C6:1 | D6:2 A5:1 F5:1 | D5:0.5 F5:0.5 A5:0.5 C6:0.5 D6:2 -:2 | -:8 | D6:1.5 E6:0.5 F6:2 | E6:1 D6:1 C6:1 A5:1 | D6:0.5 C6:0.5 Bb5:0.5 A5:0.5 G5:1 F5:1 E5:1 | D5:4 -:4 | -:8 | -:8 | D5:0.5 F5:0.5 A5:0.5 D6:0.5 F6:2 D6:2 | F6:0.5 E6:0.5 D6:0.5 C6:0.5 Bb5:1 A5:1 G5:1 | F5:0.5 A5:0.5 C6:0.5 F6:0.5 E6:2 C6:2 | D6:4 -:4",
+      "gain": 0.7,
+      "params": {"mute": 0.0},
+      "fx": [
+        {"type": "reverb", "mix": 0.22, "size": 0.7, "damp": 0.5},
+        {"type": "eq", "freq": 3000, "gain": 1.0, "q": 1.0}
+      ]
+    },
+    {
+      "type": "seq",
+      "inst": "strings",
+      "step": 1,
+      "steps": "-:8 | D3:1 A3:1 D4:1 F4:1 | A3:1 F3:1 D3:1 A2:1 | Bb2:1 F3:1 Bb3:1 D4:1 | C3:1 G3:1 C4:1 E4:1 | D3:1 A3:1 D4:1 F4:1 | Bb2:1 F3:1 Bb3:1 D4:1 | C3:1 G3:1 C4:1 E4:1 | D3:1 A3:1 D4:1 F4:1 | G3:1 D4:1 G4:1 Bb4:1 | C3:1 G3:1 C4:1 E4:1 | D3:1 A3:1 D4:1 F4:1 | -:4 | -:4 | D3:1 A3:1 D4:2 | Bb2:1 F3:1 Bb3:2 | C3:1 G3:1 C4:2 | D3:4 | -:4 | -:4 | D3:1 A3:1 D4:1 F4:1 | Bb2:1 F3:1 Bb3:1 D4:1 | C3:1 G3:1 C4:1 E4:1 | D3:4 -:4",
+      "gain": 0.4,
+      "params": {"attack": 0.4, "release": 0.8, "players": 10},
+      "fx": [
+        {"type": "reverb", "mix": 0.3, "size": 0.8, "damp": 0.5}
+      ]
+    },
+    {
+      "type": "seq",
+      "inst": "trombone",
+      "step": 1,
+      "steps": "-:8 | D2:2 A2:2 | F2:2 D2:2 | Bb1:2 F2:2 | C2:2 G2:2 | D2:2 A2:2 | Bb1:2 F2:2 | C2:2 G2:2 | D2:2 A2:2 | G1:2 D2:2 | C2:2 G2:2 | D2:2 A2:2 | -:4 | -:4 | D2:2 A2:2 | Bb1:2 F2:2 | C2:2 G2:2 | D2:4 | -:4 | -:4 | D2:2 A2:2 | Bb1:2 F2:2 | C2:2 G2:2 | D2:4 -:4",
+      "gain": 0.45,
+      "fx": [
+        {"type": "reverb", "mix": 0.25, "size": 0.75, "damp": 0.5},
+        {"type": "lowpass", "cutoff": 4000}
+      ]
+    },
+    {
+      "type": "seq",
+      "inst": "vocal_choir",
+      "step": 1,
+      "steps": "-:8 | -:8 | [D4,F4,A4]:4 | [Bb3,D4,F4]:4 | [C4,E4,G4]:4 | [D4,F4,A4]:4 | [Bb3,D4,F4]:4 | [C4,E4,G4]:4 | [D4,F4,A4]:4 | [G3,Bb3,D4]:4 | [C4,E4,G4]:4 | [D4,F4,A4]:4 | -:8 | -:8 | -:8 | -:8 | -:8 | -:8 | -:8 | -:8 | [D4,F4,A4]:8 | [Bb3,D4,F4]:8 | [C4,E4,G4]:8 | [D4,F4,A4]:8",
+      "gain": 0.3,
+      "params": {"singers": 12, "vowel": "ah", "style": "epic", "spread": 0.8, "breath": 0.4, "vibrato": 25},
+      "fx": [
+        {"type": "reverb", "mix": 0.4, "size": 0.9, "damp": 0.4}
+      ]
+    },
+    {
+      "type": "seq",
+      "inst": "timpani",
+      "step": 1,
+      "steps": "-:8 | D2:1 -:1 D2:1 -:1 | D2:1 -:1 A2:1 -:1 | Bb1:1 -:1 Bb1:1 -:1 | C2:1 -:1 G2:1 -:1 | D2:1 -:1 D2:1 -:1 | Bb1:1 -:1 Bb1:1 -:1 | C2:1 -:1 G2:1 -:1 | D2:1 -:1 D2:1 -:1 | G1:1 -:1 D2:1 -:1 | C2:1 -:1 G2:1 -:1 | D2:1 -:1 A2:1 -:1 | D2:4 | -:4 | D2:2 -:2 | Bb1:2 -:2 | C2:2 -:2 | D2:4 | -:4 | -:4 | D2:1 -:1 D2:1 -:1 | Bb1:1 -:1 Bb1:1 -:1 | C2:1 -:1 G2:1 -:1 | D2:4 -:4",
+      "gain": 0.55,
+      "params": {"decay": 2.0},
+      "fx": [
+        {"type": "reverb", "mix": 0.2, "size": 0.7}
+      ]
+    },
+    {
+      "type": "compose",
+      "role": "drums",
+      "kit": {
+        "taiko": "x-------x-------",
+        "kick": "x-------x-------",
+        "snare": "----x-------x---"
+      },
+      "kit_params": {
+        "taiko": {"tune": 55, "decay": 0.8},
+        "kick": {"tune": 50, "decay": 0.3}
+      },
+      "bars": 24,
+      "fill_every": 8,
+      "seed": 12,
+      "gain": 0.6,
+      "humanize": 0.15,
+      "fx": [
+        {"type": "reverb", "mix": 0.25, "size": 0.75, "damp": 0.5}
+      ]
+    }
+  ],
+  "fx": [
+    {"type": "reverb", "mix": 0.25, "size": 0.85, "damp": 0.45},
+    {"type": "compressor", "threshold": -16, "ratio": 3.0, "attack": 0.015, "release": 0.2, "makeup": 1.0},
+    {"type": "limiter", "ceiling": -0.8}
+  ]
+}

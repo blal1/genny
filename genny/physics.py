@@ -326,10 +326,10 @@ class BarBody:
                          max(self.material.density, 1e-9))
         if self.boundary == "clamped":
             f1 = 0.5596 / (L * L) * root
-            ratios = np.array([1.0, 6.267, 17.55, 34.39, 56.84, 84.35, 116.9, 154.5])
+            ratios = np.array([1.0, 6.267, 17.55, 34.39, 56.84, 84.91, 118.6, 157.9])
         elif self.boundary in ("free", "free_free"):
-            f1 = 3.5594 / (L * L) * root
-            ratios = np.array([1.0, 2.756, 5.404, 8.933, 13.34, 18.64, 24.84, 31.94])
+            f1 = 3.5608 / (L * L) * root
+            ratios = np.array([1.0, 2.756, 5.404, 8.933, 13.34, 18.64, 24.81, 31.87])
         else:
             raise ValueError("boundary must be 'clamped' or 'free'")
         ratios = ratios[:max(1, min(int(self.n_modes), len(ratios)))]
@@ -695,8 +695,8 @@ class MembraneDrum:
     """Reduced circular-membrane model with strike-position and stroke controls.
 
     The mode ratios follow the low modes of a circular membrane (Bessel zeros),
-    while ``harmonic_loading`` continuously pulls them toward an integer series
-    (useful for tabla-like loaded heads).  This is a reduced modal renderer, not
+    while ``harmonic_loading`` continuously pulls them toward the loaded-head
+    series 1, 2, 3, 3, 4, 4, 5, 5, 5 (tabla, mridanga: nine modes on five tones).  This is a reduced modal renderer, not
     a full 2-D waveguide mesh, but preserves the excitation/resonator separation.
     """
     frequency: float = 180.0
@@ -708,15 +708,23 @@ class MembraneDrum:
     bend: float = 0.06
     bend_tau: float = 0.02
     radiation: float = 0.0
+    ratios: tuple = ()
+    air_shift: float = 0.0
 
-    _RATIOS = np.array([1.0, 1.5933, 2.1355, 2.2954, 2.6531, 2.9173, 3.1555, 3.5001, 3.6005])
+    _RATIOS = np.array([1.0, 1.5933, 2.1355, 2.2954, 2.6531, 2.9173, 3.1555, 3.5001, 3.5985])
+    _AIR_WEIGHT = np.array([1.0, 0.45, 0.2, 0.7, 0.1, 0.32, 0.05, 0.14, 0.58])   # A_m / sqrt(k), (m, k) of each mode, A = 1 .45 .2 .1 .05
     _MONOPOLE = np.array([2.8 / 0.4, 1, 1, 4.2 / 0.5, 1, 1, 1, 1, 4.6 / 1.0])
+    _HARMONIC = np.array([1.0, 2.0, 3.0, 3.0, 4.0, 4.0, 5.0, 5.0, 5.0])
 
     def _modes(self, position: float, stroke: str) -> _modal.Modes:
         h = float(np.clip(self.harmonic_loading, 0.0, 1.0))
-        harmonic = np.arange(1, len(self._RATIOS) + 1, dtype=float)
+        harmonic = self._HARMONIC
         ratios = (1.0 - h) * self._RATIOS + h * harmonic
+        if self.ratios:
+            ratios = np.asarray(self.ratios, float)
         f = max(15.0, float(self.frequency)) * ratios
+        if self.air_shift > 0.0:                                 # added air mass: axisymmetric modes, the best radiators, drop most
+            f = f / np.sqrt(1.0 + float(self.air_shift) * np.resize(self._AIR_WEIGHT, len(f)))
         # Edge strikes suppress axisymmetric low modes and excite higher orders.
         p = float(np.clip(position, 0.0, 1.0))
         idx = np.arange(len(f), dtype=float)
@@ -731,7 +739,8 @@ class MembraneDrum:
         size = max(self.radius_m, 0.04) / 0.16
         base = max(self.damping, 0.05) * (2.0 / max(size, 0.25))
         decay = base * (1.0 + 0.13 * idx + 0.018 * idx * idx)
-        decay = decay * (1.0 + float(np.clip(self.radiation, 0.0, 1.0)) * (self._MONOPOLE - 1.0))
+        mono = np.resize(self._MONOPOLE, len(f)) if len(f) <= len(self._MONOPOLE) else np.concatenate([self._MONOPOLE, np.ones(len(f) - len(self._MONOPOLE))])
+        decay = decay * (1.0 + float(np.clip(self.radiation, 0.0, 1.0)) * (mono - 1.0))
         keep = f < 0.45 * _PHYS_SR
         return _modal.Modes(f[keep], decay[keep], gains[keep], "membrane")
 
@@ -781,6 +790,7 @@ class CymbalPlate:
     size: float = 1.0
     damping: float = 1.0
     profile: str = "crash"   # crash | ride | hihat
+    modes_hz: tuple = ()     # measured mode frequencies (Hz at fundamental 205, size 1), replaces the reduced series
 
     def strike(self, dur: float = 2.0, *, velocity: float = 0.8,
                bell: float = 0.0, sr: int = DEFAULT_SR, seed: int = 0) -> np.ndarray:
@@ -789,6 +799,8 @@ class CymbalPlate:
         # Irregular plate ratios (dense at high order), deliberately non-harmonic.
         ratios = np.array([1.00,1.43,1.91,2.37,2.86,3.31,3.88,4.47,5.12,5.89,
                            6.73,7.66,8.72,9.91,11.24,12.77,14.52,16.48,18.71,21.2])
+        if self.modes_hz:
+            ratios = np.asarray(self.modes_hz, float) / 205.0
         f = self.fundamental * ratios / max(self.size, 0.2)
         keep = f < 0.44 * _PHYS_SR; f=f[keep]; ratios=ratios[keep]
         k = np.arange(len(f), dtype=float)
@@ -804,6 +816,8 @@ class CymbalPlate:
             gains = 0.85/(1+0.08*k)
             decay = self.damping*(0.75 + 0.095*k)
             contact_ms = 0.16
+        if self.modes_hz:
+            gains = gains * np.minimum(1.0, f / 700.0)
         modes = _modal.Modes(f, decay, gains, "plate")
         force=np.zeros(n)
         p=_modal.bang(_modal.contact_time(contact_ms, max(velocity,.05)), velocity)
@@ -891,6 +905,7 @@ class Rotor:
     style: str = "generic"
     thickness: float = 0.05
     strouhal: float = 1.0
+    tip_doppler: bool = False
 
     @property
     def broadband_hz(self) -> float:
@@ -919,9 +934,10 @@ class Rotor:
         # Pressure pulse train with harmonics; angle controls tonal/direct component.
         direction=0.25+0.75*abs(np.cos(float(listener_angle)))
         tonal=np.zeros(n)
+        tw=t-(self.tip_speed/(2*np.pi*self.rotation_hz*343.0)*np.sin(2*np.pi*self.rotation_hz*t) if self.tip_doppler and self.rotation_hz>0 else 0.0)
         for h,a in ((1,1.0),(2,.34),(3,.17),(4,.08)):
             if h*bpf < .45*_PHYS_SR:
-                tonal += a*np.sin(2*np.pi*h*bpf*t)
+                tonal += a*np.sin(2*np.pi*h*bpf*tw)
         from scipy import signal as sg
         noise=rng.standard_normal(n)
         f0=float(np.clip(self.broadband_hz,20.0,.4*_PHYS_SR))
@@ -1296,6 +1312,19 @@ _BLAST_ALPHA = ((0.787, 4.5), (0.945, 3.5), (1.260, 2.3), (1.574, 1.5), (2.204, 
 # positive-phase duration from the same table, ms per ton^(1/3) at ft/ton^(1/3): (25, 5.6) .. (250, 24.6)
 _BLAST_TD = ((25, 5.6), (30, 6.0), (35, 6.5), (40, 7.4), (45, 8.3), (50, 9.3), (60, 11.1), (70, 12.9), (80, 14.6),
              (90, 16.0), (100, 17.3), (120, 19.0), (150, 20.6), (200, 23.4), (250, 24.6))
+# Table XI part A (point source: an ideal-gas energy deposit, no explosive products), 1 ton, ft/ton^(1/3):
+# peak overpressure ratio p/P0, positive duration (ms), decay parameter. Rows the scan does not give are left out.
+_POINT_PS = ((5, 970.0), (10, 115.0), (15, 35.0), (20, 16.0), (25, 9.4), (30, 5.8), (35, 3.9), (40, 2.8), (45, 2.1), (50, 1.65),
+             (65, 0.96), (70, 0.83), (75, 0.73), (80, 0.65), (85, 0.58), (95, 0.47), (100, 0.43), (105, 0.40), (110, 0.37),
+             (130, 0.292), (140, 0.259), (150, 0.230), (160, 0.208), (170, 0.192), (180, 0.178), (190, 0.164), (200, 0.151),
+             (210, 0.141), (230, 0.123), (250, 0.110))
+_POINT_TD = ((25, 12.4), (30, 11.4), (35, 10.7), (50, 12.8), (55, 14.1), (60, 15.0), (65, 15.6), (70, 16.1), (75, 16.6),
+             (85, 17.6), (90, 18.0), (95, 18.4), (100, 18.8), (105, 19.2), (110, 19.6), (115, 19.9), (120, 20.2), (125, 20.5),
+             (130, 20.8), (140, 21.4), (150, 22.0), (160, 22.4), (170, 22.8), (180, 23.2), (190, 23.5), (200, 23.8),
+             (210, 24.1), (220, 24.3), (230, 24.5), (240, 24.6), (250, 24.7))
+_POINT_ALPHA = ((25, 3.5), (30, 2.4), (35, 1.8), (40, 1.5), (45, 1.2), (55, 1.0), (60, 0.9), (100, 0.9), (120, 1.0),
+                (150, 1.1), (180, 1.1), (210, 1.2), (250, 1.4))
+SECONDARY_Z, SECONDARY_DELAY_MS, SECONDARY_RATIO = 0.4, 1.03, 0.3
 
 
 _TON_CBRT = 907.18 ** (1.0 / 3.0)
@@ -1405,13 +1434,50 @@ def blast_ground(w_kg: float, r_m: float) -> float:
     return 1e6 * math.exp(sum(a * u ** i for i, a in enumerate(c)))
 
 
-def blast_wave(w_kg: float, r_m: float) -> tuple[float, float, float]:
+def _point_blast(w_kg: float, r_m: float) -> tuple[float, float, float]:
+    s3 = max(float(w_kg), 1e-6) ** (1.0 / 3.0)
+    zf = max(float(r_m), 1e-3) / s3 / _FT_TON
+    xs, ys = np.log([a for a, _ in _POINT_PS]), np.log([b for _, b in _POINT_PS])
+    lz = math.log(zf)
+    if lz > xs[-1]:
+        ps = math.exp(ys[-1] + (ys[-1] - ys[-2]) / (xs[-1] - xs[-2]) * (lz - xs[-1]))
+    else:
+        ps = math.exp(float(np.interp(lz, xs, ys)))
+    td = float(np.interp(zf, [a for a, _ in _POINT_TD], [b for _, b in _POINT_TD])) / _TON_CBRT * s3 * 1e-3
+    al = float(np.interp(zf, [a for a, _ in _POINT_ALPHA], [b for _, b in _POINT_ALPHA]))
+    return ps * 101325.0, td, al
+
+
+def blast_secondary(w_kg: float, r_m: float) -> tuple[float, float]:
+    """(delay s after the shock, amplitude relative to its peak) of the second shock that follows the first
+    inside Z = r / W^(1/3) < 0.4 m/kg^(1/3), where the detonation products catch up; (0, 0) beyond. The delay
+    scales with the cube root of the charge, the amplitude falls to nothing at Z = 0.4."""
+    s3 = max(float(w_kg), 1e-6) ** (1.0 / 3.0)
+    z = max(float(r_m), 1e-3) / s3
+    if z >= SECONDARY_Z:
+        return 0.0, 0.0
+    return SECONDARY_DELAY_MS * 1e-3 * s3, SECONDARY_RATIO * (1.0 - z / SECONDARY_Z)
+
+
+def blast_wave(w_kg: float, r_m: float, source: str = "tnt", pressure_kpa: float = 101.325, temp_c: float = 15.0) -> tuple[float, float, float]:
     """(peak overpressure Pa, positive-phase duration s, decay alpha) of a free-air burst of ``w_kg`` kg TNT at
     ``r_m`` metres, for the Friedlander wave p(t) = Ps (1 - t/td) exp(-alpha t/td) (Kinney & Graham eq. 5.10).
+    ``pressure_kpa`` and ``temp_c`` give the ambient air (sea level, 15 C by default): the altitude scaling reads the
+    sea-level result at the distance r (P / P0)^(1/3), multiplies the pressure by P / P0 and the duration by
+    (P0 / P)^(1/3) c0 / c.
+    ``source="point"``: an energy deposit with no explosive products (lightning, a spark; ``w_kg`` its TNT-equivalent
+    energy), read from the point-source half of the reference table, 0.79 <= Z <= 7.9 m/kg^(1/3), clamped beyond.
     Ps from the JRC fit (valid 0.053 <= Z <= 40 m/kg^(1/3)); td read from Kinney's Table XI where it reaches
     (0.79 <= Z <= 7.9), beyond it from the JRC impulse, i = Ps td (1/alpha - (1 - e^-alpha)/alpha^2), scaled to
     meet the table at Z = 7.9 (the two sources differ by about 30 % in td there). Past Z = 40 Ps and the
     impulse go on along their log-log slope (weak shock)."""
+    if abs(float(pressure_kpa) - 101.325) > 1e-9 or abs(float(temp_c) - 15.0) > 1e-9:
+        s = (max(float(pressure_kpa), 1e-3) / 101.325) ** (1.0 / 3.0)
+        ps, td, a = blast_wave(w_kg, float(r_m) * s, source)
+        c0, c = 331.3 * math.sqrt(288.15 / 273.15), 331.3 * math.sqrt((273.15 + float(temp_c)) / 273.15)
+        return ps * s ** 3, td / s * c0 / c, a
+    if str(source) == "point":
+        return _point_blast(w_kg, r_m)
     w = max(float(w_kg), 1e-6)
     s3 = w ** (1.0 / 3.0)
     z = max(float(r_m), 1e-3) / s3
@@ -1436,6 +1502,28 @@ def blast_wave(w_kg: float, r_m: float) -> tuple[float, float, float]:
     return ps * 1e3, td, a
 
 
+def friedlander_peak_freq(t0: float, b: float = 1.0) -> float:
+    """Frequency [Hz] of the spectrum peak of a Friedlander wave p = Ps (1 - t / t0) exp(-b t / t0): sqrt(-b^2 + 4 b - 2) / (2 pi t0),
+    defined for b between 2 - sqrt 2 and 2 + sqrt 2 (b = 1, t0 = 0.5 ms: 318 Hz)."""
+    r = -b * b + 4.0 * b - 2.0
+    if r < 0.0:
+        raise ValueError("b must lie within 2 +- sqrt(2)")
+    return math.sqrt(r) / (2.0 * math.pi * t0)
+
+
+def muzzle_peak_angle(theta_deg, p_front: float, p_back: float):
+    """Peak overpressure of a muzzle blast at ``theta_deg`` from the line of fire, front pressure ``p_front``, rear ``p_back``
+    (same unit): p_front (1 - (p_front - p_back) / p_front sin(theta / 2))."""
+    th = np.radians(np.asarray(theta_deg, float))
+    return p_front * (1.0 - (p_front - p_back) / p_front * np.sin(th / 2.0))
+
+
+def hopkinson_scale(energy_ratio: float) -> float:
+    """Factor on distance, positive-phase duration and impulse that gives the same peak pressure for a blast of ``energy_ratio``
+    times the energy: its cube root (eight times the energy: twice the distance, twice the duration)."""
+    return float(energy_ratio) ** (1.0 / 3.0)
+
+
 @dataclass
 class Explosion:
     """Blast: a Friedlander shock pulse sized by the charge and distance (`blast_wave`), low-frequency
@@ -1445,6 +1533,7 @@ class Explosion:
     debris: float = 0.45
     enclosure: float = 0.15
     windows: float = 0.0
+    secondary: float = 0.0
 
     def render(self, dur: float = 2.0, *, sr: int=DEFAULT_SR, seed: int=0) -> np.ndarray:
         dur=max(.15,float(dur)); n=max(1,int(round(dur*_PHYS_SR))); t=np.arange(n)/_PHYS_SR
@@ -1455,6 +1544,12 @@ class Explosion:
         m = min(n, max(4, int(min(td * (1.0 + 8.0 / alpha), 0.5) * _PHYS_SR)))
         tt = np.arange(m) / _PHYS_SR
         nw = np.zeros(n); nw[:m] = (1.0 - tt / td) * np.exp(-alpha * tt / td)
+        if self.secondary > 0:
+            lag, ratio = blast_secondary(e, d)
+            k2 = int(lag * _PHYS_SR)
+            if ratio > 0 and k2 < n:
+                m2 = min(m, n - k2)
+                nw[k2:k2 + m2] += float(self.secondary) * ratio * nw[:m2]
         # Smooth distance-dominant high frequencies by short moving average.
         smooth=max(1,int(np.clip(d*.000035*_PHYS_SR,1,80)))
         if smooth>1: nw=np.convolve(nw,np.ones(smooth)/smooth,mode='same')

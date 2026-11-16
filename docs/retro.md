@@ -250,3 +250,7 @@ chosen if its name is in the sample's name, and failing that the note plays a pl
   HL = round(437500 / f − 30.125); `bfxr_strict`, `mod_note`, `FRAME_HZ`.
 - `psg`: one voice of the chip, not three channels sharing one envelope. The DAC table (3 dB per step), the
   noise register's taps and the default clock are not in the datasheet.
+## Newer chips
+
+Chips with a wavetable or FM core (`scc`, `namco_wsg`, `huc6280`, `vrc6`, `n163`, `fds`, `paula`, `opl2`, `opl3`, `opll`, `snes`, `saa1099`,
+`wonderswan`) are described in `chiptune.md`.

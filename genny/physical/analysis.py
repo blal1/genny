@@ -857,13 +857,15 @@ VOTE_MIN_DECAY = 0.1
 
 
 def modal_fit(x: np.ndarray, n_modes: int = 16, fmin: float = 60.0, fmax: float = 16000.0, *,
-              method: str = "peak", N: int = 4096) -> Modes:
+              method: str = "peak", N: int = 4096, residual: bool = False):
     """Modal analysis of a recorded strike:
     the strongest spectral peaks of the first 60 ms after the onset, each one's decay rate
     from the slope of its STFT magnitude (dB) over the following frames. ``N`` = FFT length.
     method="vote": a peak is kept only if it is found (within one bin) in at least half of the
     frames of those 60 ms, stands ``VOTE_FLOOR_DB`` above the noise floor measured before the
-    onset, and decays faster than ``VOTE_MIN_DECAY`` 1/s (steady hum and noise lines are dropped)."""
+    onset, and decays faster than ``VOTE_MIN_DECAY`` 1/s (steady hum and noise lines are dropped).
+    ``residual=True``: returns ``(modes, resid)``, resid the recording minus the fitted modes (their amplitudes and
+    phases refitted by least squares over the first second after the onset), the part the modes do not explain."""
     from scipy.signal import find_peaks, stft
     N = int(N)
     if len(x) < 2 * N:
@@ -911,7 +913,19 @@ def modal_fit(x: np.ndarray, n_modes: int = 16, fmin: float = 60.0, fmax: float 
         freqs.append(float(f[b] + (0.5 * (a - c) / den if den < 0 else 0.0) * (f[1] - f[0])))
         gains.append(float(10 ** (spec[b] / 20)))
     g = np.array(gains) if gains else np.array([1.0])
-    return Modes(np.array(freqs or [500.0]), np.array(decays or [30.0]), g / g.max())
+    md = Modes(np.array(freqs or [500.0]), np.array(decays or [30.0]), g / g.max())
+    if not residual:
+        return md
+    x = np.asarray(x, float)
+    i0 = int(t[j0] * SR)
+    seg = x[i0:i0 + SR]
+    tt = np.arange(len(seg)) / SR
+    A = np.concatenate([np.exp(-d * tt)[:, None] * np.stack([np.cos(2 * np.pi * f * tt), np.sin(2 * np.pi * f * tt)], 1)
+                        for f, d in zip(md.freqs, md.decays)], 1)
+    coef = np.linalg.lstsq(A, seg, rcond=None)[0]
+    out = x.copy()
+    out[i0:i0 + len(seg)] -= A @ coef
+    return md, out
 
 
 def modal_resynth(md: Modes, n: int, rng: np.random.Generator, *, f_scale: float = 1.0,

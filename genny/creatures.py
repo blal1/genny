@@ -152,8 +152,9 @@ _ROAR_TRACT = {"lion": 0.38, "tiger": 0.29, "jaguar": 0.33, "jaguar_female": 0.3
 @sfx("roar", "Big-cat roar (Farnell lion arc 30->240->120 Hz, flapping cords into a long tract).",
      size=(1.0, "body scale 0.4..4: f0 = arc/size, tract = species length x size"), aggression=(0.7, "0 smooth .. 1 snarling"),
      dur=(2.5, "s"), species=("lion", "lion 0.38 m | tiger 0.29 | jaguar 0.33 | jaguar_female 0.31 | cub 0.035 (newborn jaguar): lips-glottis length"),
-     seed=(0, "variation"))
-def roar(sr=DEFAULT_SR, size=1.0, aggression=0.7, dur=2.5, species="lion", seed=0):
+     seed=(0, "variation"),
+     formants=("", "Hz of the measured formants F1, F2, ... e.g. '120,360,600': the tract is the quarter-wave tube of their spacing (350 m/s), replacing the species length"))
+def roar(sr=DEFAULT_SR, size=1.0, aggression=0.7, dur=2.5, species="lion", seed=0, formants=""):
     size = float(np.clip(size, 0.4, 4.0))
     rng = _rng(seed, 1)
     n = _n(dur)
@@ -164,22 +165,26 @@ def roar(sr=DEFAULT_SR, size=1.0, aggression=0.7, dur=2.5, species="lion", seed=
     f0[:nr] = 30.0 + (240.0 - 30.0) * a[:nr]
     f0[nr:] = 120.0 + (240.0 - 120.0) * a[nr:]
     ag = float(np.clip(aggression, 0.0, 1.0))
-    y = _voc(f0 / size, a, rng, tract_m=_ROAR_TRACT[_choice(species, _ROAR_TRACT, "species")] * size, harsh=0.15 + 0.85 * ag, jitter=0.005 + 0.03 * ag,
+    tract = _ROAR_TRACT[_choice(species, _ROAR_TRACT, "species")]
+    if formants:
+        tract = apparent_vocal_tract_length(formant_spacing([float(x) for x in str(formants).replace(";", ",").split(",") if x.strip()]))
+    y = _voc(f0 / size, a, rng, tract_m=tract * size, harsh=0.15 + 0.85 * ag, jitter=0.005 + 0.03 * ag,
              shimmer=0.3 * ag, sub=0.3 * ag)
     return _fin(_dark(y), sr)
 
 
 @sfx("growl", "Low threatening growl: slow wobbling pulses, period doubling, noisy cords.",
      size=(1.0, "body scale: f0 = pitch/size, tract 0.25 m x size"), aggression=(0.6, "0..1 harshness and subharmonics"),
-     pitch=(70.0, "Hz at size 1"), dur=(1.5, "s"), seed=(0, "variation"))
-def growl(sr=DEFAULT_SR, size=1.0, aggression=0.6, pitch=70.0, dur=1.5, seed=0):
+     pitch=(70.0, "Hz at size 1"), dur=(1.5, "s"), seed=(0, "variation"),
+     mass=(0.0, "dog mass in kg (2.5..50 measured): tract length from the dog fit instead of 0.25 m x size; 0 = off"))
+def growl(sr=DEFAULT_SR, size=1.0, aggression=0.6, pitch=70.0, dur=1.5, seed=0, mass=0.0):
     size = float(np.clip(size, 0.3, 4.0))
     rng = _rng(seed, 2)
     n = _n(dur)
     ag = float(np.clip(aggression, 0.0, 1.0))
     env = V.articulation_env(n, 0.3, offset=0.0) ** 0.5
     f0 = to_hz(pitch) / size * (1.0 + 0.12 * _slow(n, rng, 3.0)) * (0.85 + 0.25 * env)
-    y = _voc(f0, env * (1.0 + 0.25 * _slow(n, rng, 7.0)), rng, tract_m=0.25 * size, harsh=0.4 + 0.6 * ag,
+    y = _voc(f0, env * (1.0 + 0.25 * _slow(n, rng, 7.0)), rng, tract_m=dog_vtl(mass) if mass else 0.25 * size, harsh=0.4 + 0.6 * ag,
              jitter=0.03, shimmer=0.25, sub=0.6 * ag, wrong=0.7)
     return _fin(_dark(y), sr)
 
@@ -266,6 +271,7 @@ def meow(sr=DEFAULT_SR, size=1.0, pitch=550.0, dur=0.9, seed=0):
 
 
 PURR_VOICE_HZ = 200.0
+PURR_INHALE_DB, PURR_INHALE_NARROW = 3.0, 1.5
 
 
 def purr_breath(t, phase=0.0, period=1.7, expiration=0.4):
@@ -276,15 +282,20 @@ def purr_breath(t, phase=0.0, period=1.7, expiration=0.4):
 
 @sfx("purr", "Cat purr: glottal pulses near 26 Hz through the tract, breathing in and out.",
      rate=(26.3, "pulses per second (mean)"), size=(1.0, "body scale"), dur=(3.0, "s"), seed=(0, "variation"),
-     voice=(0.0, "0..1 voicing during the purr: a ~200 Hz tone (/ size) swelling with each purr cycle, on expiration"))
-def purr(sr=DEFAULT_SR, rate=26.3, size=1.0, dur=3.0, seed=0, voice=0.0):
+     voice=(0.0, "0..1 voicing during the purr: a ~200 Hz tone (/ size) swelling with each purr cycle, on expiration"),
+     inhale=(0.0, "0..1 stronger, rougher breath in: up to +3 dB level and 1.5x narrower pulses on the inspiration (the breath in is 60 % of the cycle)"),
+     breath=(0.0, "breaths a minute, 8..60 (0 = 35, the default 1.7 s cycle; its value is not sourced)"))
+def purr(sr=DEFAULT_SR, rate=26.3, size=1.0, dur=3.0, seed=0, voice=0.0, inhale=0.0, breath=0.0):
     rng = _rng(seed, 5)
     n = _n(dur)
     t = np.arange(n) / KSR
-    br = purr_breath(t, rng.uniform(0, 1.0))
+    br = purr_breath(t, rng.uniform(0, 1.0), period=60.0 / float(np.clip(breath, 8.0, 60.0)) if breath else 1.7)
     f = float(np.clip(rate, 5.0, 80.0)) * (1.0 + 0.046 * np.tanh(4.0 * br)) * (1.0 + 0.01 * _slow(n, rng, 5.0))
     amp = 0.55 + 0.45 * np.abs(np.tanh(4.0 * br)) ** 0.5           # dip at each breath reversal
-    src = V.raised_cosine_pulse(f, width_env=5.0)
+    ih = float(np.clip(inhale, 0.0, 1.0))
+    if ih:
+        amp = amp * np.where(br < 0.0, 10.0 ** (PURR_INHALE_DB * ih / 20.0), 1.0)
+    src = V.raised_cosine_pulse(f, width_env=5.0 * np.where(br < 0.0, 1.0 + (PURR_INHALE_NARROW - 1.0) * ih, 1.0) if ih else 5.0)
     src = src + 0.06 * rng.uniform(-1, 1, n) * np.maximum(src, 0.0)
     if voice > 0:
         gate = np.maximum(V.raised_cosine_pulse(f, width_env=1.0), 0.0) * np.maximum(br, 0.0)
@@ -300,7 +311,35 @@ DIANA_TUBES = {                            # (diameter cm, length cm) from the l
     7: ((1.0, 1.27), (0.3, 3.0), (2.0, 5.75), (0.71, 0.25)),
     8: ((1.0, 1.23), (0.3, 3.0), (2.0, 5.75), (0.76, 0.25)),
 }
-DIANA_CALL = dict(f0=130.0, dur=0.18, gap=0.17, calls=4)
+DIANA_CALL = dict(f0=57.0, dur=0.2, gap=0.11, calls=4)
+DIANA_EAGLE_CALLS = 13
+
+
+def formant_spacing(formants) -> float:
+    """Formant spacing dF (Hz) of a vocal tract that is a quarter-wave resonator: F_n = k_n dF, k_n = (2n - 1) / 2,
+    dF the slope through the origin of the formants F_1, F_2, ... against k_n."""
+    f = np.asarray(formants, float)
+    k = (2.0 * np.arange(1, f.size + 1) - 1.0) / 2.0
+    return float(np.dot(k, f) / np.dot(k, k))
+
+
+def apparent_vocal_tract_length(spacing_hz: float, c: float = C_TRACT) -> float:
+    """Length (m) of the closed-open tube whose formants are `spacing_hz` apart: c / (2 dF), c = 350 m/s in warm humid air."""
+    return float(c) / (2.0 * float(spacing_hz))
+
+
+def kuramoto_threshold(spread: float, density: str = "gauss") -> float:
+    """Coupling above which phase oscillators with frequency spread `spread` (rad/s) lock partly: Kc = 2 / (pi g(0)),
+    sqrt(8 / pi) sigma for a Gaussian density, 2 gamma for a Lorentzian of half-width gamma."""
+    if density not in ("gauss", "lorentz"):
+        raise ValueError("density must be gauss or lorentz")
+    return math.sqrt(8.0 / math.pi) * float(spread) if density == "gauss" else 2.0 * float(spread)
+
+
+def kuramoto_order(k: float, kc: float) -> float:
+    """Order parameter of the locked state of a Lorentzian population, r = sqrt(1 - Kc / K) above Kc, 0 below (a
+    square-root rise for any smooth density, with another coefficient)."""
+    return math.sqrt(max(0.0, 1.0 - float(kc) / float(k))) if k > 0 else 0.0
 
 
 def tube_formants(tubes, c: float = C_TRACT, fmax: float = 8000.0) -> np.ndarray:
@@ -320,17 +359,20 @@ def tube_formants(tubes, c: float = C_TRACT, fmax: float = 8000.0) -> np.ndarray
     return f[i] - D[i] * (f[i + 1] - f[i]) / (D[i + 1] - D[i])
 
 
-def diana_alarm(seed: int = 0, calls: int = 0) -> np.ndarray:
-    """Male Diana monkey leopard alarm series at 48 kHz: glottal pulses through the tube model moving
-    from configuration 4 (onset) to 7 (middle) to 8 (end) within each call."""
+def diana_alarm(seed: int = 0, calls: int = 0, predator: str = "leopard") -> np.ndarray:
+    """Male Diana monkey alarm series at 48 kHz: glottal pulses through the tube model. leopard: configuration 4
+    (onset) to 7 (middle) to 8 (end) within each syllable, 4 syllables; eagle: no onset transition (configuration 7
+    throughout), a longer series."""
+    if predator not in ("leopard", "eagle"):
+        raise ValueError("predator must be leopard or eagle")
     rng = _rng(seed, 41)
     p = DIANA_CALL
-    F = np.array([tube_formants(DIANA_TUBES[i])[:3] for i in (4, 7, 8)])
+    F = np.array([tube_formants(DIANA_TUBES[i])[:3] for i in ((4, 7, 8) if predator == "leopard" else (7, 7, 7))])
     m = _n(p["dur"])
     path = np.stack([np.interp(np.linspace(0, 1, m), [0, 0.5, 1], F[:, j]) for j in range(3)], axis=1)
     ring = _n(0.03)                                      # the tract rings on after the source stops
     path = np.concatenate([path, np.repeat(path[-1:], ring, axis=0)])
-    calls = int(calls) or p["calls"]
+    calls = int(calls) or (p["calls"] if predator == "leopard" else DIANA_EAGLE_CALLS)
     out = np.zeros(_n(calls * (p["dur"] + p["gap"]) + 0.05))
     for c in range(calls):
         f0 = p["f0"] * rng.uniform(0.95, 1.05) * _arc(m, [(0, 0.9), (0.3, 1.0), (1, 0.85)])
@@ -446,7 +488,7 @@ def _cricket(n: int, rate: float, rng, species: str, bright: float, phase0: floa
     u = tc / ps - k
     on = k < pulses
     e = np.where(on, (k + 2.0) / (pulses + 2.0) * np.minimum(u / 0.3, 1.0) ** 2 * (1.0 - u) ** 1.5, 0.0)
-    ph = TWO_PI * np.cumsum(fc * (1.0 - fall * np.where(on, u, 0.0))) / KSR
+    ph = TWO_PI * np.cumsum(fc * (1.0 - fall * np.where(on, (k + u) / pulses, 0.0))) / KSR
     y = np.zeros(n)
     for w in (1.0 - split, 1.0 + split):       # two wings at 4.4 and 4.6 kHz
         y += np.sin(w * ph) + bright / 3.0 * np.sin(2.0 * w * ph) + bright / 30.0 * np.sin(3.0 * w * ph)
@@ -532,13 +574,16 @@ def _grasshopper(n, rate, rng):
     return grain * env
 
 
-def _lobster(n, rate, rng):
-    """Spiny lobster rasp: a soft plectrum sliding over a file, elasto-plastic stick-slip on three modes; no impacts."""
+def _lobster(n, rate, rng, pulse=0.0):
+    """Spiny lobster rasp: a soft plectrum sliding over a file, elasto-plastic stick-slip on three modes; no impacts.
+    `pulse` (Hz, 0 = off): the sweep itself is made of still and sliding periods alternating at that rate."""
     from .friction import elastoplastic_friction
     p = STRIDULATION
     t = np.arange(n) / KSR
     ph = np.mod(rate * t, 1.0)
     v = p["lobster_speed"] * np.where(ph < 0.6, np.sin(np.pi * ph / 0.6), 0.0) * (1.0 + 0.1 * _slow(n, rng, 3.0))
+    if pulse > 0.0:
+        v = v * np.sin(np.pi * np.mod(float(pulse) * t, 1.0)) ** 2
     r = elastoplastic_friction(np.array(p["lobster_modes"]), 0.02, 1.0 / p["lobster_mass"], p["lobster_force"],
                                v, n / KSR)
     return np.gradient(np.gradient(np.asarray(r["out"], float)[:n]))           # radiated ~ acceleration
@@ -547,13 +592,13 @@ def _lobster(n, rate, rng):
 @sfx("stridulation", "Stridulation that is not a cricket's: a grasshopper rubbing pegs on a wing vein (friction noise, "
      "two stroke directions) or a spiny lobster's soft stick-slip rasp.",
      kind=("grasshopper", "grasshopper | lobster"), rate=(0.0, "strokes per second (0 = 12 grasshopper, 4 lobster)"),
-     dur=(2.0, "s"), seed=(0, "variation"))
-def stridulation(sr=DEFAULT_SR, kind="grasshopper", rate=0.0, dur=2.0, seed=0):
+     dur=(2.0, "s"), seed=(0, "variation"), pulse=(0.0, "lobster: Hz of the alternating still and sliding periods within a sweep (0 = off, 77 = mean measured)"))
+def stridulation(sr=DEFAULT_SR, kind="grasshopper", rate=0.0, dur=2.0, seed=0, pulse=0.0):
     _choice(kind, ("grasshopper", "lobster"), "kind")
     rng = _rng(seed, 31)
     r = float(rate) if rate else (12.0 if kind == "grasshopper" else 4.0)
     n = _n(dur)
-    y = _grasshopper(n, r, rng) if kind == "grasshopper" else _lobster(n, r, rng)
+    y = _grasshopper(n, r, rng) if kind == "grasshopper" else _lobster(n, r, rng, float(pulse))
     return _fin(y, sr, peak=0.5, hp=300.0)
 
 
@@ -593,7 +638,7 @@ def _buzz(kind: str, sr, freq, wobble, motion, proximity, tone, dur, seed) -> np
         k = np.arange(1, min(kmax, 60) + 1)
         amps = np.sinc(k * duty)
     y = np.zeros(n)
-    for wing, det in ((0.0, 1.0), (1.3, 1.004)):
+    for wing, det in ((0.0, 1.0), (1.3, 1.004 + 0.004 * _slow(n, rng, 5.0))):
         for i, a in enumerate(amps):
             y += a * np.sin((i + 1) * det * ph + wing)
     if band:
@@ -852,6 +897,39 @@ def wc_pressure(dur: float, rate: float, **kw) -> np.ndarray:
     return out
 
 
+TMG = dict(m=0.5, tau=1.0, k=1.0, mu=5.0, e1=-1.3, e2=-1.5, amp=0.8, omega=0.4, fs=2000.0)
+
+
+def tmg_pressure(dur: float, rate: float, **kw) -> np.ndarray:
+    """Air-sac pressure from the driven respiratory model: m x'' + k x + mu x' = 2 i1 - i2,
+    tau i1' = -i1 + S(E1 - i2 - f(x)), tau i2' = -i2 + S(E2 - i1 + A cos(w t)), S logistic, f(x) = 9 x^3 / (1 + x^3);
+    pressure = -x. Model time is scaled so the forcing runs at ``rate`` Hz (w = TMG["omega"], A = TMG["amp"]).
+    Returns the pressure shifted and scaled to 0..0.9 at TMG["fs"]. Larger ``omega`` or smaller ``amp`` moves between
+    period-1, period-2 and period-3 patterns."""
+    p = dict(TMG, **kw)
+    fs = p["fs"]
+    n = max(2, int(dur * fs))
+    du = TWO_PI * rate / p["omega"] / fs
+    sub = max(1, int(math.ceil(du / 0.02)))
+    h = du / sub
+    x = v = i1 = i2 = 0.0
+    out = np.empty(n)
+    for j in range(n):
+        for q in range(sub):
+            u = (j * sub + q) * h
+            fx = 9.0 * max(x, 0.0) ** 3 / (1.0 + max(x, 0.0) ** 3)
+            a = (2.0 * i1 - i2 - p["k"] * x - p["mu"] * v) / p["m"]
+            d1 = (-i1 + 1.0 / (1.0 + math.exp(-(p["e1"] - i2 - fx)))) / p["tau"]
+            d2 = (-i2 + 1.0 / (1.0 + math.exp(-(p["e2"] - i1 + p["amp"] * math.cos(p["omega"] * u))))) / p["tau"]
+            x += v * h
+            v += a * h
+            i1 += d1 * h
+            i2 += d2 * h
+        out[j] = -x
+    out -= out.min()
+    return 0.9 * out / (out.max() + 1e-12)
+
+
 def spectral_content_index(y, sr, f0=None):
     """SCI = mean spectral frequency / fundamental (f0 from the autocorrelation peak, 100 Hz..10 kHz, if not given)."""
     y = np.asarray(y, float) - np.mean(y)
@@ -891,6 +969,42 @@ def _laje_syrinx(k, b, f0, fs):
     return out
 
 
+LAJE_COUPLING = dict(alpha=1.2e6, beta=1.5e3, tau=1e-4, D=5e-3, gamma=0.9, T=2.0 * 2.0 / 3.5e4)
+
+
+@numba.njit(cache=True)
+def _laje_syrinx_coupled(k, b, f0, fs, cpl, alpha, beta, tau, dd, gamma, nd):
+    """_laje_syrinx with the delayed tract feedback (low-coupling form): y' gains (1 - D y) pi~ with
+    pi~ = alpha (x - tau y) + beta y - gamma pi(t - T), pi = alpha (x - tau y) + beta (y - tau y') - gamma pi(t - T)."""
+    n = k.shape[0]
+    x, y = 1e-4, 0.0
+    h = 1.0 / fs
+    out = np.empty(n)
+    c = LAJE_C
+    pis = np.zeros(n)
+    al, be = alpha * cpl, beta * cpl
+    for i in range(n):
+        kk, bb, ff = k[i], b[i], f0[i]
+        pd = gamma * (pis[i - nd] if i >= nd else 0.0)
+        k1x = y
+        k1y = -kk * x - c * x * x * y + bb * y - ff + (1.0 - dd * y) * (al * (x - tau * y) + be * y - pd)
+        xx, yy = x + 0.5 * h * k1x, y + 0.5 * h * k1y
+        k2x = yy
+        k2y = -kk * xx - c * xx * xx * yy + bb * yy - ff + (1.0 - dd * yy) * (al * (xx - tau * yy) + be * yy - pd)
+        xx, yy = x + 0.5 * h * k2x, y + 0.5 * h * k2y
+        k3x = yy
+        k3y = -kk * xx - c * xx * xx * yy + bb * yy - ff + (1.0 - dd * yy) * (al * (xx - tau * yy) + be * yy - pd)
+        xx, yy = x + h * k3x, y + h * k3y
+        k4x = yy
+        k4y = -kk * xx - c * xx * xx * yy + bb * yy - ff + (1.0 - dd * yy) * (al * (xx - tau * yy) + be * yy - pd)
+        x += h / 6.0 * (k1x + 2.0 * k2x + 2.0 * k3x + k4x)
+        y += h / 6.0 * (k1y + 2.0 * k2y + 2.0 * k3y + k4y)
+        yd = -kk * x - c * x * x * y + bb * y - ff + (1.0 - dd * y) * (al * (x - tau * y) + be * y - pd)
+        pis[i] = al * (x - tau * y) + be * (y - tau * yd) - pd
+        out[i] = y
+    return out
+
+
 def laje_path(f_start: float, f_end: float, n: int, gap: int, level: float = 1.0):
     """One syllable as an ellipse in the (b, k) plane: phonation along the upper arc (b > 0, labia free,
     k swept from (2 pi f_start)^2 to (2 pi f_end)^2), then the mini breath along the lower arc with the
@@ -904,7 +1018,7 @@ def laje_path(f_start: float, f_end: float, n: int, gap: int, level: float = 1.0
     return k, b, f0
 
 
-def _laje_source(plan, n):
+def _laje_source(plan, n, coupling=0.0):
     os_ = 4
     k, b, f0 = np.full(n * os_, (TWO_PI * 1000.0) ** 2), np.full(n * os_, -1.0), np.zeros(n * os_)
     for i, s in enumerate(plan):
@@ -915,7 +1029,12 @@ def _laje_source(plan, n):
         kk, bb, ff = laje_path(s["f"][0][1], s["f"][-1][1], m, g, s.get("amp", 1.0))
         e = min(i0 + m + g, len(k))
         k[i0:e], b[i0:e], f0[i0:e] = kk[:e - i0], bb[:e - i0], ff[:e - i0]
-    y = _laje_syrinx(k, b, f0, float(KSR * os_))
+    if coupling > 0.0:
+        L = LAJE_COUPLING
+        y = _laje_syrinx_coupled(k, b, f0, float(KSR * os_), float(coupling), L["alpha"], L["beta"], L["tau"],
+                                 L["D"], L["gamma"], max(1, int(round(L["T"] * KSR * os_))))
+    else:
+        y = _laje_syrinx(k, b, f0, float(KSR * os_))
     return _sig.resample_poly(y, 1, os_)[:n]
 
 
@@ -1075,7 +1194,7 @@ def _two_tube(x):
 
 RHO_AIR = 1.2
 OEC = dict(lg=20.0, ch=1.5e-8 / 350.0, rh=1000.0, rb=1e5,
-           lb=RHO_AIR * GARDNER_TRACT[1] / (GARDNER_TRACT[3] * 1e-4), r=0.5)
+           lb=1000.0, r=0.5)
 
 
 def oec_hz(lg: float = OEC["lg"], ch: float = OEC["ch"]) -> float:
@@ -1127,7 +1246,7 @@ def oec_beak(pi, tf1: float, **kw) -> np.ndarray:
 
 
 def _birdsong(species: str, seed, repeats=1, syllables=0, tempo=1.0, pitch=1.0, two_voice=0.0,
-              source="fm", tract="bands", coupling=0.0, gestures=0.0) -> np.ndarray:
+              source="fm", tract="bands", coupling=0.0, gestures=0.0, model="wc") -> np.ndarray:
     p = BIRDS[species]
     plan = birdsong_plan(species, seed, repeats, syllables, tempo, pitch)
     rng = _rng(seed, 21)
@@ -1169,7 +1288,7 @@ def _birdsong(species: str, seed, repeats=1, syllables=0, tempo=1.0, pitch=1.0, 
     f = np.minimum(f, 0.2 * KSR)
     tf1, tf2 = (min(v * pitch, 0.4 * KSR) for v in p["tf"])
     if gestures > 0:
-        g = wc_pressure(n / KSR, float(gestures))
+        g = (tmg_pressure if model == "tmg" else wc_pressure)(n / KSR, float(gestures))
         amp = np.clip(np.interp(np.arange(n) / KSR, np.arange(len(g)) / WC["fs"], g) / 0.9, 0.0, 1.0)
         amp = np.where(amp > 0.1, amp, 0.0)
     if source == "gardner":
@@ -1178,7 +1297,7 @@ def _birdsong(species: str, seed, repeats=1, syllables=0, tempo=1.0, pitch=1.0, 
         k2, ke = SUBOSCINE[source]
         x = _unit(gardner_source(3.0 * amp, np.full(n, float(np.min(f))), tf1, coupling, k2=k2, kexp=ke))
     elif source == "laje":
-        x = _unit(_laje_source(plan, n))
+        x = _unit(_laje_source(plan, n, coupling))
         amp = np.maximum(amp, 0.0) > 0
     elif source == "normal_form":
         x = _normal_form_source(f, amp, fb, nzd, tf1, rng)
@@ -1206,17 +1325,23 @@ def _birdsong(species: str, seed, repeats=1, syllables=0, tempo=1.0, pitch=1.0, 
      pitch=(1.0, "frequency scale (smaller bird > 1)"), tempo=(1.0, "speed scale"),
      two_voice=(0.0, "0..1 level of the second syrinx source"), bright=(1.0, "0.3..2 top-end"),
      source=("fm", "fm (Farnell) | normal_form (labial normal form + trachea) | laje (labia driven along one ellipse in pressure-tension per syllable) | gardner (flapping labia, tension follows the song) | suboscine / tyrant (fixed tension, pressure alone raises the pitch through a stiffening restitution)"), seed=(0, "variation"),
-     coupling=(0.0, "0..1 gardner/suboscine/tyrant: trachea pressure acting back on the labia (period doubling when strong)"),
+     coupling=(0.0, "0..1 gardner/suboscine/tyrant/laje: trachea pressure acting back on the labia (period doubling when strong; laje: delayed tract feedback, 1 = the thesis values)"),
      gestures=(0.0, "Hz: > 0 replaces the syllable envelopes by Wilson-Cowan air-sac pressure gestures at this rate (canary: 5 separate pulses .. 25 sustained)"),
-     tract=("bands", "bands = the preset's two band-passes | gardner = a 3 cm trachea and a 1 cm beak (a canary's), whatever the species | oec = trachea, oropharyngeal-esophageal cavity (Helmholtz, ~5 kHz) and beak"))
+     model=("wc", "wc | tmg: the gestures come from a Wilson-Cowan pair, or from the driven respiratory model of a mechanical air sac with mutually inhibiting inspiratory and expiratory nuclei (the forcing frequency = gestures)"),
+     tract=("bands", "bands = the preset's two band-passes | gardner = a 3 cm trachea and a 1 cm beak (a canary's), whatever the species | oec = trachea, oropharyngeal-esophageal cavity (Helmholtz, ~5 kHz) and beak"),
+     centre=(0.0, "Hz: the geometric centre of the song's frequency range (`bird_range`); pitch is scaled to put it here, 0 = off"))
 def birdsong(sr=DEFAULT_SR, species="robin", repeats=1, syllables=0, pitch=1.0, tempo=1.0, two_voice=0.0,
-             bright=1.0, source="fm", seed=0, tract="bands", coupling=0.0, gestures=0.0):
+             bright=1.0, source="fm", seed=0, tract="bands", coupling=0.0, gestures=0.0, model="wc", centre=0.0):
     _choice(species, BIRDS, "species")
+    if centre > 0:
+        lo, hi = bird_range(species)
+        pitch = pitch * float(centre) / math.sqrt(lo * hi)
     _choice(source, ("fm", "normal_form", "laje", "gardner", "suboscine", "tyrant"), "source")
     _choice(tract, ("bands", "gardner", "oec"), "tract")
+    _choice(model, ("wc", "tmg"), "model")
     y = _birdsong(species, seed, int(np.clip(repeats, 1, 50)), int(syllables), tempo,
                   float(np.clip(pitch, 0.25, 3.0)), float(np.clip(two_voice, 0.0, 1.0)), source, tract,
-                  float(np.clip(coupling, 0.0, 1.0)), float(np.clip(gestures, 0.0, 40.0)))
+                  float(np.clip(coupling, 0.0, 1.0)), float(np.clip(gestures, 0.0, 40.0)), model)
     return _fin(_lp(y, 5500.0 * float(np.clip(bright, 0.3, 2.0))), sr, peak=0.5, fade_ms=2.0, hp=60.0)
 
 
@@ -1319,15 +1444,16 @@ def labial_syrinx(pressure_pa, f_pair, length_m: float = 0.07, radius_m: float =
      pressure=(3.0, "air-sac pressure kPa, 1.5..6"), attack=(0.3, "fraction of dur over which pressure rises"),
      two_voice=(5.0, "Hz offset of the second valve (beating); 0 = one valve"),
      species=("raven", "trachea size: oil_bird|raven|budgie"), dur=(0.5, "s"),
-     source=("valve", "valve (membrane valves, Smyth & Smith) | labial (two self-oscillating labia, bronchi joined to the trachea, phonation above 1 kPa)"),
+     source=("valve", "valve (membrane valves, Smyth & Smith) | labial (two self-oscillating labia, bronchi joined to the trachea, phonation above 1 kPa) | farnell (the 11-parameter patch: two bronchus pulses, ring modulator, FM, two trachea band-passes; freq is its base)"),
+     ring=(0.5, "farnell: ring-modulator mix of the two bronchus pulses, 0 = sum .. 1 = product"),
      coupling=(0.5, "labial: back-pressure coupling of the two sources (0 = independent, they beat; larger = they lock when close)"),
      latex=(0.0, "membrane strain 0..0.5: if > 0 the frequency is that of a latex membrane across the trachea (artificial syrinx), freq ignored"),
      membrane=("sweep", "valve: sweep (sounds from about 1 kPa) | fletcher (a raven's thin membrane, sounds from 0.3 kPa; pressure may go down to 0.3) | raven (full raven set: valve shut at rest, constant damping, heavy mass law, 1 ml bronchus)"),
      radiation=("lowpass", "valve: lowpass (beak reflection corner 4 kHz) | piston (corner where k b = 2) | fletcher (piston, then a roll-off from 3 kHz)"))
 def bird_call(sr=DEFAULT_SR, freq=450.0, freq_end=0.0, pressure=3.0, attack=0.3, two_voice=5.0, species="raven",
-              dur=0.5, source="valve", coupling=0.5, latex=0.0, membrane="sweep", radiation="lowpass"):
+              dur=0.5, source="valve", coupling=0.5, latex=0.0, membrane="sweep", radiation="lowpass", ring=0.5):
     length, radius = _TUBES[_choice(species, _TUBES, "species")]
-    _choice(source, ("valve", "labial"), "source")
+    _choice(source, ("valve", "labial", "farnell"), "source")
     n = _n(dur)
     budgie = species == "budgie"
     f0 = latex_membrane_hz(radius, float(np.clip(latex, 0.0, 0.5))) if latex > 0 else to_hz(freq)
@@ -1336,7 +1462,9 @@ def bird_call(sr=DEFAULT_SR, freq=450.0, freq_end=0.0, pressure=3.0, attack=0.3,
     _choice(membrane, ("sweep", "fletcher", "raven"), "membrane")
     _choice(radiation, ("lowpass", "piston", "fletcher"), "radiation")
     ps = 1000.0 * float(np.clip(pressure, 1.5 if membrane == "sweep" else 0.3, 6.0)) * (0.3 + 0.7 * env)
-    if source == "labial":
+    if source == "farnell":
+        y = V.farnell_syrinx(n, rm=float(np.clip(ring, 0.0, 1.0)), bf=f, tf1=float(f0) * 3.0, tf2=float(f0) * 5.5)
+    elif source == "labial":
         y = labial_syrinx(ps, (f, f + float(two_voice) if two_voice else None), length, radius,
                           float(np.clip(coupling, 0.0, 2.0)))
     else:
@@ -1444,7 +1572,7 @@ def breath(sr=DEFAULT_SR, kind="out", effort=0.5, size=1.0, dur=0.0, seed=0):
     if kind in ("in", "out"):
         y = _breath(dur or 1.3 - 0.5 * e, kind, rng, size, e)
     elif kind == "gasp":
-        y = _breath(dur or 0.45, "in", rng, size / 1.15, 1.0, rise=0.2)
+        y = _breath(dur or 1.1, "in", rng, size / 1.15, 1.0, rise=0.2)
     elif kind == "sigh":
         d = dur or 1.7
         y = _breath(d, "out", rng, size, e, rise=0.15)
@@ -1479,14 +1607,16 @@ def grunt(sr=DEFAULT_SR, pitch=110.0, effort=0.5, size=1.0, dur=0.3, seed=0):
 
 
 def _nonverbal(kind: str, what: str):
-    def fn(sr=DEFAULT_SR, voice="female", syllables=0, pitch=1.0, seed=0):
+    def fn(sr=DEFAULT_SR, voice="female", syllables=0, pitch=1.0, seed=0, rhythm="preset"):
         from .physical import nonverbal as NV
+        _choice(rhythm, ("preset", "oscillator", "calls"), "rhythm")
         y = NV.vocalize(kind, str(voice), _rng(seed, 60 + NV.KINDS.index(kind)),
-                        n_syl=int(syllables) or None, pitch=float(np.clip(pitch, 0.25, 4.0)))
+                        n_syl=int(syllables) or None, pitch=float(np.clip(pitch, 0.25, 4.0)), rhythm=rhythm)
         return _fin(y, sr, peak=0.6, hp=60.0)
     sfx(kind, f"{what} (Anikin's soundgen model with its presets: syllables, jitter, AM, aspiration, formants).",
         voice=("female", "female | male"), syllables=(0, "syllables in the bout, 0 = as the preset"),
-        pitch=(1.0, "f0 scale"), seed=(0, "variation"))(fn)
+        pitch=(1.0, "f0 scale"), seed=(0, "variation"),
+        rhythm=("preset", "preset | oscillator (damped oscillator: calls slow and fade) | calls (long first call, shorter ones, growing gaps; a laugh takes its measured formants)"))(fn)
 
 
 for _k, _w in (("laugh", "Laugh: a bout of short voiced syllables with breathy onsets"),
@@ -1656,14 +1786,22 @@ def heartbeat(sr=DEFAULT_SR, rate=1.0, dur=2.0, murmur=0.0, tone=1.0, dub_delay=
 
 
 CLAP_EXP_RISE = 0.0032
+CLAP_EXP_TAU = -1.0 / (44100.0 * math.log(0.99))
 CLAP_EXP_Q = 5.5
+
+
+def clap_rise(t: np.ndarray, rise: str = "fast") -> np.ndarray:
+    """Onset gain of a clap burst: fast = 0.4 ms linear ramp; exp = exponential growth over CLAP_EXP_RISE
+    with time constant CLAP_EXP_TAU, reaching 1 at its end."""
+    if rise == "exp":
+        return np.exp(np.minimum(t - CLAP_EXP_RISE, 0.0) / CLAP_EXP_TAU)
+    return np.minimum(t / 0.0004, 1.0)
 
 
 def _clap(rng, fc: float, q: float, decay: float, n: int | None = None, rise: str = "fast") -> np.ndarray:
     m = _n(max(8 * decay, 0.03)) if n is None else n
     t = np.arange(m) / KSR
-    up = 1.0 - np.exp(-t / CLAP_EXP_RISE) if rise == "exp" else np.minimum(t / 0.0004, 1.0)
-    return _bpf(rng.uniform(-1, 1, m) * up * np.exp(-t / decay), fc, q)
+    return _bpf(rng.uniform(-1, 1, m) * clap_rise(t, rise) * np.exp(-t / decay), fc, q)
 
 
 # hand configuration -> resonator (f, df, B, dB in Hz, gain G, dG)
@@ -1692,7 +1830,7 @@ def _clap_burst(rng, kind: str, n: int) -> tuple[np.ndarray, float]:
      cup=(0.3, "0 flat palms (bright ~1.4 kHz) .. 1 cupped (hollow ~0.5 kHz)"),
      clap_type=("", "hand configurations P1 P2 P3 (palm to palm), A1 A2 A3 (palm to fingers), A1+ (cupped), "
                     "A1- (flat): one resonator drawn around the measured f, B, G; empty = use `cup`"),
-     rise=("fast", "fast (0.4 ms linear onset) | exp (exponential onset, 3.2 ms time constant, resonators Q 5.5)"),
+     rise=("fast", "fast (0.4 ms linear onset) | exp (3.2 ms exponentially growing onset, resonators Q 5.5)"),
      seed=(0, "variation"))
 def handclap(sr=DEFAULT_SR, cup=0.3, clap_type="", rise="fast", seed=0):
     rng = _rng(seed, 48)
@@ -1744,21 +1882,40 @@ def clap_order(plan: list[np.ndarray], dur: float, r: float) -> float:
 
 
 def applause_plan(crowd: int = 30, enthusiasm: float = 0.6, dur: float = 4.0, seed: int = 0,
-                  sync: float = 0.0) -> list[np.ndarray]:
+                  sync: float = 0.0, warm: float = 1.0, ritard: float = 0.0) -> list[np.ndarray]:
     """Clap times (s) of each individually rendered clapper: own rate (sd 10 %), phase and 2.7 % jitter.
-    `sync` > 0 is Mode II: period doubled, relative rate spread / 1.3, coupling K = sync * 0.8/(2 pi) * w."""
+    `sync` > 0 is Mode II: period doubled, relative rate spread / 1.3, coupling K = sync * 0.8/(2 pi) * w.
+    `warm` multiplies the jitter of the claps before 2 s; `ritard` slows each clapper's last third, every clap
+    that much longer than the one before (0.02 = +2 % of the interval per clap)."""
+    plan = _applause_plan(crowd, enthusiasm, dur, seed, sync, warm)
+    if ritard <= 0.0:
+        return plan
+    t0, r = dur * 2.0 / 3.0, math.log1p(float(ritard))
+    out = []
+    for p in plan:
+        ioi = float(np.median(np.diff(p))) if len(p) > 2 else 0.4
+        late = p > t0
+        q = p.copy()
+        q[late] = t0 + ioi * np.expm1(r * (p[late] - t0) / ioi) / r
+        out.append(np.sort(q[q < dur - 0.03]))
+    return out
+
+
+def _applause_plan(crowd, enthusiasm, dur, seed, sync, warm):
     rng = _rng(seed, 49)
     r = applause_rate(enthusiasm)
     if sync > 0.0:
         r2 = 0.5 * r
         plan = _kuramoto_plan(int(min(max(crowd, 1), CLAP_VOICES)), r2, 0.10 / 1.3,
                               float(np.clip(sync, 0.0, 1.0)) * 0.8 * r2, dur, rng)
-        return [np.sort(np.clip(p + rng.normal(0.0, 0.027 / r2, len(p)), 0.0, dur - 0.03)) for p in plan]
+        return [np.sort(np.clip(p + rng.normal(0.0, 0.027 / r2, len(p)) * np.where(p < 2.0, warm, 1.0), 0.0, dur - 0.03))
+                for p in plan]
     plan = []
     for _ in range(int(min(max(crowd, 1), CLAP_VOICES))):
         ri = r * float(np.clip(rng.normal(1.0, 0.10), 0.7, 1.3))
         k = np.arange(int(dur * ri) + 2)
-        t = rng.uniform(0.0, 1.0 / ri) + k / ri + rng.normal(0.0, 0.027 / ri, len(k))
+        t0 = rng.uniform(0.0, 1.0 / ri) + k / ri
+        t = t0 + rng.normal(0.0, 0.027 / ri, len(k)) * np.where(t0 < 2.0, warm, 1.0)
         plan.append(np.sort(t[(t >= 0.0) & (t < dur - 0.03)]))
     return plan
 
@@ -1770,13 +1927,15 @@ def applause_plan(crowd: int = 30, enthusiasm: float = 0.6, dur: float = 4.0, se
                 "into phase (Mode II, Kuramoto coupling)"),
      clap_type=("", "empty = hand resonances spread log-normally | mix = each clapper one of the 8 hand "
                     "configurations | one type (P1..A1-) for all"),
+     warm=(1.0, "timing jitter multiplier for the first 2 s (2 = a crowd still finding its beat)"),
+     ritard=(0.0, "final ritard: the interval grows by this share at every clap of the last third (0.02 = +2 %)"),
      seed=(0, "variation"))
-def applause(sr=DEFAULT_SR, crowd=30, enthusiasm=0.6, dur=4.0, sync=0.0, clap_type="", seed=0):
+def applause(sr=DEFAULT_SR, crowd=30, enthusiasm=0.6, dur=4.0, sync=0.0, clap_type="", warm=1.0, ritard=0.0, seed=0):
     crowd = int(np.clip(crowd, 1, 100000))
     rng = _rng(seed, 50)
     n = _n(dur)
     out = np.zeros(n)
-    plan = applause_plan(crowd, enthusiasm, dur, seed, sync)
+    plan = applause_plan(crowd, enthusiasm, dur, seed, sync, warm, ritard)
     kinds = list(CLAP_TYPES)
     if clap_type and clap_type != "mix":
         _choice(clap_type, CLAP_TYPES, "clap_type")
@@ -1943,6 +2102,26 @@ def stride_pace(gait: str, mass: float) -> float:
     """Footfalls per minute of a quadruped of `mass` kg at its preferred trot / gallop: 4 x 60 x a M^b."""
     a, b = _STRIDE[gait]
     return 240.0 * a * float(np.clip(mass, 0.01, 6000.0)) ** b
+_SPEED_PREF = {"trot": (1.09, 0.222), "gallop": (2.78, 0.176)}     # preferred speed a M^b, m/s
+_STRIDE_SLOPE = {"trot": 0.3, "gallop": 0.019}                     # strides per metre about the preferred speed
+STEP_SPEED = (1.31, 0.5)                                            # walking speed (m/s) at GAITS["walk"], exponent of step rate against speed
+
+
+def speed_pace(gait: str, speed: float, mass: float = 0.0) -> float:
+    """Footfalls per minute at `speed` m/s. Trot, gallop: the preferred stride rate of a `mass` kg animal (500 kg when 0)
+    plus slope x (speed - preferred speed). Other gaits: the step rate of a walker grows as speed^0.5 (the step lengthens
+    as the cadence rises), scaled from the walking rate."""
+    v = float(np.clip(speed, 0.05, 40.0))
+    if gait in _STRIDE:
+        a, b = _STRIDE[gait]
+        pa, pb = _SPEED_PREF[gait]
+        m = float(np.clip(mass if mass else 500.0, 0.01, 6000.0))
+        f = a * m ** b + _STRIDE_SLOPE[gait] * (v - pa * m ** pb)
+        return 240.0 * max(f, 0.25)
+    v0, e = STEP_SPEED
+    return GAITS["walk"] * (v / v0) ** e * (GAITS[gait] / GAITS["walk"] if gait in ("sneak", "limp", "stairs") else 1.0)
+
+
 _QUAD = {"trot": (0.0, 0.035, 0.5, 0.535), "gallop": (0.0, 0.17, 0.36, 0.52)}
 SHOES = ("default", "barefoot", "boot", "heel", "hoof")
 WALKERS = {"woman": (120.0, 0.8), "man": (75.0, 1.25)}                 # footfalls / min, weight (resonance) scale
@@ -1950,9 +2129,15 @@ MOODS = {"neutral": (1.0, 0.0, 1.0, 1.0), "happy": (1.15, 3.0, 0.7, 0.95), "sad"
          "angry": (1.1, 5.0, 1.6, 1.2), "tender": (0.85, -5.0, 0.6, 0.9)}   # pace x, dB, irregularity x, weight x
 
 
+INCLINE_TERM = 3.0    # weight-shift term of the stride model per unit of grade (rise / run): 15 % = 0.45 of the 0.5 limit
+STOP_RATE_END = 0.72 # step rate on the last stopping step, re the running rate (speed falls mostly through step length)
+
+
 def footsteps_plan(gait: str = "walk", pace: float = 0.0, steps: int = 8, variation: float = 0.5, seed: int = 0,
-                   stop: int = 0) -> np.ndarray:
-    """Footfall onset times in seconds. Mean rate = ``pace`` footfalls per minute."""
+                   stop: int = 0, rhythm: str = "fractal") -> np.ndarray:
+    """Footfall onset times in seconds. Mean rate = ``pace`` footfalls per minute. ``rhythm``: the interval
+    noise is fractal (DFA exponent 0.76) or ``ar9``, the autoregressive walking series (order 9)."""
+    _choice(rhythm, ("fractal", "ar9"), "rhythm")
     _choice(gait, GAITS, "gait")
     rng = _rng(seed, 60)
     pace = float(np.clip(pace if pace else GAITS[gait], 20.0, 900.0))
@@ -1966,13 +2151,29 @@ def footsteps_plan(gait: str = "walk", pace: float = 0.0, steps: int = 8, variat
     gaps = np.full(steps, ioi)
     if gait == "limp":                         # the weak leg is unloaded early: short-long alternation
         gaps *= np.where(np.arange(steps) % 2 == 0, 0.72, 1.28)
-    gaps *= 1.0 + np.clip(0.03 * v * _fractal(steps, 0.76, rng), -0.08, 0.08) * (0.5 if gait == "stairs" else 1.0)
+    z = _ar_series(steps, WALK_AR9, rng) if rhythm == "ar9" else _fractal(steps, 0.76, rng)
+    gaps *= 1.0 + np.clip(0.03 * v * z, -0.08, 0.08) * (0.5 if gait == "stairs" else 1.0)
     if stop and steps > 1:
         from .compose import ritard_map
-        f = ritard_map({"beats": min(int(stop), steps - 1), "q": 3.0, "v_end": 0.27}, steps - 1.0)
+        f = ritard_map({"beats": min(int(stop), steps - 1), "q": 3.0, "v_end": STOP_RATE_END}, steps - 1.0)
         if f:
             gaps[:-1] *= np.diff([f(i) for i in range(steps)])
     return 0.01 + np.concatenate(([0.0], np.cumsum(gaps[:-1])))
+
+
+WALK_AR9 = (0.30, 0.19, 0.10, 0.06, 0.04, 0.01, 0.06, 0.01, 0.07)
+
+
+def _ar_series(n: int, coefs, rng) -> np.ndarray:
+    """Unit-variance series x[t] = sum a[i] x[t-1-i] + e[t] (a 200-sample burn-in is dropped)."""
+    p, m = len(coefs), n + 200
+    e = rng.normal(size=m)
+    x = np.zeros(m + p)
+    a = np.asarray(coefs)[::-1]
+    for t in range(m):
+        x[t + p] = a @ x[t:t + p] + e[t]
+    x = x[p + 200:]
+    return (x - x.mean()) / (x.std() + 1e-12)
 
 
 def _fractal(n: int, alpha: float, rng) -> np.ndarray:
@@ -1986,10 +2187,11 @@ def _fractal(n: int, alpha: float, rng) -> np.ndarray:
 
 
 def _step(ground: str, i: int, gait: str, ioi: float, weight: float, shoe: str, v: float, seed,
-          temperature: float = -8.0) -> np.ndarray:
+          temperature: float = -8.0, snow_depth: float = 0.0, accel: float = 0.0, incline: float = 0.0) -> np.ndarray:
     """One freshly synthesised step (never a copy: own random stream, own GRF deviations)."""
     rng = _rng(seed, 1000 + i)
-    y = S.render_step(ground, i % 2, rng, temperature=temperature)     # 0 = right foot, 1 = left foot
+    y = S.render_step(ground, i % 2, rng, temperature=temperature, snow_depth=snow_depth, accel=accel,
+                      incline=INCLINE_TERM * incline)     # 0 = right foot, 1 = left foot
     if abs(weight - 1.0) > 1e-3:
         y = S._varispeed(y, weight ** -0.12)
         y = F.lowshelf(y, 200.0, KSR, 6.0 * math.log2(weight))
@@ -2039,12 +2241,23 @@ def _step(ground: str, i: int, gait: str, ioi: float, weight: float, shoe: str, 
      temperature=(-8.0, "air temperature in C, snow only: squeak spectrum after Arabadzhi 1963 (-1.5 dull ~300 Hz, -15 bright up to 8 kHz), no squeak at 0"),
      walker=("", "'' | woman (120 steps/min, lighter, higher resonances) | man (75 steps/min, heavier, lower); sets pace and weight left at default"),
      mood=("neutral", "neutral|happy (faster, louder, regular)|sad (slow, soft, uneven)|angry (fast, loud, heavy, uneven)|tender (slow, soft, even)"),
+     speed=(0.0, "m/s of travel, with pace 0: the step rate that goes with it (people: 105 steps/min at 1.31 m/s, rising as speed^0.5; trot, gallop: the stride rate of a `mass` kg animal at that speed); 0 = gait default"),
+     snow_depth=(0.0, "cm of snow under the foot (snow only): 6 dB more under 500 Hz per decade of depth against 5 cm; 0 = off"),
+     rhythm=("fractal", "fractal | ar9 (interval noise from the order-9 autoregressive walking series)"),
+     incline=(0.0, "grade of the ground, rise / run: uphill (> 0) puts the weight on the ball of the foot, downhill (< 0) on the heel (0.15 = 15 %)"),
+     accel=(0.0, "-0.5..0.5: speeding up puts the weight on the ball of the foot, braking on the heel"),
+     species=("", "'' | horse | mouse | dog: trot / gallop at `speed` m/s with the measured stride rate of that animal (a + b v), when pace is 0"),
      seed=(0, "variation"))
 def footsteps(sr=DEFAULT_SR, ground="wood", gait="walk", pace=0.0, steps=0, weight=1.0, shoe="default",
-              variation=0.5, temperature=-8.0, mass=0.0, stop=0, seed=0, walker="", mood="neutral"):
+              variation=0.5, temperature=-8.0, mass=0.0, stop=0, seed=0, walker="", mood="neutral", speed=0.0, snow_depth=0.0,
+              rhythm="fractal", incline=0.0, accel=0.0, species=""):
     _choice(ground, GROUNDS, "ground")
+    if species and not pace and gait in _STRIDE:
+        pace = 240.0 * stride_hz(species, speed)
     _choice(shoe, SHOES, "shoe")
     _choice(mood, MOODS, "mood")
+    if speed and not pace:
+        pace = speed_pace(gait, speed, mass)
     if walker:
         _choice(walker, WALKERS, "walker")
         wp, ww = WALKERS[walker]
@@ -2057,7 +2270,7 @@ def footsteps(sr=DEFAULT_SR, ground="wood", gait="walk", pace=0.0, steps=0, weig
         weight = weight * mw
     if mass and not pace and gait in _STRIDE:
         pace = stride_pace(gait, mass)
-    times = footsteps_plan(gait, pace, steps, variation, seed=seed, stop=stop)
+    times = footsteps_plan(gait, pace, steps, variation, seed=seed, stop=stop, rhythm=rhythm)
     if gait in _QUAD and shoe == "default":
         shoe = "hoof"
     weight = float(np.clip(weight, 0.4, 3.0))
@@ -2066,7 +2279,8 @@ def footsteps(sr=DEFAULT_SR, ground="wood", gait="walk", pace=0.0, steps=0, weig
     end = 0
     for i, t in enumerate(times):
         y = _step(ground, i, gait, ioi, weight, shoe, float(np.clip(variation, 0, 1)), seed,
-                  float(np.clip(temperature, -40.0, 10.0)))
+                  float(np.clip(temperature, -40.0, 10.0)), float(max(snow_depth, 0.0)), float(np.clip(accel, -0.5, 0.5)),
+                  float(np.clip(incline, -0.17, 0.17)))
         _place(out, y, float(t))
         end = max(end, int(t * KSR) + len(y))
     peak = 0.7 * 10.0 ** (min(mdb, 3.0) / 20.0) if gait not in _QUAD else 0.7

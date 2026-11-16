@@ -42,3 +42,10 @@ sr, **kw)` accepts.
   `dpw_order_for(f0, sr)` gives the lowest DPW order (2-6) that stays clean up to f0, 0 if none does.
 
 Default sounds changed in this version: everything built on `triangle`, and `saw`, `pulse`, `square` above 2 kHz.
+
+## Added in 1.3.0
+
+- `fat_pulse` (pad, from Farnell's MEX): the ratio of two raised cosines; `ratio` 2.01 beats slowly, 2 is fixed.
+## Newer options (1.3.0)
+
+`osc.pulse_train` (gaussian, hann or sine pulses, a carrier, two copies); `osc.gendyn`.

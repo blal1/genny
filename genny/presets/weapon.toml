@@ -1,0 +1,277 @@
+schema = "genny.preset/1"
+family = "weapon"
+# cart: a cartridge preset. barrel: m. rate: rounds/s (0 = one at a time). body: scale of the gun body's ring.
+# action: semi_gas | open_bolt | manual | revolver | lock. muzzle: bare | brake | flash_hider | can.
+# lock: [delay ms, kind]. cadence: rounds/s of a clip rifle. clip: rounds per clip. suppressed: 0..1.
+
+[pistol_9mm]
+cart = "9x19"
+barrel = 0.118
+rate = 0.0
+action = "semi_gas"
+body = 1.4
+muzzle = "bare"
+
+[pistol_9mm_sub]
+cart = "9x19_sub"
+barrel = 0.118
+rate = 0.0
+action = "semi_gas"
+body = 1.4
+muzzle = "bare"
+
+[pistol_45]
+cart = "45acp"
+barrel = 0.127
+rate = 0.0
+action = "semi_gas"
+body = 1.2
+muzzle = "bare"
+
+[pistol_40]
+cart = "40sw"
+barrel = 0.102
+rate = 0.0
+action = "semi_gas"
+body = 1.3
+muzzle = "bare"
+
+[pistol_10mm]
+cart = "10mm"
+barrel = 0.117
+rate = 0.0
+action = "semi_gas"
+body = 1.3
+muzzle = "bare"
+
+[pistol_22]
+cart = "22lr"
+barrel = 0.508
+rate = 0.0
+action = "semi_gas"
+body = 1.6
+muzzle = "bare"
+
+[machine_pistol]
+cart = "9x19"
+barrel = 0.117
+rate = 22.5
+action = "open_bolt"
+body = 1.4
+muzzle = "bare"
+
+[revolver_357]
+cart = "357"
+barrel = 0.076
+rate = 0
+action = "revolver"
+body = 1.3
+muzzle = "bare"
+
+[revolver_38]
+cart = "38spl"
+barrel = 0.051
+rate = 0
+action = "revolver"
+body = 1.35
+muzzle = "bare"
+
+[smg_mp5]
+cart = "9x19"
+barrel = 0.225
+rate = 13.3
+action = "semi_gas"
+body = 1.25
+muzzle = "bare"
+
+[smg_mp5sd]
+cart = "9x19_sub"
+barrel = 0.146
+rate = 13.3
+action = "semi_gas"
+body = 1.25
+muzzle = "bare"
+suppressed = 1.0
+
+[smg_uzi]
+cart = "9x19"
+barrel = 0.26
+rate = 10.0
+action = "open_bolt"
+body = 1.25
+muzzle = "bare"
+
+[smg_45]
+cart = "45acp"
+barrel = 0.2
+rate = 12.0
+action = "open_bolt"
+body = 1.15
+muzzle = "bare"
+
+[ar15]
+cart = "556"
+barrel = 0.508
+rate = 13.0
+action = "semi_gas"
+body = 1.1
+muzzle = "bare"
+
+[m4_short]
+cart = "556"
+barrel = 0.368
+rate = 13.0
+action = "semi_gas"
+body = 1.15
+muzzle = "bare"
+
+[ak47]
+cart = "762x39"
+barrel = 0.415
+rate = 10.0
+action = "semi_gas"
+body = 1.0
+muzzle = "bare"
+wood = true
+
+[battle_rifle]
+cart = "762x51"
+barrel = 0.559
+rate = 10.0
+action = "semi_gas"
+body = 1.0
+muzzle = "bare"
+
+[m1_garand]
+cart = "762x51"
+barrel = 0.61
+rate = 0
+action = "semi_gas"
+body = 0.95
+muzzle = "bare"
+wood = true
+clip = 8
+cadence = 0.75
+
+[blackout]
+cart = "300blk"
+barrel = 0.406
+rate = 13.0
+action = "semi_gas"
+body = 1.05
+muzzle = "bare"
+
+[blackout_sub]
+cart = "300blk_sub"
+barrel = 0.406
+rate = 13.0
+action = "semi_gas"
+body = 1.05
+muzzle = "bare"
+
+[sniper_308]
+cart = "308"
+barrel = 0.61
+rate = 0
+action = "manual"
+body = 0.95
+muzzle = "bare"
+
+[sniper_50]
+cart = "50bmg"
+barrel = 1.143
+rate = 0
+action = "manual"
+body = 0.5
+muzzle = "brake"
+
+[sniper_22]
+cart = "22lr_sub"
+barrel = 0.508
+rate = 0
+action = "manual"
+body = 1.6
+muzzle = "bare"
+
+[shotgun_buck]
+cart = "12_buck"
+barrel = 0.457
+rate = 0
+action = "manual"
+body = 0.75
+muzzle = "bare"
+
+[shotgun_slug]
+cart = "12_slug"
+barrel = 0.457
+rate = 0
+action = "manual"
+body = 0.75
+muzzle = "bare"
+
+[shotgun_short]
+cart = "12_buck"
+barrel = 0.356
+rate = 0
+action = "manual"
+body = 0.8
+muzzle = "bare"
+
+[lmg_m249]
+cart = "556"
+barrel = 0.465
+rate = 14.2
+action = "open_bolt"
+body = 0.9
+muzzle = "bare"
+
+[gpmg_pkm]
+cart = "762x54"
+barrel = 0.605
+rate = 11.7
+action = "open_bolt"
+body = 0.8
+muzzle = "bare"
+
+[hmg_m2]
+cart = "50bmg"
+barrel = 1.143
+rate = 9.0
+action = "semi_gas"
+body = 0.5
+muzzle = "bare"
+
+[minigun]
+cart = "762x51"
+barrel = 0.559
+rate = 50.0
+action = "manual"
+body = 0.9
+muzzle = "bare"
+
+[flintlock]
+cart = "musket"
+barrel = 0.99
+rate = 0
+action = "lock"
+body = 0.6
+muzzle = "bare"
+lock = [35.0, "flint"]
+
+[matchlock]
+cart = "musket"
+barrel = 1.0
+rate = 0
+action = "lock"
+body = 0.6
+muzzle = "bare"
+lock = [60.0, "match"]
+
+[percussion]
+cart = "musket"
+barrel = 1.0
+rate = 0
+action = "lock"
+body = 0.6
+muzzle = "bare"
+lock = [5.0, "cap"]

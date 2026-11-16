@@ -357,3 +357,18 @@ A steel-string riff on `ks_string` with a sympathetic string:
 - Like `group`, a `scatter` has a `layers` key of its own, so put it inside a spec's `layers` list, not at the top level.
 - A generated layer starts and ends as its instruments do; several existing instruments carry a DC
   offset, which this module does not remove.
+
+## Added in 1.3.0
+
+- `p_repeat`; `humanize: "hennig"` (15 ms); mode `riff` (riffology); `write_midi`; `rhythm: "voss"` (durations in
+  1/f like the pitches); `voss` uses about log2 n generators (at least 4) so long melodies keep the 1/f slope.
+- `ritard` (q 3, v_end 0.3, x = 1 at the attack of the last note).
+## Newer options (1.3.0)
+
+- `emotion` is angry, happy, sad, tender, fear or solemn (tempo as 1/IOI and levels -6 / +8 / +3 dB after Bresin and Friberg 2000).
+- `vel_law`, `vel_range`, `gate` for the bass, chords, pad and counter roles; layer `figure` (`FIGURES`); `loop_form`
+  (`interrupted` rotates the progression and doubles the chords, `answer_question` removes the forced resolution at the loop end);
+  `answer` (a motif operation); `ride_data="pickup"`; `bass_ms`; `phrase_shape="todd"`; `kth_1983`; `humanize` takes `beta`,
+  `offset_ms`, a dict, and `bar:N`; `genre_styles`; `INTENSITY_FLOOR` (an intensity under 0.01 mutes all parts); 36 `STYLES`
+  with `atari_vcs`; stinger `comma`; `seq` takes `pedal` and `articulation`.
+- `humanize=1` is 6 ms at 96 bpm, the just noticeable timing difference (orders of magnitude of detection, B64).

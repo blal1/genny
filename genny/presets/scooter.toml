@@ -1,0 +1,9 @@
+schema = "genny.preset/1"
+family = "scooter"
+# rpm: where the CVT holds the crank.
+
+[2t]
+rpm = 7000.0
+
+[4t]
+rpm = 6000.0

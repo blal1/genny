@@ -252,16 +252,41 @@ def bell_length_correction(k: float, L_h: float, h: float = 0.085) -> float:
     return -L_h + math.atan(k * h * math.tan(L_h / h)) / k
 
 
-def _cyl_tmatrix(L: float, a: float, f: float, t_c: float = 20.0) -> np.ndarray:
-    G = complex(bore_wavenumber(f, a, t_c))
+def _cyl_tmatrix(L: float, a: float, f: float, t_c: float = 20.0, bore: str = "keefe") -> np.ndarray:
+    if bore == "visco":
+        G = complex(float(visco_alpha(f, a)), 2 * math.pi * f / float(phase_velocity(f, a, t_c)))
+    else:
+        G = complex(bore_wavenumber(f, a, t_c))
     zc = RHO * air(t_c)["c"] / (math.pi * a * a)
     ch, sh = np.cosh(G * L), np.sinh(G * L)
     return np.array([[ch, zc * sh], [sh / zc, ch]], complex)
 
 
-def tmm_impedance(length: float, a: float, holes, freqs, opens=None, t_c: float = 20.0) -> np.ndarray:
+def _hole_impedances(a: float, b: float, t: float, f: float, open_: bool, model: str, t_c: float, v0: float):
+    c = air(t_c)["c"]
+    if model == "dubos":
+        d = dubos_hole(b, a, t, f, open_, c)
+        za = RHO * c / (math.pi * b * b) * (-1j * 2 * math.pi * f / c * d["la"])
+        zs = d["Zs"]
+    else:
+        hh = keefe_hole(a, b, t, f, open_)
+        za, zs = hh["Za"], hh["Zs"]
+    if v0 > 0.0 and open_:
+        ra, rh = hole_nonlinear_resistance(v0, b, a, c)
+        za, zs = za + ra, zs + rh
+    return za, zs
+
+
+def tmm_impedance(length: float, a: float, holes, freqs, opens=None, t_c: float = 20.0, bore: str = "keefe",
+                  hole_model: str = "keefe", v0: float = 0.0) -> np.ndarray:
     """Input impedance of a cylinder of radius a with side holes [(x from the input, b, t), ...] (open = ``opens``,
-    default all open), unflanged end; transfer matrices with Keefe's hole."""
+    default all open), unflanged end; transfer matrices with Keefe's hole. ``bore`` "visco": the boundary-layer
+    attenuation and phase velocity of `visco_alpha` / `phase_velocity` instead of the empirical wavenumber;
+    ``hole_model`` "dubos": the series and shunt lengths of `dubos_hole`; ``v0`` (m/s) the acoustic velocity that
+    adds the quadratic loss of the open end (`end_nonlinear_impedance`) and of the open holes
+    (`hole_nonlinear_resistance`)."""
+    if bore not in ("keefe", "visco") or hole_model not in ("keefe", "dubos"):
+        raise ValueError("tmm_impedance: bore keefe|visco, hole_model keefe|dubos")
     freqs = np.atleast_1d(np.asarray(freqs, float))
     holes = sorted(holes)
     opens = [True] * len(holes) if opens is None else list(opens)
@@ -269,15 +294,15 @@ def tmm_impedance(length: float, a: float, holes, freqs, opens=None, t_c: float 
     out = np.empty(freqs.size, complex)
     for i, f in enumerate(freqs):
         k = 2 * math.pi * f / air(t_c)["c"]
-        zl = zc * (0.25 * (k * a) ** 2 + 1j * k * 0.6133 * a)
+        zl = zc * (0.25 * (k * a) ** 2 + 1j * k * 0.6133 * a) + end_nonlinear_impedance(v0, zc)
         M = np.eye(2, dtype=complex)
         x0 = 0.0
         for (x, b, t), o in zip(holes, opens):
-            M = M @ _cyl_tmatrix(x - x0, a, f, t_c)
-            hh = keefe_hole(a, b, t, f, o)
-            M = M @ tonehole_tmatrix(hh["Za"], hh["Zs"])
+            M = M @ _cyl_tmatrix(x - x0, a, f, t_c, bore)
+            za, zs = _hole_impedances(a, b, t, f, o, hole_model, t_c, v0)
+            M = M @ tonehole_tmatrix(za, zs)
             x0 = x
-        M = M @ _cyl_tmatrix(max(length - x0, 1e-6), a, f, t_c)
+        M = M @ _cyl_tmatrix(max(length - x0, 1e-6), a, f, t_c, bore)
         out[i] = (M[0, 0] * zl + M[0, 1]) / (M[1, 0] * zl + M[1, 1])
     return out
 
@@ -347,6 +372,20 @@ def shock_delay(p, B: float, L_ecl: float, c0: float = C0, rho: float = RHO):
     return -(GAMMA + 1.0) / (2.0 * c0 * c0) * B * L_ecl * np.asarray(p, float) / (rho * c0)
 
 
+def brass_shock(y, inst: str, peak_pa: float, sr: int = SR) -> np.ndarray:
+    """Nonlinear propagation along the bore of ``inst``: each sample of the record, scaled to a peak of ``peak_pa`` Pa at the
+    bell, arrives `shock_delay` early (B and L_ecl of the instrument), so the compressions overtake the rarefactions and
+    the wave steepens (a brassy edge). Where samples would cross they merge."""
+    y = np.asarray(y, float)
+    m = float(np.max(np.abs(y))) if y.size else 0.0
+    if m <= 0.0 or peak_pa <= 0.0:
+        return y
+    tg = np.arange(y.size) / sr
+    d = shock_delay(y / m * peak_pa, BRASSINESS[inst], 1.1 * BRASS_LENGTH[inst])
+    ta = np.maximum.accumulate(tg + d) + 1e-12 * np.arange(y.size) / sr
+    return np.interp(tg, ta, y)
+
+
 def local_speed(u, c0: float = C0):
     """dx/dt = c0 + (gamma + 1) u / 2."""
     return c0 + 0.5 * (GAMMA + 1.0) * np.asarray(u, float)
@@ -405,8 +444,8 @@ TRUMPET_ZIN = ((87.0, 43.7), (232.0, 35.2), (341.0, 46.4), (457.0, 55.7), (572.0
                (800.0, 44.5), (913.0, 28.5))
 TRUMPET_ZIN_Q = 25.0
 # f_peak, f_lip, f_sound, p0 Pa of the stable oscillations on modes II-VI.
-TRUMPET_OPTIMAL = ((232.0, 250.0, 236.0, 2000.0), (341.0, 370.0, 342.0, 2500.0), (457.0, 490.0, 453.0, 3000.0),
-                   (572.0, 580.0, 563.0, 3500.0), (686.0, 680.0, 673.0, 4000.0))
+TRUMPET_OPTIMAL = ((232.0, 250.0, 236.0, 2500.0), (341.0, 370.0, 342.0, 3000.0), (457.0, 490.0, 453.0, 3500.0),
+                   (572.0, 580.0, 563.0, 4000.0), (686.0, 680.0, 673.0, 5000.0))
 LIP2D = dict(c=340.0, rho=1.2, S_cup=2.3e-4, b=7.0e-3, d=2.0e-3, joint=(0.0, 4.0e-3), x_eq=1.0e-3, y_eq=2.0e-6,
              Q_open=3.0, Q_closed=0.5, contact=3.0)
 
@@ -452,11 +491,25 @@ LIP_Q_LATEX = (8.0, 10.0)
 LIP_Q_GLYCERINE = (4.0, 6.0)
 
 
-def lip_params(embouchure: float = 0.5) -> dict:
-    """Table B interpolated, embouchure 0 = loosest (index 0) .. 1 = tightest (index 19)."""
+LIP_Q_MATERIAL = dict(human=LIP_Q_HUMAN, latex=LIP_Q_LATEX, glycerine=LIP_Q_GLYCERINE)
+
+
+def lip_params(embouchure: float = 0.5, preset: str = "") -> dict:
+    """Table B interpolated, embouchure 0 = loosest (index 0) .. 1 = tightest (index 19). ``preset`` "slack", "medium" or
+    "tight": b, H0 and the measured lip modes of `LIP_TABLE_1` replace the interpolated ones (the second mode stays
+    interpolated where the table has none)."""
     i = float(np.clip(embouchure, 0.0, 1.0)) * 19.0
     r = [float(np.interp(i, np.arange(20), LIP_TABLE_B[:, j])) for j in range(8)]
-    return dict(H0=r[0], b=r[1], fL1=r[2], QL1=r[3], inv_mu1=r[4], fL2=r[5], QL2=r[6], inv_mu2=r[7])
+    out = dict(H0=r[0], b=r[1], fL1=r[2], QL1=r[3], inv_mu1=r[4], fL2=r[5], QL2=r[6], inv_mu2=r[7])
+    if preset:
+        if preset not in LIP_TABLE_1:
+            raise ValueError(f"lip preset {preset!r}: use {', '.join(LIP_TABLE_1)}")
+        t = LIP_TABLE_1[preset]
+        out.update(H0=t["H0"], b=t["b"])
+        for n, m in zip(("1", "2"), t["modes"][:2]):
+            if m is not None:
+                out["fL" + n], out["QL" + n], out["inv_mu" + n] = m
+    return out
 
 
 def lip_response(f, fL: float, QL: float, inv_mu: float):
@@ -558,15 +611,21 @@ def lip_buzz(dur: float, sr: int = SR, pressure: float = 3000.0, embouchure: flo
 
 
 def trombone_lip(freq: float, dur: float, sr: int = SR, vel: float = 0.8, embouchure: float = 0.5,
-                 inward: bool = False) -> np.ndarray:
+                 inward: bool = False, lips: str = "", lip_q: str = "", hysteresis: bool = False,
+                 shock: float = 0.0) -> np.ndarray:
     """A trombone note on the one-mass lip: the slide and mode that sound ``freq`` (modes 4-6 measured; others
     on the harmonic series), lip Q and 1/mu from Table B (outward lip, or the inward one), lip frequency set
     under the note for an outward lip and above it for an inward one, mouth pressure 1.2-2 times the linear
     threshold. The lip pulls the note off the bore peak (an outward lip sharp, an inward one flat): one tuning
     pass moves the slide, all bore modes and the lip by the measured ratio. Radiated pressure (first difference
-    of the mouthpiece pressure), peak 1."""
+    of the mouthpiece pressure), peak 1. ``lips`` "slack", "medium" or "tight": the measured lips of `LIP_TABLE_1`;
+    ``lip_q`` "human", "latex" or "glycerine": the outward lip's Q of that lip material; ``hysteresis``: the note
+    stops when the mouth pressure falls to `LIP_HYSTERESIS` x its threshold (`lip_sounding`); ``shock`` Pa:
+    the peak pressure at the bell that steepens the wave (`brass_shock`)."""
     from .waveguides import measure_f0
-    lp = lip_params(embouchure)
+    lp = lip_params(embouchure, lips)
+    if lip_q:
+        lp["QL1"] = float(np.mean(LIP_Q_MATERIAL[lip_q]))
     best = None
     for n in (4, 5, 6):
         s = slide_for(freq, n)
@@ -591,6 +650,8 @@ def trombone_lip(freq: float, dur: float, sr: int = SR, vel: float = 0.8, embouc
     k = int(dur * sr)
     t = np.arange(k) / sr
     pm = Pt * (1.2 + 0.8 * float(np.clip(vel, 0.0, 1.0))) * np.clip(t / 0.03, 0.0, 1.0) * np.clip((dur - t) / 0.05, 0.0, 1.0)
+    if hysteresis:
+        pm = pm * lip_sounding(pm, Pt)
     p = lip_one_mass(pm, fL, QL, im, lp["b"], lp["H0"], modes, sr)
     seg = p[int(0.3 * k):int(0.8 * k)]
     mf = measure_f0(seg, freq) if seg.size > 256 and np.std(seg) > 1e-6 else 0.0
@@ -598,6 +659,8 @@ def trombone_lip(freq: float, dur: float, sr: int = SR, vel: float = 0.8, embouc
         r = freq / mf
         p = lip_one_mass(pm, fL * r, QL, im, lp["b"], lp["H0"], [(f * r, z, q) for f, z, q in modes], sr)
     y = np.diff(p, prepend=0.0)
+    if shock > 0.0:
+        y = brass_shock(y, "trombone", shock, sr)
     return y / (np.max(np.abs(y)) + 1e-12)
 
 
@@ -689,11 +752,11 @@ def lip_ratio(f: float) -> float:
     return float(np.interp(f, fs, r))
 
 
-def trumpet_lip2d(freq: float, dur: float, sr: int = SR, vel: float = 0.8, tune: bool = True) -> np.ndarray:
+def trumpet_lip2d(freq: float, dur: float, sr: int = SR, vel: float = 0.8, tune: bool = True, shock: float = 0.0) -> np.ndarray:
     """A trumpet note on the 2D lip: the bore is Table II transposed so that its nearest mode (II-VIII) sits on
     ``freq`` (the valves), the lip at the optimal f_lip / f_sound, blowing pressure that of the mode in
     Table III scaled by ``vel`` (2-5 kPa); one tuning pass corrects the transposition. Radiated pressure
-    (first difference), peak 1."""
+    (first difference), peak 1. ``shock`` Pa: the peak pressure at the bell that steepens the wave (`brass_shock`)."""
     from .waveguides import measure_f0
     peaks = [f for f, _ in TRUMPET_ZIN[1:]]
     j = int(np.argmin([abs(math.log(freq / f)) for f in peaks]))
@@ -715,6 +778,8 @@ def trumpet_lip2d(freq: float, dur: float, sr: int = SR, vel: float = 0.8, tune:
             break
         k *= freq / mf
     y = np.diff(p, prepend=0.0)
+    if shock > 0.0:
+        y = brass_shock(y, "trumpet", shock, SR)
     if sr != SR:
         y = np.interp(np.arange(int(dur * sr)) * SR / sr, np.arange(n), y)
     return y / (np.max(np.abs(y)) + 1e-12)
@@ -731,6 +796,8 @@ REED_PLAYED = dict(k=1.24e7, S=1.77e-4, ym=2.55e-4, pm=1671.0, lam=0.012, m=0.05
 SAX_REED = dict(Mr=0.269 * 1.77e-4, omega0=4224.0, sigma0=1858.5, Sr=1.77e-4)
 # Alto saxophone (Meyer n. 8 mouthpiece): reed mass per area, f_r, damping, mouthpiece volume, missing cone volume.
 SAX_ALTO = dict(mu_r=0.0475, fr=1500.0, gr_over_wr=0.6, Vm=8.1e-6, Vmissing=9.75e-6)
+SAX_ALTO_REED = dict(Mr=SAX_ALTO["mu_r"] * SAX_REED["Sr"], omega0=2 * math.pi * SAX_ALTO["fr"],
+                     sigma0=0.5 * SAX_ALTO["gr_over_wr"] * 2 * math.pi * SAX_ALTO["fr"], Sr=SAX_REED["Sr"])
 SAX_ALTO_HARMONICS = (138.6, 280.2, 424.6, 573.5)
 SAX_SOPRANO_PEAKS = (207.0, 411.0, 606.0, 824.0, 1063.0, 1305.0, 1561.0, 1801.0, 2038.0)
 SAX_GEOMETRY = dict(soprano=dict(L=0.710, half_angle=1.74), tenor=dict(L=1.490, half_angle=1.52),
@@ -784,12 +851,16 @@ def playable(y, p_mouth: float, f0: float, f_res: float) -> bool:
     return bool(a >= p_mouth / 6.0 and abs(1200.0 * math.log2(f0 / f_res)) <= 200.0)
 
 
+CLARINET_BEND = dict(p=-1.95, pp=5.71, f=32.87, ff=-1.39, pf=13.12)
+
+
 def clarinet_bend_cents(p_kpa: float, force_n: float, p_ref: float = 4.5, f_ref: float = 1.0) -> float:
     """Pitch deviation (cents) of a clarinet note with blowing pressure (kPa) and lip force (N) around (p_ref,
     f_ref): with a firm lip the note rises with P and F; with a light lip it first falls with P, then rises."""
+    c = CLARINET_BEND
     dp = float(p_kpa) - p_ref
     df = float(force_n) - f_ref
-    return 6.0 * df * dp + 3.0 * dp * dp + 10.0 * df
+    return c["p"] * dp + c["pp"] * dp * dp + c["f"] * df + c["ff"] * df * df + c["pf"] * dp * df
 
 
 # Buffet Crampon clarinet: bore (x mm from the reed tip, diameter mm), holes (n, l mm, r mm, h mm).
@@ -947,11 +1018,15 @@ def dynamic_threshold(a: float, p_stat: float, alpha: float = 0.85) -> float:
 
 
 def register_track(p, sr: float, p12: float = REGISTER_G4["p12"], p21: float = REGISTER_G4["p21"],
-                   alpha: float = 0.85, skill: float = 0.0) -> np.ndarray:
+                   alpha: float = 0.85, skill: float = 0.0, fingering: str = "") -> np.ndarray:
     """Register (1 or 2) along a blowing pressure p (Pa, per sample). A change happens when
     zeta = integral alpha sqrt(|p - Pstat|) dt past the static threshold reaches 1, so a fast crescendo overshoots
     the static threshold by (3 a / 2 alpha)^(2/3). ``skill`` 0..1 widens the hysteresis as a flutist does,
-    by 2.7 times at 1 (measured 169-380 % wider)."""
+    by 2.7 times at 1 (measured 169-380 % wider). ``fingering`` "G4" or "F4": the measured thresholds of that
+    fingering instead of ``p12``, ``p21`` and ``alpha``."""
+    if fingering:
+        f = {"G4": REGISTER_G4, "F4": REGISTER_F4}[fingering]
+        p12, p21, alpha = f["p12"], f["p21"], f["alpha"]
     p = np.asarray(p, float)
     w = (p12 - p21) * (1.0 + 2.7 * float(np.clip(skill, 0.0, 1.0)))
     up, dn = p21 + w, p21
@@ -1046,17 +1121,29 @@ def _auvray_kernel(u0, fs_int, os, wn, en, yn, W, h, H, cjd, alpha_h, y_off, avc
 def auvray_recorder(freq: float, dur: float, sr: int = SR, u0: float | None = None, attack: float = 0.03,
                     release: float = 0.05, labium_offset: float | None = None, edge: str = "sharp",
                     stopped: bool = False, wet: bool = False, attack_impulse: float = 0.0, noise: float = 0.0,
-                    seed: int = 0, os: int = 6) -> np.ndarray:
+                    seed: int = 0, os: int = 6, regime: int = 0, recorder: str = "zenon", trajectory: float = 0.0) -> np.ndarray:
     """Flue instrument as three modes of the window admittance Y = sum j w Y_n / (w_n^2 - w^2 + j eps_n w_n w)
     (the Zen-On recorder's, scaled to ``freq``) driven by the jet: eta(W, t) = e^(alpha_i W) h v_ac(t - W/cp) / u0,
     alpha_i = 0.3 / h, cp = 0.4 u0; jet drive rho delta_d b u0 / W d/dt tanh((eta - y_off) / b), delta_d =
     4 sqrt(2 h W) / pi, b = 2h/5; vena-contracta loss -rho v|v| / (2 alpha_vc^2) (0.6; 0.6 in, 1.0 out for a
-    ``edge="thick"`` edge). u0 defaults to the optimum of the first regime, 9 f W. Turbulent above Re = u0 h / nu
+    ``edge="thick"`` edge). u0 defaults to the optimum of the first regime, 9 f W; ``regime`` n > 0 takes `optimal_jet_velocity` of regime n (n = 2 overblows). Turbulent above Re = u0 h / nu
     of 2500 (the convection speed halves by 3000). ``stopped``: odd modes of a closed pipe; ``wet``: a wet bore,
     +1.5 % on the modes and peaks 9 % higher; ``attack_impulse`` K: a pressure pulse K rho u0^2 / 2 when the jet
-    first reaches the edge; ``labium_offset`` in units of h (default 0.1 mm). Radiated pressure (d v_ac / dt), peak 1."""
+    first reaches the edge; ``labium_offset`` in units of h (default 0.1 mm). ``recorder`` "yrt304": the flue height and
+    the lip-to-edge distance of that recorder (its window modes stay the Zen-On's); ``trajectory`` Re: the flutists'
+    operating line (`jet_trajectory`), W / h = (3500 - Re) / 250 and, with ``u0`` unset, u0 = Re nu / h.
+    Radiated pressure (d v_ac / dt), peak 1."""
     Z = RECORDER_ZENON
     W, h, H = Z["W"], Z["h"], Z["H"]
+    if recorder == "yrt304":
+        W, h = RECORDER_YRT304["W"], RECORDER_YRT304["h"][0]
+    elif recorder != "zenon":
+        raise ValueError("auvray_recorder recorder: zenon or yrt304")
+    if trajectory > 0.0:
+        tr = jet_trajectory(trajectory)
+        W = tr["W_over_h"] * h
+        if u0 is None:
+            u0 = tr["Re"] * NU / h
     k = freq / Z["f1"]
     if stopped:
         wn = np.array([Z["omega"][0] * k * (2 * i + 1) for i in range(3)])
@@ -1067,7 +1154,7 @@ def auvray_recorder(freq: float, dur: float, sr: int = SR, u0: float | None = No
     if wet:
         wn = wn * 1.015
         en = en / 1.09
-    U0 = 9.0 * freq * W if u0 is None else float(u0)
+    U0 = float(u0) if u0 is not None else (optimal_jet_velocity(freq, W, int(regime) - 1, Z["c_jd"]) if regime > 0 else 9.0 * freq * W)
     Re = reynolds(U0, h)
     cjd = Z["c_jd"] * (1.0 - 0.5 * float(np.clip((Re - 2500.0) / 500.0, 0.0, 1.0)))
     yoff = Z["y0"] if labium_offset is None else float(labium_offset) * h
@@ -1131,14 +1218,20 @@ def _modal_clar_kernel(gam, zeta, fs_int, os, wn, yn, c_l):
 
 def modal_clarinet(freq: float, dur: float, sr: int = SR, n_modes: int = 6, zeta: float = 0.35, gamma: float = 0.39,
                    eta: float = 0.02, c: float = 340.0, attack: float = 0.02, release: float = 0.05,
-                   os: int = 4) -> np.ndarray:
+                   os: int = 4, peaks=None) -> np.ndarray:
     """Clarinet as ``n_modes`` resonators of a cylinder (l = c / 4f): p_n'' + 2 Y_n (c/l) p_n' + w_n^2 p_n =
     (2c/l)[A + 2B P + 3C P^2] P', P = sum p_n, w_j = (2j - 1) 2 pi c / 4l, Y_j = 1.3 eta sqrt(2j - 1), with the
-    reed's cubic flow (A, B, C from zeta, gamma). A non-beating reed. Radiated pressure (first difference), peak 1."""
+    reed's cubic flow (A, B, C from zeta, gamma). A non-beating reed. Radiated pressure (first difference), peak 1.
+    ``peaks``: the resonance frequencies (Hz) of a bore that is not a cylinder (`SAX_SOPRANO_PEAKS`, `SAX_ALTO_HARMONICS`)
+    replace the odd harmonics of ``freq``; the damping then grows as sqrt(f_n / f_1)."""
     l = c / (4.0 * freq)
     j = np.arange(1, n_modes + 1)
     wn = (2 * j - 1) * 2 * math.pi * c / (4 * l)
     yn = 1.3 * eta * np.sqrt(2 * j - 1)
+    if peaks is not None:
+        pk = np.asarray(peaks, float)
+        wn = 2 * math.pi * pk
+        yn = 1.3 * eta * np.sqrt(pk / pk[0])
     n = int((dur + release) * sr)
     t = np.arange(n) / sr
     g = gamma * np.clip(t / max(attack, 1e-3), 0.0, 1.0) * np.clip((dur + release - t) / max(release, 1e-3), 0.0, 1.0)
@@ -1149,6 +1242,22 @@ def modal_clarinet(freq: float, dur: float, sr: int = SR, n_modes: int = 6, zeta
 
 # ------------------------------------------------------------------------------------------------ thresholds, directivity
 # Lip reed: the note dies when the mouth pressure falls to these fractions of its onset threshold (three embouchures).
+LIP_TWO_RES = {350.0: (96.0, 111.0), 390.0: (97.0, 117.0)}     # mouth pressure Pa: (outward, inward) lip resonance Hz
+LIP_Q_OUT, LIP_Q_IN = 1.7, (3.0, 5.0)
+
+
+def lip_two_resonance(pm: float) -> tuple[float, float]:
+    """(f_outward, f_inward) Hz of the two lip resonances at mouth pressure `pm` Pa, linear between the 350 and 390 Pa
+    measurements and held beyond; the inward one is the one `waveguides.brass(inward=, inward_ratio=f_in/f_out)` takes."""
+    ps = sorted(LIP_TWO_RES)
+    return tuple(float(np.interp(pm, ps, [LIP_TWO_RES[q][i] for q in ps])) for i in (0, 1))
+
+
+def lip_volume_freq(ml: float) -> float:
+    """Lip-cavity resonance Hz from the mouth volume: 500 Hz at 9 ml, 460 Hz at 12 ml, f ~ V^-0.29."""
+    return 500.0 * (9.0 / float(ml)) ** 0.29
+
+
 LIP_HYSTERESIS = (0.927, 0.964, 0.981)
 
 

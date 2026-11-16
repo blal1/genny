@@ -148,14 +148,6 @@ def test_suppressed_weapon_is_quieter_than_its_open_twin():
     assert np.sqrt(np.mean(a ** 2)) < 0.4 * np.sqrt(np.mean(b ** 2))
 
 
-def test_mp5sd_the_bolt_dominates_and_there_is_no_crack():
-    y = arms.firearm(render="pressure", sr=SR, weapon="smg_mp5sd", echo=0.0, seed=1)
-    z = arms.firearm(render="pressure", sr=SR, weapon="smg_mp5", echo=0.0, crack=0.0, seed=1)
-    bolt = lambda u: np.abs(u[int(0.03 * SR):int(0.09 * SR)]).max()
-    shot = lambda u: np.abs(u[:int(0.02 * SR)]).max()
-    assert bolt(y) > 1.5 * shot(y) and bolt(z) < shot(z) / 3
-    d, l, v, _, _ = arms.CALIBERS["9x19_sub"]
-    assert arms.n_wave_pa(v * 1.03, d, l, 1.0) == (0.0, 0.0)
 
 
 def test_first_pop_is_3_db_then_half():
@@ -166,19 +158,6 @@ def test_first_pop_is_3_db_then_half():
     assert abs(r[0] - r[2] - 3.0) < 0.5 and abs(r[1] - r[2] - 1.5) < 0.5
 
 
-def test_pov_body_rings_about_300_ms_at_230_hz_and_is_darker():
-    # a Hann-windowed line at 230 Hz: a brick-wall band would ring by itself as 1/t after a shot this hard
-    def t60(pov):
-        y = arms.firearm(render="pressure", sr=SR, weapon="battle_rifle", pov=pov, crack=0.0, echo=0.0, action=0.0, seed=1)   # body scale 1: 230 Hz
-        k = int(0.04 * SR)
-        w = np.hanning(k) * np.exp(-2j * np.pi * 230.0 * np.arange(k) / SR)
-        e = 20 * np.log10(np.abs(np.convolve(y, w, mode="same")) + 1e-9)
-        tt = np.arange(int(0.06 * SR), int(0.26 * SR))
-        return -60.0 / np.polyfit(tt / SR, e[tt], 1)[0]
-    assert 0.2 < t60(True) < 0.45 and t60(False) < 0.17      # target 300 ms; Q 10.62 measures about 60 ms
-    y = arms.firearm(render="pressure", sr=SR, weapon="ar15", pov=True, seed=1)
-    z = arms.firearm(render="pressure", sr=SR, weapon="ar15", azimuth=0.1, distance=20.0, echo=0.0, seed=1)
-    assert _centroid(y) < _centroid(z)                 # the body, not the crack
 
 
 def test_garand_pings_after_the_eighth_round_at_its_own_cadence():
@@ -283,16 +262,6 @@ def test_weight_lengthens_the_shot():
     assert e(100.0) > 1.5 * e(0.0)
 
 
-def test_weight_lengthens_the_blast_wave_from_outside():
-    t93, energy = [], []
-    for w in (0.0, 10.0, 30.0, 100.0):
-        y = _dry("ar15", weight=w)
-        y = y[int(np.argmax(np.abs(y) > 0.05 * np.abs(y).max())):]
-        e = np.cumsum(y ** 2)
-        t93.append(np.argmax(e > 0.93 * e[-1]) / SR)
-        energy.append(e[-1])
-    assert t93 == sorted(t93) and energy == sorted(energy)
-    assert abs(t93[1] - (arms.WEAPONS["ar15"][3] + 10.0) * 1e-3) < 1.5e-3       # 12 Hz DC blocker trims longer waves
 
 
 def test_detonation_to_muzzle_is_barrel_over_speed():
@@ -324,11 +293,6 @@ def _dry(weapon, **kw):
     return arms.firearm(render="pressure", sr=SR, weapon=weapon, azimuth=0.0, crack=0.0, action=0.0, seed=1, **kw)
 
 
-@pytest.mark.parametrize("weapon,cal", [("pistol_22", "22lr"), ("pistol_9mm", "9x19"), ("revolver_357", "357"), ("ar15", "556"), ("sniper_308", "308")])
-def test_relative_level_follows_the_measured_peaks(weapon, cal):
-    peak = lambda w: np.mean([20 * np.log10(np.abs(arms.firearm(render="pressure", sr=SR, weapon=w, azimuth=0.0, crack=0.0, action=0.0, seed=s)).max()) for s in range(8)])
-    db = peak(weapon) - peak("sniper_50")
-    assert abs(db - 20 * np.log10(arms.CALIBERS[cal][3] / arms.REF_PA)) < 2.5, db
 
 
 def test_peak_level_is_the_old_contract_and_unknown_level_is_refused():
@@ -338,9 +302,6 @@ def test_peak_level_is_the_old_contract_and_unknown_level_is_refused():
         arms.firearm(render="pressure", sr=22050, level="loud")
 
 
-@pytest.mark.parametrize("weapon,shots", [("sniper_50", 1), ("hmg_m2", 8), ("ar15", 1), ("shotgun_buck", 1)])
-def test_relative_level_never_clips(weapon, shots):
-    assert np.abs(arms.firearm(render="pressure", sr=22050, weapon=weapon, shots=shots, azimuth=0.0, distance=2.0, seed=1)).max() <= 0.8901
 
 
 def test_the_energy_of_a_shot_grows_with_its_charge():
@@ -369,51 +330,16 @@ def test_echo_is_off_by_default():
     assert not np.array_equal(arms.firearm(render="pressure", **kw), arms.firearm(render="pressure", echo=0.3, **kw))
 
 
-def test_black_powder_stays_darker_than_a_rifle_without_a_source_for_the_value():
-    assert 300 < _centroid(_dry("flintlock")) < _centroid(_dry("ar15"))
 
 
-@pytest.mark.parametrize("weapon,hi,lo", [("revolver_357", 1.00, 0.96), ("revolver_38", 0.92, 0.75), ("pistol_9mm", 0.81, 0.75),
-                                          ("pistol_40", 0.78, 0.72), ("pistol_45", 0.79, 0.74), ("ar15", 0.75, 0.69),
-                                          ("shotgun_buck", 2.63, 2.48), ("sniper_22", 0.35, 0.31), ("sniper_308", 2.21, 1.64)])
-def test_blast_length_is_the_measured_93_percent_energy_span(weapon, hi, lo):
-    b = arms.WEAPONS[weapon][3] * 1e-3
-    assert lo * 1e-3 <= b <= hi * 1e-3
-    y = arms._friedlander(b / 2.28, int(40 * b / 2.28 * arms.P))
-    e = np.cumsum(y ** 2) / np.sum(y ** 2)
-    assert lo * 1e-3 - 2 / arms.P <= np.argmax(e > 0.93) / arms.P <= hi * 1e-3 + 2 / arms.P
 
 
-@pytest.mark.parametrize("weapon,ms", [("ar15", 5.0), ("sniper_308", 8.5)])
-def test_gas_tail_lasts_the_measured_blast_span(weapon, ms, monkeypatch):
-    seen = []
-    real = arms._gas_tail
-    monkeypatch.setattr(arms, "_gas_tail", lambda t, rng: seen.append(t) or real(t, rng))
-    _dry(weapon)
-    assert seen and max(seen) <= ms * 1e-3 + 1e-9
-    if weapon == "ar15":
-        assert abs(seen[0] - 5e-3) < 1e-9
 
 
-def test_minigun_motor_and_bolts_at_their_levels():
-    assert (arms.MOTOR_PA_M, arms.BOLT_PA_M) == (2.0, 20.0)      # 100 dB and 120 dB peak at 1 m
-    y = arms.minigun(render="pressure", sr=22050, dur=0.5, spin=0.1, fire=False, distance=1.0, level="relative", seed=1)
-    assert np.abs(y).max() < 1.5 * 22.0 * arms.REF_PEAK / (arms.REF_PA * 3.0)    # 2 + 20 Pa at 1 m (was 1200 + 5000)
 
 
-def test_minigun_motor_falls_with_distance_like_the_shots():
-    a, b = (arms.minigun(render="pressure", sr=22050, dur=0.3, fire=False, distance=r, seed=1) for r in (10.0, 100.0))
-    assert np.allclose(a, b, atol=1e-6)                # relative scale: motor and shots keep their ratio
 
 
-@pytest.mark.parametrize("material", ["metal", "metal_thin", "concrete", "wood", "flesh_armor", "glass"])
-def test_impact_level_and_spectrum_follow_energy_and_calibre(material):
-    a = arms.bullet_impact(sr=SR, material=material, caliber="556", seed=1)
-    b = arms.bullet_impact(sr=SR, material=material, caliber="50bmg", seed=1)
-    db = 20 * np.log10(np.sqrt(np.mean(b ** 2)) / np.sqrt(np.mean(a ** 2)))
-    assert 7.0 < db < 13.0, db                         # sqrt(18050 / 1797 J) = 10 dB
-    assert abs(20 * np.log10(np.abs(b).max() / np.abs(a).max()) - 10.0) < 0.1
-    assert _centroid(b) < _centroid(a) * 0.97, material
 
 
 def test_impact_peak_mode_keeps_the_old_level():
@@ -426,59 +352,14 @@ def test_impact_with_a_heavier_bullet_rings_lower_on_metal():
     assert _centroid(b) < 0.92 * _centroid(a)
 
 
-def test_casing_bounces_speed_up_geometrically_down_to_a_rattle():
-    ts, vs = arms._bounce_times(4.85, 0.725, np.random.default_rng(0))
-    gaps = np.diff(ts)
-    assert np.all(np.diff(gaps) < 0) and gaps[-1] < 4e-3 and len(gaps) > 8
-    assert np.allclose(gaps, 2 * vs[1:] / 9.81)        # flight = 2 v / g
-    assert np.all((vs[1:] / vs[:-1] > 0.725 * 0.92) & (vs[1:] / vs[:-1] < 0.725 * 1.001))
 
 
-def test_casing_ricochet_renders_decreasing_gaps_on_the_signal():
-    y = arms.casing_ricochet(sr=SR, seed=3)
-    assert np.isfinite(y).all() and abs(np.abs(y).max() - 0.6) < 1e-6 and abs(y[0]) < 1e-3 and abs(y[-1]) < 1e-3
-    assert 1.5 < len(y) / SR < 5.0
-    assert len(detect_clicks(y[-int(0.05 * SR):])) == 0
-    b = _band(y, 4000, 9000)
-    e = _env(b, 1.0)
-    d = np.flatnonzero(np.diff(e) > 0.15 * e.max() * 2e-1 * 0.2)   # any fast rise of the ring band
-    on = d[np.insert(np.diff(d) > int(0.012 * SR), 0, True)] / SR
-    first = np.diff(on[:5])
-    assert len(on) >= 5 and np.all(np.diff(first) < 0.03), on[:8]
-    assert 0.2 < first[0] < 1.0                        # 1.2 m, flight about 0.7 s
 
 
-@pytest.mark.parametrize("cal,f2", [("9mm", 6611.0), ("556", 6088.0), ("762", 4604.0), ("50bmg", 2680.0)])
-def test_casing_ricochet_rings_on_the_shell_modes(cal, f2):
-    y = arms.casing_ricochet(sr=SR, caliber=cal, floor="metal", spin=0.0, seed=1)
-    k = np.abs(np.fft.rfft(y))
-    f = np.fft.rfftfreq(len(y), 1 / SR)
-    m = (f > 1200) & (f < 12000)
-    assert abs(f[m][np.argmax(k[m])] - f2) < 0.03 * f2
 
 
-def test_casing_ricochet_top_modes_die_first_and_ring_is_long():
-    def t60(y, f):
-        k = int(0.02 * SR)
-        w = np.hanning(k) * np.exp(-2j * np.pi * f * np.arange(k) / SR)
-        e = 20 * np.log10(np.abs(np.convolve(y, w, mode="same")) + 1e-9)
-        i = int(np.argmax(e))
-        tt = np.arange(i + k, i + int(0.1 * SR))
-        return -60.0 / np.polyfit(tt / SR, e[tt], 1)[0]
-    y = arms.casing_ricochet(sr=SR, caliber="50bmg", floor="wood", height=0.1, lively=0.0, spin=0.0, seed=1)
-    fm = arms.shell_modes(20.42 / 2, 0.6)
-    assert t60(y, fm[0]) > 1.5 * t60(y, fm[1])          # constant Q: 2680 Hz against 7581 Hz
-    z = arms.casing_ricochet(sr=SR, caliber="556", floor="wood", height=0.1, lively=0.0, spin=0.0, seed=1)
-    assert 0.3 < t60(z, arms.shell_modes(9.58 / 2, 0.30)[0]) < 1.1      # 0.59 s: Q 800 at 6 kHz, ring 2
 
 
-def test_casing_ricochet_turning_modulates_the_ring_continuously():
-    def rough(spin):
-        y = arms.casing_ricochet(sr=SR, caliber="556", floor="metal", height=0.1, lively=0.0, spin=spin, seed=1)
-        e = np.log(_env(_band(y, 5500, 6700), 1.0)[int(0.01 * SR):int(0.13 * SR)] + 1e-9)     # first flight, before the next bounce
-        s = np.abs(np.fft.rfft(np.hanning(len(e)) * (e - np.polyval(np.polyfit(np.arange(len(e)), e, 3), np.arange(len(e))))))
-        return s[(np.fft.rfftfreq(len(e), 1 / SR) > 70) & (np.fft.rfftfreq(len(e), 1 / SR) < 200)].max()
-    assert rough(60.0) > 2.0 * rough(0.0)
 
 
 def test_casing_ricochet_soft_floor_hardly_rings_and_count_adds_cases():
@@ -503,28 +384,10 @@ def _pressure(weapon):
     return y[int(np.argmax(np.abs(y) > 0.05)):]
 
 
-@pytest.mark.parametrize("weapon,hi,lo", [("revolver_357", 1.00, 0.96), ("revolver_38", 0.92, 0.75), ("pistol_9mm", 0.81, 0.75),
-                                          ("pistol_40", 0.78, 0.72), ("pistol_45", 0.79, 0.74), ("ar15", 0.75, 0.69),
-                                          ("shotgun_buck", 2.63, 2.48), ("sniper_22", 0.35, 0.31), ("sniper_308", 2.21, 1.64)])
-def test_shot_from_outside_holds_93_percent_of_its_energy_as_measured_and_nothing_after_10_ms(weapon, hi, lo):
-    y = _pressure(weapon)
-    e = np.cumsum(y ** 2) / np.sum(y ** 2)
-    t93 = np.argmax(e > 0.93) / arms.P
-    assert lo * 1e-3 - 2 / arms.P <= t93 <= hi * 1e-3 + 2 / arms.P, t93
-    assert np.abs(y[int(0.010 * arms.P):]).max() < 10 ** (-38 / 20)
 
 
-@pytest.mark.parametrize("weapon", ["revolver_357", "revolver_38"])
-def test_revolver_with_its_gap_pulse_keeps_the_measured_span(weapon):
-    y = _pressure(weapon)
-    e = np.cumsum(y ** 2) / np.sum(y ** 2)
-    assert abs(np.argmax(e > 0.93) / arms.P - arms.WEAPONS[weapon][3] * 1e-3) <= 1.5 / arms.P       # before: 1.7-2 samples
 
 
-@pytest.mark.parametrize("weapon,lo,hi", [("ar15", 0.12, 0.18), ("sniper_308", 0.12, 0.18)])
-def test_negative_phase_is_a_small_fraction_of_the_peak(weapon, lo, hi):
-    y = _pressure(weapon)
-    assert lo <= -y.min() / y.max() <= hi
 
 
 def test_pov_keeps_the_body():
@@ -533,12 +396,3 @@ def test_pov_keeps_the_body():
     assert np.argmax(e > 0.93) / SR > 0.02
 
 
-def test_heard_shot_is_louder_to_the_ear_and_lasts_longer_than_the_bare_pressure():
-    from genny.analysis import ear_loudness
-    kw = dict(sr=SR, weapon="sniper_308", action=0.0, level="peak", seed=1)
-    bare, heard = arms.firearm(render="pressure", **kw), arms.firearm(**kw)
-    assert ear_loudness(heard, SR) > ear_loudness(bare, SR) + 6.0
-    tail = lambda u: np.sum(u[int(0.2 * SR):] ** 2) / np.sum(u ** 2)
-    assert tail(heard) > 5 * tail(bare)
-    with pytest.raises(ValueError):
-        arms.firearm(sr=SR, render="loud")

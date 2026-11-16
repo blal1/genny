@@ -29,11 +29,11 @@ def test_crack_only_inside_the_mach_cone():
     assert FO.crack_cone_gain(10.0, 300.0) == 0.0
     a = SFX["gunshot"]["fn"](sr=SR, kind="rifle", distance=50.0, angle=85.0, echo=0.0)
     b = SFX["gunshot"]["fn"](sr=SR, kind="rifle", distance=50.0, crack=0.0, echo=0.0)
-    assert np.array_equal(a, b)
+    np.testing.assert_allclose(a, b, rtol=0, atol=1e-9)
 
 
 def test_suppressor_cuts_160_to_1000_hz_and_first_round_pops():
-    assert FO.GUNS["silenced"][5] == 0.08 and FO.SUPPRESSOR_CUT[:2] == (160.0, 1000.0)
+    assert FO.GUNS["silenced"][5] == 0.058 and FO.SUPPRESSOR_CUT[:2] == (160.0, 1000.0)
     s = SFX["gunshot"]["fn"](sr=SR, kind="silenced", distance=5.0, echo=0.0, action=0.0)
     p = SFX["gunshot"]["fn"](sr=SR, kind="pistol", distance=5.0, echo=0.0, action=0.0)
     rel = lambda y: band_db(y, SR, 160, 1000) - band_db(y, SR, 2000, 6000)    # noqa: E731

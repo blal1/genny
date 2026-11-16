@@ -1,9 +1,16 @@
 # Changelog
 
-## Unreleased
+## 1.3.0 (2026-11-16)
 
-Catalog: 167 instruments (was 150), 53 drums (was 52), 534 sound effects (was 287), 133 effects (was 103), 14 extra
-layer types.
+Catalog: 241 instruments (was 144 in 1.2.1), 64 drums (was 50), 580 sound effects (was 242), 192 effects (was 98), 15
+extra layer types, 32 preset families.
+
+- `car_cabin` (fx) no longer raises `AttributeError`: the arguments of `_per_channel` were swapped. `casing` / `casing_ricochet` `caliber=` accepts any cartridge name (`9x19`, `762x51`, `357`, `22lr`, `762x39`, a user cartridge) through the `case_of` family; the names already accepted sound the same.
+- `melee.blade_force` counts the material piled up beside the blade (new `melee.wedge_half_width`): the force is 15-47 %
+  higher depending on the edge angle, so blade contacts are about 14 % shorter. **Default sound changed** for the
+  `melee`, `knife`, `spear`, `gouge` and other edged hits.
+- `arms.ricochet`: the `f0` and `speed` help now says the values were tuned by ear (the forum reading cited before
+  does not exist). Sound unchanged.
 
 Deep reading by lots (`reports/lecture_profonde` in the parent repository): each item below comes from the text the
 lot read, or is marked UNSOURCED. Source citations are leaving the code: the paper, table or figure behind a constant,
@@ -174,6 +181,43 @@ Analysis/CLI
   `align_stimuli`, `n_opt`, `emg_fit`; `identify.pcen`.
 - `genny info --check`.
 
+Last round of deep reading (new documents read in full)
+- New instruments `harmonium` (measured free-reed source spectrum; `tubes.free_reed(reed="harmonium")`), `pea_whistle`
+  (referee whistle, `spin` = trill; the sports sfx of the same name is a separate one-shot) and `fat_pulse` (Farnell's
+  combined-pulse pad: `ratio` 2.01 beats slowly, 2 is fixed). `hihat` / `openhat model=farnell` (FM hi-hat of the MEX).
+  `accordion bend=` and `pressure=` (pitch drops 2.5-5.1 Hz per kPa of bellows pressure); `gamelan bar=jegogan`.
+- tubes: `reed_characteristic`, `free_reed` (a physical free reed, blown or drawn), `free_reed_section`, `DOUBLE_REED`;
+  `space.pipe_reflection` uses the exact Levine-Schwinger end correction near ka 3.8; `physical.winds.keefe_hole(inner=True)`.
+- contact: `layer_k` follows a sphere's law (F ~ d^2, d^3 incompressible; the old per-length law is `layer_line_k`);
+  `elastoplastic_mean_pressure` returns the mean pressure (not the cavity pressure); `elastoplastic_contact` widens the
+  contact in plasticity; `wavy_contact(two_d=True)` follows the numerical curve. `cloth(fabric=)`:
+  polyester | corduroy | cotton weave friction. `hail_impulses(measured=)`.
+- Geophysics: `geyser rate` defaults to 2 (was 40), `debris_flow(approach=)`, `geo.geyser_tau`, `geo.lava_f0`,
+  `snow_avalanche` cloud share `geo.AVALANCHE_CLOUD` 0.5; `matter.slosh_hz`; `drip(regime="tap")` (default unchanged);
+  `rain_on(model="drops")` and `nature.drop_force` (Schmid 2020 impact force of a drop).
+- Voice and music: `speech` `diplophonia` and `effort`; `compose` `p_repeat`, `humanize: "hennig"`, mode `riff`,
+  `write_midi`, `rhythm: "voss"`, `voss` with log2 n generators (longer melodies in voss mode change), `ritard`;
+  `end_boost` vibrato tail; `handclap(rise="exp")` and `creatures.clap_rise`; whinny valence; `footsteps stop`;
+  `birdsong source=laje coupling>0` (acoustic feedback of the tract, period doubling).
+- Piano and strings: `bank_piano.note` corrected `ribs` (above 1.15 kHz fewer, stronger table modes; mobility x3.5
+  above 2.5 kHz), new `bridge_profile` and `orth_profile`, `HORIZ_CENTS` 0.1; `violin sordino=1` has the measured
+  mute shape (bridge hump -5 to -13 dB, bass intact; the overall level drops 0.5-3.6 dB instead of 6 dB flat).
+- DSP: `filters.ladder` modes `levien` and `levien_linear`; `dsp.playhead_loss` / `playhead_loss_db` and `tape(speed=)`;
+  `calibrate.esr`; `analysis.sethares_dissonance` (dissonance curve of a timbre); `clarinet(reed_table="pasp")`,
+  `bowed_string(bow_table="pasp")`, `overdrive shape=cubic|atan`; `wdf_oscillator` resonates exactly, `wdf_port(warp_hz=)`;
+  `FractionalDelay` / `ThiranDelay` clamp the delay; the dead `fx.chorus`, `flanger`, `phaser` are removed (those of
+  `reverbs.py` are unchanged).
+- Vehicles: `pass_by wet=` and `cyber.wet_road_db` (wet-road rolling noise rises above 1.6 kHz; `tyre_roll kind=tyre_wet`
+  no longer adds spray); `space_rocket` tabulated directivity (`aero.ROCKET_DI`, `rocket_directivity_db`); `chowning`
+  winds keep the index fixed while the note dies away; `ground_impedance(model="variable_porosity")`,
+  `space.foliage_attenuation`; `mesh_vowel` wall reflection 0.92 (was 0.97).
+- Fixed: `friction.thoret_friction` beat was a factor pi too fast (v/D instead of v/(pi D)); `wg_osc(tau=)` is now an
+  amplitude time constant (was e^(-t/2tau)) and stays in tune with damping; `CoupledStringBank` / `SympatheticPiano`
+  damp the in-phase mode at the bridge (two-stage decay).
+- Datasets read for validation (TinySOL, NSynth, VocalSet, MAESTRO...) are listed in `THIRD_PARTY_NOTICES.md`; none is
+  shipped. Full readings of Laje, Liao, Caracalla, Werner 2016 (R164 is 47 kOhm in Table 2.3 and 4.7 kOhm in Table 4.2;
+  genny uses 47) and the geophysics sources (Lamb 2021, Johnson 2023, Kedar 1998, Gestrich 2025...) changed nothing.
+
 Default sound changes
 - Clicks fixed at the source in `render_modes`, `strike`, bubbles, `stickslip_pulses`, `declick`, `vocalize`,
   `speech`, `sword_swing`, `aeolian_harp`, `brass`: renders change at equal seed. Pink Trombone: return phase floor
@@ -203,7 +247,15 @@ Default sound changes
   bfxr presets hit, jump and blip, `soft_sync window` 0.35.
 - Music: stingers `danger` (rising minor second), `defeat` (falling minor third), transition stingers; intensity 0
   is silent.
-- Level trims regenerated (`_levels.py`, 167 entries).
+- Last round: `tabla` (loaded skin, 9 modes on 5 tones), `vibraphone` (partials by register, motor vibrato 6 dB), `glass`
+  (partials 1.89 / 3.21), `gamelan` (saron 3rd partial 4.84 f, was 5.15), `tubular_bell` (measured loaded-tube
+  partials), `glockenspiel` (steel-bar modal model), `singing_bowl` (qing modes), `trumpet model=lip2d` (+0.5-1 kPa),
+  `kick808` (bridged-T loop at 49.5 Hz, was 45.7; circuit model `sigh`), `bass_drum` felt contact 4 ms (was 6),
+  `shaker_comb` (`ramp` defaults to 4 / `rate`), `geyser` (`rate` 2), `violin sordino`, bowed strings and brass
+  (vibrato speeds up at the end of a held note), `CoupledStringBank` / `SympatheticPiano`, `speech` vocal effort,
+  `mesh_vowel`, `pass_by` and `tyre_roll` on a wet road, `space_rocket` directivity, `chowning` winds, `melee` and
+  other edged hits (about 14 % shorter).
+- Level trims regenerated (`_levels.py`, 199 entries).
 
 Removed
 - `aeolian_harp` `length` and `density` (they changed nothing).
@@ -214,6 +266,155 @@ Removed
   "Buchla-type" label of `lockhart_fold`.
 - Tests contradicted by measurement: `test_blast_has_a_low_body_and_a_tail`,
   `test_the_guns_differ_in_body_and_saturation`.
+
+Lots 3 and 4, families Q-Y and presets (2026-11-15 and 16)
+
+Added
+- Presets (new module `genny.presets`, `docs/presets.md`): the tables of weapons, cartridges, cases, engines, vehicles,
+  scenes and more now live in TOML files (`genny/presets/*.toml`, schema `genny.preset/1`, inheritance with `extends`,
+  errors name the file, table and key). A user folder (`GENNY_PRESETS`, `presets.register`) adds or overrides a preset
+  without code. Command `genny presets list|show|check|path`, `genny list presets`, spec key `"presets"`,
+  `examples/preset_freeze.py`. Families: `weapon`, `cartridge`, `case`, `case_dim`, `case_extra`, `case_of`,
+  `gun_legacy`, `two_stroke`, `engine_layout`, `diesel`, `tracks`, `moto_2t`, `scooter`, `garden`, `ev`, `avas_style`,
+  `interior`, `air_leak`, `door`, `horn`, `tyre_surface`, `rail_kind`, `ship`, `lap`, `scene` (49 scenes), `lofi`,
+  `spring`, `compressor`, `free_reed`, `bearing`, and `patch` (a TOML file defines a whole sound, for example a bus, a
+  tram or a pick-played guitar, as an `sfx`, `instrument` or `drum` plus `params`, resolved by `genny sfx`,
+  `genny render` and `genny synth`; `genny list --json` says `"origin": "patch"`). `firearm weapon=`, `two_stroke
+  kind=`, `tracks kind=` and `scene kind=` take a name or an inline dict (`{"extends": "ar15", "barrel": 0.4}`);
+  a user cartridge or weapon works in `bullet_pass`, `bullet_impact`, `firearm` and `casing`. No sound changed
+  (bit-identical).
+- Chip families (`chiptune_q`, `chiptune_r`): `scc` (Konami), `namco_wsg`, `huc6280`, `vrc6`, `n163`, `fds`, `paula`
+  (with `render_mod` and `mod_parse`: a MOD player), `opl2`, `opl3`, `wonderswan`, `opll` (five patches corrected),
+  `snes` (real echo with FIR, gaussian table, BRR rounding), `saa1099`; `chip` layer systems `scc`, `wsg`, `huc6280`,
+  `vrc6`, `n163`, `fds`, `paula`, `opl2`, `opl3`. Also `ppg_wave`, `optigan`, `chamberlin`.
+- World instruments (`docs/world.md`): `guzheng`, `oud`, `qanun`, `santur`, `erhu` (`kind` erhu|gaohu|zhonghu|yehu),
+  `morin_khuur`, `shakuhachi`, `ney`, `bansuri`, `duduk`, `bonang`, `balafon`; bend, scoop and vibrato options.
+- Synth families (`synth_s`): `dx7` (32 algorithms, SysEx in and out), Buchla (`buchla_fold`, `lpg`, `buchla_259`,
+  `lpg_ping`), Serge (`serge_wavemult`, `serge_dusg`, `serge_random`).
+- Reeds and bodies (family V): `harmonica_reed`, `accordion_reed`, `melodica_reed`, `sho_reed`, `khaen_reed`,
+  `guitar_modal`, `violin_modal`; effects `binaural_move`, `binaural_room`, `body_measured`, `tape_bias`; `hrtf` takes a
+  .sofa path (h5py) or a stereo .wav.
+- Geophysics (family U): `rockfall_hertz`, `debris_flow_granular`, `avalanche_flow`, `icequake_swarm`, `iceberg_fizz`,
+  `dune_sound`, `granular_pour`; also `lahar`, `strombolian`, `mud_volcano`, `branch_break`, `lake_ice`, `snow_rub`,
+  `strombolian_pulse`, `lava(slug=)`, `cavity_depth`, `ice_chirp(floating=)`, `burst_freq(measured=)`, `geo` `plume=`.
+- Weapons v4 (families W1-W4): `ballistics` (Friedlander, N-wave emission point, near-field law), `brass.render_case`
+  for cases, `arms.PRESETS` 33 weapons in pascals, `recorder` (`none`, `field`, `camera`, `phone`), `clip_db`, `flash`,
+  `barrel`, `barrel_ring`, `k_t0`, `brass`, `ground`, `whine_ratio`, `firearm treeline=`, `gun_mech finish= spread=`.
+  `bullet_impact` plate size and modes follow the momentum (`law` impulse|energy, `gain_db`); `casing_ricochet`
+  takes `ring`, `lively`, `rattle_law`, `spin_depth`, `wobble`, `air`, `wall_scale`; `.45`, `20mm` and `105mm` cases.
+- Two-stroke core (families X-A, X-B): `pipe_engine cycle=2` with port timing from the crank-rod geometry (`ports`),
+  exhaust blow-down, crankcase pump, scavenging and misfires (`tuned_rpm`, `band`, `induct`, `ccr`, `egt`, `misfire`,
+  `steepen`, `raw`, `cut`, `rev_limit`, `cut_dyn`, `relight`, `blowdown`, `gate`), tuned chamber (`tuned_chamber`);
+  `two_stroke kind` chainsaw, scooter, mx125, mx250, outboard, snowmobile, mower, vintage; `motorcycle
+  cross_125|cross_250`; rev limiter on chainsaw, scooter, mower, motorcycle and outboard.
+- New sfx: `radio_chatter`, `hit_marker`, `crossing_beeper`, `ui_gesture`, `snow_rub`, `suikinkutsu`, `slinky`,
+  `auditory_icon`; `red_alert model=patch`; new effects `scramble`, `virtual_bass`, `curtain`, `gsm_call`; drums
+  `cymbal808`, `gamelan_gong`; instruments `steelpan`, `trautonium`, `ondes_martenot`, `slide_clarinet`,
+  `unison_strings`, `rhodes_fd`. Style `atari_vcs` (36 styles), stinger `comma`.
+- Options: `choir` style `cossack`; `church_organ voicing=light`, `mouth`; `clarinet model=worman|map`, `lattice`;
+  `cello`/`violin` `torsion`, `wolf`; `harpsichord plectrum=`; `mandolin plectrum=`; `recorder attack_pulse=`;
+  `koto`/`sitar loss=air`; `rhodes hysteresis`; `flute jet_peak=`; `trumpet mute_kind=`; `filled_glass partials=french`;
+  `organ crosstalk=`; `vibrato model=scanner`; `fd_bar resonator=`, `fd_bar` padouk and rosewood materials; `roll
+  slip=`, `rest_force=`; `scrape rest_force=`; `impact assembly=`, `radius2`, `radiate`, `foundation`, `tip="roller"`;
+  `switch bistable=1`; `explosion model="farnell"`, `secondary=`; `physics.blast_wave(source=, altitude)`;
+  `footsteps speed=`, `snow_depth=`, `species=`, `rhythm="ar9"`; `purr inhale=`, `breath`; `birdsong model="tmg"`,
+  `centre`; `bird_call source="farnell"`; `roar formants=`; vocalisations `rhythm` preset|oscillator|calls; `tornado
+  spectrum=`, `roughness`, `wind`, `approach`; `ice_cubes slosh=`; `ball_bounce modes=`; `conveyor oiled=`;
+  `curve_squeal straight=`; `engine_event temperature=`; `pipe_engine` `branch`, `bottle`, `expansion_ir`, `muffler_r`,
+  `compression`, `ignition`, `clutch`, `transmission`, `ignition_time`, `bend`, `step_radius`, `twin`, `throttle`,
+  `redline`, `cut_at`; `tracks gravel=`; `hydraulic_pump rate=`; `scooter slip= idle=`; `motorcycle idle=`;
+  `two_stroke idle=`, `cut_at=`; `calliope overblow=`; `laser model=farnell`; `telephone voicing=farnell|line`;
+  `sword_swing arc=haversine`; `sword arc=short`; `dark_drone valence tension`; `robot_babble style=pd`; `pour drop`;
+  `metal_plate ribs rib_height dome`; plate drums `edges=`; `bearing preset`; `applause warm ritard`; `cavity
+  aspect_y aspect_z`; `thunder horizontal`; `wood_panel species`; `creak slam`; `distance curve max_dist size`;
+  `texturize mode target_snr`; `room model=moorer79`, `src_beta`, `transition`, preset `baroque`; `reflection
+  kind=diffuser`; `directivity` for oboe, clarinet, bassoon, violin, tuba and membrane; `rod_bank feed mount damp body
+  neighbours`; `rod_cage driver order`; `wind_chimes pattern`; `glass fill`; `bowed_bar partial ranks`;
+  `bowed_string_fd friction residual`; `sheet_radiator sectors tilt tuned_to fragments`; `wah order=4`;
+  `phaser barber`; `feedback_guitar cabinet`; `fx.expander direction thresh_db`; `fx.limiter input_db`; `fx.duck
+  hold`; `fx.radio rotator`; `dsp.tape bias`; `dsp.gsm_like ltp`, `codec ltp`; `harmonizer series draw seed`;
+  `mulaw law=g711|g711a`; `overdrive shape=symclip`; `pitch mode=delay`; `resynth partial_wander`; spec key
+  `"ui_level"`; `compose` `vel_law`, `vel_range`, `gate`, `figure` layer, `loop_form`, `answer`, `ride_data="pickup"`,
+  `bass_ms`, `phrase_shape="todd"`, `kth_1983`, `humanize` `beta` and `offset_ms`, emotions `fear` and `solemn`,
+  `genre_styles`; `analysis` `duration_loudness_offset`, `short_loudness`, `estimate_f0`, `terhardt_pitch`,
+  `mfcc_davis`, `lfcc_davis`, `goldstein_harmonicity`, `kurtosis_echo_density`; `psychoacoustics_p2` (Moore-Glasberg,
+  Hearing Model of Sottek loudness and roughness); `export.fmod_import_script`; `speech` VOT by place of articulation;
+  `ambience.rain` options; `reverbs` `moorer_early`, `t60_within_jnd`, `audience_absorption`; `filters` `shelf1`,
+  `diode_ladder_poles`, `ladder(kind="dangelo")`, `ladder(pole_cutoff=)`; `dsp` `phase_splitter`, `ppm_meter`,
+  `fdn_echo_density`, `fdn_mixing_time`, `mode_lock`; `fdstring.table_i_check`; `modal.body_interp`; `networks`
+  `loaded_junction`, `passive_bridge`, `MultiHoleBore` vents; `tubes` `reed_tube`/`reed_cone` `bend`, `temperature`,
+  `reed="sax_alto"`, `vowel_tube sinuses=`, `wall`; `winds` `tmm_impedance`, `lip_params`, `brass_shock`,
+  `trombone_lip lips`, `register_track fingering`, `auvray_recorder`, `modal_clarinet peaks`; `acoustics.Room(absorbers)`;
+  `calibrate.match`, `esprit_benchmark`, `double_slope`; `rail.vermeulen_force`; `voice.farnell_syrinx`;
+  `aero` XV-15, FL-282 and `twin` rotors; `tank_leopard1` (`heavy_vehicles`). Details of each are in the module pages.
+- Python only: `spectral.fit_min_phase_iir`, `fx.loop(period, cycles, preroll, snap)`, `osc.pulse_train`,
+  `cyber.erb_centres`, `equalized_noise`, `limiter_skips`, `space.loop_gain_from_edt`, `ground_bounce_gain`,
+  `contact.wood_from_density`, `wood_moisture_factors`, `play_events`, `plates.nl_plate(ulim)`, `nature.fountain`
+  with 64 jets, `examples/bench_datasets.py` (`research/datasets_bench/`), `vehicle.engine_bank`, `bank_ratio`.
+
+Changed (default sounds)
+- Arms (W3, `docs/arms.md`): every `firearm` and `minigun` changes (shot shape, relative levels between weapons, tail
+  length; no more tanh saturation, echo or Farnell texture in the shot; a .22 sits 30 dB under a 5.56);
+  `bullet_impact` (physical relative level, no plate size by bullet, no filter); `bullet_pass` (near-field law, no
+  tanh); `casing_ricochet` (`brass` model, `ring` 1, `lively` 0); `casing` without a calibre is the 5.56 case
+  (`caliber="generic"` is the old model); `scenes.warfare` calls `firearm`; `RECIPES`. This supersedes the `render=heard`
+  chain listed earlier in this release. `arms.ricochet` is bit-identical to its references (`water_*` drift fixed by
+  `particles.DELTA_TH_FROZEN`).
+- Two-stroke engines: every `cycle=2` sound (`two_stroke`, two-stroke `scooter`, `chainsaw`, `garden_machine`, `mower`,
+  `snowmobile`, `outboard strokes=2`, `tractor_vintage stroke=2`, `motorcycle` cross): a blow-down pulse replaces the
+  `pf cos` pumping, the intake is the crankcase pump, `n_cyl` feeds the block only; rough level kept (0.194 against
+  0.188). Four-stroke output unchanged bit for bit.
+- Voice: `choir` (all sung voices): Rd follows the effort with a slope of 0.917 per unit (was 1.5), so pp is less
+  breathy and ff less pressed; jitter and shimmer ratios by effort (soft 3.1, loud 0.32); the nonverbal laugh `pauseLen`
+  120 to 90 ms (men) and 90 to 110 ms (women); voiced stop VOT 1, 5, 21 ms (was 6, 8, 12); `pig`, `grognement` and
+  `trompe` lower in F0; `cricket` pitch falls over the whole song; `fly` second wing slowly modulated; `scream` rougher.
+- Winds (formants of Meyer): `french_horn` and `natural_horn` main formant 340 Hz (was 450) plus four secondary ones;
+  `oboe` +4500 Hz; `bassoon` +2000 and 3500 Hz; `contrabassoon` 250, 450, 800; `bass_trombone` 370 Hz; `a_clarinet` and
+  `eb_clarinet` lose their even partials in the low register (even 0.03 from 0.08, -22 to -30 dB).
+- Instruments: `calliope` 1.45 times higher at equal length, range C3-G5, 15 ms attack with a chuff; `flexatone`
+  linear glissando over two octaves, partials 1 : 2.3 : 3.9, irregular strokes; `harmonium` softened above 1.8 kHz;
+  `slide_clarinet` softer and 3.6 dB lower; `unison_strings` gain compensated by register (+3 to +16 dB); `ukulele`
+  tail without a click; `snes` waveform within a few percent; `opll` patches clarinet, trumpet, synth, harpsichord and
+  electric guitar sound different.
+- Liquids: `burst_freq` 30 Hz at 10 mm and 30 Pa s (was 650 Hz): every sound built on `viscous_bubble` (`mud`, `gore`,
+  `slime`, `blood`, `chem`, `burn_flesh`, `bone`) has a lower, duller burst; `particles.DELTA_TH` 0.02 to 0.026 (about
+  18 % faster decay of `tube_bubble`: `gurgle`, `drain`, `splash`); `GLASS_ALPHA` 1.4 (a full `filled_glass` at 631 Hz,
+  not 657).
+- Other: `fx.radio` rotator off by default (`rotator=True` gives the old sound); `compose` intensity under 0.01 mutes all
+  parts; gong `percussion.triad` threshold 0.05 through the detuned formula (alpha about 8 % smaller); `silenced` and
+  `silenced_rifle` 0.08 to 0.058 and 0.067; wall `plexiglass` 11.5 kg/m2 (+/- 2.6 %); `cyber.transformer` grid spread in
+  absolute mHz; `edge_track` gives a frequency where the polynomial gave silence; `whistling_blades spin` adds the
+  Doppler; `plate` free edges no longer drift; `write_wav(dither="auto")` is TPDF at 16 bits; `marimba` bar tuning 4 :
+  9.8; `vkmodal.build` is deterministic (`eigsh v0`): `vk_plate`, `vk_gong`, `vk_cymbal` are reproducible; `bowed_bar material="comb"` renders (it raised).
+- No default changed by the following, which are opt-in options: everything under Added, unless listed here.
+
+Fixed
+- `rail._v16` renders 0.1 s upstream and drops it: `train_diesel` has no start step. `instruments.ukulele` tail click.
+  `test_cavitation` window. `vkmodal` determinism. `crack` test tolerance.
+- Every `UNSOURCED` line of `research/SOURCES.md` (103) is now `connaissance` with its reason; `UNSOURCED` is gone from
+  the code, the docs and `AGENTS.md`. No default sound changed by it.
+- `arms.ricochet` `water_*` drift (0.08-0.17 on the peak) from `particles.DELTA_TH` 0.026: `tube_bubble(delta_th=None)`
+  and `DELTA_TH_FROZEN` 0.02 keep the frozen sound.
+
+Tests
+- New files: `test_lot34_*.py` (A to P2), `test_arms_w3.py`, `test_x_a.py`, `test_y2.py`, `test_y2b.py`, `test_presets.py`
+  and the tests of families Q-V. Full run: 4687 passed, 33 failed before the repairs of TF to TF3 (30 recalibrated
+  against the intended new defaults, 6 real bugs fixed: `ukulele`, `vkmodal`, `slide_clarinet`, `train_diesel`, `unison_strings`,
+  `harmonium`). Tests of the pre-W3 weapon laws were removed (span 93 %, `_gas_tail`, old caliber levels).
+- Chips with an integer divider (`scc`, `huc6280`, `vrc6`, `fds`, `paula`, `wonderswan`) are tuned to the pitch the chip
+  plays (`scc_hz`), not to the equal-tempered note.
+- `_levels.py` rewritten by `examples/level_match.py` (241 entries, all at 0.0 dB of the -12 dB K-weighted target); the
+  `TRIM` stop-gap table in `instruments.py` is gone. **Default level changed** for `unison_strings`, `harmonium`,
+  `packet_pad`, `huc6280`, `fds`, `paula`, `wonderswan`, `chamberlin`, `mesh_vowel`, `ukulele`, `oud`, `qanun`, `balafon`.
+- Register compensation: `REGISTER_DB` (MIDI note, dB) in `instruments.py` levels `harmonica_reed`, `accordion_reed`,
+  `melodica_reed`, `sho_reed`, `khaen_reed`, `morin_khuur` and `trautonium` across their range.
+- `mesh_vowel`: wall reflection 0.7 (transverse modes no longer ring) and an order-8 low-pass at clip(6 f, 2000, 3000).
+  **Default sound changed** (duller, no 5-8 kHz parasites; sharpness 0.87 to 1.18 against 0.28 to 0.58 for a pure tone).
+- Pitch and sharpness repairs (TF4): `chamberlin`, `guitar_modal`, `duduk`, `sho_reed`, `khaen_reed`, `erhu`, `rhodes_fd`
+  and `bonang` now play in tune; `string_scrape`, `packet_pad`, `fat_pulse`, `glitch_saw`, `ppg_wave`, the five `*_reed`
+  and `violin_modal` no longer pierce. `vkmodal` is deterministic; `slide_clarinet`, `harmonium` and `unison_strings`
+  as listed above. Tests adapted with their reason (`test_aero` collection error, `test_choir` centroid threshold,
+  `test_marine` windows and seeds, `test_v4_effets` tolerance).
 
 Earlier in this release
 
@@ -725,6 +926,57 @@ markers are being removed from the code module by module. Default sounds that ch
   No default sound changed.
 - Sources of `arms`, `ordnance`, `aero` are in `research/SOURCES.md`; no UNSOURCED marker left in them except two in the
   frozen `ricochet`.
+
+Verification round (2026-11-16): chips, instruments, weapons, levels
+
+Added
+- `sfx`: common parameter `out_level` (dBFS RMS of the loudest 400 ms, `"-23lufs"`, or `"match"` = fixed per-sfx gain
+  from the generated table `genny/_sfx_levels.py`, 580 entries) through `render_sfx` (`sfx.apply_level`); layer key
+  `level` in specs; `genny sfx NAME --level -18|match|-23lufs`. A spec whose sfx layer carries `level` is no longer
+  normalised to -1 dB peak (an explicit `normalize` is still respected). Regenerate the table with
+  `examples/sfx_level_match.py` when an sfx is added or revoiced. No default sound changes. `level` stays the own
+  parameter of `firearm`, `minigun`, `bullet_impact`, `bullet_pass` and others; the generic one is `out_level`.
+- `psychoacoustics_p2.procedural_grid` (taxonomy of procedural audio: 5 groups, 65 classes, 9 techniques, each class
+  linked to catalog names).
+- `namco_wsg` / `wsg` chip layer: key `generic` (the eight generic waves of before); `PROM_DEFAULT`.
+- `huc6280`: note keys `bal` (left, right 0..15, 3 dB per step), `dda`, `dda_hz`; chip layer key `master`. `vrc6` layer key
+  `shift` (0, 4, 8: the $9003 frequency scaling).
+- DX7: 32 algorithms checked against the published table (no difference). `render_mod`: effects 7xy (tremolo), 8xx / E8x
+  (panning), E3, E4 / E7, E6, E9, EE, B with D on the same row; original finetune tables (`PT_PERIODS`, `PT_VIBRATO`);
+  `hw_limit=True` (period floor 124 instead of 113).
+- Weapons: `arms.env_ir` and the parameter `env` on `firearm`, `minigun`, `bullet_pass`, `bullet_impact` (presets
+  `weapon_env`: `open_field` by default, `forest`, `urban`, `range`, `indoor`, an inline dict, or `anechoic` / `none` for
+  the dry render of before); gas hiss at a suppressor muzzle (`_can_hiss`). `arms.ricochet` is unchanged (24/24 identical).
+- `harpsichord(timbre=)` (one-pole damping of the release, 0 = off); `nonverbal` `temperature` 0 adds no formants.
+
+Default sound changes
+- `namco_wsg` and the `wsg` chip layer: `wave` 0..7 plays the eight blocks of the real PROM instead of the generic waves
+  (`generic=True` or a wave name restores the old sound).
+- DX7: detune is 0.9 cent per step (was 2), LFO speed 11 times faster with the published delay, pitch-depth and
+  pitch-envelope tables. The four shipped presets are bit-identical; voices with detune other than 7, LFO or pitch EG change.
+- MOD player: finetune from the original tables (one period at most) and the vibrato reads its position before advancing.
+- `huc6280` balance is new (default unchanged); `fds` with `mod_gain` > 0: each `mod_table` entry now acts twice (modulation
+  twice as fast per cycle); `snes` decay time constant doubled (table time / 2.3); `opl2` / `opl3` / `opll` `ksl` 1 and 2
+  exchanged (patches with ksl 1 or 2 change); `saa1099` noise and `wonderswan` channel noise are deterministic LFSRs
+  (`WS_NOISE_TAPS`).
+- Oud: the F2-A2 notes sound on the F2 course (was D2); `morin_khuur` free length 0.60 m (was 0.65); `qanun` range A2-E6
+  (was D3-A6); `two_stroke` with a chamber and `outboard strokes=2`: final section 0.36 B (was 0.32 B); `cyber.tuned_chamber`
+  diffuser up to 2.5 d1 with an exit area of 6.25 (the two-stroke `pipe_engine` / `two_stroke` chambers differ slightly).
+- `moore_glasberg_loudness`: tones under 500 Hz are louder (63 Hz at 70 dB: 0.45 to 0.76 sone; 1 kHz unchanged).
+- Springs (`fdstring.spring_geometry`, `spring_echo_time`, `spring_dispersion`, `spring_fd`): `STEEL_E` 2.11e11 and
+  `STEEL_RHO` 7800: wave speed +3 %, delay -2.9 %, cutoff +3 %.
+- Weapons: `firearm` (33 weapons) gets the `open_field` environment and `place` is `none` instead of `street`; the
+  relative level now refers to the 5.56 at 10 m (about +20 dB in peak); suppressed weapons hiss. `minigun`, `bullet_pass`
+  and `bullet_impact` take `env` `open_field` (`place` none for the first two). `env="anechoic"` gives the previous dry
+  render bit for bit (with `place="street"` the complete previous one). `render="pressure"` (so the `warfare` scene) is
+  unchanged, as are `casing`, `casing_ricochet`, `gun_mech`, `ricochet`.
+- Level trims regenerated (`_levels.py`).
+
+Open after the round: Paula minimum period stays 113 (the manual says 124 NTSC / 123 PAL; the `hw_limit` floor is 124),
+DX7 key-scale breakpoint offset, SAA1099 frequency factor of 2, SNES GAIN, PPG Wave tables, DX7 AM depth, 6581 cutoff
+curve in Hz, Trautonium and Ondes Martenot values, `BODY_MODES` Q and gains (all `connaissance`); closed or sourced only
+second-hand: Medwin 1992, Baken & Orlikoff, Fletcher 1979 / Fletcher & Rossing, ISO 532-3 middle-ear table, bonang
+ratios, donkey bray figures.
 
 ## 1.2.1
 

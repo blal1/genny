@@ -271,6 +271,20 @@ def wood_species(name: str) -> ContactMaterial:
     return replace(MATERIALS["wood"], density=1000.0 * g, young=g * sm * 1e9, fd=1.0 / (math.pi * td * 1e-3))
 
 
+WOOD_CORRELATION = {"softwood": (56.3, 0.84, 0.229, 1.5), "hardwood": (121.1, 0.7, 6.48e-3, 2.09)}
+
+
+def wood_from_density(density: float, group: str = "softwood") -> dict:
+    """Clear straight-grained wood from its density (kg/m^3): Young's modulus along the grain E (Pa; the correlation
+    gives MPa), side hardness (N), speed of sound c = sqrt(E/rho), characteristic impedance z = c rho and sound
+    radiation coefficient R = c/rho."""
+    a, b, h, k = WOOD_CORRELATION[group]
+    rho = float(density)
+    e = a * rho ** b * 1e6
+    c = math.sqrt(e / rho)
+    return {"young": e, "hardness": h * rho ** k, "c": c, "impedance": c * rho, "radiation": c / rho}
+
+
 def get_material(name) -> ContactMaterial:
     if isinstance(name, ContactMaterial):
         return name
@@ -464,7 +478,7 @@ def _l_modes(n_modes: int = 48, n: int = 64):
 
 
 @lru_cache(maxsize=64)
-def _shape_table(shape: str, boundary: str, aspect: float, n_modes: int, rmax: float):
+def _shape_table(shape: str, boundary: str, aspect: float, n_modes: int, rmax: float, nu: float = 0.3):
     """(ratios to the lowest mode, descriptor arrays), lowest ``n_modes`` modes with ratio <= rmax."""
     n_modes = int(max(1, min(n_modes, 400)))
     if shape == "string":
@@ -511,17 +525,17 @@ def _shape_table(shape: str, boundary: str, aspect: float, n_modes: int, rmax: f
         norm = np.array([2.0 * np.mean(_plate_radial(m, k, rr) ** 2 * rr) for m, k in zip(ms, ks)])
         norm *= np.where(ms == 0, 1.0, 0.5)
         desc, ratio = {"m": ms, "k": ks, "norm": norm}, (ks / k01) ** 2
-    elif shape == "circ_plate_free":                        # nu = 0.3 for the ratios; f1 takes the material's
-        k20 = math.sqrt(free_disc_omega((2, 0), 0.3))
+    elif shape == "circ_plate_free":                        # ratios and f1 both at the material's Poisson ratio
+        k20 = math.sqrt(free_disc_omega((2, 0), nu))
         kmax = min(math.sqrt(rmax) * k20 + 0.1, 1.3 * math.pi * math.sqrt(n_modes) + 6.0, 70.0)
         ms, ks = [], []
         for m in range(0, int(kmax) + 3):                   # (m, 0) lies above k = m: no root past that
-            r = [k for k in _free_disc_roots(m, 0.3, kmax) if k <= kmax]
+            r = [k for k in _free_disc_roots(m, nu, kmax) if k <= kmax]
             ms += [m] * len(r)
             ks += r
         ms, ks = np.array(ms, float), np.array(ks)
         rr = (np.arange(600) + 0.5) / 600.0
-        norm = np.array([2.0 * np.mean(_free_disc_radial(m, k, rr) ** 2 * rr) for m, k in zip(ms, ks)])
+        norm = np.array([2.0 * np.mean(_free_disc_radial(m, k, rr, nu) ** 2 * rr) for m, k in zip(ms, ks)])
         norm *= np.where(ms == 0, 1.0, 0.5)
         desc, ratio = {"m": ms, "k": ks, "norm": norm}, (ks / k20) ** 2
     elif shape == "l_membrane":
@@ -802,10 +816,11 @@ class ShapeBody(ModalObject):
         if boundary not in BOUNDARIES:
             raise ValueError(f"unknown boundary {boundary!r}; choose from {BOUNDARIES}")
         f1 = float(np.clip(f1, 5.0, 20000.0))
-        ratio, desc = _shape_table(shape, boundary, round(float(aspect), 6), int(n_modes),
-                                   round(max(float(fmax) / f1, 1.0), 6))
-        self.shape, self.boundary, self.aspect, self.f1 = shape, boundary, float(aspect), f1
         self.material = get_material(material)
+        self._nu = round(float(self.material.poisson), 6) if shape == "circ_plate_free" else 0.3
+        ratio, desc = _shape_table(shape, boundary, round(float(aspect), 6), int(n_modes),
+                                   round(max(float(fmax) / f1, 1.0), 6), self._nu)
+        self.shape, self.boundary, self.aspect, self.f1 = shape, boundary, float(aspect), f1
         freqs = f1 * ratio
         decays = material_damping(freqs, self.material, law=law, ext=ext, scatter=scatter, seed=seed)
         super().__init__(freqs, decays, np.zeros_like(freqs), mass=mass,
@@ -831,6 +846,38 @@ class ShapeBody(ModalObject):
         top = float(np.max(self.freqs)) * (1.0 + 1e-9)
         up = full.freqs > top
         return float(np.sum(full.phi[up] ** 2 / (self.mass * (TWO_PI * full.freqs[up]) ** 2)))
+
+    def radiation(self, size: float, thickness: float | None = None) -> tuple[np.ndarray, np.ndarray]:
+        """(sigma_mn, zeta_rad) of every mode of the body, ``size`` m as in `from_size`. Stiff shapes (bar, plates, any
+        ``circ_plate``) radiate as a finite plate (`plates.radiation_efficiency`: edge modes below coincidence, 1 above);
+        membranes and strings, with no bending stiffness, as a baffled piston of the same area, 1 - 2 J1(2ka)/(2ka).
+        zeta = rho0 c sigma / (2 w m'') with m'' the mass per area: add zeta w to the decays to include the radiation loss."""
+        from . import plates as PL
+        L = max(float(size), 1e-3)
+        h = float(thickness) if thickness else _thickness(self.shape, L)
+        if self.shape == "bar":
+            w, ln = 2.5 * h, L
+        elif self.shape in ("rect_plate", "rect_membrane"):
+            w, ln = L / self.aspect, L
+        elif self.shape == "l_membrane":
+            w, ln = 0.75 * L, L
+        elif self.shape == "string":
+            w, ln = 2.0 * h, L
+        else:
+            w, ln = math.pi * L / 4.0, L
+        area = w * ln if not self.shape.startswith("circ") else math.pi * (0.5 * L) ** 2
+        per = 2.0 * (w + ln) if not self.shape.startswith("circ") else math.pi * L
+        m = self.material
+        f = np.asarray(self.freqs, float)
+        if self.shape in ("bar", "rect_plate", "circ_plate", "circ_plate_free"):
+            sig = PL.radiation_efficiency(f, h, area, per, (m.density, m.young, m.poisson))
+            sigma_m = m.density * h
+        else:
+            ka = TWO_PI * f / PL.C_AIR * math.sqrt(area / math.pi)
+            x = np.maximum(2.0 * ka, 1e-9)
+            sig = np.clip(1.0 - 2.0 * special.j1(x) / x, 0.0, 1.0)
+            sigma_m = self.mass / area
+        return sig, PL.RHO_AIR * PL.C_AIR * sig / (2.0 * TWO_PI * f * sigma_m)
 
     def monopole_share(self) -> np.ndarray:
         """Per mode |int phi dS| / int |phi| dS: 1 for a mode that only breathes, 0 when its parts cancel."""
@@ -871,7 +918,7 @@ class ShapeBody(ModalObject):
         if self.shape == "circ_membrane":
             rad = special.jv(d["m"], d["j"] * r)
         elif self.shape == "circ_plate_free":
-            rad = np.array([_free_disc_radial(m, k, r) for m, k in zip(d["m"], d["k"])])
+            rad = np.array([_free_disc_radial(m, k, r, self._nu) for m, k in zip(d["m"], d["k"])])
         else:
             rad = _plate_radial(d["m"], d["k"], r)
         return rad * ang / np.sqrt(d["norm"])
@@ -1535,11 +1582,11 @@ def rolling_surface(length: float, dx: float = 1e-4, roughness: float = 0.5, *, 
     return s
 
 
-_TEXTURES = {      # beta, periodic share, period (grains), spike share. Names from van den Doel's
-    "white": (0.0, 0.0, 0, 0.0),       # texture set (thesis Fig. 7.11; g06 B6): white, 1/f^.5 and
-    "pink_half": (0.5, 0.0, 0, 0.0),   # 1/f are specified there, "grid" is "a periodic profile";
+_TEXTURES = {      # beta, periodic share, period (grains), spike share
+    "white": (0.0, 0.0, 0, 0.0),
+    "pink_half": (0.5, 0.0, 0, 0.0),
     "pink": (1.0, 0.0, 0, 0.0),
-    "brown": (2.0, 0.0, 0, 0.0),       # (gritty, wood, metal, plastic, sandpaper).
+    "brown": (2.0, 0.0, 0, 0.0),
     "gritty": (0.3, 0.0, 0, 0.6),
     "sandpaper": (0.0, 0.0, 0, 0.25),
     "grid": (2.0, 1.0, 12, 0.0),
@@ -1552,6 +1599,12 @@ _TEXTURES = {      # beta, periodic share, period (grains), spike share. Names f
 def surface_texture(texture="pink", n: int = 1 << 15, seed: int = 0) -> np.ndarray:
     """Looped surface height profile (unit RMS), one sample per grain: a named texture or a number
     = the spectral exponent beta (0 white = very rough ... 1 = smoother, g06 B6)."""
+    if not isinstance(texture, (str, int, float)):
+        p = np.asarray(texture, float).ravel()
+        if p.size < 8:
+            raise ValueError("a measured surface profile needs at least 8 samples")
+        p = np.interp(np.linspace(0.0, p.size - 1.0, int(n)), np.arange(p.size), p - p.mean())
+        return p / (p.std() + 1e-30)
     if isinstance(texture, str):
         if texture not in _TEXTURES:
             raise ValueError(f"unknown texture {texture!r}; choose from {sorted(_TEXTURES)} or give beta")
@@ -1895,17 +1948,25 @@ def plasticity_index(es: float, hardness: float, sigma: float, kappa: float) -> 
     return es / hardness * math.sqrt(sigma * kappa)
 
 
-def hertz_elliptic(p: float, r1: float, r2: float, es: float) -> tuple[float, float, float, float]:
+def hertz_elliptic(p: float, r1: float, r2: float, es: float, fit: str = "simple") -> tuple[float, float, float, float]:
     """Contact of two bodies with principal relative radii ``r1``, ``r2`` (gap z = x^2/2r1 + y^2/2r2) under load p:
     (a, b, delta, p0), a and b the semi-axes, a along the larger radius, delta the approach, p0 = 3P/(2 pi a b).
     With al = Ry/Rx: ellipticity k = al^(2/pi), elliptic integrals E = 1 + (pi/2 - 1)/al, F = pi/2 + (pi/2 - 1) ln al
-    (exact Hertz at al = 1)."""
+    (exact Hertz at al = 1). ``fit="regression"``: k = 1.0339 al^0.636, E = 1.0003 + 0.5968/al, F = 1.5277 + 0.6023 ln al
+    (fitted for 1 < al <= 35, ellipticity up to 10; the circular case al = 1 is exact: k = 1, E = F = pi / 2)."""
     rx, ry = min(r1, r2), max(r1, r2)
     R = 1.0 / (1.0 / rx + 1.0 / ry)
     al = ry / rx
-    k = al ** (2.0 / math.pi)
-    E = 1.0 + (0.5 * math.pi - 1.0) / al
-    Fi = 0.5 * math.pi + (0.5 * math.pi - 1.0) * math.log(al)
+    if fit == "regression" and al < 1.0 + 1e-9:
+        k, E, Fi = 1.0, 0.5 * math.pi, 0.5 * math.pi
+    elif fit == "regression":
+        k, E, Fi = 1.0339 * al ** 0.636, 1.0003 + 0.5968 / al, 1.5277 + 0.6023 * math.log(al)
+    elif fit == "simple":
+        k = al ** (2.0 / math.pi)
+        E = 1.0 + (0.5 * math.pi - 1.0) / al
+        Fi = 0.5 * math.pi + (0.5 * math.pi - 1.0) * math.log(al)
+    else:
+        raise ValueError("fit: simple | regression")
     ep = 2.0 * es
     a = (6.0 * k * k * E * p * R / (math.pi * ep)) ** (1.0 / 3.0)
     b = (6.0 * E * p * R / (math.pi * k * ep)) ** (1.0 / 3.0)
@@ -1944,21 +2005,32 @@ def jkr_load(a: float, gamma: float, r: float, es: float) -> float:
 
 
 def elastoplastic_mean_pressure(a: float, r: float, y: float, es: float) -> float:
-    """Mean pressure under a sphere at contact radius a: Hertz 4E*a/(3 pi R) until the first yield (1.07 Y),
-    then the expanding-cavity law (2/3) Y (1 + ln(E* a/(3 Y R))) once it exceeds 1.07 Y, capped at the full plastic 3 Y."""
+    """Mean pressure under a sphere at contact radius a, x = E* a/(Y R): Hertz 4x/(3 pi) up to x = 4, where it meets
+    the expanding-cavity law pm/Y = 1.52 + (2/3) ln(x/3) (cavity pressure + 2Y/3, sphere constant), capped at the
+    full plastic 3 Y (x ~ 28)."""
     x = es * a / (y * r)
-    pe = 4.0 * x / (3.0 * math.pi)
-    if pe <= 1.07:
-        return pe * y
-    return y * min(3.0, max(1.07, 2.0 / 3.0 * (1.0 + math.log(x / 3.0))))
+    if x <= 4.0:
+        return 4.0 * x / (3.0 * math.pi) * y
+    return y * min(3.0, 1.52 + 2.0 / 3.0 * math.log(x / 3.0))
+
+
+def _plastic_radius(delta: float, r: float, y: float, es: float) -> float:
+    """Contact radius at approach delta: a^2 = c R delta, c from 1 (Hertz, x <= 4) to 2 (fully plastic, no pile-up
+    nor sink-in, x >= 28), log-linear in x between."""
+    a = math.sqrt(r * delta)
+    for _ in range(30):
+        x = es * a / (y * r)
+        c = 1.0 + min(max(math.log(max(x, 1e-12) / 4.0) / math.log(7.0), 0.0), 1.0)
+        a = math.sqrt(c * r * delta)
+    return a
 
 
 def elastoplastic_contact(delta: float, delta_max: float, r: float, y: float, es: float) -> tuple[float, float]:
     """Force at approach ``delta`` after a largest approach ``delta_max`` (loading if delta >= delta_max), and the
-    crater depth left. Loading: P = pi a^2 pm(a), a^2 = R delta. Unloading is elastic, Hertz on the recovered depth
-    3 Pmax/(4 E* amax): P = Pmax ((delta - d_res)/(delta_max - d_res))^1.5, d_res the crater."""
+    crater depth left. Loading: P = pi a^2 pm(a), a^2 = R delta elastic to 2 R delta fully plastic. Unloading is
+    elastic, Hertz on the recovered depth 3 Pmax/(4 E* amax): P = Pmax ((delta - d_res)/(delta_max - d_res))^1.5."""
     dm = max(delta_max, delta, 0.0)
-    am = math.sqrt(r * dm)
+    am = _plastic_radius(dm, r, y, es)
     pmax = math.pi * am * am * elastoplastic_mean_pressure(am, r, y, es)
     rec = min(dm, 3.0 * pmax / (4.0 * es * am)) if am > 0 else 0.0
     res = dm - rec
@@ -1982,7 +2054,19 @@ def matthews_indentation(a: float, r: float, n: float, sigma0: float, eps0: floa
 
 
 def layer_k(e: float, nu: float, thickness: float, r: float, bonded: bool = False) -> tuple[float, float]:
-    """(k, alpha) of F = k d^alpha for a sphere on a thin layer (felt, rubber pad, paint, coating) on a rigid base.
+    """(k, alpha) of F = k d^alpha for a sphere on a thin layer (felt, rubber pad, paint, coating) on a rigid base,
+    the layer a bed of columns p = K (d - r^2/2R)/b: P = pi K R d^2/b, alpha 2, K = E (frictionless base) or the
+    confined E (1 - nu)/((1 + nu)(1 - 2 nu)) (bonded). Bonded and incompressible (nu >= 0.499), squeezed out under a
+    smooth sphere: P = (2 pi/3) E R^2 d^3/b^3, alpha 3."""
+    b = thickness
+    if bonded and nu >= 0.499:
+        return 2.0 * math.pi / 3.0 * e * r * r / b ** 3, 3.0
+    k = e * ((1.0 - nu) / ((1.0 + nu) * (1.0 - 2.0 * nu)) if bonded else 1.0)
+    return math.pi * k * r / b, 2.0
+
+
+def layer_line_k(e: float, nu: float, thickness: float, r: float, bonded: bool = False) -> tuple[float, float]:
+    """(k, alpha) of F = k d^alpha per unit length for a cylinder on a thin layer on a rigid base (plane strain).
     Compressible, frictionless: P = (2/3) E a^3/((1 - nu^2) R b), d = a^2/2R; bonded x (1 - nu)^2/(1 - 2 nu).
     Bonded and incompressible (nu >= 0.499): P = 2 E a^5/(45 R b^3), d = a^2/6R, alpha 2.5."""
     b = thickness
@@ -1994,21 +2078,21 @@ def layer_k(e: float, nu: float, thickness: float, r: float, bonded: bool = Fals
     return k, 1.5
 
 
+WAVY_2D = ((0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0),
+           (0.103, 0.18, 0.33, 0.51, 0.62, 0.69, 0.77, 0.83, 0.88, 0.93, 1.0))
+
+
 def wavy_contact(p: float, es: float, amp: float, wavelength: float, two_d: bool = False) -> float:
     """Fraction of a wavy surface (amplitude amp, wavelength l) in contact under mean pressure p. 1-D: p* = pi E* amp/l,
-    2a/l = (2/pi) asin(sqrt(p/p*)); 2-D: p* = 2 pi E* amp/l, pi a^2/l^2 = pi (3p/(8 pi p*))^(2/3) at light load,
-    1 - (3/(2 pi))(1 - p/p*) near full contact, the two joined linearly between p/p* 0.3 and 0.8. 1 when p >= p*."""
+    2a/l = (2/pi) asin(sqrt(p/p*)); 2-D: p* = 2 pi E* amp/l, pi a^2/l^2 = pi (3p/(8 pi p*))^(2/3) at light load
+    (p/p* <= 0.05), then the numerical solution `WAVY_2D`. 1 when p >= p*."""
     ps = (2.0 if two_d else 1.0) * math.pi * es * amp / wavelength
     q = min(max(p / ps, 0.0), 1.0)
     if not two_d:
         return 2.0 / math.pi * math.asin(math.sqrt(q))
-    light = lambda s: math.pi * (3.0 * s / (8.0 * math.pi)) ** (2.0 / 3.0)
-    full = lambda s: 1.0 - 1.5 / math.pi * (1.0 - s)
-    if q <= 0.3:
-        return light(q)
-    if q >= 0.8:
-        return full(q)
-    return light(0.3) + (q - 0.3) / 0.5 * (full(0.8) - light(0.3))
+    if q <= 0.05:
+        return math.pi * (3.0 * q / (8.0 * math.pi)) ** (2.0 / 3.0)
+    return float(np.interp(q, WAVY_2D[0], WAVY_2D[1]))
 
 
 def gw_contact(p: float, es: float, sigma_s: float, kappa_s: float) -> tuple[float, float]:
@@ -2064,7 +2148,9 @@ def oblique_impact(vx: float, vz: float, mu: float, nu: float = 0.3, gyration: f
     mu x normal force. kappa = 2(1 - nu)/(2 - nu), chi = kappa (1 + 1/gyration)/2 (gyration = k^2/R^2, 0.4 solid),
     psi = kappa vx/(mu vz). Returns kappa, chi, psi, the regime (stick if psi <= 1, gross slip if psi >= 4 chi - 1,
     partial slip between) and the tangential velocity of the contact point after the impact, ``vt_out`` (negative:
-    the spin turned it back)."""
+    the spin turned it back); ``psi_out`` = kappa vt_out / (mu vz), the angle of reflexion in the units of psi (it goes
+    negative between 1 and 4 chi), ``psi_out_rigid`` that of rigid-body impact: 0 up to psi = 4 chi (rolling at exit), then
+    psi - 4 chi."""
     kap = 2.0 * (1.0 - nu) / (2.0 - nu)
     chi = kap * (1.0 + 1.0 / gyration) / 2.0
     psi = kap * abs(vx) / (mu * abs(vz) + 1e-30)
@@ -2084,7 +2170,8 @@ def oblique_impact(vx: float, vz: float, mu: float, nu: float = 0.3, gyration: f
         vt += ft / mstar * dt
         if i > 0 and z <= 0.0:
             break
-    return {"kappa": kap, "chi": chi, "psi": psi, "regime": regime, "vt_out": vt, "vn_out": vn}
+    return {"kappa": kap, "chi": chi, "psi": psi, "regime": regime, "vt_out": vt, "vn_out": vn,
+            "psi_out": kap * vt / (mu * vz + 1e-30), "psi_out_rigid": max(psi - 4.0 * chi, 0.0) if vx >= 0 else -max(psi - 4.0 * chi, 0.0)}
 
 
 def rayleigh_speed(c2: float, nu: float) -> float:
@@ -2099,6 +2186,35 @@ def halfspace_radiated_power(p_amp: float, omega: float, g: float, c2: float) ->
     """Mean power an oscillating point force P* cos(wt) sends into an elastic half-space as waves (nu 0.25):
     W = 0.074 P*^2 w^2/(G c2), 7 % P waves, 26 % S, 67 % Rayleigh."""
     return 0.074 * p_amp * p_amp * omega * omega / (g * c2)
+
+
+GROUND_SHARE_POISSON = {0.25: (0.069, 0.258, 0.674), 1.0 / 3.0: (0.056, 0.304, 0.639)}
+
+
+def _rayleigh_f0(z, mu):
+    z = np.asarray(z, float)
+    rad = np.sqrt(np.abs(z * z - mu * mu)) * np.sqrt(np.abs(z * z - 1.0))
+    ph = np.where(z < 1.0, -1.0 + 0j, np.where(z < mu, -1j, 1.0 + 0j))
+    return (2 * z * z - mu * mu) ** 2 - 4 * z * z * ph * rad
+
+
+def surface_source_directivity(theta, poisson: float = 0.25) -> tuple[np.ndarray, np.ndarray]:
+    """Far-field amplitudes (P, S) of a vertical point force on an elastic half-space at the angle ``theta`` (rad) from the
+    vertical, mu = sqrt(2 (1 - nu) / (1 - 2 nu)): mu^2 |T1| and mu^(9/2) |T2|, in common units (P at the vertical = 1)."""
+    mu = math.sqrt(2.0 * (1.0 - poisson) / (1.0 - 2.0 * poisson))
+    th = np.asarray(theta, float)
+    sn = np.sin(th)
+    t1 = np.cos(th) * (mu * mu - 2 * sn * sn) / _rayleigh_f0(sn, mu)
+    t2 = np.sin(2 * th) * np.sqrt(np.abs(mu * mu * sn * sn - 1.0)) / _rayleigh_f0(mu * sn, mu)
+    return mu * mu * np.abs(t1), mu ** 4.5 * np.abs(t2)
+
+
+def rayleigh_depth_intensity(kz) -> np.ndarray:
+    """Intensity of the surface wave of an oscillating point force at depth z relative to the surface (nu 0.25, k1 = w / c1,
+    kz = k1 z): X = 1.5383 e^(-1.482 kz) - 3.1192 e^(-2.3376 kz) + 1.8131 e^(-3.1932 kz), divided by X(0)."""
+    kz = np.asarray(kz, float)
+    x = 1.5383 * np.exp(-1.482 * kz) - 3.1192 * np.exp(-2.3376 * kz) + 1.8131 * np.exp(-3.1932 * kz)
+    return x / (1.5383 - 3.1192 + 1.8131)
 
 
 def johnson_regime(rho: float, v: float, sigma_s: float) -> str:
@@ -2329,6 +2445,10 @@ def _make_body(shape, mat, size, position=0.3, position2=0.37, *, freq=0.0, mode
     return b.pruned(keep=modes) if len(b.freqs) > modes else b
 
 
+ASSEMBLY_DAMPING = {"bare": 1.0, "welded": 10.0, "composite": 28.0, "bolted": 45.0, "prestressed": 77.0, "reinforced": 141.0,
+                    "many_joints": 167.0, "elastomer": 447.0}
+
+
 def _rest_damping(body, mat, force):
     g = CONTACT_GAMMA.get(mat.name)
     if g is None:
@@ -2361,8 +2481,9 @@ C_AIR = 350.0     # reproduces the book's 463.8 Hz lowest partial of a d = 0.5 m
 
 @lru_cache(maxsize=32)
 def cavity_modes(shape: str = "box", size: float = 0.5, wall: float = 1.0, fmax: float = 5000.0,
-                 per_band: int = 10, seed: int = 0, gamma: float | None = None):
-    """``(freqs, decays, gains)`` of a hollow box (cube of edge ``size``) or the sphere of equal
+                 per_band: int = 10, seed: int = 0, gamma: float | None = None,
+                 aspect: tuple | None = None):
+    """``(freqs, decays, gains)`` of a hollow box (cube of edge ``size``, or edges ``size`` x ``aspect``) or the sphere of equal
     volume (pitch follows volume, §6.1).
 
     Box: ``f(l,m,n) = (c/2) sqrt((l/X)^2 + (m/Y)^2 + (n/Z)^2)`` (eq. 6.1). Sphere:
@@ -2373,16 +2494,19 @@ def cavity_modes(shape: str = "box", size: float = 0.5, wall: float = 1.0, fmax:
     per third octave ("where single modes can no longer be discriminated").
     ``gamma``: superquadric |x|^g + |y|^g + |z|^g = 1 between the sphere (g = 2) and the box (g -> inf): the sorted
     modes of both are interpolated in log frequency (decays linearly) with weight w = 2 / g on the sphere.
+    ``aspect`` = (Y/X, Z/X) turns the cube into a crate or a drawer (X = ``size``); the sphere keeps the box's volume.
     """
     if gamma is not None:
         w = float(np.clip(2.0 / max(float(gamma), 2.0), 0.0, 1.0))
-        fb, db, gb = cavity_modes("box", size, wall, fmax, per_band, seed)
-        fs, ds, _ = cavity_modes("sphere", size, wall, fmax, per_band, seed)
+        fb, db, gb = cavity_modes("box", size, wall, fmax, per_band, seed, aspect=aspect)
+        fs, ds, _ = cavity_modes("sphere", size * (aspect[0] * aspect[1]) ** (1 / 3) if aspect else size, wall, fmax, per_band, seed)
         k = min(len(fb), len(fs))
         f = np.exp((1 - w) * np.log(fb[:k]) + w * np.log(fs[:k]))
         return f, (1 - w) * db[:k] + w * ds[:k], gb[:k]
     size = float(np.clip(size, 0.03, 20.0))
+    edges = (1.0, float(aspect[0]), float(aspect[1])) if aspect else (1.0, 1.0, 1.0)
     if shape == "sphere":
+        size = size * (edges[1] * edges[2]) ** (1.0 / 3.0)
         a = size * (3.0 / (4.0 * math.pi)) ** (1.0 / 3.0)
         vol, area = 4.0 / 3.0 * math.pi * a ** 3, 4.0 * math.pi * a * a
         zmax = TWO_PI * a * fmax / C_AIR
@@ -2394,11 +2518,11 @@ def cavity_modes(shape: str = "box", size: float = 0.5, wall: float = 1.0, fmax:
             z += [brentq(lambda q: special.spherical_jn(nn, q, derivative=True), grid[i], grid[i + 1]) for i in idx]
         f = np.sort(np.array(z)) * C_AIR / (TWO_PI * a)
     elif shape == "box":
-        vol, area = size ** 3, 6.0 * size * size
-        top = int(2.0 * size * fmax / C_AIR) + 1
-        g = np.arange(0, top + 1)
-        q = (g[:, None, None] ** 2 + g[None, :, None] ** 2 + g[None, None, :] ** 2).ravel()
-        f = C_AIR / (2.0 * size) * np.sqrt(np.unique(q[q > 0]).astype(float))
+        X, Y, Z = (size * e for e in edges)
+        vol, area = X * Y * Z, 2.0 * (X * Y + Y * Z + X * Z)
+        gx, gy, gz = (np.arange(0, int(2.0 * L * fmax / C_AIR) + 2) for L in (X, Y, Z))
+        q = (gx[:, None, None] / X) ** 2 + (gy[None, :, None] / Y) ** 2 + (gz[None, None, :] / Z) ** 2
+        f = C_AIR / 2.0 * np.sqrt(np.unique(q[q > 0].round(12)))
     else:
         raise ValueError("cavity shape must be 'box' or 'sphere'")
     f = f[f <= fmax]
@@ -2412,8 +2536,8 @@ def cavity_modes(shape: str = "box", size: float = 0.5, wall: float = 1.0, fmax:
     return f, 6.91 / t60, gains
 
 
-def _cavity(x, sr, shape="box", size=0.5, wall=1.0, seed=0):
-    f, d, g = cavity_modes(shape, round(float(size), 4), round(float(wall), 4), min(5000.0, 0.4 * sr), 10, int(seed))
+def _cavity(x, sr, shape="box", size=0.5, wall=1.0, seed=0, aspect=None):
+    f, d, g = cavity_modes(shape, round(float(size), 4), round(float(wall), 4), min(5000.0, 0.4 * sr), 10, int(seed), aspect=aspect)
     body = ModalObject(f, d, np.ones_like(f), aw0=g * TWO_PI * f / (TWO_PI * f[0]))    # equal-amplitude sines
     return modal_bank(x, body, sr, bright=0.0)[0]
 
@@ -2460,9 +2584,12 @@ def resonate(x, sr=DEFAULT_SR, body="rect_plate", material="steel", size=0.4, po
         shape=("box", "box|sphere (sphere of the same volume: a little brighter)"),
         size=(0.5, "m: edge of the cube (0.3-1 m); pitch follows the volume"),
         wall=(1.0, "wall absorption x: 1 wood, < 1 harder (marble) = longer ring, > 1 padded"),
+        aspect_y=(1.0, "Y edge / X edge (a crate, a drawer: 0.3-3); 1 with aspect_z 1 = cube"),
+        aspect_z=(1.0, "Z edge / X edge"),
         mix=(0.6, "0..1 wet"), seed=(0, "which modes are excited"), tail=(0.5, "s of ring-out appended"))
-def cavity(x, sr=DEFAULT_SR, shape="box", size=0.5, wall=1.0, mix=0.6, seed=0, tail=0.5):
-    return _fx_apply(x, sr, tail, lambda ch: _cavity(ch, sr, shape, size, wall, seed), mix)
+def cavity(x, sr=DEFAULT_SR, shape="box", size=0.5, wall=1.0, mix=0.6, seed=0, tail=0.5, aspect_y=1.0, aspect_z=1.0):
+    asp = None if aspect_y == 1.0 and aspect_z == 1.0 else (float(np.clip(aspect_y, 0.1, 10.0)), float(np.clip(aspect_z, 0.1, 10.0)))
+    return _fx_apply(x, sr, tail, lambda ch: _cavity(ch, sr, shape, size, wall, seed, asp), mix)
 
 
 # ==========================================================================================
@@ -2471,6 +2598,22 @@ def cavity(x, sr=DEFAULT_SR, shape="box", size=0.5, wall=1.0, mix=0.6, seed=0, t
 
 _MAT_HELP = "rubber|plastic|plastic2|polycarbonate|polystyrene|mdf|wood|wood:<species> (spruce, maple, padauk, ebony...)|glass|ceramic|metal|steel|cast_iron|carbide|aluminium|bronze|copper|acrylic|ice|stone|concrete"
 _SHAPE_HELP = "string|bar|bar_clamped|bar_supported|rect_membrane|rect_plate|circ_membrane|circ_plate|circ_plate_free|l_membrane|ri_<object> (measured: ceramic_bowl, glass, wood_plate, iron_pan, plastic_bowl, steel_pot, polycarbonate_cup)"
+
+
+WOOD_WET = ((0.0, 13.69, 0.422, 0.0061), (1.2, 13.72, 0.426, 0.0068), (2.7, 13.76, 0.429, 0.0062),
+            (5.8, 13.66, 0.435, 0.0055), (9.6, 13.39, 0.443, 0.0064), (12.7, 12.95, 0.448, 0.0071),
+            (14.2, 12.78, 0.451, 0.0075), (22.8, 11.73, 0.466, 0.0092), (23.8, 11.59, 0.468, 0.0093),
+            (28.1, 10.97, 0.474, 0.0097))
+
+
+def wood_moisture_factors(pct: float) -> tuple[float, float]:
+    """(frequency factor, loss factor) of spruce at water content `pct` (%) against 6 %: sqrt of the ratio of E'/gamma,
+    and the ratio of tan delta, interpolated in the measured table (0-28.1 %)."""
+    m, e, g, t = (np.array(c, float) for c in zip(*WOOD_WET))
+    ratio = e / g
+    p = float(np.clip(pct, 0.0, m[-1]))
+    return (math.sqrt(float(np.interp(p, m, ratio)) / float(np.interp(6.0, m, ratio))),
+            float(np.interp(p, m, t)) / float(np.interp(6.0, m, t)))
 
 
 @sfx("impact", "One object struck by another: analytic modal body + Hunt-Crossley contact (harder / faster = shorter contact = brighter).",
@@ -2490,7 +2633,7 @@ _SHAPE_HELP = "string|bar|bar_clamped|bar_supported|rect_membrane|rect_plate|cir
                       "density and E too) | power, sterling_rayleigh, caughey, hybrid (Sterling, fitted to recordings) | obrien | zheng; "
                       "all but the first two exist for some materials only, and `damping` is added on top"),
      thickness=(0.0, "m: of the bar or plate; 0 = in proportion to size (a bar then goes 1/L, a fixed thickness 1/L^2)"),
-     tip=("ball", "shape of the striker: ball (Hertz) | cone (contact grows faster, sharper at high speed) | flat (contact time independent of speed)"),
+     tip=("ball", "shape of the striker: ball (Hertz) | cone (contact grows faster, sharper at high speed) | flat (the face of a book or a brick: contact time independent of speed) | roller (a cylinder on a Winkler foundation, F ~ d^1.5 per length)"),
      tip_size=(0.0, "m: flat face radius; 0 = the striker's own radius"), tip_angle=(60.0, "degrees: cone semi-angle"),
      mount=(0.0, "1/s: a free bar hung at its nodes 22.4 % from the ends, scale of the suspension loss: mode 1 keeps ringing, the others lose it"),
      rest_force=(0.0, "N: resting on a support, each mode damped by what it does at the contact point (ceramic, polystyrene, steel, mdf, wood)"),
@@ -2502,23 +2645,31 @@ _SHAPE_HELP = "string|bar|bar_clamped|bar_supported|rect_membrane|rect_plate|cir
      material_radius=(1.0, "0..1 distance from the disk centre (0 = the average of glass, metal and wood)"),
      radiation=("sphere", "sphere: every mode radiates as a pulsating body | modes: only each mode's net volume flow is a monopole, "
                           "the rest a dipole, weaker by ka / sqrt 3 while the body is small against the wavelength"),
-     moisture=(0.0, "0..1 wood only: water content from 6 to 12 %, E/rho down 6 % and the loss up 24 % at 1"),
+     moisture=(0.0, "0..3.7 wood only: water content 6 + 6 x %, measured spruce E'/density and loss tangent (E'/density -7 % and loss +25 % at 1 = 12 %; -26 % and +75 % at 3.7 = 28 %)"),
      azimuth=(-1.0, "degrees: where the listener stands around the object; each mode's level follows its lobes (-1 = averaged over all directions)"),
      rough=(0.0, "0..1 perceived roughness: every mode amplitude-modulated at a quarter of its critical band (the most dissonant rate), "
                  "this the modulation index"),
      freq_factor=(1.0, "x on every mode frequency: 0.7 with a heavier striker reads as a bigger object, 4 as a small ceramic one"),
      decay_factor=(1.0, "x on every decay rate (the ring time divides by it): 50 turns a ringing metal into a wood-like knock"),
      uneven=(0.0, "0..1 uneven decay, as real wood rings: a slow random swell on the tail and the highs dying sooner (0.5 for wood; metal decays smoothly)"),
-     accel=(0.0, "0..1 acceleration noise of the striker: the click of its velocity reversal over the Hertz contact time (a steel ball's modes are above hearing, this is what is heard of it)"))
+     accel=(0.0, "0..1 acceleration noise of the striker: the click of its velocity reversal over the Hertz contact time (a steel ball's modes are above hearing, this is what is heard of it)"),
+     assembly=("", "how the structure is put together, a multiplier on every decay rate against a bare steel one: bare 1, welded 10, composite 28, bolted 45, prestressed 77, reinforced 141, many_joints 167, elastomer 447 (empty = off)"),
+     radius2=(0.0, "m: radius of the surface struck, signed: > 0 convex (a ball on a ball), < 0 concave (a ball in a cup: a wider, stiffer contact), 0 = plane"),
+     radiate=(0.0, "0..1 radiation loss of the body: every mode gets its radiation damping zeta_rad (ShapeBody.radiation), 1 = the full value"),
+     foundation=(0.0, "Pa/m for tip roller: stiffness of the Winkler foundation under the cylinder (0 = 1.18 E*/r, matched to Hertz)"))
 def impact(sr=DEFAULT_SR, material="wood", shape="bar", size=0.3, position=0.28, position2=0.37, striker_mass=0.02,
            hardness=0.6, velocity=1.5, hollow=0.0, damping=2.0, bright=0.5, freq=0.0, modes=24, dur=0.0, seed=0, law="friction",
            material_angle=-1.0, material_radius=1.0, thickness=0.0, tip="ball", tip_size=0.0, tip_angle=60.0, mount=0.0, rest_force=0.0,
            ice_temp=1.0, dilate=0.0, dilate_r=0.0, radiation="sphere", moisture=0.0, azimuth=-1.0, rough=0.0,
-           freq_factor=1.0, decay_factor=1.0, uneven=0.0, accel=0.0):
+           freq_factor=1.0, decay_factor=1.0, uneven=0.0, accel=0.0, assembly="", radius2=0.0, radiate=0.0, foundation=0.0):
     mat = get_material(material)
+    if assembly and str(assembly) not in ASSEMBLY_DAMPING:
+        raise ValueError(f"assembly must be one of {sorted(ASSEMBLY_DAMPING)}")
     body = _make_body(shape, mat, size, position, position2, freq=freq, modes=modes, damping=damping, seed=seed,
                       fmax=min(12000.0, 0.45 * sr), law=str(law), thickness=float(thickness) if thickness and thickness > 0 else None,
                       rest_force=float(rest_force))
+    if radiate > 0 and isinstance(body, ShapeBody):
+        body.decays = body.decays + float(np.clip(radiate, 0.0, 1.0)) * body.radiation(float(size), float(thickness) if thickness and thickness > 0 else None)[1] * TWO_PI * body.freqs
     if radiation == "modes" and isinstance(body, ShapeBody):
         body.multipole = body.monopole_share()
     if azimuth is not None and float(azimuth) >= 0:
@@ -2533,14 +2684,17 @@ def impact(sr=DEFAULT_SR, material="wood", shape="bar", size=0.3, position=0.28,
     if material_angle is not None and float(material_angle) >= 0:
         body.decays = aramaki_damping(body.freqs, float(material_angle), float(material_radius)) + max(float(damping), 0.0)
     if moisture > 0 and mat.name == "wood":
-        w = float(np.clip(moisture, 0.0, 1.0))
-        body.freqs = body.freqs * math.sqrt(1.0 - 0.06 * w)
-        body.decays = body.decays * (1.0 + 0.24 * w)
+        ff, fd = wood_moisture_factors(6.0 + 6.0 * float(moisture))
+        body.freqs = body.freqs * ff
+        body.decays = body.decays * fd
     velocity = float(np.clip(velocity, 0.01, 300.0))             # guards; the sound needed 250 kg at 66 m/s (lot L03)
     hardness = float(np.clip(hardness, 0.0, 1.0))
     m_s = float(np.clip(striker_mass, 1e-5, 2000.0))
     k = _striker_k(mat, hardness, m_s)
     alpha = 1.5
+    if tip == "ball" and radius2:
+        r1 = (3.0 * m_s / (4.0 * math.pi * 1100.0 * (7850.0 / 1100.0) ** hardness)) ** (1.0 / 3.0)
+        k *= math.sqrt(relative_radius(r1, float(radius2)) / r1)
     if tip != "ball":                                        # E* of the same striker: k_ball = 4/3 E* sqrt(R), with R = R(m_s)
         h_rho = 1100.0 * (7850.0 / 1100.0) ** hardness
         r = (3.0 * m_s / (4.0 * math.pi * h_rho)) ** (1.0 / 3.0)
@@ -2549,12 +2703,18 @@ def impact(sr=DEFAULT_SR, material="wood", shape="bar", size=0.3, position=0.28,
             k, alpha = cone_k(es, float(np.clip(tip_angle, 5.0, 85.0))), 2.0
         elif tip == "flat":
             k, alpha = 2.0 * es * (float(tip_size) if tip_size and tip_size > 0 else r), 1.0       # P = 2 E* a d (Johnson eq. 5.1)
+        elif tip == "roller":
+            kw = float(foundation) if foundation and foundation > 0 else winkler_stiffness(es, r, line=True)
+            ln = float(tip_size) if tip_size and tip_size > 0 else 4.0 * r
+            k = 4.0 * math.sqrt(2.0) / 3.0 * kw * math.sqrt(r) * ln       # p = 2 k b^3 / 3r, d = b^2 / 2r
         else:
-            raise ValueError("tip must be ball, cone or flat")
+            raise ValueError("tip must be ball, cone, flat or roller")
     if freq_factor != 1.0:
         body.freqs = np.minimum(body.freqs * float(np.clip(freq_factor, 0.05, 20.0)), 0.44 * sr)
     if decay_factor != 1.0:
         body.decays = body.decays * float(np.clip(decay_factor, 0.01, 100.0))
+    if assembly:
+        body.decays = body.decays * ASSEMBLY_DAMPING[str(assembly)]
     if rough > 0:
         body = am_sidebands(body, float(np.clip(rough, 0.0, 1.0)), 0.44 * sr)
     it = ImpactInteractor(body, mass=m_s, k=k, alpha=alpha, mu=max(mat.mu, 0.05 + 0.55 * (1.0 - hardness)), bright=bright)
@@ -2760,16 +2920,21 @@ def drop(sr=DEFAULT_SR, material="steel", size=0.03, surface="wood", surface_siz
      body=("", "'' a solid ball, only the surface rings | can: an empty can with its four measured modes"),
      patch=(0.0, "0 = off; 1 = the surface is felt as its mean height over the Hertz contact patch (half-length "
                  "x patch), which dulls wavelengths shorter than the patch: a low-pass at speed / (2 a)"),
+     slip=(0.0, "0..1 share of the ball's speed it slides at: the scraper model (path of the ball over the profile, vertical m S'' v^2 + horizontal beta1 v S') "
+                "at that speed is added to the rolling, peak for peak weighted by slip (0 = pure rolling)"),
+     rest_force=(0.0, "N: the surface's modes damp as d = gamma F phi^2/(2 m) from the ball resting on it, in place of the flat 6 1/s "
+                      "(0 = the flat 6 1/s); only materials with a measured gamma: ceramic polystyrene steel mdf wood"),
      bright=(0.4, "0 dark .. 1 bright"), seed=(0, "variation"))
 def roll(sr=DEFAULT_SR, dur=1.0, speed=0.5, radius=0.03, roughness=0.5, material="steel", surface="wood",
-         surface_size=1.0, joints=0.0, dents=0.0, asymmetry=0.0, feedback=0.18, body="", patch=0.0, bright=0.4, seed=0):
+         surface_size=1.0, joints=0.0, dents=0.0, asymmetry=0.0, feedback=0.18, body="", patch=0.0, slip=0.0, rest_force=0.0,
+         bright=0.4, seed=0):
     mat, smat = get_material(material), get_material(surface)
     radius = float(np.clip(radius, 0.002, 1.0))
     dur = float(np.clip(dur, 0.03, 120.0))
     mass = 0.015 if body == "can" else float(np.clip(_ball_mass(mat, 2.0 * radius), 1e-5, 500.0))   # 15 g empty can
     k = _hertz_pair(mat, smat, radius)
-    plate = _make_body("rect_plate", smat, surface_size, 0.37, 0.41, modes=28, damping=6.0, seed=seed,
-                      fmax=min(8000.0, 0.45 * sr))
+    plate = _make_body("rect_plate", smat, surface_size, 0.37, 0.41, modes=28, damping=0.0 if rest_force > 0 else 6.0, seed=seed,
+                      fmax=min(8000.0, 0.45 * sr), rest_force=max(float(rest_force), 0.0))
     os_ = 2
     fs, n = sr * os_, samples(dur, sr) * os_
     v = np.clip(_curve(speed, n), 0.0, 50.0)
@@ -2780,10 +2945,18 @@ def roll(sr=DEFAULT_SR, dur=1.0, speed=0.5, radius=0.03, roughness=0.5, material
     if body not in ("", "can"):
         raise ValueError("roll body must be '' or can")
     res = it.run(dur, sr, y0=off[0] - x_static, active=True, offset=off, load=load, oversample=os_)
+    audio = res.audio
+    if slip > 0:
+        m = len(audio)
+        vs = float(np.clip(slip, 0.0, 1.0)) * np.clip(_curve(speed, m), 0.0, 50.0)
+        prof = surface_texture(2.0 * (1.0 - float(np.clip(roughness, 0.0, 1.0))), seed=seed)
+        fs = curvature_force(prof * 2e-5, vs, np.ones(m), 1e-4, sr, mass)
+        sl = modal_bank(fs, plate, sr, bright)[0][:m]
+        audio = audio / (np.max(np.abs(audio)) + 1e-30) + float(np.clip(slip, 0.0, 1.0)) * sl / (np.max(np.abs(sl)) + 1e-30)
     if body == "can":
         ring = _can_ring(res.force[::os_][:samples(dur, sr)], v[::os_][:samples(dur, sr)], radius, mass, sr)
-        return _out(ring / (np.max(np.abs(ring)) + 1e-30) + 0.1 * res.audio / (np.max(np.abs(res.audio)) + 1e-30), sr, 0.75, 15.0)   # floor at -20 dB
-    return _out(res.audio, sr, 0.75, 15.0)
+        return _out(ring / (np.max(np.abs(ring)) + 1e-30) + 0.1 * audio / (np.max(np.abs(audio)) + 1e-30), sr, 0.75, 15.0)   # floor at -20 dB
+    return _out(audio, sr, 0.75, 15.0)
 
 
 def _can_ring(force, v, radius, mass, sr):
@@ -2817,14 +2990,17 @@ def _can_ring(force, v, radius, mass, sr):
      stroke_len=(0.1, "m, half the stroke"), stroke_angle=(30.0, "degrees of the held scraper from the surface"),
      mu=(0.6, "friction coefficient, stroke only"),
      gate=(0, "1 = the scraper leaves the surface where the profile falls away faster than force/mass can pull it down (fast scrapes chatter); uses height, scraper_mass, force in N"),
+     rest_force=(0.0, "N: the body's modes damp as d = gamma F phi^2/(2 m) from the scraper pressing on it, in place of the flat 8 1/s "
+                      "(0 = the flat 8 1/s); only materials with a measured gamma: ceramic polystyrene steel mdf wood; analytic shapes"),
      seed=(0, "variation"))
 def scrape(sr=DEFAULT_SR, dur=0.8, speed=0.3, force=1.0, roughness=0.5, texture="", grain=0.1, body="rect_plate",
            material="wood", size=0.4, position=0.3, level="force", model="profile", scraper_mass=0.02, height=2e-5, bright=0.5,
-           stroke=0.0, stroke_len=0.1, stroke_angle=30.0, mu=0.6, gate=0, variation=0.0, seed=0):
+           stroke=0.0, stroke_len=0.1, stroke_angle=30.0, mu=0.6, gate=0, rest_force=0.0, variation=0.0, seed=0):
     n = samples(float(np.clip(dur, 0.03, 120.0)), sr)
     moving = isinstance(position, (list, tuple, np.ndarray))
-    b = _make_body(body, material, size, float(np.asarray(position, float).ravel()[0]) if moving else position, modes=28, damping=8.0,
-                   seed=seed, fmax=min(10000.0, 0.45 * sr))
+    rf = max(float(rest_force), 0.0)
+    b = _make_body(body, material, size, float(np.asarray(position, float).ravel()[0]) if moving else position, modes=28,
+                   damping=0.0 if rf > 0 else 8.0, seed=seed, fmax=min(10000.0, 0.45 * sr), rest_force=rf)
     prof = surface_texture(texture if texture else 2.0 * (1.0 - float(np.clip(roughness, 0.0, 1.0))), seed=seed)
     fade = np.minimum(1.0, np.minimum(np.arange(n), n - 1 - np.arange(n)) / max(1.0, 0.005 * sr))
     v = np.clip(_curve(speed, n), 0.0, 50.0)
@@ -2867,6 +3043,25 @@ _CONAN_ROLL = {  # Table I, roughness 0 -> 1: sigma, a1, b1, mean; dT in s
 }
 CONAN_SCRATCH_DT = 0.012
 CONAN_RUB_SIGMA = 0.43
+PLAY_HIT_FRACTION = 0.69
+PLAY_MIN_GAP = 0.25
+PLAY_SOFT_MATERIALS = ("leaf", "grass", "cloth", "plastic bag", "carpet")
+PLAY_HARD_MATERIALS = ("gravel", "rock", "tile", "wood", "ceramic", "plastic", "drywall", "glass", "metal")
+
+
+def play_events(dur: float, rate: float = 48.0 / 35.0, hit_fraction: float = PLAY_HIT_FRACTION, min_gap: float = PLAY_MIN_GAP,
+                seed: int = 0) -> list[tuple[float, str]]:
+    """Strike/scrape actions of a drumstick on a surface over ``dur`` s: Poisson arrivals at ``rate`` per second, never
+    closer than ``min_gap``, each a ``hit`` with probability ``hit_fraction`` and a ``scrape`` otherwise."""
+    rng = np.random.default_rng(seed)
+    t, out = 0.0, []
+    while True:
+        t += max(rng.exponential(1.0 / max(rate, 1e-6)), 0.0) if out else rng.uniform(0.0, 1.0 / max(rate, 1e-6))
+        if out:
+            t = max(t, out[-1][0] + min_gap)
+        if t >= dur:
+            return out
+        out.append((float(t), "hit" if rng.random() < hit_fraction else "scrape"))
 
 
 def conan_weights(angle: float = 0.0, radius: float = 1.0) -> np.ndarray:
@@ -2896,27 +3091,52 @@ def _pulse_train(n, idx, amp, length, xi=1.0):
     return f
 
 
-def conan_force(n: int, sr: int, weights, roughness: float = 0.5, size: float = 0.5, speed: float = 0.3,
-                seed: int = 0, sharpness: float = 1.0, radius: float = 0.0) -> np.ndarray:
-    """The interaction force (before the speed low-pass) for (rub, scratch, roll) ``weights``. roughness 0..1 is
-    Table I's rho, size the normalised ball radius S (0.1..1), speed in m/s (number or per-sample) sets the rolling
-    modulation: once per turn, v/(2 pi radius), when the ball's ``radius`` (m) is given, else 3 V/S."""
+def _conan_arma(x, b1: float, a1: float, ar2: float):
+    """1-pole 1-zero ARMA of Table I; with ``ar2`` > 0 a second pole coefficient a2 = ar2 a1^2 is added and the input
+    rescaled so the output keeps the variance of the first-order series (only the correlation shape changes)."""
+    if ar2 <= 0.0 or abs(a1) < 1e-9:
+        return lfilter([1.0, b1], [1.0, a1], x)
+    a2 = float(np.clip(ar2, 0.0, 0.95)) * a1 * a1
+    imp = np.zeros(4096)
+    imp[0] = 1.0
+    v1 = float(np.sum(lfilter([1.0, b1], [1.0, a1], imp) ** 2))
+    v2 = float(np.sum(lfilter([1.0, b1], [1.0, a1, a2], imp) ** 2))
+    return lfilter([1.0, b1], [1.0, a1, a2], x) * math.sqrt(v1 / max(v2, 1e-30))
+
+
+def conan_series(n: int, sr: int, weights, roughness: float = 0.5, seed: int = 0, scratch_dt: float = CONAN_SCRATCH_DT,
+                 ar2: float = 0.0, ar_free: float = 0.0):
+    """The amplitude series A and interval series dT (s) of ``conan_force`` for (rub, scratch, roll) ``weights``.
+    Table I gives the 1-pole 1-zero ARMA of rolling only: ``ar_free`` (0..0.95) gives the rub and scratch series the
+    same kind of correlation (AR pole -ar_free, 0 = white, as Conan's rubbing and scratching), ``ar2`` (0..0.95) adds
+    a second pole a2 = ar2 a1^2 to every series at unchanged variance, ``scratch_dt`` is the mean scratch interval."""
     w = np.asarray(weights, float) / max(float(np.sum(weights)), 1e-12)
     rho = float(np.clip(roughness, 0.0, 1.0))
-    S = float(np.clip(size, 0.1, 1.0))
     roll = {k: [lo + rho * (hi - lo) for lo, hi in v] for k, v in _CONAN_ROLL.items()}
     sa, a1a, b1a, ma = roll["A"]
     sd, a1d, b1d, md = roll["dT"]
-    mean_dt = w[0] / sr + w[1] * CONAN_SCRATCH_DT + w[2] * md
+    mean_dt = w[0] / sr + w[1] * scratch_dt + w[2] * md
     m = int(n / sr / mean_dt * 1.3) + 64
     rng = np.random.default_rng(seed)
     W = np.clip(rng.random(m), 1e-9, 1 - 1e-9)
     g = special.ndtri(W)                                     # one W drives both series (TASLP Fig. 5)
     expo = -np.log1p(-W) - 1.0                               # centred unit exponential
-    cA = lfilter([1.0, w[2] * b1a], [1.0, w[2] * a1a], (w[0] + w[1]) * CONAN_RUB_SIGMA * g + w[2] * sa * g)
-    cD = lfilter([1.0, w[2] * b1d], [1.0, w[2] * a1d], w[1] * CONAN_SCRATCH_DT * expo + w[2] * sd * g)
-    A = w[2] * ma + cA
-    dT = np.maximum(mean_dt + cD, 1.0 / sr)
+    free = -float(np.clip(ar_free, 0.0, 0.95)) * (1.0 - w[2])
+    cA = _conan_arma((w[0] + w[1]) * CONAN_RUB_SIGMA * g + w[2] * sa * g, w[2] * b1a, w[2] * a1a + free, ar2)
+    cD = _conan_arma(w[1] * scratch_dt * expo + w[2] * sd * g, w[2] * b1d, w[2] * a1d + free, ar2)
+    return w[2] * ma + cA, np.maximum(mean_dt + cD, 1.0 / sr)
+
+
+def conan_force(n: int, sr: int, weights, roughness: float = 0.5, size: float = 0.5, speed: float = 0.3,
+                seed: int = 0, sharpness: float = 1.0, radius: float = 0.0, scratch_dt: float = CONAN_SCRATCH_DT,
+                ar2: float = 0.0, ar_free: float = 0.0) -> np.ndarray:
+    """The interaction force (before the speed low-pass) for (rub, scratch, roll) ``weights``. roughness 0..1 is
+    Table I's rho, size the normalised ball radius S (0.1..1), speed in m/s (number or per-sample) sets the rolling
+    modulation: once per turn, v/(2 pi radius), when the ball's ``radius`` (m) is given, else 3 V/S. ``scratch_dt``,
+    ``ar2`` and ``ar_free`` act on the A and dT series (``conan_series``); the defaults are Table I as it was."""
+    w = np.asarray(weights, float) / max(float(np.sum(weights)), 1e-12)
+    S = float(np.clip(size, 0.1, 1.0))
+    A, dT = conan_series(n, sr, weights, roughness, seed, float(scratch_dt), float(ar2), float(ar_free))
     t = np.cumsum(dT) - dT[0]
     keep = t < n / sr
     t, A = t[keep], A[keep]
@@ -2940,12 +3160,17 @@ def conan_force(n: int, sr: int, weights, roughness: float = 0.5, size: float = 
      prefilter=(0.0, "0..1 reinforce the force near the body's modes (what a two-way contact does; 0 = off)"),
      radius=(0.0, "m: the rolling ball's radius; its wobble is then once per turn, v/(2 pi radius) (0 = Conan's 3 V/ball)"),
      gamma=(1, "1 | 2: each mode rings as t exp(-t/tau) sin (a gammatone, softer onset) instead of exp(-t/tau) sin"),
+     scratch_dt=(0.012, "s mean interval between the impacts of a scratch (the dT series of scratching)"),
+     ar2=(0.0, "0..0.95 second pole of the amplitude and interval series, a2 = ar2 a1^2 at unchanged variance (0 = Table I's first order)"),
+     ar_free=(0.0, "0..0.95 correlation of the amplitude and interval series of rubbing and scratching (0 = white, as Conan's)"),
      bright=(0.5, "0 dark .. 1 bright"), seed=(0, "variation"))
 def interaction(sr=DEFAULT_SR, dur=1.0, action=0.0, blend=1.0, speed=0.3, roughness=0.5, ball=0.5, body="rect_plate",
-                material="wood", size=0.4, position=0.3, sharpness=1.0, prefilter=0.0, radius=0.0, gamma=1, bright=0.5, seed=0):
+                material="wood", size=0.4, position=0.3, sharpness=1.0, prefilter=0.0, radius=0.0, gamma=1, bright=0.5, seed=0,
+                scratch_dt=CONAN_SCRATCH_DT, ar2=0.0, ar_free=0.0):
     n = samples(float(np.clip(dur, 0.03, 120.0)), sr)
     v = np.clip(_curve(speed, n), 0.0, 50.0)
-    f = conan_force(n, sr, conan_weights(action, blend), roughness, ball, v, seed, sharpness, float(max(radius, 0.0)))
+    f = conan_force(n, sr, conan_weights(action, blend), roughness, ball, v, seed, sharpness, float(max(radius, 0.0)),
+                    float(np.clip(scratch_dt, 0.002, 0.2)), float(ar2), float(ar_free))
     f = F.svf(f, "lowpass", np.clip(15000.0 * v, 150.0, 0.45 * sr), sr) * np.clip(v / 0.02, 0.0, 1.0)
     b = _make_body(body, material, size, position, modes=28, damping=8.0, seed=seed, fmax=min(10000.0, 0.45 * sr))
     f = resonant_prefilter(f, b, sr, prefilter)
@@ -3089,40 +3314,46 @@ def _rumble(sr, dur, fmin, fmax, damping, modes, rise, hold, fade, seed, prop):
 
 # Hail (Lane et al., "A hail size distribution impact transducer", JASA 2006 / arXiv 1408.4702; Kopp et al.,
 # AMT 16:3487, 2023): a stone of diameter D falls at v = 142 sqrt(D) (Lane; Kopp's drag balance with
-# rho_ice 870, cw 0.5 gives 138) and hits with the ramp F(t) = F0 (1 - t/tau), tau = xi D / v, carrying the
-# impulse (1 + eta) m v (Lane eq. 1-3: eta = 0.9, xi = 0.1 for hard hail, ~1 for a raindrop: the short ramp
-# is why hail has far more energy above 10 kHz than rain). Sizes are exponential (Kopp: median 6.7 mm over
-# 80 Swiss sensors); with a rate falling as 1 - t/dur the largest stone lands at relative time 0.29 in
-# median (Kopp: 0.34 for dense events).
+# rho_ice 870, cw 0.5 gives 138) and hits with a constant force F0 = (1 + eta) m v / tau over tau = xi D / v
+# (Lane eq. 2-3: eta = 0.9, xi = 0.1 for hard hail, ~1 for a raindrop: the short pulse is why hail has far
+# more energy above 10 kHz than rain; the older triangle stays for the debris of `arms`). Sizes: 5 mm plus an
+# exponential of 2.71 mm (P(D) ~ 10^-0.16 D), scaled so the median is ``size``; with a rate falling as
+# 1 - t/dur the largest stone lands at relative time 0.29 in median (Kopp: 0.34 for dense events).
 HAIL_RHO, HAIL_ETA, HAIL_XI = 870.0, 0.9, 0.1
+HAIL_D0, HAIL_DE = 5.0, 1.0 / (0.16 * math.log(10.0))     # mm: smallest stone, e-folding of the size law
 
 
-def hail_impulses(dur, sr, rate=80.0, size=6.7e-3, decay=1.0, hardness=1.0, seed=0):
+def hail_impulses(dur, sr, rate=80.0, size=6.7e-3, decay=1.0, hardness=1.0, seed=0, measured=False):
     """Force (N) of a hail shower on one surface: Poisson stones, exponential diameters (median ``size`` m),
-    each a Lane triangle of area (1 + eta) m v. Returns ``(force, diameters, times)``."""
+    each a force ramp of area (1 + eta) m v over tau. ``measured``: the measured law HAIL_D0 + exponential(HAIL_DE)
+    scaled to the median (few stones over 3 x size) and Lane's constant force over tau. Returns ``(force, diameters, times)``."""
     rng = np.random.default_rng(seed)
     n = samples(dur, sr)
     decay = float(np.clip(decay, 0.0, 1.0))
     # thinning: candidates at the peak rate, kept with probability 1 - decay t/dur
     t = np.sort(rng.uniform(0.0, dur, rng.poisson(max(rate, 0.0) * dur)))
     t = t[rng.uniform(size=len(t)) < 1.0 - decay * t / dur]
-    d = np.clip(rng.exponential(size / math.log(2.0), len(t)), 1e-3, 0.15)
+    if measured:
+        d = size * (HAIL_D0 + rng.exponential(HAIL_DE, len(t))) / (HAIL_D0 + HAIL_DE * math.log(2.0))
+    else:
+        d = rng.exponential(size / math.log(2.0), len(t))
+    d = np.clip(d, 1e-3, 0.15)
     v = 142.0 * np.sqrt(d)
     j = (1.0 + HAIL_ETA) * HAIL_RHO * math.pi / 6.0 * d ** 3 * v
     tau = HAIL_XI / float(np.clip(hardness, 0.05, 1.0)) * d / v
     force = np.zeros(n)
     for ti, ji, ta in zip(t, j, tau):
         m = max(1, int(round(ta * sr)))
-        ramp = 1.0 - np.arange(m) / m
+        ramp = np.ones(m) if measured else 1.0 - np.arange(m) / m
         i0 = int(ti * sr)
         seg = force[i0:i0 + m]
         seg += (ji * sr / ramp.sum() * ramp)[:len(seg)]
     return force, d, t
 
 
-@sfx("hail", "Hail on a surface: Poisson stones, exponential sizes, each a short force ramp (Lane 2006) ringing the body; the shower thins out over dur.",
+@sfx("hail", "Hail on a surface: Poisson stones, exponential sizes, each a short constant-force pulse ringing the body; the shower thins out over dur.",
      dur=(6.0, "s"), rate=(80.0, "stones/s hitting the surface at the start"),
-     size=(6.7, "mm median stone diameter (Kopp 2023: 6.7; 20-30 = severe)"),
+     size=(6.7, "mm median stone diameter (6.7 measured over Swiss storms; 20-30 = severe)"),
      decay=(1.0, "0 steady .. 1 the rate falls to zero by the end (measured showers are front-loaded)"),
      hardness=(1.0, "0..1: 1 hard hail (contact 0.1 D/v), lower = graupel / slush, longer and darker"),
      body=("rect_plate", _SHAPE_HELP + " or a modal table"), material=("metal", _MAT_HELP + ": tin roof, car (metal), "
@@ -3134,7 +3365,7 @@ def hail(sr=DEFAULT_SR, dur=6.0, rate=80.0, size=6.7, decay=1.0, hardness=1.0, b
     y = np.zeros(samples(dur, sr))
     # stones land all over the surface: three strike points, each with its share of the shower
     for k, (p1, p2) in enumerate(((0.31, 0.37), (0.53, 0.71), (0.77, 0.23))):
-        f, _, _ = hail_impulses(dur, sr, float(rate) / 3.0, size, decay, hardness, seed * 7 + k)
+        f, _, _ = hail_impulses(dur, sr, float(rate) / 3.0, size, decay, hardness, seed * 7 + k, measured=True)
         b = _make_body(body, material, surface_size, p1, p2, modes=200, seed=seed + k, fmax=min(16000.0, 0.45 * sr))
         y += modal_bank(f, b, sr, bright)[0]
     return _out(y, sr, 0.8, 10.0)

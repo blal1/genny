@@ -1,0 +1,9 @@
+schema = "genny.preset/1"
+family = "moto_2t"
+# preset: a two_stroke preset a motorcycle kind uses.
+
+[cross_125]
+preset = "mx125"
+
+[cross_250]
+preset = "mx250"

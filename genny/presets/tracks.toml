@@ -1,0 +1,81 @@
+schema = "genny.preset/1"
+family = "tracks"
+# speed_kmh: km/h. pitch_m: link pitch. wheels: road wheels. spacing_m: between road wheels. teeth: sprocket teeth. slack: 0..1. weight: hull level.
+# engine: diesel_6 | diesel_12 | turbine | two_stroke, engine_rpm: rpm (0 for the turbine).
+
+[tracked_vehicle]
+speed_kmh = 30.0
+pitch_m = 0.15
+wheels = 6
+spacing_m = 0.7
+teeth = 12
+slack = 0.3
+weight = 1.0
+engine = "diesel_6"
+engine_rpm = 2000.0
+
+[tank_m1]
+speed_kmh = 40.0
+pitch_m = 0.1937
+wheels = 7
+spacing_m = 0.7
+teeth = 11
+slack = 0.3
+weight = 1.0
+engine = "turbine"
+engine_rpm = 0.0
+
+[tank_diesel]
+speed_kmh = 40.0
+pitch_m = 0.15
+wheels = 6
+spacing_m = 0.8
+teeth = 13
+slack = 0.3
+weight = 1.0
+engine = "diesel_12"
+engine_rpm = 2000.0
+
+[tank_leopard1]
+speed_kmh = 14.04
+pitch_m = 0.169
+wheels = 7
+spacing_m = 0.665
+teeth = 11
+slack = 0.3
+weight = 1.0
+engine = "diesel_12"
+engine_rpm = 2200.0
+
+[snowmobile]
+speed_kmh = 91.44
+pitch_m = 0.0635
+wheels = 2
+spacing_m = 0.4
+teeth = 8
+slack = 0.1
+weight = 0.25
+engine = "two_stroke"
+engine_rpm = 7000.0
+
+[bulldozer]
+speed_kmh = 5.0
+pitch_m = 0.17145
+wheels = 6
+spacing_m = 0.5
+teeth = 21
+slack = 0.2
+weight = 1.0
+engine = "diesel_6"
+engine_rpm = 1800.0
+
+[excavator_tracks]
+speed_kmh = 5.0
+pitch_m = 0.17145
+wheels = 7
+spacing_m = 0.45
+teeth = 21
+slack = 0.3
+weight = 1.0
+engine = "diesel_6"
+engine_rpm = 1800.0

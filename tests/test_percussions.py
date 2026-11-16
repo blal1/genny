@@ -221,14 +221,14 @@ def test_timpani_measured_table():
     assert abs(_t60(h, 196, 0.1, 0.3, ) / 0.2 - 1) < 0.15
 
 
-def test_tubular_bell_modes_81_121_169():
+def test_tubular_bell_modes_4_5_6():
     from genny.acoustic import tubular_bell
     y = tubular_bell(220.0, 1.0, SR)
     X = np.abs(np.fft.rfft(y[:SR] * np.hanning(SR)))
     fr = np.fft.rfftfreq(SR, 1 / SR)
     pk = lambda f: fr[(fr > 0.97 * f) & (fr < 1.03 * f)][np.argmax(X[(fr > 0.97 * f) & (fr < 1.03 * f)])]
-    for k in (81, 121, 169):
-        assert abs(pk(220.0 * k / 40.5) / (220.0 * k / 40.5) - 1) < 0.003
+    for k in (2.0, 2.93, 4.01):
+        assert abs(pk(220.0 * k) / (220.0 * k) - 1) < 0.003
     assert fr[np.argmax(X)] == pk(440.0)                                  # mode 4, an octave above the note
 
 
@@ -252,7 +252,7 @@ def test_marimba_bar_tuned_on_two_ratios():
     m = len(y)
     X = np.abs(np.fft.rfft(y * np.hanning(m)))
     fr = np.fft.rfftfreq(m, 1 / SR)
-    for k in (4, 10):
+    for k in (4, 9.8):                                                 # the marimba table is (4, 9.8) since LOT34_D
         b = (fr > 0.97 * k * 220) & (fr < 1.03 * k * 220)
         assert abs(fr[b][np.argmax(X[b])] / (k * 220) - 1) < 0.01
 

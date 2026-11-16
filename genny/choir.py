@@ -164,9 +164,12 @@ STYLES = {
                  lag=0.015, scoop=20.0, attack=0.04, f1=1.12, drift=4.0),
 }
 STYLES["amateur"] = dict(STYLES["classical"], vib=45.0, rate=5.3, ring=0.4, scatter=10.0)
+STYLES["cossack"] = dict(STYLES["classical"], vib=70.0, choir=0.8, scatter=27.0, lag=0.03, fscat=0.06, drift=8.0, rd=-0.2)
+STYLES["roar"] =dict(STYLES["classical"], scoop=1100.0, scoop_tau=(0.03, 0.04))
 VIB_DYN = (0.20, 0.86, 0.37, 0.48, 5.38, 5.21)     # pp and ff levels; vibrato extent (ST) and rate (Hz) at each
 VIB_CYCLE_SD = (0.42, 0.105 / 0.43)                # rate sd Hz, extent sd relative, drawn once per vibrato cycle
-VIB_ARCH = (0.56, 0.73)                            # vib_arch: extent at the first and last semicycle, share of the plateau
+END_BOOST = (0.15, 1.7)                             # end_boost: rate rise at the last cycle, e-folding in cycles
+VIB_ARCH = (0.56, 0.73)                           # vib_arch: extent at the first and last semicycle, share of the plateau
 STYLES["cathedral"] = STYLES["classical"]
 STYLES["chant"] = STYLES["gregorian"]
 STYLES["trailer"] = STYLES["epic"]
@@ -233,6 +236,10 @@ _FRIC_X = ([(1700.0, 600.0, 0.9), (3000.0, 1200.0, 0.4), (5000.0, 2500.0, 0.15)]
 _DYN = {"ppp": 0.10, "pp": 0.20, "p": 0.33, "mp": 0.45, "mf": 0.58, "f": 0.72, "ff": 0.86, "fff": 1.0}
 LEVEL_DB = 6.0
 RD_MF = 0.8
+MECH_RD = ((0.3, 1.0), (1.0, 2.3))                 # Rd range of laryngeal mechanism 1 and 2
+RD_PER_DB = (1.15 - 0.6) / 20.0                 # Rd per dB of sound level in modal voice
+EFFORT_DB = 22.0 / (_DYN["ff"] - _DYN["pp"])      # dB of level per unit of effort, pp to ff
+RD_PER_EFFORT = RD_PER_DB * EFFORT_DB
 
 
 def _voice_name(v: str) -> str:
@@ -979,16 +986,14 @@ def _roster(types, singers: int, st: dict, seed: int, solo: bool, width: float, 
         out.append(dict(
             voice=vt, idx=i,
             vtl=1.0 if solo else float(np.clip(rng.normal(1.0, 0.03), 0.93, 1.07)),   # formant shift (tract length)
-            fdev=1.0 + np.clip(rng.normal(0, 0.025 if not solo else 0.012, 5), -0.06, 0.06),
+            fdev=1.0 + np.clip(rng.normal(0, 0.012 if solo else st.get("fscat", 0.025), 5), -0.06 * max(1.0, st.get("fscat", 0.025) / 0.025), 0.06 * max(1.0, st.get("fscat", 0.025) / 0.025)),
             detune=0.0 if solo else float(np.clip(rng.normal(0, st["scatter"]), -2.2 * st["scatter"], 2.2 * st["scatter"])),
             vib_rate=float(st["rate"] + (0.0 if solo else rng.uniform(-0.45, 0.45))),
             vib_depth=float(st["vib"] * (1.0 if solo else st["choir"] * rng.uniform(0.7, 1.3))),
             vib_delay=float(st["delay"] * (1.0 if solo else rng.uniform(0.75, 1.5))),
             vib_fade=float(rng.uniform(0.3, 0.5)),
-            # period / amplitude scatter of a sustained sung vowel: low end of the normal ranges (jitter
-            # < 1 %, shimmer < 4 %, Baken & Orlikoff 2000; pathology limits of MDVP, not targets: jitter 1.04 %,
-            # RAP 0.68 %, PPQ 0.84 %, shimmer 3.81 %, 0.35 dB, APQ 3.07 %, Praat manual "Voice"; medium phonation
-            # 0.31-0.36 %, 0.28-0.50 dB, Brockmann 2008). 0.4 % / 4 % measured
+            # period / amplitude scatter of a sustained sung vowel: low end of the normal ranges, under the
+            # pathology limits (sources in SOURCES.md). 0.4 % / 4 % measured
             # 16 dB HNR at 1-4 kHz on this kernel (hoarse); these give about 28 dB.
             jitter=float(rng.uniform(0.001, 0.002)), shimmer=float(rng.uniform(0.01, 0.02)),
             rd_off=0.0 if solo else float(rng.normal(0, 0.12)), asp0=1.0 if solo else float(rng.uniform(0.7, 1.3)),
@@ -1212,11 +1217,14 @@ def _render_singer(sg: dict, notes: list[dict], P: dict, n: int, sr: int, cons_g
             vib_env = np.where(seg & (tb >= t_on - 0.2),
                                _smoothstep((tb - (t_voice + sg["vib_delay"])) / sg["vib_fade"]), vib_env)
         if P["end_boost"] and t_end - t_voice > sg["vib_delay"] + sg["vib_fade"] + 1.0:     # same gate as instruments._vibrato
-            eb, tail_s = (P["end_boost"], 0.5) if P["end_boost"] > 0 else (0.15 * sg["vib_rate"], 5.0 / sg["vib_rate"])
-            boost = boost + eb * np.clip((tb - (t_end - tail_s)) / tail_s, 0.0, 1.0) * seg
+            if P["end_boost"] > 0:
+                boost = boost + P["end_boost"] * np.clip((tb - (t_end - 0.5)) / 0.5, 0.0, 1.0) * seg
+            else:                  # rate x (1 + 0.15 e^(x / 1.7)) over the last 9 cycles, x = cycles before the end
+                x = np.minimum((tb - t_end) * sg["vib_rate"], 0.0)
+                boost = boost + END_BOOST[0] * sg["vib_rate"] * np.exp(x / END_BOOST[1]) * (x >= -9.0) * seg
         scp = sg["scoop"] * rng.uniform(0.6, 1.3) * (0.5 if stac else 1.0)
         cents += np.where((tb >= t_on - 0.2) & (tb <= t_end + R),
-                          -scp * np.exp(-np.clip(tb - t_voice, 0, None) / rng.uniform(0.03, 0.06)), 0.0)
+                          -scp * np.exp(-np.clip(tb - t_voice, 0, None) / rng.uniform(*P["style"].get("scoop_tau", (0.03, 0.06)))), 0.0)
         cents += -rng.uniform(5, 25) * _smoothstep((tb - t_end) / max(R, 0.05)) * seg     # falling release
     if marc:
         for i in range(N):
@@ -1274,10 +1282,12 @@ def _render_singer(sg: dict, notes: list[dict], P: dict, n: int, sr: int, cons_g
     cents += dr + fl + vd * vib_env * np.sin(vph)
     f0b = np.clip(440.0 * 2 ** ((cents / 100.0 - 69) / 12), 25.0, min(4000.0, 0.2 * sr))
     # voice quality (Rd): effort, pitch, breath, falsetto
-    rdv = rd + st["rd"] + sg["rd_off"] - 1.5 * (eff - 0.6) + 0.7 * P["breath"] \
+    rdv = rd + st["rd"] + sg["rd_off"] - RD_PER_EFFORT * (eff - 0.6) + 0.7 * P["breath"] \
         + 0.4 * np.clip((mt - (V["lo"] + 7.0)) / 12.0, 0.0, 2.5)
     rdv = rdv + falt * 0.85 * (2.3 - rdv)
     rdv = np.clip(rdv, RD_GRID[0], 2.7)        # Huber et al. 2012: 0.3 pressed
+    if P["mech_rd"]:
+        rdv = (1.0 - falt) * np.minimum(rdv, MECH_RD[0][1]) + falt * np.clip(rdv, *MECH_RD[1])
     lev = 10 ** ((-LEVEL_DB * (1.0 - np.clip(eff, 0, 1.2)) + sg["level_db"] - 4.0 * falt) / 20.0)
     if P.get("vib_am"):                         # level ripple at twice the vibrato rate, +- vib_am dB
         lev = lev * 10 ** (P["vib_am"] * vib_env * np.cos(2.0 * vph) / 20.0)
@@ -1301,6 +1311,10 @@ def _render_singer(sg: dict, notes: list[dict], P: dict, n: int, sr: int, cons_g
     # yielding wall (Bilbao 9.18-9.19): low formants broadened. 50 Hz at F1 = 250 Hz (12.5 at 500): Fujimura &
     # Lindqvist 1971 (JASA 49:541) closed-glottis B1 about 70 Hz close vowels vs 35 Hz semi-open (male), the 35 Hz excess = wall
     Bs[:, 0] += 50.0 * (250.0 / np.maximum(Fs[:, 0], 120.0)) ** 2 + 25.0 * np.clip(rdv - 1.0, 0, None)
+    if P["ra_bw"]:                  # the glottal leak widens F1 and F2: dB1 = 250 (F1/500)^2 Ra/12 (Ra in %), dB2 = dB1/2 F1/F2; Ra = (4.8 Rd - 1) %
+        db1 = 250.0 * (Fs[:, 0] / 500.0) ** 2 * np.clip(4.8 * rdv - 1.0, 0.0, None) / 12.0
+        Bs[:, 0] += db1
+        Bs[:, 1] += 0.5 * db1 * Fs[:, 0] / Fs[:, 1]
     Bs = np.clip(Bs, 30.0, 2000.0)
     Fs = np.clip(Fs, 60.0, 0.49 * sr)
     # ---- per-sample signals and kernel --------------------------------------------------------
@@ -1309,8 +1323,8 @@ def _render_singer(sg: dict, notes: list[dict], P: dict, n: int, sr: int, cons_g
     voiced = 0.0 if P["whisper"] else 1.0
     amp = up(phon * env * lev) * voiced
     rds = up(rdv)
-    # Klatt TL: dB down at 3 kHz (0-24). Slope: A3-A1 moves up to 0.31 dB per dB SPL (Brockmann, speech, extrapolated
-    # to singing) x the 52.5 dB SPL per unit effort below = 16 dB per unit.
+    # Klatt TL: dB down at 3 kHz (0-24). Slope: 0.31 dB of A3-A1 per dB SPL (speech, extrapolated to singing)
+    # x the 52.5 dB SPL per unit effort below = 16 dB per unit (SOURCES.md).
     tl_db = np.clip(16.0 * (0.72 - eff), 0.0, 24.0) + 6.0 * P["breath"] + 8.0 * falt
     fc = 3000.0 / np.sqrt(np.maximum(10 ** (tl_db / 10.0) - 1.0, 1e-3))
     tla = np.clip(1.0 - np.exp(-2 * np.pi * np.minimum(fc, 0.4 * sr) / sr), 0.0, 1.0)
@@ -1326,13 +1340,13 @@ def _render_singer(sg: dict, notes: list[dict], P: dict, n: int, sr: int, cons_g
     na /= np.sqrt(np.mean(na * na)) + 1e-12
     tabs, flows = _tables()
     Pn = int(n * 2200 / sr) + 64
-    # Softer singing is rougher: jitter and shimmer relative to medium phonation are x2.6 / x3.2 soft and
-    # x0.65 / x0.35 loud (Brockmann et al., JSLHR 51:1152, 2008, Table 2, mean of women and men; soft / medium /
-    # loud = 64-69 / 73-79 / 97-99 dB SPL), here at effort 0.3 / 0.6 / 0.9.
+    # Softer singing is rougher: jitter and shimmer relative to medium phonation are x2.6 / x3.1 soft and
+    # x0.65 / x0.32 loud (mean of women and men; soft / medium / loud = 64-69 / 73-79 / 97-99 dB SPL),
+    # here at effort 0.3 / 0.6 / 0.9 (SOURCES.md).
     # ponytail: one factor per singer from the mean effort, not per period; follow the effort if crescendos matter.
     e_mean = float(np.mean(eff)) if np.size(eff) else 0.6
     kj = float(np.exp(np.interp(e_mean, (0.3, 0.6, 0.9), np.log((2.6, 1.0, 0.65)))))
-    ks = float(np.exp(np.interp(e_mean, (0.3, 0.6, 0.9), np.log((3.2, 1.0, 0.35)))))
+    ks = float(np.exp(np.interp(e_mean, (0.3, 0.6, 0.9), np.log((3.1, 1.0, 0.32)))))
     jit, shim = sg["jitter"] * kj * PRAAT_LOCAL, sg["shimmer"] * ks * PRAAT_LOCAL
     rj = np.clip(rng.normal(0, jit, Pn), -3 * jit, 3 * jit)
     rs = np.clip(rng.normal(0, shim, Pn), -0.2, 0.2)
@@ -1407,7 +1421,8 @@ def _params(sr: int, style: str, solo: bool, **kw) -> dict:
         vib_cycle=bool(kw.get("vib_cycle", False)), vib_arch=bool(kw.get("vib_arch", False)),
         octaves=bool(kw.get("octaves", False)), dyn=kw.get("dyn"),
         f1_margin=float(np.clip(kw.get("f1_margin", 0.0), 0.0, 4.0)), coloratura=bool(kw.get("coloratura", False)),
-        end_boost=float(kw.get("end_boost", -1.0)),
+        end_boost=float(kw.get("end_boost", -1.0)), ra_bw=bool(kw.get("ra_bw", False)),
+        mech_rd=bool(kw.get("mech_rd", False)),
     )
 
 
@@ -1504,7 +1519,7 @@ def _note(freq, dur, sr, vel, *, vowel="ah", level_db=0.0, **kw) -> np.ndarray:
 
 
 _VIB_HELP = "vibrato extent, +- cents peak (-1 = the style's own: classical solo 60, choir 30; 0 = straight tone)"
-_STYLE_HELP = "classical|cathedral|gregorian|gospel|pop|children|epic|throat|bulgarian|belt"
+_STYLE_HELP = "classical|cathedral|gregorian|gospel|pop|children|epic|throat|bulgarian|belt|cossack (a loose men's chorus: singers up to 60 cents apart, vowels 6 % apart)|roar (each note starts 11 semitones under its pitch and rises in about 0.1 s)"
 
 
 def _v(x):
@@ -1521,12 +1536,15 @@ def _v(x):
             ring=(-1.0, "singer's formant 0 (untrained) .. 1 (operatic) .. 1.5; -1 = style"),
             mode=("sing", "sing|whisper|shout|falsetto"), style=("classical", _STYLE_HELP),
             lang=("la", "how a syllable is read: la (Latin vowels)|en|es"),
-            bright=(1.0, "0.5 dark .. 2 bright (shelf above 3 kHz)"), seed=(0, "which singer / take"))
+            bright=(1.0, "0.5 dark .. 2 bright (shelf above 3 kHz)"),
+            ra_bw=(False, "true = F1 and F2 bandwidths widen with the glottal return phase Ra (breathy voices have wider formants)"),
+            mech_rd=(False, "true = Rd held to the laryngeal mechanism: chest voice (M1) below 1.0, falsetto (M2) 1.0 to 2.3"),
+            seed=(0, "which singer / take"))
 def voice(freq, dur, sr=DEFAULT_SR, vel=1.0, voice="auto", vowel="ah", vibrato=-1.0, vib_rate=-1.0, breath=-1.0,
-          effort=1.0, ring=-1.0, mode="sing", style="classical", lang="la", bright=1.0, seed=0):
+          effort=1.0, ring=-1.0, mode="sing", style="classical", lang="la", bright=1.0, seed=0, ra_bw=False, mech_rd=False):
     return _note(freq, dur, sr, vel, vowel=vowel, voice=voice, singers=1, vibrato=_v(vibrato), vib_rate=_v(vib_rate),
                  breath=_v(breath), effort=effort, ring=_v(ring), mode=mode, style=style, lang=lang, bright=bright,
-                 seed=seed)
+                 seed=seed, ra_bw=ra_bw, mech_rd=mech_rd)
 
 
 @instrument("vocal_choir", "Choir section of individual singers (own tract, pitch, vibrato, timing each): sopranos .. basses, boys, mixed.",

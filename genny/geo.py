@@ -82,10 +82,29 @@ def landslide(sr=DEFAULT_SR, dur=10.0, blocks=60, size=0.4, seed=0):
     return Ma._fin(y / (np.max(np.abs(y)) + 1e-12) + 0.5 * roar / (np.max(np.abs(roar)) + 1e-12), sr, 0.8)
 
 
+DEBRIS_APPROACH_HZ = (10.0, 35.0)    # median frequency of the approaching flow, far .. at the front
+DEBRIS_APPROACH_DB = 20.0            # rise of the rumble over the approach
+DEBRIS_APPROACH_PEAK = 0.4           # level reached at the front, against the flow's 0.8
+
+
 @sfx("debris_flow", "Debris flow or lahar: successive muddy surges, a 20-50 Hz roar with boulders knocking inside and water over them.",
-     dur=(20.0, "s"), surges=(4, "waves; on a real volcano 4-5, about 10 minutes apart (Bosa et al. 2021): here squeezed into dur"),
+     dur=(20.0, "s"), surges=(4, "waves; on a real volcano 4-5, about 10 minutes apart: here squeezed into dur"),
+     approach=(0.0, "s of rumble before the front arrives: its pitch climbs from 10 to 35 Hz and it grows 20 dB; 0 = none"),
      seed=(0, "variation"))
-def debris_flow(sr=DEFAULT_SR, dur=20.0, surges=4, seed=0):
+def debris_flow(sr=DEFAULT_SR, dur=20.0, surges=4, approach=0.0, seed=0):
+    y = _debris_flow(sr, dur, surges, seed)
+    ap = float(np.clip(approach, 0.0, 300.0))
+    if ap <= 0:
+        return y
+    rng = Ma._rng(seed, 715)
+    n = Ma._n(ap)
+    u = np.arange(n) / n
+    pre = Ma._tvbp(rng.standard_normal(n), DEBRIS_APPROACH_HZ[0] * (DEBRIS_APPROACH_HZ[1] / DEBRIS_APPROACH_HZ[0]) ** u, 0.8)
+    pre *= 10.0 ** (DEBRIS_APPROACH_DB * (u - 1.0) / 20.0)
+    return np.concatenate([Ma._fin(pre, sr, DEBRIS_APPROACH_PEAK, 0.002, 0.002), y])
+
+
+def _debris_flow(sr, dur, surges, seed):
     rng = Ma._rng(seed, 703)
     n = Ma._n(dur)
     t = np.arange(n) / SR
@@ -94,7 +113,7 @@ def debris_flow(sr=DEFAULT_SR, dur=20.0, surges=4, seed=0):
     for i in range(k):
         t0 = dur * (i + rng.uniform(0.0, 0.4)) / k
         env += (0.6 ** i) * np.where(t > t0, (1.0 - np.exp(-(t - t0) / 0.5)) * np.exp(-(t - t0) / (0.35 * dur / k)), 0.0)
-    low = Ma._bp(rng.standard_normal(n), 35.0, 0.8)             # pic at 20-50 Hz (flume, E3S 2023)
+    low = Ma._bp(rng.standard_normal(n), 35.0, 0.8)             # peak at 20-50 Hz
     water = Ma._hp(Ma._lp(rng.standard_normal(n), 3500.0), 500.0)
     y = np.zeros(n)
     for s in rng.uniform(0.0, dur, int(25 * dur)):
@@ -105,8 +124,11 @@ def debris_flow(sr=DEFAULT_SR, dur=20.0, surges=4, seed=0):
     return Ma._fin(env * un(low) + 0.25 * env * un(water) + 0.5 * un(y), sr, 0.8)
 
 
-@sfx("singing_dune", "Singing or booming dune: an avalanche of dry sand gives one sustained, almost pure note near 100 Hz that beats.",
-     freq=(100.0, "Hz; set by the grain size (Douady et al. 2006, Vriend et al. 2007: whichever explains it, about 100)"),
+DUNE_HARMONICS = ((2, 0.3), (3, 0.2), (4, 0.15), (5, 0.1))    # integer harmonics over the boom
+
+
+@sfx("singing_dune", "Singing or booming dune: an avalanche of dry sand gives one sustained note near 100 Hz with its harmonics, that beats.",
+     freq=(100.0, "Hz; 70-105, about 100 (set by the grain size or by the dune's surface layer)"),
      dur=(6.0, "s"), beat=(1.5, "Hz between the patches of grains that do not quite lock"), seed=(0, "variation"))
 def singing_dune(sr=DEFAULT_SR, freq=100.0, dur=6.0, beat=1.5, seed=0):
     rng = Ma._rng(seed, 704)
@@ -115,7 +137,7 @@ def singing_dune(sr=DEFAULT_SR, freq=100.0, dur=6.0, beat=1.5, seed=0):
     f = float(np.clip(freq, 40.0, 500.0))
     fm = np.cumsum(f * (1.0 + 0.01 * Ma._lfn(rng, n, 0.5))) / SR
     body = np.sin(2 * np.pi * fm) + np.sin(2 * np.pi * (fm + float(beat) * t) + 1.0)
-    body = np.tanh(1.5 * body) + 0.15 * np.sin(4 * np.pi * fm)
+    body = np.tanh(1.5 * body) + sum(g * np.sin(2 * np.pi * h * fm) for h, g in DUNE_HARMONICS)
     u = t / dur
     env = np.minimum(u / 0.25, 1.0) ** 2 * np.clip((1.0 - u) / 0.3, 0.0, 1.0)
     hiss = Ma._hp(rng.standard_normal(n), 1500.0) * (0.5 + np.abs(Ma._lfn(rng, n, 25.0)))
@@ -144,18 +166,30 @@ def mud_pot(sr=DEFAULT_SR, dur=6.0, rate=1.2, thick=0.5, seed=0):
     return Ma._fin(Ma._lp(y, 3500.0, 2), sr, 0.8)
 
 
-@sfx("geyser", "Geyser: a tremor of collapsing steam bubbles about 5 cm across, then the jet and its water raining back (Kedar et al. 1998).",
-     dur=(14.0, "s"), rate=(40.0, "bubbles a second in the tremor"), erupt=(0.4, "0..1 when in dur it blows; 1 = tremor only"), seed=(0, "variation"))
-def geyser(sr=DEFAULT_SR, dur=14.0, rate=40.0, erupt=0.4, seed=0):
+GEYSER_REBOUNDS = (1.0, 0.6, 0.35)     # a collapse and its two rebounds
+GEYSER_PEAK = 0.002                    # s: half-width of each pressure peak
+
+
+def geyser_tau(r: float) -> float:
+    """Collapse time (s) of a steam bubble of radius r m: 0.05 s at 5.5 cm, in proportion to r."""
+    return 0.05 * r / 0.055
+
+
+@sfx("geyser", "Geyser: a tremor of collapsing steam bubbles about 5 cm across, each a thump and two rebounds 50 ms apart, then the jet and its water raining back.",
+     dur=(14.0, "s"), rate=(2.0, "bubble collapses a second in the tremor (up to 100-120 a minute)"), erupt=(0.4, "0..1 when in dur it blows; 1 = tremor only"), seed=(0, "variation"))
+def geyser(sr=DEFAULT_SR, dur=14.0, rate=2.0, erupt=0.4, seed=0):
     rng = Ma._rng(seed, 706)
     n = Ma._n(dur)
     t = np.arange(n) / SR
     y = np.zeros(n)
     te = float(np.clip(erupt, 0.05, 1.0)) * dur
-    for s in rng.uniform(0.0, min(te * 1.1, dur), rng.poisson(max(rate, 1.0) * te)):
-        r = 0.05 * rng.uniform(0.6, 1.3)
-        # no column resonance (their result); a collapse is a fast damped Minnaert ring: sharp, two periods
-        _ring(y, s, 3.26 / r, 2.0 * r / 3.26, (s / te) ** 2 * rng.uniform(0.2, 1.0))
+    k = np.arange(int(0.02 * SR)) / SR - 0.01
+    peak = np.exp(-0.5 * (k / GEYSER_PEAK) ** 2)
+    for s in rng.uniform(0.0, min(te * 1.1, dur), rng.poisson(max(rate, 0.1) * te)):
+        r = 0.055 * rng.uniform(0.6, 1.3)
+        a = (s / te) ** 2 * rng.uniform(0.2, 1.0)
+        for j, g in enumerate(GEYSER_REBOUNDS):            # no column resonance: a collapse and its rebounds
+            Ma._place(y, peak, (s + j * geyser_tau(r)) * SR, a * g)
     jet = np.where(t > te, (1.0 - np.exp(-(t - te) / 0.2)) * np.exp(-(t - te) / (0.25 * dur)), 0.0)
     roar = Ma._hp(Ma._lp(rng.standard_normal(n), 6000.0), 150.0)
     fall = Ma._hp(rng.standard_normal(n), 1800.0) * np.where(t > te + 1.0, (1.0 - np.exp(-(t - te - 1.0) / 1.0)) * np.exp(-(t - te) / (0.4 * dur)), 0.0)
@@ -163,10 +197,48 @@ def geyser(sr=DEFAULT_SR, dur=14.0, rate=40.0, erupt=0.4, seed=0):
     return Ma._fin(un(y) + 0.7 * jet * un(roar) + 0.25 * un(fall), sr, 0.8)
 
 
-@sfx("lava", "Strombolian bursts: big gas slugs breaking a lava film in a conduit, a chest-felt thump, the crack of the film, spatter falling back.",
-     dur=(10.0, "s"), bursts=(3, "explosions"), conduit=(25.0, "m depth of the vent, 15..35 (Ripepe, Delle Donne & Ripepe): the thump's pitch"),
-     seed=(0, "variation"))
-def lava(sr=DEFAULT_SR, dur=10.0, bursts=3, conduit=25.0, seed=0):
+LAVA_VENT_R = 2.0      # m: vent radius; the open end adds 0.6 of it to the conduit
+
+
+def lava_f0(depth: float) -> float:
+    """Quarter-wave pitch (Hz) of a conduit open at the vent: 343 / (4 (L + 0.6 a))."""
+    return 343.0 / (4.0 * (depth + 0.6 * LAVA_VENT_R))
+
+
+SLUG = {"radius": 0.8, "length": 22.0, "dp": 4.7e4, "thick": 0.02, "mu": 400.0, "rho": 2700.0, "gamma": 1.1, "dist": 250.0}
+
+
+def strombolian_pulse(radius=SLUG["radius"], length=SLUG["length"], dp=SLUG["dp"], thick=SLUG["thick"], mu=SLUG["mu"],
+                      rho=SLUG["rho"], gamma=SLUG["gamma"], dist=SLUG["dist"], rate: float = 2000.0):
+    """Pressure Pa at ``dist`` m of the single vibration cycle of an overpressurised gas slug under a thin magma
+    film: the film (thickness ``thick``) is a mass on the gas spring, R'' + 12 mu/(rho Req^2) R' + p_air (1 - (Veq/Vg)^g)
+    (1 + e)^2 / (rho Req h) = 0, started at rest with R'' = dp R0^2 / (rho Req^3 h) and cut at the second minimum radius;
+    p = rho_air R (2 R'^2 + R R'') / r. Defaults: 0.8 m, 22 m, 0.47 bar, 2 cm, 400 Pa s, 2700 kg/m3."""
+    pa, rhoa = 1.0e5, 1.1
+    req = (1.5 * radius ** 2 * ((2.0 * radius / 3.0 + length) * (1.0 + dp / pa) ** (1.0 / gamma) - length)) ** (1.0 / 3.0)
+    veq = 2.0 * math.pi * req ** 3 / 3.0 + math.pi * radius ** 2 * length
+    e, ed, dt = radius / req - 1.0, 0.0, 1.0 / rate
+    out, went_down = [], False
+    for i in range(int(3.0 * rate)):
+        if i == 0:
+            a = dp * radius ** 2 / (rho * req ** 3 * thick)
+        else:
+            vg = 2.0 * math.pi * (req * (1.0 + e)) ** 3 / 3.0 + math.pi * radius ** 2 * length
+            a = -12.0 * mu / (rho * req ** 2) * ed - pa * (1.0 - (veq / vg) ** gamma) * (1.0 + e) ** 2 / (rho * req * thick)
+        ed += a * dt
+        e += ed * dt
+        rr = req * (1.0 + e)
+        out.append(rhoa * rr * (2.0 * (req * ed) ** 2 + rr * req * a) / dist)
+        went_down = went_down or ed < 0.0
+        if went_down and ed > 0.0:
+            break
+    return np.asarray(out)
+
+
+@sfx("lava","Strombolian bursts: big gas slugs breaking a lava film in a conduit, a chest-felt thump, the crack of the film, spatter falling back.",
+     dur=(10.0, "s"), bursts=(3, "explosions"), conduit=(25.0, "m depth of the vent, 15..35: the thump's pitch"),
+     seed=(0, "variation"), slug=(0.0, "0..1: level of the ~2 Hz pressure cycle of the gas slug vibrating under the film before it breaks"))
+def lava(sr=DEFAULT_SR, dur=10.0, bursts=3, conduit=25.0, seed=0, slug=0.0):
     rng = Ma._rng(seed, 707)
     n = Ma._n(dur)
     y = np.zeros(n)
@@ -176,9 +248,14 @@ def lava(sr=DEFAULT_SR, dur=10.0, bursts=3, conduit=25.0, seed=0):
         t0 = rng.uniform(0.02, 0.75) * dur
         a = rng.uniform(0.6, 1.0)
         # monopole with a little dipole, quarter-wave conduit; the hearing threshold makes 3.5 Hz a pressure more than a note: its 7th is what is heard
-        f0 = 343.0 / (4.0 * float(np.clip(conduit, 5.0, 60.0)))
+        f0 = lava_f0(float(np.clip(conduit, 5.0, 60.0)))
         for k, g in ((3, 1.0), (5, 0.7), (7, 0.5), (11, 0.25)):
             _ring(y, t0, f0 * k * rng.uniform(0.95, 1.05), 0.25, a * g)
+        if slug > 0.0:
+            cyc = strombolian_pulse(radius=SLUG["radius"] * rng.uniform(0.8, 1.2))
+            cyc = np.interp(np.arange(int(len(cyc) * SR / 2000.0)) / SR, np.arange(len(cyc)) / 2000.0, cyc)
+            _put = min(len(cyc), n - int(t0 * SR))
+            y[int(t0 * SR):int(t0 * SR) + _put] += float(np.clip(slug, 0.0, 1.0)) * a * cyc[:_put] / (np.max(np.abs(cyc)) + 1e-12)
         s = int(t0 * SR)                                        # the film breaking is the audible part
         m = min(n - s, int(0.02 * SR))
         if m > 8:
@@ -188,9 +265,27 @@ def lava(sr=DEFAULT_SR, dur=10.0, bursts=3, conduit=25.0, seed=0):
     return Ma._fin(y + 0.15 * bed / (np.max(np.abs(bed)) + 1e-12), sr, 0.8)
 
 
+CALVING_FIZZ_R = (0.0011, 0.0033)                    # m: melt bubbles ring at 1-3 kHz
+CALVING_MODES = {"typical": (35.0, 17.0), "sliding": (35.0, 24.0), "submarine": (50.0, 32.0)}   # Hz of the spectral peak, dB/kHz above it
+CALVING_FIZZ_PULSE = (15000.0, 20000.0, 0.0002)      # Hz, Hz, s: the high-frequency pulse that opens each melt bubble event
+CALVING_PLUME_R, CALVING_PLUME_VOID, CALVING_PLUME_TAU = 0.2, 0.02, 0.25
+CALVING_PLUME_RISE, CALVING_PINCH_S = 0.085, 0.15
+
+
+def bubble_plume_frequency(radius: float, void: float = CALVING_PLUME_VOID, p0: float = 101325.0, rho: float = 1025.0) -> float:
+    """Hz: f = sqrt(3 p0 / (void rho)) / (2 pi R), the modified Minnaert law of a spherical bubble cloud of radius R."""
+    return math.sqrt(3.0 * p0 / (void * rho)) / (2.0 * math.pi * radius)
+
+
+
 @sfx("glacier_calving", "A glacier calving: deep crack and rumble of the iceberg, the huge splash, then the fizz of air bubbles leaving melting ice (Glowacki & Deane).",
-     dur=(14.0, "s"), size=(1.0, "0.2..3 mass of the block: lower, longer"), seed=(0, "variation"))
-def glacier_calving(sr=DEFAULT_SR, dur=14.0, size=1.0, seed=0):
+     dur=(14.0, "s"), size=(1.0, "0.2..3 mass of the block: lower, longer"), seed=(0, "variation"),
+     pulse=(0.0, "0..1: level of the 15-20 kHz pulse that opens every melt bubble before it rings at 1-3 kHz"),
+     mode=("", " | ".join(("", *CALVING_MODES)) + ": '' the original block; else the rumble gets that detachment's spectrum (peak 35 / 50 Hz, falling 17 / 24 / 32 dB per kHz); sliding adds contacts with the cliff, submarine surfaces late with a weaker splash"),
+     plume=(0.0, "0..2: level of the bubble plume that rings at about 100 Hz after the block is under (Minnaert law of a cloud, rising 8.5 % as it decays; lower for a bigger block)"))
+def glacier_calving(sr=DEFAULT_SR, dur=14.0, size=1.0, seed=0, pulse=0.0, mode="", plume=0.0):
+    if mode not in ("", *CALVING_MODES):
+        raise ValueError("mode must be one of: '', " + ", ".join(CALVING_MODES))
     rng = Ma._rng(seed, 708)
     n = Ma._n(dur)
     t = np.arange(n) / SR
@@ -199,17 +294,36 @@ def glacier_calving(sr=DEFAULT_SR, dur=14.0, size=1.0, seed=0):
     for c in range(12):
         _ring(y, rng.uniform(0.0, 0.8), rng.uniform(120.0, 700.0) / s, 0.02, rng.uniform(0.3, 1.0))
     rum = np.where(t > 0.4, (1.0 - np.exp(-(t - 0.4) / 0.7)) * np.exp(-(t - 0.4) / (0.2 * dur)), 0.0)
-    low = Ma._lp(rng.standard_normal(n), 70.0 / s, 2)
-    ts = 0.25 * dur
+    nz = rng.standard_normal(n)
+    low = Ma._lp(nz, 70.0 / s, 2)
+    if mode:
+        f0, slope = CALVING_MODES[mode]
+        f = np.fft.rfftfreq(n, 1.0 / SR)
+        low = np.fft.irfft(np.fft.rfft(nz) * (f / (f + f0 / s)) * 10.0 ** (-slope * np.maximum(f - f0 / s, 0.0) / 20000.0), n)
+    ts = (0.5 if mode == "submarine" else 0.25) * dur
     sp = np.where(t > ts, (1.0 - np.exp(-(t - ts) / 0.05)) * np.exp(-(t - ts) / (0.1 * dur)), 0.0)
     splash = Ma._hp(Ma._lp(rng.standard_normal(n), 7000.0), 200.0)
     fiz = np.zeros(n)
     w = np.where(t > ts, np.exp(-(t - ts) / (0.5 * dur)), 0.0)
     for b in rng.uniform(ts, dur, int(180 * dur)):
-        r = rng.uniform(0.0003, 0.002)
-        _ring(fiz, b, 3.26 / r, 8.0 / (3.26 / r), rng.uniform(0.2, 1.0) * w[min(int(b * SR), n - 1)])
+        r = rng.uniform(CALVING_FIZZ_R[0], CALVING_FIZZ_R[1])
+        a = rng.uniform(0.2, 1.0) * w[min(int(b * SR), n - 1)]
+        _ring(fiz, b, 3.26 / r, 8.0 / (3.26 / r), a)
+        if pulse > 0.0:
+            _ring(fiz, b - 0.0002, rng.uniform(CALVING_FIZZ_PULSE[0], CALVING_FIZZ_PULSE[1]), CALVING_FIZZ_PULSE[2], float(pulse) * a)
     un = lambda v: v / (np.max(np.abs(v)) + 1e-12)
-    return Ma._fin(0.5 * un(y) + rum * un(low) + 0.7 * sp * un(splash) + 0.12 * un(fiz), sr, 0.8)
+    if mode == "sliding":
+        st = np.zeros(n)
+        for b in np.sort(rng.uniform(0.4, ts, 24)):
+            _ring(st, b, rng.uniform(1500.0, 14000.0), 0.002, rng.uniform(0.3, 1.0))
+        y = y + 0.4 * st / (np.max(np.abs(st)) + 1e-12) * np.max(np.abs(y))
+    out = 0.5 * un(y) + rum * un(low) + (0.35 if mode == "submarine" else 0.7) * sp * un(splash) + 0.12 * un(fiz)
+    if plume > 0.0:
+        tau = t - (ts + CALVING_PINCH_S * math.sqrt(s))
+        env = np.where(tau > 0.0, np.exp(-np.maximum(tau, 0.0) / CALVING_PLUME_TAU), 0.0)
+        f = bubble_plume_frequency(CALVING_PLUME_R * s) * (1.0 + CALVING_PLUME_RISE * (1.0 - env))
+        out = out + float(np.clip(plume, 0.0, 2.0)) * 0.5 * env * np.sin(2.0 * np.pi * np.cumsum(f) / SR)
+    return Ma._fin(out, sr, 0.8)
 
 
 @sfx("sand_storm", "Blown sand: wind, and grain impacts that only start above the threshold and then rise as the cube of its excess (Bagnold; Saltiphone counts).",
@@ -306,7 +420,7 @@ def snowfall(sr=DEFAULT_SR, dur=10.0, rate=0.3, hiss=0.15, seed=0):
     return Ma._fin(y + f, sr, 0.5)
 
 
-@sfx("snow_avalanche", "Powder avalanche: a moving turbulent cloud, blocks of snow thudding inside the flow and the low rumble under it (Kogelnig et al. 2011).",
+@sfx("snow_avalanche", "Powder avalanche: a moving turbulent cloud, blocks of snow thudding inside the flow and the low rumble under it; the cloud roars early, while the front is fast.",
      dur=(12.0, "s"), powder=(0.6, "0 dense flow .. 1 powder cloud"), blocks=(70, "snow blocks"),
      precursor=(0.0, "s of snowpack cracking before the release: faint crackle at a rising rate, a quiet spell, then the slide"),
      density=(200.0, "kg/m3 of the snowpack, 80..500: light snow damps the highs of the cracking"), seed=(0, "variation"))
@@ -320,7 +434,8 @@ def snow_avalanche(sr=DEFAULT_SR, dur=12.0, powder=0.6, blocks=70, precursor=0.0
     return np.concatenate([pc_, y])
 
 
-PRECURSOR_QUIET = 0.15          # share of the precursor that is the quiet spell before release
+AVALANCHE_CLOUD = 0.5           # share of the avalanche over which the powder cloud swells and dies (a spindle)
+PRECURSOR_QUIET = 0.15         # share of the precursor that is the quiet spell before release
 PRECURSOR_LEVEL = 0.05          # peak of the precursor cracking against the avalanche's peak
 PRECURSOR_RATE = (2.0, 60.0)    # cracks per second at the start and at the end of the emission
 
@@ -349,6 +464,7 @@ def _snow_avalanche(sr, dur, powder, blocks, seed):
     env = np.minimum(u / 0.15, 1.0) * np.clip((1.0 - u) / 0.6, 0.0, 1.0) ** 1.2
     pw = float(np.clip(powder, 0.0, 1.0))
     cloud = Ma._tvbp(rng.standard_normal(n), 250.0 + 900.0 * pw * (0.6 + 0.4 * np.abs(Ma._lfn(rng, n, 0.5))), 0.5)
+    spindle = np.sin(np.pi * np.clip(u / AVALANCHE_CLOUD, 0.0, 1.0)) ** 2
     ru = K.avalanche(SR, dur=dur, seed=int(seed))
     ru = np.resize(np.asarray(ru, float), n) if len(ru) != n else np.asarray(ru, float)
     y = np.zeros(n)
@@ -357,7 +473,7 @@ def _snow_avalanche(sr, dur, powder, blocks, seed):
         lev, f = boulder(m, rng.uniform(4.0, 25.0))
         _ring(y, b, min(f, 180.0), 0.03, lev * env[min(int(b * SR), n - 1)])
     un = lambda v: v / (np.max(np.abs(v)) + 1e-12)
-    return Ma._fin((0.3 + 0.7 * pw) * env * un(cloud) + 0.6 * un(y) + 0.8 * un(ru), sr, 0.8)
+    return Ma._fin((0.3 + 0.7 * pw) * spindle * un(cloud) + 0.6 * un(y) + 0.8 * un(ru), sr, 0.8)
 
 
 def _steps_env(n, rate):
@@ -420,3 +536,29 @@ def snow_squeal(sr=DEFAULT_SR, speed=0.2, grain=1.0, dur=1.5, seed=0):
     env = np.minimum(u / 0.1, 1.0) * np.clip((1.0 - u) / 0.2, 0.0, 1.0) * (0.6 + 0.4 * np.abs(Ma._lfn(rng, n, 15.0)))
     y = (2.0 * (ph % 1.0) - 1.0) * env + 0.1 * env * Ma._hp(rng.standard_normal(n), 1000.0)
     return Ma._fin(Ma._lp(y, 4000.0, 2), sr, 0.7)
+
+
+@sfx("snow_rub", "A stick (ski pole, tent peg) rubbed and twisted in cold dry snow: stick-slip locks onto its torsional modes, a harmonic squeal at n x 636 / 2L.",
+     length=(0.3, "m of the stick between the hand and the snow (0.3 m: first mode about 1 kHz)"),
+     temperature=(-15.0, "air temperature in C: silent above -5, full below -10"),
+     dur=(1.0, "s"), seed=(0, "variation"))
+def snow_rub(sr=DEFAULT_SR, length=0.3, temperature=-15.0, dur=1.0, seed=0):
+    from .physical.footsteps import stick_squeal
+    return Ma._fin(stick_squeal(float(np.clip(length, 0.05, 3.0)), float(np.clip(dur, 0.1, 30.0)), float(temperature), int(seed)), sr, 0.7)
+
+
+from . import geo_u  # noqa: E402,F401  (flows, ice and dunes from measurable quantities)
+
+
+def _alias(name, target, desc, **fixed):
+    from .sfx import REGISTRY
+    src = REGISTRY[target]
+    fn = src["fn"]
+    REGISTRY[name] = {"fn": lambda sr=DEFAULT_SR, **kw: fn(sr, **{**fixed, **kw}), "desc": desc,
+                      "params": {k: v for k, v in src["params"].items() if k not in fixed}}
+
+
+_alias("lahar", "debris_flow", "Lahar: the volcanic debris flow, successive muddy surges with a rumble that comes before the front (`debris_flow` with an approach).", approach=6.0)
+_alias("strombolian", "lava", "Strombolian explosions: gas slugs breaking in a conduit (`lava`).")
+_alias("mud_volcano", "mud_pot", "Mud volcano: hemispheric bubbles of a thick mud, slower and heavier than a pot (`mud_pot` with a thick mud).", thick=2.0)
+_alias("lake_ice", "ice_crack", "Lake ice singing and cracking: the falling dispersed whistle of the plate, then the crack (`ice_crack`).")

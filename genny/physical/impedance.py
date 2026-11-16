@@ -32,9 +32,8 @@ C, RHO = 340.0, 1.2
 LV, LT, CPCV = 4e-8, 5.6e-8, 1.4          # Guillemain Sec. II A (m K s)
 BORE_R = 7e-3                              # clarinet bore radius (Guillemain)
 REED_F, REED_Q = 2205.0, 0.3               # Guillemain Sec. IV E (Chatziioannou: 2095 Hz, 0.23 squeaks at E5-F#5)
-# Open tone holes: above the lattice cutoff the bore resonances are "very slightly marked" and the cutoff hardly
-# depends on the note (Benade, in Chaigne & Kergomard 2016, 7.8); about 1.5 kHz on a clarinet (Lefebvre 2010).
-# A plain cylinder keeps its high peaks and the reed locks onto the one nearest f_r (a squeak on every note above
+# Open tone holes: above the lattice cutoff the bore resonances are weakly marked and the cutoff hardly
+# depends on the note. A plain cylinder keeps its high peaks and the reed locks onto the one nearest f_r (a squeak on every note above
 # E4); one pole at the cutoff in the loop stands for the lattice.
 TONEHOLE_FC = 1500.0
 CONE = dict(R=4e-3, angle=2.0)             # reed-end radius (m) and full apex angle (deg) of the conical bore
@@ -63,6 +62,17 @@ def cone_peaks(L: float, xe: float) -> tuple[float, float]:
     w1 = C * (12 * math.pi * L + 9 * math.pi ** 2 * xe + 16 * L) / (4 * L * (4 * L + 3 * math.pi * xe + 4 * xe))
     w2 = C * (28 * math.pi * L + 49 * math.pi ** 2 * xe + 16 * L) / (4 * L * (4 * L + 7 * math.pi * xe + 4 * xe))
     return w1, w2
+
+
+def tube_loss_alpha(f, R: float = BORE_R) -> np.ndarray:
+    """Amplitude loss per metre (1/m) of a cylindrical bore of radius R m at frequency f Hz: 2.96e-5 sqrt(f) / R."""
+    return 2.96e-5 * np.sqrt(np.asarray(f, float)) / R
+
+
+def round_trip_loss(L: float, f0, R: float = BORE_R) -> np.ndarray:
+    """Round-trip amplitude factor exp(-2 alpha L) of a bore of length L m, alpha taken at the playing frequency f0
+    (the ``loss_filter`` one-pole is exact at the first two peaks instead)."""
+    return np.exp(-2.0 * tube_loss_alpha(f0, R) * L)
 
 
 def loss_filter(L: float, sr: float, R: float = BORE_R, xe: float | None = None) -> tuple[float, float]:

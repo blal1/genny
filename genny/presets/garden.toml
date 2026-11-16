@@ -1,0 +1,12 @@
+schema = "genny.preset/1"
+family = "garden"
+# rpm: the machine's crankshaft speed.
+
+[souffleur]
+rpm = 7500.0
+
+[taille-haie]
+rpm = 6000.0
+
+[debroussailleuse]
+rpm = 8500.0

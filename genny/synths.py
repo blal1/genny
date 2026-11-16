@@ -14,10 +14,12 @@ from scipy import signal as _sig
 
 from . import filters as F
 from . import osc as O
-from .core import DEFAULT_SR
+from .core import DEFAULT_SR, samples
 from .env import adsr, apply
 from .fx import _per_channel, effect
-from .instruments import _cut, _fm_cap, _harmonics, _n, _off, _roll, _spectrum, _vibrato, decay_env, instrument
+from .notes import to_hz
+from .sfx import sfx
+from .instruments import _soften, _cut, _fm_cap, _harmonics, _n, _off, _roll, _spectrum, _vibrato, decay_env, instrument
 
 FM_MEX_ATTACK = 0.002
 FM_MEX_DECAY = 0.8
@@ -314,7 +316,33 @@ def packet_pad(freq, dur, sr=DEFAULT_SR, vel=1.0, cutoff=0.5, res=0.3, attack=0.
     m = 1.0 + 10.0 * c
     if m * freq < 0.45 * sr:
         y = y + float(np.clip(res, 0.0, 1.0)) * np.sin(2 * np.pi * ((ph * m) % 1.0)) * (1.0 - ph)
+    y = _soften(y, freq, sr, harm=6.0, lo=1800.0, hi=3000.0)
     return apply(y * PACKET_OUT, adsr(dur, attack, 0.3, 0.9, release, sr)) * (0.6 + 0.4 * vel)
+
+
+FAT_PULSE = (0.49, 0.5, 2.01, 0.005, 500.0)   # cosine depth, offset, denominator ratio, output gain, high-pass Hz
+
+
+def fat_pulse_wave(freq, n, sr=DEFAULT_SR, ratio=FAT_PULSE[2]):
+    """Ratio of two raised cosines: narrow pulses on f and on ratio*f that slide past each other."""
+    a, b, _, g, hp = FAT_PULSE
+    num = a * np.cos(2 * np.pi * O.phase(freq, n, sr)) + b
+    den = a * np.cos(2 * np.pi * O.phase(freq * ratio, n, sr)) + b
+    y = g * num / den
+    c = 1.0 - 2.0 * np.pi * hp / sr
+    for _ in range(2):
+        y = _sig.lfilter([c, -c], [1.0, -c], y)
+    return y
+
+
+@instrument("fat_pulse", "Combing pulse-train pad: two raised cosines divided, narrow pulses on f and 2.01 f that "
+            "slowly swap, an odd-even shifting spectrum (Farnell MEX pad).",
+            family="pad", span=("C2", "C5"), ratio=(2.01, "denominator / note frequency: 2 static, 2.01 slow swap"),
+            attack=(0.05, "s"), release=(0.3, "s"))
+def fat_pulse(freq, dur, sr=DEFAULT_SR, vel=1.0, ratio=2.01, attack=0.05, release=0.3):
+    n = _n(dur, sr, release)
+    y = _soften(fat_pulse_wave(freq, n, sr, float(np.clip(ratio, 1.0, 4.0))), freq, sr, harm=2.5, lo=600.0, hi=1100.0)
+    return apply(y, adsr(dur, attack, 0.1, 1.0, release, sr)) * (0.6 + 0.4 * vel) * 2.9
 
 
 @instrument("padsynth", "PADsynth: every harmonic widened into a band of random phases, one huge loop with a natural chorus (Nasca, ZynAddSubFX).",
@@ -337,3 +365,158 @@ def padsynth(freq, dur, sr=DEFAULT_SR, vel=1.0, bw=40.0, tilt=1.0, attack=0.5, r
     table /= np.max(np.abs(table)) * 1.4142 + 1e-30
     n = _n(dur, sr, release)
     return apply(table[(np.arange(n) + rng.integers(N)) % N], adsr(dur, attack, 0.3, 0.9, release, sr)) * (0.6 + 0.4 * vel)
+
+
+@instrument("scanned", "Scanned synthesis: a ring of masses on springs, struck and left to move slowly, read as the wavetable of the note "
+            "(evolving, vocal-like drones and bells).",
+            family="synth", span=("C2", "C6"), stiffness=(0.3, "spring stiffness, 0..1 of the stability limit"),
+            t60=(2.0, "s: decay of the masses' motion (the timbre settles towards a sine)"),
+            shape=("hammer", "hammer | pluck | noise: the initial displacement"), position=(0.3, "0..1 where the hammer strikes"),
+            connect=("ring", "ring | line | random (ring plus 32 random springs)"), rate=(200.0, "Hz: network updates per second"),
+            attack=(0.01, "s"), release=(0.4, "s"), seed=(0, "random springs and noise shape"))
+def scanned(freq, dur, sr=DEFAULT_SR, vel=1.0, stiffness=0.3, t60=2.0, shape="hammer", position=0.3, connect="ring",
+            rate=200.0, attack=0.01, release=0.4, seed=0):
+    n = _n(dur, sr, release)
+    y = O.scanned(freq, n, sr, rate=float(rate), stiffness=float(stiffness), t60=float(t60), shape=str(shape),
+                  position=float(position), connect="ring" if connect == "random" else str(connect),
+                  links=32 if connect == "random" else 0, seed=int(seed), top=_cut(freq, 10, 1500.0, 3500.0))
+    return apply(y, adsr(dur, attack, 0.1, 1.0, release, sr)) * (0.6 + 0.4 * vel)
+
+
+def _fades(y, sr, ms=5.0):
+    k = min(int(ms * 1e-3 * sr), len(y) // 2)
+    if k > 0:
+        r = np.linspace(0.0, 1.0, k).reshape((k,) + (1,) * (y.ndim - 1))
+        y[:k] *= r
+        y[-k:] *= r[::-1]
+    return y
+
+
+@sfx("chaos", "Chaotic map heard as audio (logistic, Henon, Lorenz, Latoocarfian, cusp, gingerbreadman...): glitch, static, alien chatter.",
+     kind=("henon", "logistic | henon | lorenz | latoocarfian | cusp | gingerbreadman | standard | quad | fbsine | lincong | crackle"),
+     rate=(4000.0, "Hz: iterations per second"), rate_end=(None, "Hz at the end (exponential sweep); None = fixed"),
+     interp=("cubic", "none (held steps) | linear | cubic"), a=(None, "first map parameter (None = default)"),
+     b=(None, "second map parameter (None = default)"), dur=(1.0, "s"))
+def chaos_sfx(sr=DEFAULT_SR, kind="henon", rate=4000.0, rate_end=None, interp="cubic", a=None, b=None, dur=1.0):
+    n = samples(dur, sr)
+    r = float(rate) if rate_end is None else O.sweep(float(rate), float(rate_end), dur, sr)[:n]
+    p = list(O.CHAOS_PARAMS[kind])
+    for i, v in enumerate((a, b)):
+        if v is not None and i < len(p):
+            p[i] = float(v)
+    y = O.chaos(kind, r, n, sr, interp=str(interp), params=p)
+    return _fades(_sig.sosfilt(_sig.butter(2, 20.0, "highpass", fs=sr, output="sos"), y) * 0.5, sr)
+
+
+RISSET_RATIOS = (1.0, 1.6, 2.2, 2.3)
+RISSET_AMPS = (1.0, 1.5, 2.0, 1.5)
+
+
+@sfx("risset_drum", "Risset drum: inharmonic partials 1, 1.6, 2.2, 2.3 of the pitch, a band of noise around `cf` and a long fundamental.",
+     freq=(100.0, "Hz or note"), decay=(2.0, "s"), cf=(500.0, "Hz: centre of the noise band"), bw=(400.0, "Hz: width of the noise band"),
+     noise=(0.25, "0..1 share of noise"), seed=(0, "noise"))
+def risset_drum(sr=DEFAULT_SR, freq=100.0, decay=2.0, cf=500.0, bw=400.0, noise=0.25, seed=0):
+    f = to_hz(freq)
+    decay = max(float(decay), 0.05)
+    n = samples(decay, sr)
+    t = np.arange(n) / sr
+    tone = 1.0 - float(noise)
+    half = n // 2
+    env2 = 2.0 ** (-t[:half] / (decay / 16.0))
+    partials = 0.17 * sum(a * np.sin(2 * np.pi * f * r * t[:half]) for r, a in zip(RISSET_RATIOS, RISSET_AMPS))
+    band = _sig.sosfilt(_sig.butter(6, min(float(bw), 0.45 * sr), "lowpass", fs=sr, output="sos"),
+                        np.random.default_rng(int(seed)).uniform(-1.0, 1.0, half))
+    y = tone * O.sine(f, n, sr) * 2.0 ** (-t / (decay / 8.0))
+    y[:half] += env2 * (float(noise) * O.sine(float(cf), half, sr) * band + tone * partials)
+    return _fades(y / max(float(np.max(np.abs(y))), 1e-12) * 0.8, sr, 2.0)
+
+
+CLICK_KINDS = ("tick", "ping", "ping_long", "cowbell", "resonant", "noise", "drip", "drip_long")
+
+
+def _gated(y, sr, edge=0.005):
+    k = max(1, int(edge * len(y)))
+    y[:k] *= np.linspace(0.0, 1.0, k)
+    y[-k:] *= np.linspace(1.0, 0.0, k)
+    return y
+
+
+def click_sound(kind: str, hz: float, amp: float, sr: int = DEFAULT_SR) -> np.ndarray:
+    """One metronome click: tick (filtered burst), ping / ping_long (10 / 80 ms sine), cowbell (two ring-modulated
+    triangle pairs), resonant (50 ms of resonant noise), noise (5 ms noise click), drip / drip_long (sines at the
+    zeros of J0, 7 / 100 ms)."""
+    def norm(y):
+        return y / max(float(np.max(np.abs(y))), 1e-12)
+    if kind == "tick":
+        m = max(8, int(300 * sr / 44100))
+        x, v = 1, np.empty(m)
+        for i in range(m):
+            x = (479 * x) % 997
+            v[i] = x / 500.0 - 1.0
+        burst = v * 10.0 * 0.2 ** (np.arange(m) / m)
+        y = np.concatenate((burst, np.zeros(int(0.05 * sr))))
+        y = F.biquad(y, "lowpass", min(2.0 * hz, 0.45 * sr), sr, q=6.0)
+        y = _sig.sosfilt(_sig.butter(8, min(hz, 0.45 * sr), "highpass", fs=sr, output="sos"), y)
+        y = norm(y) * amp
+        k = int(0.02 * sr)
+        y[k:] *= np.clip(1.0 - (np.arange(len(y) - k) / (0.03 * sr)), 0.0, 1.0)
+        return y
+    if kind in ("ping", "ping_long"):
+        return _gated(amp * O.sine(hz, samples(0.01 if kind == "ping" else 0.08, sr), sr), sr)
+    if kind == "cowbell":
+        n = samples(0.8, sr)
+        t = np.arange(n) / sr
+        e1 = 0.3 * (0.0005 / 0.3) ** (t / 0.8)
+        e2 = 0.7 * (0.01 / 0.7) ** (np.minimum(t, 0.2) / 0.2) * (t < 0.2)
+        a = O.triangle(hz, n, sr) * O.triangle(hz * 3.46, n, sr)
+        b = O.triangle(hz * 7.3, n, sr) * O.triangle(hz * 1.52, n, sr)
+        return _gated(0.8 * (e1 * a + e2 * b) * amp / 0.5, sr, 0.001)
+    if kind in ("resonant", "noise"):
+        n = samples(0.05 if kind == "resonant" else 0.005, sr)
+        w = np.random.default_rng(int(hz)).uniform(-1.0, 1.0, n + int(0.02 * sr))
+        y = F.biquad(w, "lowpass", min(hz, 0.45 * sr), sr, q=20.0 if kind == "resonant" else 2.0)[-n:]
+        return _gated(amp * norm(y), sr, 0.05 if kind == "resonant" else 0.005)
+    if kind in ("drip", "drip_long"):
+        n = samples(0.25, sr)
+        t = np.arange(n) / sr
+        top = sr / 2.1
+        y = sum(a * np.sin(2 * np.pi * min(top, z * hz) * t) for z, a in zip(DRIP_J0_ZEROS, (0.5, 0.25, 0.125, 0.0625)))
+        y = _sig.lfilter(*_sig.butter(1, 440.0, fs=sr), y * 2.0 ** (-t / 0.015))
+        return _gated(amp * norm(y[:samples(0.007 if kind == "drip" else 0.1, sr)]), sr)
+    raise ValueError(f"click: {' | '.join(CLICK_KINDS)}")
+
+
+DRIP_J0_ZEROS = (2.40483, 5.52008, 8.653, 11.8)
+
+
+@sfx("click_track", "Metronome / click track: accented first beat, swing, eight click sounds (tick, ping, cowbell, drip at the zeros of J0...).",
+     tempo=(120.0, "bpm"), beats=(4, "beats per bar"), bars=(4, "bars"), click=("tick", " | ".join(CLICK_KINDS)),
+     high=(84, "MIDI note of the strong beat"), low=(80, "MIDI note of the other beats"),
+     swing=(0.0, "-1..1: every other beat moves by swing / 3 of a beat"))
+def click_track(sr=DEFAULT_SR, tempo=120.0, beats=4, bars=4, click="tick", high=84, low=80, swing=0.0):
+    beat = 60.0 / float(np.clip(tempo, 20.0, 400.0))
+    nb = max(1, int(beats))
+    total = max(1, int(bars)) * nb
+    hits = [click_sound(str(click), 440.0 * 2 ** ((float(m) - 69) / 12), a, sr) for m, a in ((high, 0.75), (low, 0.5))]
+    out = np.zeros(samples(total * beat, sr) + max(len(h) for h in hits))
+    for i in range(total):
+        b = i % nb
+        at = (i + (float(swing) / 3.0 if b % 2 else 0.0)) * beat
+        h = hits[0 if b == 0 else 1]
+        s = int(round(at * sr))
+        out[s:s + len(h)] += h
+    return _fades(out, sr, 1.0)
+
+
+@sfx("grain_cloud", "Cloud of short grains, each with its own pitch, length, level and place, drawn from ranges (sparkles, bubbles, rain of tones).",
+     density=(30.0, "grains per second"), dur_lo=(0.02, "s shortest grain"), dur_hi=(0.08, "s longest grain"),
+     freq_lo=(300.0, "Hz lowest grain"), freq_hi=(3000.0, "Hz highest grain"), kind=("sine", "sine | fm"),
+     index=(3.0, "fm: largest modulation index"), ratio=(2.0, "fm: modulator / carrier"), spread=(0.0, "0 mono .. 1 grains panned anywhere"),
+     poisson=(True, "random arrivals (false: regular)"), dur=(2.0, "s"), seed=(0, "variation"))
+def grain_cloud_sfx(sr=DEFAULT_SR, density=30.0, dur_lo=0.02, dur_hi=0.08, freq_lo=300.0, freq_hi=3000.0, kind="sine",
+                    index=3.0, ratio=2.0, spread=0.0, poisson=True, dur=2.0, seed=0):
+    from .spectral import grain_cloud
+    y = grain_cloud(samples(dur, sr), sr, float(density), (float(dur_lo), float(dur_hi)), (float(freq_lo), float(freq_hi)),
+                    pan=(-float(spread), float(spread)) if spread else 0.0, kind=str(kind), ratio=float(ratio),
+                    index=(0.0, float(index)), poisson=bool(poisson), seed=int(seed))
+    return _fades(y, sr)

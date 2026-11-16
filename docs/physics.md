@@ -269,4 +269,49 @@ recorder's window admittance).
   models are driven by stochastic surrogates of the simulations in the source papers.
 - **Spring reverb**: `spring_reverb` is a dispersive allpass loop (Välimäki-Parker-Abel stretched allpasses); its
   `model="fd"` is the wire as Fletcher's two coupled wave equations, slow, not the book's helical-spring scheme.
-- Constants without a source are marked `# UNSOURCED` in the code and listed at the end of each module page.
+- Constants without a published source are listed as `connaissance` in `research/SOURCES.md`, with the reason.
+
+## Added in 1.3.0
+
+- Free reeds: `tubes.free_reed` solves the reed-in-a-volume oscillator (`FREE_REED`, `FREE_REED_LOAD`); `harmonium`
+  uses its measured source spectrum.
+- Piano: the soundboard as seen from the bridge has fewer, stronger modes above 1.15 kHz (`ribs`), the bridge
+  conductance follows the key (`bridge_profile`), and the horizontal polarisation radiates by frequency
+  (`orth_profile`).
+- Ground and foliage: `ground_impedance(model="variable_porosity", sigma=Re, alpha=alpha_e)`;
+  `space.foliage_attenuation(freqs, F, a, L)` in dB.
+- Wakes: `wake_intensity` defaults `B=0.7`, `gamma=1e-4` (`WAKE_B`, `WAKE_GAMMA`); `CORR_LENGTH_D` is replaced by
+  `physical.modal.corr_length(re, d)`.
+- Singing glass: the beat follows the rim circumference (pi D), see `friction.md`.
+## Models added in 1.3.0
+
+- Blast: `blast_wave(source="tnt"|"point")` (Kinney Table XI B or A), second shock `blast_secondary`, `impact assembly` (table of
+  zeta), `jet_bore` gain regions (St 0.0705-0.2871 and 0.4964-0.7690), `flute jet_peak`, `aeolian_harp` alpha = m* eta zeta.
+- Weapons v4: Friedlander in pascals, N-wave from the emission point (b^-0.87), impulse law for impacts (Thomson and Lambert-Jonas
+  perforation), `brass.render_case` shell modes, `hopkinson_scale`, `friedlander_peak_freq`, `muzzle_peak_angle`.
+- Two-stroke: crank-rod port areas, blow-down, crankcase pump, scavenging efficiency, tuned expansion chamber.
+- Chips: phase accumulators (scc, wsg, huc6280, vrc6, n163, fds, paula) and FM with log-sine and exponential tables (opl2, opl3, opll).
+- Voice: Rd follows the level (0.917 per effort unit); VOT by place (Lisker and Abramson 1964); `farnell_syrinx`; nasal sinuses (MRI).
+- Footsteps: speed and snow depth; Heglund and Taylor trot and gallop. Thunder: rotation per channel segment (Hill, 16.3 degrees mean
+  absolute, 20.43 degrees rms per axis).
+- Piano: `PianoHammerAction(hysteresis)` (felt hysteresis, Boutillon 1988), loaded junction `networks.loaded_junction`, passive bridge
+  reflectance, Table I of Bensa (`fdstring.table_i_check`).
+- Brass: `brass_shock` (non-linear propagation in the bell); the play pitch rule B43: the STK lip at T >= 0.5 pulls
+  towards the high side, like an outward-striking lip.
+- Sword swing: `arc="haversine"`; Doppler: `Rotor.tip_doppler`, `MembraneDrum.air_shift`; steam (calliope), curved blade (flexatone),
+  film opening (viscous bubble burst).
+- Loudness: Moore-Glasberg loudness and Sottek's Hearing Model (`psychoacoustics_p2`), with their limits; `estimate_f0`.
+  Moore-Glasberg now uses the threshold Ethrq(f) (28.2 dB at 50 Hz down to 3.6 dB from 500 Hz), the gain G and the A and
+  alpha tables per channel (A 8.85 to 4.72, alpha 0.267 to 0.200): tones under 500 Hz are louder (63 Hz at 70 dB 0.76 sone,
+  was 0.45; 1 kHz at 40 dB 0.995 sone as before). `psychoacoustics_p2.procedural_grid` is the taxonomy of procedural audio
+  (5 groups, 65 classes, 9 techniques) with each class tied to catalog names. The ISO 532-3 middle-ear table is not
+  available (paid standard); the model keeps the open tables.
+- Nonverbal voice: `nonverbal.vocalize(temperature=0)` adds no formants (0.025 default, 0.15 for the moan); the temperature
+  loop is only on when it is above 0.
+- Spring reverb: Young's modulus 211 GPa and density 7800 kg/m3 (Parker & Bilbao's table): wave speed +3 %, echo time
+  -2.9 %, dispersion cutoff +3 % against the earlier 200 GPa and 7850. Echo times 29.8-51.3 ms are recovered for the
+  published springs.
+- Two-stroke exhaust chamber (`cyber.tuned_chamber`): diffuser up to 2.5 d1 with an exit area 6.25 times the entry (8 degree
+  cone), final section 0.36 B in `two_stroke` with a chamber and `outboard strokes=2`.
+- Hunt-Crossley hammer, damper and Rhodes tine: constants kept (checked against the thesis tables); `ENTRAIN_TAU` 1.45 s of
+  the stochastic splash entrainment is a choice, not a reading.

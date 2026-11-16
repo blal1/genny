@@ -72,6 +72,36 @@ class FrequencyDependentBridge(BridgeImpedance):
         return v,hf,local
 
 
+def hard_hammer_contact_time(mass, tension, linear_density, strike_ratio, length):
+    """Contact time (s) of a rigid point-mass hammer on a flexible string whose first reflection from the short end
+    ends the contact (valid up to twice the round trip to the near end): tau = ta + (1 + exp(-g ta)) / g, with
+    g = 2 T / (m c) and ta = 2 a / c."""
+    c = math.sqrt(tension / linear_density)
+    g = 2.0 * tension / (mass * c)
+    ta = 2.0 * strike_ratio * length / c
+    return float(ta + (1.0 + math.exp(-g * ta)) / g)
+
+
+def heavy_hammer_energy_transfer(mass, string_mass):
+    """Fraction of the hammer's kinetic energy left in the string by a very heavy hammer, the string taken as
+    two rigid bars: 1 - (m / (m + M/3))^2."""
+    return float(1.0 - (mass / (mass + string_mass / 3.0)) ** 2)
+
+
+def critical_compliance(mass, tension, linear_density):
+    """Hammer compliance (m/N) below which the felt is overdamped by the string: m / (16 mu T)."""
+    return float(mass / (16.0 * linear_density * tension))
+
+
+def soft_hammer_critical_mode(mass, string_mass, compliance, tension, linear_density):
+    """Mode number above which the hammer's compliance cuts the string spectrum (intrinsic frequency of the felt
+    over the string fundamental): 4 M / (pi m sqrt(C / C0))."""
+    a = compliance / critical_compliance(mass, tension, linear_density)
+    return float(4.0 * string_mass / (math.pi * mass * math.sqrt(a)))
+
+
+VOICING_EXPONENT = (2.3, 2.47, 2.63, 2.8, 3.3)
+VOICING_DELTA = 1.0e-3
 
 
 @dataclass
@@ -89,6 +119,8 @@ class PianoHammerAction:
     ``agraffe=True``: the string is a dashpot plus the wave sent toward the agraffe, which comes back
     inverted after 2 d / c = (hammer position ratio) / f0 and pushes the hammer off (string velocity
     (F(t) - F(t - tau)) / R). Contact then depends less on hammer mass in the bass and more on speed.
+    ``hysteresis`` > 0: the felt exponent grows by that amount at every reversal of the compression
+    (the branch restarts from the reversal point) and the hammer leaves below 1 % of its peak force.
     """
     midi_note: int
     sr: int = 48000
@@ -98,6 +130,9 @@ class PianoHammerAction:
     restitution: float = 0.28
     string_impedance: float | None = None
     agraffe: bool = False
+    hysteresis: float = 0.0
+    voicing: int | None = None
+    strike_ratio: float | None = None
 
     _NOTES = (36.0, 60.0, 96.0)
 
@@ -111,6 +146,10 @@ class PianoHammerAction:
                                     else np.exp(np.interp(n, N, np.log((4.0e8, 4.5e9, 1.0e12)))))
         self.string_impedance = float(self.string_impedance if self.string_impedance is not None
                                       else np.exp(np.interp(n, N, np.log((7.89, 7.82, 82.1)))))
+        if self.voicing is not None:
+            pv=VOICING_EXPONENT[int(np.clip(self.voicing,1,5))-1]
+            self.felt_stiffness*=VOICING_DELTA**(self.felt_exponent-pv)
+            self.felt_exponent=pv
         self.last_force_n=np.zeros(0,float)
         self.last_rebound_velocity_m_s=0.0
         self.last_contact_time_s=0.0
@@ -118,7 +157,8 @@ class PianoHammerAction:
     def agraffe_delay_s(self) -> float:
         """Round trip hammer -> agraffe -> hammer: beta / f0, beta the course's hammer position ratio."""
         kp=float(np.clip((self.midi_note-21)/87.0,0.0,1.0))
-        return (0.145-0.060*kp)/midi_frequency(self.midi_note)
+        beta=0.145-0.060*kp if self.strike_ratio is None else float(self.strike_ratio)
+        return beta/midi_frequency(self.midi_note)
 
     def strike(self, velocity: float, *, soft: bool=False) -> np.ndarray:
         vel=float(np.clip(velocity,0.0,1.0))
@@ -130,13 +170,21 @@ class PianoHammerAction:
         dt=1.0/(self.sr*os); yh=ys=0.0; force=[]
         d=max(1,int(round(self.agraffe_delay_s()/dt))) if self.agraffe else 0
         last=0
+        h=max(float(self.hysteresis),0.0); e=p; up=True; c0=f0=cp=fm=0.0
         for i in range(max(8,int(round(0.018*self.sr)))*os):
             yh+=v*dt
             c=yh-ys
             # the agraffe wave can bring the string back onto the hammer up to d steps after a separation
             if c<=0.0 and i>0 and i-last>d:
                 break
-            f=k*c**p if c>0.0 else 0.0
+            if h and c>0.0 and cp>0.0 and (c>cp)!=up and c!=cp:
+                up=c>cp; e+=h; c0=cp; f0=force[-1]
+            f=(f0*(c/c0)**e if e>p and c0>0.0 and f0>0.0 else k*c**p) if c>0.0 else 0.0
+            if h:
+                fm=max(fm,f)
+                if f<fm*0.01 and not up:
+                    f=0.0
+            cp=c
             if f>0.0:
                 last=i
             force.append(f)
@@ -466,8 +514,14 @@ class PolyphonicPiano:
     global_coupling: float = 0.055
     sympathetic_coupling: float = 0.0028
     aliquot_ratios: tuple[float, ...] = (2.0, 3.0, 4.0)
+    action_level: float = 0.0
+    action_kind: str = "noise"
 
     def __post_init__(self):
+        if self.action_kind not in ("noise", "tones"):
+            raise ValueError("action_kind must be noise or tones")
+        self._action = np.zeros(0)
+        self._action_pos = 0
         self.bridge = self.bridge or FrequencyDependentBridge(sr=self.sr)
         self.soundboard = self.soundboard or ModalSoundboard(sr=self.sr)
         self.sympathetic = SympatheticResonatorBank(sr=self.sr, coupling=self.sympathetic_coupling)
@@ -495,6 +549,22 @@ class PolyphonicPiano:
         c = self._course(midi_note)
         c.note_on(velocity, soft_pedal=self.soft)
         self.sympathetic.set_key(int(midi_note), True)
+        if self.action_level > 0.0:
+            self._add_action(int(midi_note), float(np.clip(velocity, 0.0, 1.0)))
+
+    def _add_action(self, midi_note: int, velocity: float):
+        """Key and key-bed transient of a key press (the bank piano's), at action_level times the pp string level
+        (0.1) scaled by the velocity, laid over what is still pending."""
+        from .physical.bank_piano import _action, _action_noise
+        n = int(0.2 * self.sr)
+        level = 0.1 * self.action_level * velocity
+        a = _action_noise(n, self.sr, level, midi_note, self.time_samples % 997) if self.action_kind == "noise" \
+            else _action(n, self.sr, level)
+        rest = self._action[self._action_pos:]
+        out = np.zeros(max(len(rest), n))
+        out[:len(rest)] += rest
+        out[:n] += a
+        self._action, self._action_pos = out, 0
 
     def note_off(self, midi_note: int):
         if int(midi_note) in self.courses:
@@ -560,7 +630,11 @@ class PolyphonicPiano:
         self.last_bridge_energy_j = self.bridge.energy_j
         self.last_soundboard_energy = self.soundboard.modal_energy
         self.time_samples += 1
-        return 0.12 * direct + 0.72 * board_rad + 0.16 * sym_rad
+        act = 0.0
+        if self._action_pos < len(self._action):
+            act = float(self._action[self._action_pos])
+            self._action_pos += 1
+        return 0.12 * direct + 0.72 * board_rad + 0.16 * sym_rad + act
 
     def render(self, dur: float) -> np.ndarray:
         n = max(1, int(round(float(dur) * self.sr)))

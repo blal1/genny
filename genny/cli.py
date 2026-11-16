@@ -13,6 +13,7 @@ from . import drums as D
 from . import fx as FX
 from . import instruments as I
 from . import osc as O
+from . import presets as PR
 from . import sfx as S
 from . import spec as SP
 from . import speech as SPK
@@ -58,6 +59,8 @@ def cmd_synth(args):
 def cmd_seq(args):
     layer = {"type": "seq", "inst": args.inst, "steps": args.steps, "params": _kv(args.p), "vel": args.vel,
              "legato": args.legato, "gap": args.gap, "step": args.step, "transpose": args.transpose}
+    if args.articulation is not None:
+        layer["articulation"] = args.articulation
     if args.bpm:
         layer["bpm"] = args.bpm
     _finish(args, layer)
@@ -70,6 +73,10 @@ def cmd_drum(args):
 
 def cmd_sfx(args):
     layer = {"type": "sfx", "kind": args.kind, "params": _kv(args.p)}
+    if args.level is not None:
+        layer["level"] = args.level
+        if args.normalize == -1.0:
+            args.normalize = None
     _finish(args, layer)
 
 
@@ -93,6 +100,19 @@ def cmd_fx(args):
     _report(Path(args.out))
 
 
+def _use_presets(sp: dict) -> dict:
+    if "presets" not in sp:
+        return sp
+    sp = dict(sp)
+    paths = sp.pop("presets")
+    paths = [paths] if isinstance(paths, str) else paths
+    if not isinstance(paths, list) or not all(isinstance(x, str) for x in paths):
+        raise ValueError('"presets" must be a folder or file path, or a list of them')
+    for x in paths:
+        PR.register(x, "spec")
+    return sp
+
+
 def cmd_render(args):
     specs: list[dict] = []
     if args.json:
@@ -108,6 +128,7 @@ def cmd_render(args):
     ok, failed = 0, 0
     for i, sp in enumerate(specs):
         try:
+            sp = _use_presets(sp)
             path = SP.render_to_file(sp, out_dir=args.out_dir, sr=args.sr)
             if not args.quiet:
                 _report(path)
@@ -128,7 +149,7 @@ def _catalog() -> dict:
         out = {}
         for k, v in reg.items():
             out[k] = {"desc": v["desc"], "params": {p: {"default": d, "help": h} for p, (d, h) in v["params"].items()}}
-            for extra in ("family", "range"):   # instruments: what kind of voice, and the register it is voiced for
+            for extra in ("family", "range", "origin"):   # instruments: what kind of voice, and the register it is voiced for
                 if extra in v:
                     out[k][extra] = v[extra]
         return out
@@ -143,6 +164,7 @@ def _catalog() -> dict:
         "waves": O.WAVES,
         "scales": list(SCALES),
         "chords": list(CHORDS),
+        "presets": {f: PR.list(f) for f in PR.list() if PR.list(f)},
     }
 
 
@@ -163,6 +185,9 @@ def cmd_list(args):
             print("  " + ", ".join(entries))
         else:
             for name, e in entries.items():
+                if isinstance(e, list):          # presets: family -> names
+                    print(f"  {name:<12} " + ", ".join(e))
+                    continue
                 if isinstance(e, str):          # layer types: name -> one-line description
                     print(f"  {name:<12} {e}")
                     continue
@@ -172,6 +197,52 @@ def cmd_list(args):
                 if ps:
                     print(f"  {'':<12}   params: {ps}")
         print()
+
+
+def cmd_presets(args):
+    act, rest = args.action, args.rest
+    if act == "path":
+        for base, org in PR.sources():
+            print(f"{org:<8} {base}{'' if base.exists() else '  (absent)'}")
+        return
+    if act == "list":
+        fams = rest[:1] or PR.list()
+        out = {f: {n: PR.origin(f, n) for n in PR.list(f)} for f in fams}
+        if args.json:
+            print(json.dumps(out, indent=2))
+            return
+        for f, d in out.items():
+            print(f"== {f} ==")
+            for n, o in d.items():
+                print(f"  {n:<20} {o}")
+        return
+    if act == "show":
+        if len(rest) != 2:
+            raise ValueError("usage: genny presets show FAMILY NAME")
+        print(PR.dumps(rest[0], {rest[1]: PR.get(rest[0], rest[1])}))
+        return
+    bad = 0
+    if rest:
+        base = Path(rest[0])
+        files = sorted(base.glob("*.toml")) if base.is_dir() else [base]
+        for f in files:
+            try:
+                PR.load(f)
+                print(f"ok   {f}")
+            except PR.PresetError as e:
+                bad += 1
+                print(f"FAIL {e}")
+    else:
+        for msg in PR.problems():
+            bad += 1
+            print(f"FAIL {msg}")
+        pending = [f for f in PR.list() if f not in PR.declared()]
+        if pending:
+            print(f"not validated (module not imported): {', '.join(pending)}")
+        if not bad:
+            print("ok")
+    if bad:
+        sys.exit(1)
 
 
 def cmd_info(args):
@@ -267,6 +338,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("steps", help="step notation (see AGENTS.md)")
     s.add_argument("--step", type=float, default=0.25, help="default step duration when a token has none")
     s.add_argument("--legato", type=float, default=1.0, help="note length as fraction of step (0.5 = staccato)")
+    s.add_argument("--articulation", type=float, default=None, help="sounding fraction of every step longer than 100 ms (0.75 = the usual articulation ratio)")
     s.add_argument("--gap", type=float, default=0.0, help="extra silence between steps")
     s.add_argument("--transpose", type=float, default=0.0, help="semitones")
     s.add_argument("--bpm", type=float, default=None, help="tempo: step durations, --step and --gap are then in beats")
@@ -285,6 +357,8 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("sfx", help="one sound effect")
     s.add_argument("kind")
     s.add_argument("-p", action="append", metavar="k=v", help="e.g. -p freq=880 -p dur=0.2")
+    s.add_argument("--level", type=lambda v: v if v.lower() == "match" or v.lower().endswith("lufs") else float(v), default=None,
+                   help="output level instead of the peak normalising: dBFS RMS of the loudest 400 ms (-18), 'match' (the sfx level table) or LUFS ('-23lufs')")
     common(s, "sfx.wav")
     s.set_defaults(fn=cmd_sfx)
 
@@ -313,9 +387,15 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(fn=cmd_render)
 
     s = sub.add_parser("list", help="list instruments, drums, sfx, fx, extra layer types and their params")
-    s.add_argument("what", nargs="?", default="all", choices=["all", "instruments", "drums", "sfx", "fx", "layers", "speech", "phonemes", "words", "waves", "scales", "chords"])
+    s.add_argument("what", nargs="?", default="all", choices=["all", "instruments", "drums", "sfx", "fx", "layers", "speech", "phonemes", "words", "waves", "scales", "chords", "presets"])
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_list)
+
+    s = sub.add_parser("presets", help="list, show and check the preset files (builtin, user folder, GENNY_PRESETS)")
+    s.add_argument("action", choices=["list", "show", "check", "path"])
+    s.add_argument("rest", nargs="*", help="list [FAMILY] | show FAMILY NAME | check [PATH] | path")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_presets)
 
     s = sub.add_parser("info", help="print duration, peak/rms, loudness and brightness (sharpness, energy above 5 kHz) of wav files")
     s.add_argument("files", nargs="+")

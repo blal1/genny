@@ -19,7 +19,9 @@ from .dsp import a_weighting_db
 from .engines import diesel_engine
 from .foley import P, _fin, _n, _put
 from .friction import brake_squeal
+from . import presets
 from .matter import _lfn, arc
+from .presets import F
 from .road import _band, _fit, _kind, _modes, air_system, ev_whine
 from .sfx import sfx
 
@@ -98,11 +100,15 @@ def creep_cutoff(speed, a=PATCH_A):
     return speed / (2.0 * a), 2.405 * speed / (2.0 * math.pi * a)
 
 
-def creep_noise(creep, speed, n, rng, a=PATCH_A, b=PATCH_B, load=WHEEL_LOAD, mu=0.3):
+def creep_noise(creep, speed, n, rng, a=PATCH_A, b=PATCH_B, load=WHEEL_LOAD, mu=0.3, follow=False):
     """What ``foley.train`` hears of a creeping wheel: a creep fluctuating over the rail's roughness (white, 50 %) through the brush of
     `creep_force`, which follows it only below V / 2a and flattens at mu P. The ripple of Q as a fraction of mu P, so it grows with the creep and
     dies once the whole patch slides."""
-    xi = float(creep) * (1.0 + 0.5 * rng.standard_normal(n))
+    wn = rng.standard_normal(n)
+    if follow:                                              # drop the creep the patch cannot follow, above V / 2a
+        wn = sosfilt(butter(2, min(creep_cutoff(speed, a)[0], 0.45 * P), "low", fs=P, output="sos"), wn)
+        wn /= max(float(np.std(wn)), 1e-12)
+    xi = float(creep) * (1.0 + 0.5 * wn)
     q = creep_transient(np.ascontiguousarray(xi), float(speed), load, a, b, mu, 3)
     m = _n(0.01)                                            # the patch's own start from rest is not part of the ripple
     q[:m] = q[m]
@@ -119,6 +125,15 @@ def carter_force(xi, load=WHEEL_LOAD, a=PATCH_A, radius=0.46, mu=0.3):
     return -np.sign(xi) * float(mu) * float(load) * (1.0 - (1.0 - s) ** 2)
 
 
+def vermeulen_force(xi, load=WHEEL_LOAD, a=PATCH_A, b=PATCH_B, mu=0.3):
+    """Three-dimensional rolling contact, Vermeulen-Johnson closed form: Q / mu P = 1 - (1 - xi / xi_s)^3 below xi_s = 3 mu P / k,
+    mu P beyond, k the slope of `creep_force` at small creep; opposite in sign to the creep."""
+    k = (8.0 * float(a) * float(b) / 3.0) * 1.1 * E_STAR
+    xs = 3.0 * float(mu) * float(load) / k
+    s = np.minimum(np.abs(np.asarray(xi, float)) / xs, 1.0)
+    return -np.sign(xi) * float(mu) * float(load) * (1.0 - (1.0 - s) ** 3)
+
+
 def halfspace_resonance(mass, a, shear=81e9, density=7850.0, nu=0.3):
     """Hz and damping ratio of a rigid disc of radius ``a`` carrying ``mass`` on an elastic half-space: stiffness 4 G a / (1 - nu),
     radiation damping 3.4 a^2 sqrt(rho G) / (1 - nu), so zeta = 0.425 / sqrt(B), B = (1 - nu) m / (4 rho a^3)."""
@@ -127,8 +142,11 @@ def halfspace_resonance(mass, a, shear=81e9, density=7850.0, nu=0.3):
     return math.sqrt(k / mass) / (2.0 * math.pi), c / (2.0 * math.sqrt(k * mass))
 
 
-def contact_resonance(load=WHEEL_LOAD, mass=30.0, radius=0.3):
-    """Hertz: delta0 = (9 W^2 / (16 R E*^2))^(1/3), stiffness 3 W / (2 delta0), on an effective mass of wheel and rail."""
+def contact_resonance(load=WHEEL_LOAD, mass=30.0, radius=0.3, model="hertz"):
+    """Hertz: delta0 = (9 W^2 / (16 R E*^2))^(1/3), stiffness 3 W / (2 delta0), on an effective mass of wheel and rail. ``model`` halfspace:
+    the patch as a rigid disc on an elastic half-space, `halfspace_resonance`."""
+    if model == "halfspace":
+        return halfspace_resonance(mass, PATCH_A)[0]
     d0 = (9.0 * load ** 2 / (16.0 * radius * E_STAR ** 2)) ** (1.0 / 3.0)
     return math.sqrt(3.0 * load / (2.0 * d0 * mass)) / (2.0 * math.pi)
 
@@ -150,11 +168,16 @@ def _hertz(z, w0, zeta):
 CONTACT_Q = 2.5                                             # in contact at A/d0 = .30, leaves it at .55: at resonance Q A = d0 puts Q in 1.8-3.3
 
 
-def corrugated_contact(freq, ratio, n, f0=None):
-    """Compression / static compression for corrugations of amplitude ``ratio`` static compressions passed at ``freq`` Hz (number or curve)."""
+def corrugated_contact(freq, ratio, n, f0=None, support="hertz"):
+    """Compression / static compression for corrugations of amplitude ``ratio`` static compressions passed at ``freq`` Hz (number or curve).
+    ``support`` halfspace takes the resonance and its radiation damping from `halfspace_resonance` instead of the Hertz stiffness."""
     f = np.broadcast_to(np.asarray(freq, float), (n,))
     z = float(ratio) * np.sin(2.0 * np.pi * np.cumsum(f) / P)
-    return _hertz(np.ascontiguousarray(z), 2.0 * math.pi * (contact_resonance() if f0 is None else f0), 0.5 / CONTACT_Q)
+    zeta = 0.5 / CONTACT_Q
+    if support == "halfspace":
+        hz, zeta = halfspace_resonance(30.0, PATCH_A)
+        f0 = hz if f0 is None else f0
+    return _hertz(np.ascontiguousarray(z), 2.0 * math.pi * (contact_resonance() if f0 is None else f0), zeta)
 
 
 # =============================================================================================
@@ -251,7 +274,8 @@ STRAIGHT_DBA = 69.0
 # 69 in all. Calculated: for the largest gap to be at 1.6 kHz while 2 kHz is loudest, the floor must dip at 1.6 kHz, to 55; 51 at the node, since the bands interpolate between nodes.
 # Above 2 kHz, 50 at the nodes: with 73 at 4 kHz, less would open a gap over 25 dB there (measured: 43 dB with no floor above 2 kHz).
 FLOOR_DBA = {f: (51.0 if abs(np.log2(f / 1600.0)) < 1 / 6 else 60.0 if f < 2100.0 else 50.0) for f in _HN_F if 300.0 < f < 4500.0}
-MODAL_KG, MODAL_ZETA = 50.0, 1e-3                           # wheel modes, lightly damped
+HARMONIC_DB = {2: -33.0, 3: -40.0}                          # dB under the fundamental of a 4 kHz squeal: peaks at 8 kHz and 12 kHz
+MODAL_KG, MODAL_ZETA = 50.0, 1e-3                          # wheel modes, lightly damped
 REF_DB = 105.0                                              # dB at digital RMS 1: 85 dB(A) is RMS .1
 
 
@@ -281,8 +305,10 @@ def _third(y, f):
 
 
 @sfx("curve_squeal", "Wheel squeal in a tight curve: lateral creep saturates the contact (brush model) and falling friction drives a wheel mode. Below about 200 m it sings, above it only rolls. Bands 630, 800, 1600, 2000, 4000 Hz at R 50 m; umbrella mode 412-850 Hz at R 100 m.",
-     radius=(50.0, "m"), speed=(19.0, "km/h, 10..80"), dur=(3.0, "s"), seed=(0, "variation"))
-def curve_squeal(sr=DEFAULT_SR, radius=50.0, speed=19.0, dur=3.0, seed=0):
+     radius=(50.0, "m"), speed=(19.0, "km/h, 10..80"), dur=(3.0, "s"), seed=(0, "variation"),
+     harmonics=(0.0, "0..1: add the 2nd and 3rd harmonics of each squeal band, 1 = measured on a 4 kHz squeal (-33 dB, -40 dB)"),
+     straight=(0.0, "0..1: 1 = the broadband bed is set to the 69 dB(A) of the same train on straight track instead of the floor table"))
+def curve_squeal(sr=DEFAULT_SR, radius=50.0, speed=19.0, dur=3.0, seed=0, harmonics=0.0, straight=0.0):
     """# ponytail: one mode per wheel, so modes do not compete for one contact: the bands measured together would otherwise be won by one."""
     rng = np.random.default_rng(int(seed))
     n = _n(float(np.clip(dur, 0.2, 30.0)))
@@ -300,11 +326,17 @@ def curve_squeal(sr=DEFAULT_SR, radius=50.0, speed=19.0, dur=3.0, seed=0):
                    w, np.array([MODAL_ZETA]), np.array([1.0 / MODAL_KG]), 3)[1]
         v = _band(v, f / 1.3, min(f * 1.3, 0.45 * P))
         ref = 0.2 * attack_angle(50.0) * 19.0 / 3.6         # a wheel that does not sing is not raised to the band's level
-        y += v * _rms_of(db - float(a_weighting_db(f))) / max(_third(v, f), ref)
+        c = v * _rms_of(db - float(a_weighting_db(f))) / max(_third(v, f), ref)
+        y += c
+        for k, hdb in HARMONIC_DB.items():
+            if harmonics > 0.0 and k * f * 1.3 < 0.45 * P:
+                h = _band(c ** k, k * f / 1.3, k * f * 1.3)
+                y += float(harmonics) * h * np.std(c) * 10.0 ** (hdb / 20.0) / max(float(np.std(h)), 1e-30)
     gain = (kmh / 19.0) ** 1.5                              # as the rolling
     floor = {f: FLOOR_DBA.get(f, 30.0) - float(a_weighting_db(f)) for f in _HN_F}
     bed = _third_octave_noise(n, rng, np.array([floor[f] for f in _HN_F]))
-    bed = bed * sum(_rms_of(FLOOR_DBA[f]) ** 2 for f in FLOOR_DBA) ** 0.5 / max(_a_rms(bed), 1e-12)
+    target = _rms_of(STRAIGHT_DBA) if straight >= 0.5 else sum(_rms_of(FLOOR_DBA[f]) ** 2 for f in FLOOR_DBA) ** 0.5
+    bed = bed * target / max(_a_rms(bed), 1e-12)
     return _fin((y + bed) * gain, sr, None, fade=0.02, tail=0.05)
 
 
@@ -330,8 +362,11 @@ def _v16(rpm, load, dur, seed):
     """16 firings per turn, evenly, into the one turbocharger, one collector. Turbo geared to the crank, whine a^2 (.22 sin p + .1 sin 2p + .05 a sin 7p)
     as `cyber.turbo`."""
     n = _n(dur)
-    y = pipe_engine(sr=P, dur=dur, rpm=rpm, cylinders=16, load=load, cycle=2, offsets=[i / 16.0 for i in range(16)],
-                    header=6.0, pipe=25.0, unequal=0.0, mic=0.15, seed=seed)
+    lead = _n(0.1)                                          # the pipes start empty: the first wavefront (6 + 25 ms later) is a step; render it ahead and drop it
+    r = np.asarray(rpm, float)
+    r = np.concatenate((np.full(lead, r[0]), r)) if r.ndim else r
+    y = pipe_engine(sr=P, dur=dur + lead / P, rpm=r, cylinders=16, load=load, cycle=2, offsets=[i / 16.0 for i in range(16)],
+                    header=6.0, pipe=25.0, unequal=0.0, mic=0.15, seed=seed)[lead:lead + n]
     p = 2.0 * np.pi * np.cumsum(TURBO_GEAR * np.asarray(rpm, float) / 60.0 * np.ones(n)) / P
     a = np.clip(rpm / EMD_MAX, 0.0, 1.0)
     return y + 0.15 * a * a * (0.22 * np.sin(p) + 0.1 * np.sin(2.0 * p) + 0.05 * a * np.sin(7.0 * p)) / 0.37
@@ -361,8 +396,7 @@ def _chime(rng):
     return y
 
 
-SPEEDS = {"train_welded": 300.0, "train_diesel": 60.0, "train_diesel_4t": 80.0, "train_electric": 60.0, "metro_start": 40.0, "tram_roll": 30.0,
-          "curve_squeal": 19.0, "train_brake": 40.0}       # km/h
+SPEEDS = presets.schema("rail_kind", {"speed_kmh": F(float, lo=0.0, hi=600.0, unit="km/h")}, shape=lambda d: d["speed_kmh"])     # the speed of each kind of `rail`
 RAIL_KINDS = ("train_welded", "train_diesel", "train_diesel_4t", "train_electric", "metro_start", "tram_roll", "curve_squeal", "pantograph_arc",
               "tram_bell", "train_door", "train_brake")
 TRAM_JOINT = 12.0                                           # m between tram rail joints

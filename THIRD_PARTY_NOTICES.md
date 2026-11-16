@@ -78,6 +78,12 @@ in the NESdev wiki and in Pan Docs. The FM patches (`FM_PATCHES`) and the wave s
 - `pokey`: no code is taken. The polynomial counter formulas, the dividers and the AUDC logic were read in MAME's
   `pokey.cpp` (Brad Oliver, Eric Smith, Juergen Buchmueller; BSD 3-Clause), which credits Perry McFarlane and the
   Altirra Hardware Reference Manual.
+- `snes`: the 4-point Gaussian interpolation table of the S-DSP is documented in **fullsnes** (Martin Korth, nocash); the table
+  is a hardware measurement, listed there as documentation. No code is taken.
+- `opll`: the YM2413 built-in instrument patch values were consulted in **Nuked-OPLL** (Nuke.YKT, LGPL 2.1+). No code is copied;
+  genny's OPLL voice is its own implementation, only the patch constants are read from the chip's measured ROM.
+- `namco_wsg`, `huc6280`: the register layout, the 20-bit accumulator, the wave index and the 18-bit noise polynomial were read in
+  MAME's `namco.cpp` and `c6280.cpp` (BSD 3-Clause, Aaron Giles, Alex Marshall, Nicola Salmoria and others). No code is copied.
 - `sn76489`: written from the SMS Power development wiki page "SN76489". `dpcm`: from the NESdev wiki, "APU DMC".
 - `stk_fm`: a port of the four-operator FM voices of **The Synthesis ToolKit in C++ (STK)** (`FM.cpp`, `HevyMetl`,
   `PercFlut`, `BeeThree`, `Rhodey`, `Wurley`, `TubeBell`): their gain and sustain tables, operator ratios, envelopes
@@ -368,3 +374,37 @@ Behav. Res. Methods 51, 778-792 (2019) and the package's parameter documentation
 
    END OF TERMS AND CONDITIONS
 ```
+
+## Datasets read for validation (not shipped)
+
+Values measured on these datasets guided some constants; none of their audio, tables or code is in the package or the
+repository.
+
+| Dataset | Licence |
+|---|---|
+| TinySOL, NSynth, VocalSet, MoReS guitars, MP-RIR, InsectSet32 | CC BY 4.0 |
+| TinySOL (Zenodo, IRCAM; used as a test bench in `research/datasets_bench/`, the audio is not redistributed) | CC BY 4.0 |
+| Dresden room responses (Sci. Data 7:255) | licence of the article |
+| CIPIC HRTF, MIT KEMAR | free use |
+| SONICOM HRTF | MIT |
+| Lexique 3.83 | CC BY-SA 4.0 |
+| MAESTRO | CC BY-NC-SA 4.0 (non commercial; never embedded) |
+
+## Tables and values taken as facts (verification round, 2026-11-16)
+
+Numerical facts only (values of hardware tables and published constants); no code or text is copied.
+
+| Item | Source and licence |
+|---|---|
+| The 256 values of the Namco WSG waveform PROM (`chiptune_q.PROM_DEFAULT`) | `prom_waveform_0` of Pacsound (F. Vecoven, vecoven.com/elec/pacman, GPL v3); values only, the table is un-permuted (address = ((i & 0x1f) << 3) \| ((i & 0xe0) >> 5), value << 4); the ROM itself was not downloaded |
+| Protracker period tables (16 finetunes x 36 notes, `PT_PERIODS`) and the vibrato table (`PT_VIBRATO`) | pt2-clone (8bitbubsy, BSD 3-Clause); hardware facts |
+| DX7 algorithm topology (32 algorithms, carriers, modulation matrix, feedback) and the rate, level, LFO and pitch tables | Music Synthesizer for Android (MSFA, Google, Apache-2.0) and Dexed (GPL v3 for the AMS table); facts only, the code is not copied |
+| The ROM1A voice bank used as a test file (`research/dx7_syx/rom1a.syx`, not in the package) | Yamaha factory bank, from yamahablackboxes.com; test only, not redistributed |
+| Chip facts (HuC6280, VRC6, FDS, SAA1099, WonderSwan, SNES, OPL, SID, Paula) | MAME, Nuked-OPL3 / OPLL, reSID, ymfm sources and the nesdev, ws.nesdev, fullsnes and Amiga Hardware Reference documentation; read, values and formulas only |
+| Moore-Glasberg tables (threshold, G, A, alpha) | open implementation of the Cambridge loudness model (M. Slaney, GitHub), values only; ISO 532-3 itself was not available |
+
+## Papers read (web)
+
+Measured values and formulas from published papers (Farin et al. 2015 JGR and JSV on rock impacts, Farin 2019 on landslide
+seismic signals and others listed with `web` in `research/SOURCES.md`) were read online; no text, figure, table or code of
+these works is reproduced in the package. The optional `sofa` extra (`h5py`, BSD 3-Clause) is only imported when a `.sofa` file is read.

@@ -1,0 +1,28 @@
+schema = "genny.preset/1"
+family = "tyre_surface"
+# grains: a particle preset. gain: tyre rolling level left under the grains. hp_hz: high-pass of that bed.
+
+[tyre_gravel]
+grains = "BigRocks"
+gain = 0.6
+hp_hz = 120.0
+
+[tyre_dirt]
+grains = "Crunch"
+gain = 0.5
+hp_hz = 150.0
+
+[tyre_sand]
+grains = "Sandpaper"
+gain = 0.3
+hp_hz = 200.0
+
+[tyre_snow]
+grains = "Crunch"
+gain = 0.25
+hp_hz = 250.0
+
+[tyre_mud]
+grains = "WaterDrops"
+gain = 0.3
+hp_hz = 200.0

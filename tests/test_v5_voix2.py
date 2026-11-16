@@ -20,7 +20,7 @@ def _peak_hz(x, sr=SR, lo=50.0, hi=20000.0):
 def test_oec_helmholtz_frequency():
     assert C.oec_hz() == pytest.approx(1.0 / (2 * math.pi * math.sqrt(20.0 * 1.5e-8 / 350.0)), rel=1e-9)
     assert 5000 < C.oec_hz() < 6000
-    assert C.OEC["lb"] == pytest.approx(1.2 * 0.01 / 0.4e-4)
+    assert C.OEC["lb"] == pytest.approx(1000.0)
 
 
 def test_oec_beak_resonance_near_helmholtz():

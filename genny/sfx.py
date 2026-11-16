@@ -107,8 +107,15 @@ def powerdown(sr=DEFAULT_SR, freq="C6", steps=6, rate=0.07):
     return mix(parts, sr)
 
 
-@sfx("laser", "Descending laser / pew.", start=(2400, "Hz"), end=(300, "Hz"), dur=(0.25, "s"), wave=("saw", "saw|square|sine"))
-def laser(sr=DEFAULT_SR, start=2400, end=300, dur=0.25, wave="saw"):
+@sfx("laser", "Descending laser / pew.", start=(2400, "Hz"), end=(300, "Hz"), dur=(0.25, "s"), wave=("saw", "saw|square|sine"),
+     model=("sweep", "sweep | farnell (six exponential sweeps f0 p^env from above Nyquist, folded, with four snaps through the spark formants; start, end, dur, wave unused)"),
+     tail=(3.3, "s length of the farnell sweeps"), seed=(0, "variation"))
+def laser(sr=DEFAULT_SR, start=2400, end=300, dur=0.25, wave="saw", model="sweep", tail=3.3, seed=0):
+    if model == "farnell":
+        from . import matter
+        return matter.laser_farnell(sr, float(np.clip(tail, 0.1, 10.0)), seed)
+    if model != "sweep":
+        raise ValueError(f"laser model {model!r}: use sweep or farnell")
     f = O.sweep(start, end, dur, sr)
     n = f.shape[0]
     x = O.osc(wave, f, n, sr)
@@ -218,15 +225,32 @@ def success(sr=DEFAULT_SR, freq="E5", up=7, wave="sine"):
     return mix([(a, 0), (b, d1)], sr) * 0.7
 
 
-@sfx("proximity", "Repeating proximity beep (faster = closer).", freq=(1000, "Hz"), rate=(4.0, "beeps per second"), dur=(1.0, "total s"), width=(0.4, "beep length as fraction of period"))
-def proximity(sr=DEFAULT_SR, freq=1000, rate=4.0, dur=1.0, width=0.4):
+@sfx("proximity", "Repeating proximity beep (faster = closer).", freq=(1000, "Hz"), rate=(4.0, "beeps per second"), dur=(1.0, "total s"), width=(0.4, "beep length as fraction of period"),
+     harmonics=("", "levels of the 2nd, 3rd... harmonic against the tone, e.g. '0.1 0.05' (empty = pure sine)"),
+     attack=(4.0, "ms attack of each beep: 0.2 = hard switching click"))
+def proximity(sr=DEFAULT_SR, freq=1000, rate=4.0, dur=1.0, width=0.4, harmonics="", attack=4.0):
     period = 1.0 / rate
+    amps = [float(a) for a in str(harmonics).replace(",", " ").split()]
     parts = []
     t = 0.0
     while t < dur - 1e-6:
-        parts.append((beep(sr, freq=freq, dur=period * width), t))
+        if amps or float(attack) != 4.0:
+            f = to_hz(freq)
+            n = samples(period * width + 0.02, sr)
+            tt = np.arange(n) / sr
+            x = np.sin(2 * np.pi * f * tt) + sum(a * np.sin(2 * np.pi * (k + 2) * f * tt) for k, a in enumerate(amps) if (k + 2) * f < 0.45 * sr)
+            parts.append((apply(x, adsr(period * width, max(float(attack), 0.05) * 1e-3, 0.0, 1.0, 0.02, sr)) * 0.8, t))
+        else:
+            parts.append((beep(sr, freq=freq, dur=period * width), t))
         t += period
     return mix(parts, sr)
+
+
+@sfx("crossing_beeper", "Pedestrian-crossing beeper: a 2.5 kHz sine switched on and off 100 ms each, weak partials at 5 and 7.5 kHz, hard click at every switch-on.",
+     freq=(2500, "Hz"), rate=(5.0, "beeps per second"), dur=(1.0, "total s"), width=(0.5, "on-time as fraction of the period"),
+     harmonics=("0.1 0.05", "levels of the 2nd and 3rd harmonic"), attack=(0.2, "ms attack"))
+def crossing_beeper(sr=DEFAULT_SR, freq=2500, rate=5.0, dur=1.0, width=0.5, harmonics="0.1 0.05", attack=0.2):
+    return proximity(sr, freq=freq, rate=rate, dur=dur, width=width, harmonics=harmonics, attack=attack)
 
 
 @sfx("radar", "Radar ping with echo tail.", freq=(1200, "Hz or note name (110, '110hz' or 'A2')"))
@@ -398,8 +422,9 @@ def countdown(sr=DEFAULT_SR, freq=660):
 
 @sfx("vinyl", "Vinyl record surface: crackle, pops and a little hiss and rumble (the bed under lo-fi music; loop it with \"loop\": true).",
      dur=(4.0, "s"), crackle=(14.0, "clicks per second"), hiss=(0.3, "0..1 surface noise"), seed=(0, "variation"),
-     wear=(0.0, "0..1 worn record: a narrow band of noise near 5 kHz, and the crackle repeats every 1.6 s (one turn)"))
-def vinyl(sr=DEFAULT_SR, dur=4.0, crackle=14.0, hiss=0.3, seed=0, wear=0.0):
+     wear=(0.0, "0..1 worn record: a narrow band of noise near 5 kHz, and the crackle repeats every 1.6 s (one turn)"),
+     wow=(0.0, "pitch wow depth as a fraction of the speed (0.005 = 0.5 %), once per turn of a 33 1/3 rpm record"))
+def vinyl(sr=DEFAULT_SR, dur=4.0, crackle=14.0, hiss=0.3, seed=0, wear=0.0, wow=0.0):
     n = samples(dur, sr)
     rng = np.random.default_rng(40 + int(seed))
     y = np.zeros(n)
@@ -418,14 +443,18 @@ def vinyl(sr=DEFAULT_SR, dur=4.0, crackle=14.0, hiss=0.3, seed=0, wear=0.0):
             reps = np.resize(y[:turn], n)
             y = (1 - w) * y + w * reps
         y += F.biquad(O.white(n, seed=43 + int(seed)), "bandpass", VINYL_WEAR_HZ, sr, q=8.0) * 0.08 * w
+    if wow > 0:
+        t = np.arange(n) / sr
+        y = np.interp(t + float(wow) / (2 * np.pi * VINYL_TURN_HZ) * (1.0 - np.cos(2 * np.pi * VINYL_TURN_HZ * t)), t, y)
     return y * 0.8
 
 
 VINYL_WEAR_HZ = 5000.0
+VINYL_TURN_HZ = 100.0 / 3.0 / 60.0   # 33 1/3 rpm
 VINYL_WEAR_LOOP = 1.6
 SCRATCH_CYCLE = 0.26           # s, a baby scratch back and forth
 SCRATCH_PULL = 0.6             # share of the cycle spent pulling back (slower than the push)
-SCRATCH_RATES = {"baby": 1.0 / 0.26, "scribble": 20.0 / 2.0, "hydroplane": 30.0}
+SCRATCH_RATES = {"baby": 1.0 / SCRATCH_CYCLE, "scribble": 20.0 / 2.0, "hydroplane": 30.0}
 
 
 @sfx("scratch", "DJ scratch on a turntable: the record pushed and pulled under the needle (baby, scribble), or slowed by the "
@@ -456,14 +485,80 @@ def _full_scale(y):
     return y * (0.9 / peak) if peak > 1.0 else y
 
 
-def render_sfx(name: str, sr: int = DEFAULT_SR, **params) -> np.ndarray:
+def rms_db(y, sr: int, window: float = 0.4) -> float:
+    """RMS level in dBFS of the loudest `window` seconds (the whole sound when shorter); channels averaged in power."""
+    x = np.asarray(y, dtype=np.float64)
+    p = np.mean(x ** 2, axis=1) if x.ndim == 2 else x ** 2
+    if p.size == 0:
+        return -240.0
+    n = max(1, min(p.size, int(window * sr)))
+    c = np.cumsum(np.concatenate([[0.0], p]))
+    return float(10 * np.log10((c[n:] - c[:-n]).max() / n + 1e-24))
+
+
+SILENT_DB = -100.0
+
+
+def apply_level(y, sr: int, name: str, level):
+    """Gains an sfx render to `level`: a number = RMS dBFS of the loudest 400 ms, "-23lufs" = K-weighted level of the loudest
+    400 ms, "match" = the relative level of the sfx table (`_sfx_levels`: one fixed gain per sfx, so a mix of sfx is balanced).
+    None / False leaves the sound as the model made it. Silence stays silence. A sound whose peaks would pass -0.5 dBFS goes
+    through the look-ahead limiter; for a number or LUFS the gain is raised until the limited sound reaches the level
+    (a spike too sparse to carry it stops short), for "match" the table gain is applied as it is."""
+    if level is None or level is False:
+        return y
+    y = np.asarray(y, dtype=np.float64)
+    if not np.all(np.isfinite(y)):
+        raise ValueError(f"sfx {name!r} rendered non-finite samples; level not applicable")
+    iterate = True
+    if isinstance(level, str):
+        s = level.strip().lower()
+        if s == "match":
+            from . import _sfx_levels as L
+            if name not in L.GAIN_DB:
+                raise ValueError(f"sfx {name!r} has no entry in genny/_sfx_levels.py; run examples/sfx_level_match.py")
+            iterate = False
+            g = L.GAIN_DB[name]
+            measure = lambda v: 0.0
+        elif s.endswith("lufs"):
+            from .analysis import loudness
+            measure = lambda v: loudness(v, sr, window=0.4)
+            g = float(s[:-4]) - measure(y)
+        else:
+            raise ValueError(f"level {level!r}: use a number (dBFS RMS), 'match' or a number followed by 'lufs'")
+    else:
+        measure = lambda v: rms_db(v, sr)
+        g = float(level) - measure(y)
+    if rms_db(y, sr) < SILENT_DB or not np.isfinite(g):
+        return y
+    from .fx import REGISTRY as FX
+    limit = FX["limiter"]["fn"]
+    ceiling = 10 ** (-0.5 / 20)
+    want = g + measure(y) if iterate else None
+    out = y * 10 ** (g / 20)
+    for _ in range(16):
+        if np.max(np.abs(out)) <= ceiling:
+            break
+        out = limit(out, sr, ceiling=-0.5)
+        if not iterate:
+            break
+        err = want - measure(out)
+        if abs(err) < 0.05:
+            break
+        g += err
+        out = y * 10 ** (g / 20)
+    return out if np.max(np.abs(out)) <= 1.0 else limit(out, sr, ceiling=-0.5)
+
+
+def render_sfx(name: str, sr: int = DEFAULT_SR, out_level=None, **params) -> np.ndarray:
+    """Renders one sfx. `out_level` is the one parameter every sfx shares (it is not passed to the sound): see `apply_level`."""
     if name not in REGISTRY:
         raise ValueError(f"unknown sfx {name!r}; run `genny list sfx`")
     entry = REGISTRY[name]
     unknown = [k for k in params if k not in entry["params"]]
     if unknown:
         raise ValueError(f"sfx {name!r} does not accept params {unknown}; allowed: {list(entry['params'])}")
-    return entry["fn"](sr, **params)
+    return apply_level(entry["fn"](sr, **params), sr, name, out_level)
 
 
 # Registers car_engine into REGISTRY (kept in its own module).
@@ -501,8 +596,9 @@ def wind(sr=DEFAULT_SR, dur=3.0, scale=1.0, seed=0):
 @sfx("thunder", "Thunder: Farnell's layered patch blended with Few's tortuous channel of N-waves, heard from `distance`.",
      dur=(2.5, "s"), distance=(80.0, "m from the strike"), channel=(0.5, "0 Farnell patch only .. 1 physical channel only"),
      strokes=(1, "return strokes down the same channel, 1..3"), walk=("farnell", "channel shape: farnell | ribner (3-D walk)"),
+     horizontal=(0.0, "m of channel running sideways at the top (1000-3000 typical, 2500 for a positive stroke): a longer rumble"),
      fineberg=(0, "1 = add the multi-impact strikes (1-5 noise sub-impacts through a falling band-pass bank), the afterimage (to 14 s) and deepener (to 18.5 s) layers; 2 = also the 0.6 s feedback delay on the strikes and the paper's compressor"), seed=(0, "variation"))
-def thunder(sr=DEFAULT_SR, dur=2.5, distance=80.0, channel=0.5, strokes=1, walk="farnell", fineberg=0, seed=0):
+def thunder(sr=DEFAULT_SR, dur=2.5, distance=80.0, channel=0.5, strokes=1, walk="farnell", fineberg=0, seed=0, horizontal=0.0):
     from .physics import _PHYS_SR, Environment, _to_sr
     from .physical import ambience as amb
     dur = max(float(dur), 0.2)
@@ -519,7 +615,7 @@ def thunder(sr=DEFAULT_SR, dur=2.5, distance=80.0, channel=0.5, strokes=1, walk=
     c = float(np.clip(channel, 0.0, 1.0))
     if c > 0:
         ch = _to_sr(amb.thunder_channel(np.random.default_rng(32 + int(seed)), dur=dur, distance_m=max(float(distance), 1.0),
-                                       strokes=int(strokes), walk=str(walk)), sr)
+                                       strokes=int(strokes), walk=str(walk), horizontal=float(horizontal)), sr)
         ch = np.pad(ch, (0, max(0, len(y) - len(ch))))[:len(y)]
         rms = lambda v: float(np.sqrt(np.mean(v * v))) + 1e-12  # noqa: E731
         y = (1.0 - c) * y / rms(y) + c * ch / rms(ch)
@@ -558,11 +654,17 @@ def fire(sr=DEFAULT_SR, dur=3.0, seed=0):
     return np.mean(y,axis=1) if np.asarray(y).ndim==2 else y
 
 
-@sfx("stream", "Procedural running water using stochastic cavities and bubble resonances.", dur=(3.0,"s"), seed=(0,"variation"))
-def stream(sr=DEFAULT_SR, dur=3.0, seed=0):
+@sfx("stream", "Procedural running water using stochastic cavities and bubble resonances.", dur=(3.0,"s"), seed=(0,"variation"),
+     bedload=(0.0, "0..1 level of the pebbles knocking on the bed (0 = none)"), pebble=(30.0, "mm pebble diameter, 1..300: impact band 87 / D(m) Hz"))
+def stream(sr=DEFAULT_SR, dur=3.0, seed=0, bedload=0.0, pebble=30.0):
     from .physics import Environment
     y=Environment(seed=120+int(seed)).stream(float(dur), sr=sr)
-    return np.mean(y,axis=1) if np.asarray(y).ndim==2 else y
+    y = np.mean(y,axis=1) if np.asarray(y).ndim==2 else y
+    if bedload > 0:
+        from . import matter as Ma
+        b = Ma.bedload_impacts(len(y), Ma._rng(seed, 18), pebble)
+        y = y + float(np.clip(bedload, 0.0, 1.0)) * float(np.sqrt(np.mean(y * y))) * b / (float(np.sqrt(np.mean(b * b))) + 1e-12)
+    return y
 
 
 @sfx("pour", "Reduced physical pouring model: stream + bubbles + rising container cavity resonance.", dur=(2.0,"s"), flow=(1.0,"flow rate"), fill=(0.0,"initial fill 0..1"), seed=(0,"variation"))
@@ -630,7 +732,7 @@ def propeller(sr=DEFAULT_SR, dur=2.0, rpm=2100, blades=3, aircraft="", radius=1.
         if aircraft not in modal.AIRCRAFT:
             raise ValueError(f"unknown aircraft {aircraft!r}; choose from {sorted(modal.AIRCRAFT)}")
         _, rpm_a, power, radius, blades = modal.AIRCRAFT[aircraft]
-        rpm = rpm if rpm != 2100 else rpm_a
+        rpm = rpm if rpm != 2100 else rpm_a; chord = 0.47 if aircraft == "c130" and chord == 0.15 else chord
     d = float(np.clip(dur, 0.05, 60.0))
     y = modal.propeller_tone(float(np.clip(rpm, 50, 20000)), int(np.clip(blades, 1, 12)), float(np.clip(radius, 0.05, 5.0)),
                              float(power), d, np.random.default_rng(int(seed)), chord=float(np.clip(chord, 0.01, 1.0)),
@@ -683,14 +785,19 @@ def gears(sr=DEFAULT_SR,dur=2.0,rpm=1800,driver_teeth=20,driven_teeth=40,backlas
 @sfx("explosion", "Physical blast: Friedlander shock sized by charge and distance, low-frequency expansion, debris and distance propagation.", dur=(1.5,"s"), energy=(1.0,"charge, kg of TNT: sets the shock's length with the distance"), distance=(8.0,"m"), debris=(0.45,"0..1"), enclosure=(0.15,"0..1"),
      windows=(0.0,"0..1 level of the listener's windows shattering, only where the overpressure breaks glass (1 kPa)"),
      explosive=("tnt","charge type, energy x its TNT equivalent: tnt c4 comp_b petn rdx hmx semtex nitroglycerin anfo black_powder tetryl picric_acid tatp tritonal torpex"),
-     burst=("air","air | surface (ground reflection, apparent yield x1.5) | rigid (x2) | crater (x1.4)"), seed=(0,"variation"), boom=(None,"legacy name for energy"))
-def explosion(sr=DEFAULT_SR,dur=1.5,energy=1.0,distance=8.0,debris=.45,enclosure=.15,windows=0.0,seed=0,boom=None,explosive="tnt",burst="air"):
+     burst=("air","air | surface (ground reflection, apparent yield x1.5) | rigid (x2) | crater (x1.4)"), seed=(0,"variation"), boom=(None,"legacy name for energy"),
+     secondary=(0.0,"0..1 second shock behind the first, only inside Z = distance / energy^(1/3) < 0.4 m/kg^(1/3), where the detonation products catch up"),
+     model=("physical","physical | farnell (the layered patch of `explosion_layers`: chirped shock, three blasts, fireball rumble, pressure echo, swept comb; `dur` is the fireball fall time and the other parameters are ignored)"))
+def explosion(sr=DEFAULT_SR,dur=1.5,energy=1.0,distance=8.0,debris=.45,enclosure=.15,windows=0.0,seed=0,boom=None,explosive="tnt",burst="air",secondary=0.0,model="physical"):
     # ``boom`` remains accepted for compatibility; map it to physical energy.
+    if str(model) == "farnell":
+        from .foley import explosion_layers
+        return explosion_layers(sr, fireball=float(dur), seed=int(seed))
     if boom is not None: energy=float(boom)
     from .ordnance import RE
     from .physics import BURST_YIELD, Explosion
     energy=float(energy)*RE[str(explosive)]*BURST_YIELD[str(burst)]
-    return Explosion(float(energy),float(distance),float(debris),float(enclosure),float(windows)).render(
+    return Explosion(float(energy),float(distance),float(debris),float(enclosure),float(windows),float(secondary)).render(
         float(dur),sr=sr,seed=int(seed))
 
 

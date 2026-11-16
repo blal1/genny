@@ -133,6 +133,7 @@ def _fin(y, sr, peak=0.7, fin=0.002, fout=0.02, soft=True) -> np.ndarray:
 
 G_GRAV, RHO_W, P_ATM, GAMMA = 9.8, 1000.0, 101325.0, 1.4
 SIGMA_W, D_GAS, C_WATER, MU_W = 0.0726, 2.122e-5, 1497.0, 8.9e-4
+C_GAS = 343.0
 G_TH = 3.0 * GAMMA * P_ATM / (4.0 * math.pi * RHO_W * D_GAS)      # 1.60e6 1/s
 # psi = PSI_K / w0; PSI_K_HF only for soft=False (frozen arms.ricochet take)
 PSI_K = 16.0 * G_TH * 2.0 * math.pi / (9.0 * (GAMMA - 1.0) ** 2)
@@ -147,23 +148,71 @@ def minnaert(r0, depth: float = 0.0):
     return MINNAERT_WR * math.sqrt(1.0 + RHO_W * G_GRAV * float(depth) / P_ATM) / (2.0 * np.pi * np.asarray(r0, float))
 
 
-def bubble_params(r0, depth: float = 0.0, legacy: bool = False, radiation: bool = True):
-    """Returns (w0, beta, w_d, delta) for radius r0 in metres (rad/s, 1/s, rad/s, -).
+def bubble_thermal(r0, w, p_gas: float = P_ATM, full: bool = False):
+    """(kappa, delta_th) of a gas bubble of radius r0 (m) driven at w (rad/s): the effective polytropic exponent and the thermal
+    damping ratio p_gas Im(Phi) / (rho r0^2 w^2), from Phi = 3 gamma / (1 - 3 (gamma - 1) i chi (z coth z - 1)), z = sqrt(i / chi),
+    chi = D / (w r0^2), D the gas diffusivity at p_gas (uniform pressure in the bubble).
+    ``full``: the pressure wave inside the bubble kept (G1 = w D_v / c_g^2, G2 = w r0^2 / D_v, D_v = gamma D: the complete
+    solution, kappa = gamma G1 G2 Re Phi / 3); it only differs where w r0 approaches the speed of sound in the gas."""
+    r0 = np.asarray(r0, float)
+    chi = D_GAS * P_ATM / float(p_gas) / (np.asarray(w, float) * r0 * r0)
+    if full:
+        d_v = GAMMA * D_GAS * P_ATM / float(p_gas)
+        g1 = np.asarray(w, float) * d_v / C_GAS ** 2
+        g2 = np.asarray(w, float) * r0 * r0 / d_v
+        root = np.sqrt((1j - g1) ** 2 + 4j * g1 / GAMMA)
+        gam1, gam2 = 1j + g1 + root, 1j + g1 - root
+        b1 = np.sqrt(0.5 * GAMMA * g2 * (1j - g1 + root))
+        b2 = np.sqrt(0.5 * GAMMA * g2 * (1j - g1 - root))
+        l1, l2 = b1 / np.tanh(b1) - 1.0, b2 / np.tanh(b2) - 1.0
+        phi = GAMMA * g1 * g2 * (gam1 - gam2) / (l1 * gam2 - l2 * gam1)
+        return phi.real / 3.0, np.abs(phi.imag) * float(p_gas) / (RHO_W * r0 * r0 * np.asarray(w, float) ** 2)
+    z = np.sqrt(1j / chi)
+    phi = 3.0 * GAMMA / (1.0 - 3.0 * (GAMMA - 1.0) * 1j * chi * (z / np.tanh(z) - 1.0))
+    return phi.real / 3.0, np.abs(phi.imag) * float(p_gas) / (RHO_W * r0 * r0 * np.asarray(w, float) ** 2)
 
-    w0 = sqrt(3 gamma p0 - 2 sigma / r0) / (r0 sqrt(rho));  beta = w0 delta / sqrt(delta^2 + 4);
+
+def bubble_params(r0, depth: float = 0.0, legacy: bool = False, radiation: bool = True, tension: bool = True,
+                  thermal: str = "devin"):
+    """Returns (w0, beta, w_d, delta) for radius r0 in metres (rad/s, 1/s, rad/s, -).
+    ``thermal`` "prosperetti": the polytropic exponent and the thermal damping of ``bubble_thermal`` at the bubble's own
+    frequency in place of the Devin form below.
+
+    w0 = sqrt(3 gamma (p0 + 2 sigma / r0) - 2 sigma / r0) / (r0 sqrt(rho));  beta = w0 delta / sqrt(delta^2 + 4);
     delta = w0 r0 / c_f  +  4 mu / (rho w0 r0^2)  +  2 (sqrt(psi - 3) - (3g-1)/(3(g-1))) / (psi - 4),
     psi = PSI_K p0 / (P_atm w0); ``legacy``: PSI_K_HF. depth (m) raises p0.
     ``radiation=False`` drops the w0 r0 / c_f term: a bubble just under the free surface radiates as a
-    dipole, whose loss is negligible.
+    dipole, whose loss is negligible. ``tension=False``: the gas pressure without the 2 sigma / r0 Laplace
+    term, as in the frozen `arms.ricochet` take.
     """
     r0 = np.asarray(r0, float)
     p0 = P_ATM + RHO_W * G_GRAV * float(depth)
-    w0 = np.sqrt(3 * GAMMA * p0 - 2 * SIGMA_W / r0) / (r0 * math.sqrt(RHO_W))
+    w0 = np.sqrt(3 * GAMMA * (p0 + (2 * SIGMA_W / r0 if tension else 0.0)) - 2 * SIGMA_W / r0) / (r0 * math.sqrt(RHO_W))
+    if thermal == "prosperetti":
+        pg = p0 + 2 * SIGMA_W / r0
+        for _ in range(8):
+            kap, d_th = bubble_thermal(r0, w0, pg)
+            w0 = np.sqrt(3 * kap * pg - 2 * SIGMA_W / r0) / (r0 * math.sqrt(RHO_W))
+        d = (w0 * r0 / C_WATER if radiation else 0.0) + 4 * MU_W / (RHO_W * w0 * r0 * r0) + d_th
+        beta = w0 * d / np.sqrt(d * d + 4)
+        return w0, beta, np.sqrt(w0 * w0 - beta * beta), d
+    if thermal != "devin":
+        raise ValueError("thermal must be devin|prosperetti")
     psi = (PSI_K_HF if legacy else PSI_K) * p0 / P_ATM / w0
     d = ((w0 * r0 / C_WATER if radiation else 0.0) + 4 * MU_W / (RHO_W * w0 * r0 * r0)
          + 2 * (np.sqrt(psi - 3) - (3 * GAMMA - 1) / (3 * (GAMMA - 1))) / (psi - 4))
     beta = w0 * d / np.sqrt(d * d + 4)
     return w0, beta, np.sqrt(w0 * w0 - beta * beta), d
+
+
+EPS0_OVER_R0 = 3.7e-4
+
+
+def bubble_peak_pressure(r0, r: float = 1.0, depth: float = 0.0, eps: float = EPS0_OVER_R0):
+    """Peak pressure in Pa at ``r`` m from a bubble of radius ``r0`` m released at ``depth``: rho w0^2 r0^3 (eps0 / r0) / r,
+    the amplitude of its decaying sinusoid; ``eps`` = initial wall displacement over radius (3.7e-4)."""
+    w0 = bubble_params(r0, depth)[0]
+    return RHO_W * w0 ** 2 * np.asarray(r0, float) ** 3 * float(eps) / float(r)
 
 
 @numba.njit(cache=True)
@@ -358,7 +407,7 @@ def _render_bubbles(n, rng, starts, r, depth=(0.002, 0.03), rise=1.0, soft=True,
     out = np.zeros(n)
     if k == 0:
         return out
-    w0 = bubble_params(r, depth=water_depth)[0]
+    w0 = bubble_params(r, depth=water_depth, tension=soft)[0]
     if pitch != 1.0:
         w0 = w0 * pitch
     td = float(transfer_db)
@@ -588,7 +637,28 @@ def _drop(rng, size: float, nb: float = HF_DROP_BUBBLES, secondary: float = 0.5,
 
 
 DROP_DELAY = ((1.0, 2.2), (9.35, 65.0))     # drop diameter mm -> first bubble ms, drops at terminal speed
+
+
+def cavity_depth(d, v):
+    """Maximum depth m of the crater of a drop of diameter ``d`` m hitting water at ``v`` m/s: R = (d^3 v^2 / (3 g))^(1/4)
+    (hemispherical crater, the drop's kinetic energy becoming its potential energy)."""
+    return (np.asarray(d, float) ** 3 * np.asarray(v, float) ** 2 / (3.0 * 9.81)) ** 0.25
+
 DROP_REBOUND = (2.0 * math.sqrt(2.0 * 0.025 / G_GRAV), 2.0 * math.sqrt(2.0 * 0.15 / G_GRAV))
+TAP_R = (0.38e-3, 0.415e-3)     # m: the one bubble a tap drop traps, 8.7..7.9 kHz
+TAP_DELAY = 0.024               # s from contact to pinch-off
+TAP_CLICK = 0.02 / 0.15         # impact level per unit of `click`: ~35 dB under the bubble at the default
+
+
+def _tap_drop(rng, click: float) -> np.ndarray:
+    """A drop falling a few cm (a tap): one small bubble pinched off TAP_DELAY after a faint contact."""
+    n = _n(0.3)
+    w = max(2, int(0.0005 * SR))
+    out = _render_bubbles(n, rng, np.array([w + int(TAP_DELAY * SR)]), np.array([rng.uniform(*TAP_R)]),
+                          depth=(0.0005, 0.002))
+    x = np.linspace(0.0, 1.0, w)
+    out[:w] += click * TAP_CLICK * float(np.max(np.abs(out))) * (1.0 - 4.0 * (x - 0.5) ** 2)
+    return out
 
 
 @sfx("drip", "One water drop into a pool: quiet impact, then 4-5 ringing air bubbles.",
@@ -599,10 +669,19 @@ DROP_REBOUND = (2.0 * math.sqrt(2.0 * 0.025 / G_GRAV), 2.0 * math.sqrt(2.0 * 0.1
      harmonic=(0.0, "0..1 the first bubble's 2 f0 component (air disc trapped under the drop)"),
      crater=(0.0, "0..1 faint tone of the crater closing, f = speed / rim length"),
      impact=("parabolic", "parabolic (a quiet pulse) | franz (noise between U/R and c/R lasting R/U, energy ~ R^3 U^5: "
-                          "big fast drops click much louder)"), seed=(0, "variation"))
-def drip(sr=DEFAULT_SR, size=0.4, bubbles=4.7, secondary=0.5, click=0.15, harmonic=0.0, crater=0.0, impact="parabolic", seed=0):
+                          "big fast drops click much louder)"),
+     regime=("terminal", "terminal (a drop falling far: 4-5 bubbles) | tap (a drop from a tap a few cm up: "
+                         "one 8 kHz bubble, 24 ms after a faint contact; size, bubbles, secondary, harmonic, "
+                         "crater and impact unused)"),
+     seed=(0, "variation"))
+def drip(sr=DEFAULT_SR, size=0.4, bubbles=4.7, secondary=0.5, click=0.15, harmonic=0.0, crater=0.0, impact="parabolic",
+         regime="terminal", seed=0):
     if impact not in ("parabolic", "franz"):
         raise ValueError("impact must be parabolic or franz")
+    if regime not in ("terminal", "tap"):
+        raise ValueError("regime must be terminal or tap")
+    if regime == "tap":
+        return _fin(_tap_drop(_rng(seed, 1), float(np.clip(click, 0, 1))), sr, 0.7, 0.0005, 0.05)
     y = _drop(_rng(seed, 1), float(size), float(bubbles), float(secondary), float(click),
               harmonic=float(np.clip(harmonic, 0, 1)), crater=float(np.clip(crater, 0, 1)), impact=impact)
     return _fin(y, sr, 0.7, 0.0005, 0.05)
@@ -653,7 +732,8 @@ def _splash(sr, size, dur, droplets, seed, soft=True, entrain="exp"):
     y = y + 0.5 * _unit(slap) * 0.5 + 0.35 * _unit(wash)
     cav = np.zeros(n)
     for _ in range(1 + int(size > 0.5)):
-        _place(cav, amb.tube_bubble((6.0 + 14.0 * size) * 1e-3 * rng.uniform(0.7, 1.1), rng, soft=soft),
+        _place(cav, amb.tube_bubble((6.0 + 14.0 * size) * 1e-3 * rng.uniform(0.7, 1.1), rng, soft=soft,
+                                delta_th=None if soft else P.DELTA_TH_FROZEN),
                rng.uniform(0.06, 0.14) * SR)
     y = y + 0.9 * _unit(cav) * math.sqrt(0.25 + size)
     for _ in range(int(np.clip(droplets, 0, 40))):
@@ -729,9 +809,11 @@ def _vessel(src, f0, q, harmonics=(1, 3, 5, 7)):
      neck_len=(0.05, "neck length, m"), material=("glass", "glass|metal|ceramic|plastic|paper (resonance sharpness)"),
      resonance=(0.6, "0..1 how readable the fill pitch is"),
      temperature=(20.0, "liquid temperature in C, 0..95: hot = vapour in the air space (higher pitch) and in the bubbles (larger)"),
-     collective=(0.0, "0..1 level of the low collective mode of the bubbles active together"), seed=(0, "variation"))
+     collective=(0.0, "0..1 level of the low collective mode of the bubbles active together"),
+     drop=(0.0, "m: height of the tap above the vessel floor; 0 = the stock law. Otherwise the fall column Dc = drop - height x fill shrinks as it fills: "
+                "the bubbles' radius goes as Dc and the jet's centre and level fall with it"), seed=(0, "variation"))
 def pour(sr=DEFAULT_SR, dur=4.0, flow=1.0, fill_start=0.05, fill_end=0.9, height=0.15, radius=0.035,
-         neck=0.0, neck_len=0.05, material="glass", resonance=0.6, temperature=20.0, collective=0.0, seed=0):
+         neck=0.0, neck_len=0.05, material="glass", resonance=0.6, temperature=20.0, collective=0.0, drop=0.0, seed=0):
     """Stream, bubbles and vessel resonance. Bubble rate 1580/s x flow, 300 Hz - 6 kHz. Bubble size
     falls as the column height falls; Chosen: the factor 1.3 -> 0.6, the stream:bubble balance
     0.3:0.7 and the flow ramp min(0.8 s, 0.2 dur). The resonance is deliberately readable."""
@@ -743,11 +825,12 @@ def pour(sr=DEFAULT_SR, dur=4.0, flow=1.0, fill_start=0.05, fill_end=0.9, height
     env = _ar(n, min(0.8, 0.2 * dur), min(0.8, 0.2 * dur))
     T = float(np.clip(temperature, 0.0, 95.0))
     hot = vapour_bubble_scale(T) if T != 20.0 else 1.0
+    dc = np.clip(1.0 - float(height) * fill / float(drop), 0.15, 1.0) if drop > 0 else None
     bub, info = bubble_cloud(dur, rng, HF_POUR_RATE * flow * env, R_6K, R_300, "gauss", cluster=0.2,
-                             r_scale=(1.3 - 0.7 * fill) * hot, return_info=True)
-    jet = sum(_fit(amb.farnell_water_voice(n / SR, rng, centre=600.0 + 300.0 * v, slew_ms=1.0), n)
+                             r_scale=(1.3 - 0.7 * fill if dc is None else 1.3 * dc) * hot, return_info=True)
+    jet = sum(_fit(amb.farnell_water_voice(n / SR, rng, centre=(600.0 + 300.0 * v) * (1.0 if dc is None else 0.6 + 0.4 * float(dc[-1])), slew_ms=1.0), n)
               for v in range(3))
-    src = 0.7 * _unit(bub) + 0.3 * _unit(jet) * env
+    src = 0.7 * _unit(bub) + 0.3 * _unit(jet) * env * (1.0 if dc is None else 0.5 + 0.5 * dc)
     if collective > 0 and info["n"]:
         rm = float(np.exp(np.mean(np.log(info["r"]))))
         w0, beta = (float(v) for v in bubble_params(rm)[:2])
@@ -861,7 +944,10 @@ def _hiss(n, rng):
     return _hp(rng.uniform(-1, 1, n) * np.clip(_lfn(rng, n, 1.0) / 3.0, -1, 1) ** 4 * 10.0, 1000.0)
 
 
-def _crackles(n, rng, rate, wood: float = 0.5, sigma: float = 0.7, return_count: bool = False):
+FIRE_AIE_PEAKS = {"spruce": (12000.0,), "douglas": (11000.0, 15000.0), "douglas_wet": (8000.0, 13000.0)}
+
+
+def _crackles(n, rng, rate, wood: float = 0.5, sigma: float = 0.7, return_count: bool = False, peaks=None):
     """Poisson crackles with log-normal sizes.
 
     Each crackle: noise x (linear decay over U(0, 30) ms)^2
@@ -874,7 +960,12 @@ def _crackles(n, rng, rate, wood: float = 0.5, sigma: float = 0.7, return_count:
     for s in times:
         T = max(8, int(rng.random() * 0.030 * SR))
         seg = np.concatenate([rng.uniform(-1, 1, T) * (1.0 - np.arange(T) / T) ** 2, np.zeros(int(0.012 * SR))])
-        fc = 100.0 + 900.0 * rng.random() if rng.random() < wood else 1500.0 + 500.0 * rng.integers(0, 31)
+        if rng.random() < wood:
+            fc = 100.0 + 900.0 * rng.random()
+        elif peaks:
+            fc = float(rng.choice(peaks)) * rng.uniform(0.93, 1.07)
+        else:
+            fc = 1500.0 + 500.0 * rng.integers(0, 31)
         _place(out, _bp(seg, fc, 1.0), s, rng.lognormal(0.0, sigma))
     return (out, len(times)) if return_count else out
 
@@ -1029,10 +1120,27 @@ def cave_drips(sr=DEFAULT_SR, dur=6.0, sources=5, wet=0.6, regime="fast", drop_m
     return _fin(y, sr, 0.7, 0.002, 0.1)
 
 
+BEDLOAD_TAU = 3.7e-3     # s of Hertz contact per metre of granite pebble diameter (1 m/s impact)
+
+
+def bedload_impacts(n, rng, pebble=30.0, rate=60.0):
+    """Pebbles knocking on a river bed: Poisson impacts, each a half-sine of the Hertz contact time 3.7e-3 D s
+    (D = ``pebble`` mm: 30 mm gives a corner near 3 kHz, 5 mm near 17 kHz), amplitude ~ D^1.5 with a log-normal spread."""
+    d = float(np.clip(pebble, 1.0, 300.0)) * 1e-3
+    L = max(3, int(round(BEDLOAD_TAU * d * SR)))
+    pulse = np.sin(np.pi * np.arange(L) / L)
+    out = np.zeros(n)
+    for s in bubble_times(n, rng, float(np.clip(rate, 0.0, 2000.0))):
+        _place(out, pulse * rng.lognormal(0.0, 0.6), s)
+    return out * (d / 0.03) ** 1.5
+
+
 @sfx("waterfall", "Waterfall: near-white roar of countless bubbles with a low rumble that grows with height.",
      dur=(4.0, "s"), height=(6.0, "fall height in m, 0.5..60 (rumble and roar)"),
-     distance=(8.0, "m, 1..200: farther = duller, less bubble detail"), seed=(0, "variation"))
-def waterfall(sr=DEFAULT_SR, dur=4.0, height=6.0, distance=8.0, seed=0):
+     distance=(8.0, "m, 1..200: farther = duller, less bubble detail"), seed=(0, "variation"),
+     bedload=(0.0, "0..1 level of the pebbles rolling on the bed under the water (0 = none)"),
+     pebble=(30.0, "mm, 1..300: pebble diameter; the impact band is 87 / D(m) Hz"))
+def waterfall(sr=DEFAULT_SR, dur=4.0, height=6.0, distance=8.0, seed=0, bedload=0.0, pebble=30.0):
     """A waterfall is near-white noise; at a distance the detail is replaced by noise.
     Detail layer: bubbles at the babbling rate with the breaking-wave power law.
     Chosen: the height and distance mappings and the layer balance."""
@@ -1046,6 +1154,8 @@ def waterfall(sr=DEFAULT_SR, dur=4.0, height=6.0, distance=8.0, seed=0):
     bub = bubble_cloud(dur, rng, HF_BABBLE_RATE, R_6K, R_300 * min(2.0, 1.0 + h / 30.0), "power", alpha=2.2,
                        cluster=0.2)
     y = _unit(roar) + min(1.2, 0.25 * math.sqrt(h)) * _unit(rumble) + 1.6 * near * _unit(bub)
+    if bedload > 0:
+        y = y + float(np.clip(bedload, 0.0, 1.0)) * _unit(bedload_impacts(n, _rng(seed, 16), pebble))
     return _fin(y, sr, 0.7, 0.05, 0.1)
 
 
@@ -1500,12 +1610,16 @@ def flame(sr=DEFAULT_SR, kind="campfire", dur=3.0, rate=1.0, length=0.0, seed=0)
      whine=(0.0, "0..1 pitched whistles of gas escaping through trapped sap"),
      woof=(0.0, "0..1 low air induction under 80 Hz, puffing with the flames"),
      clatter=(0.0, "0..1 burnt pieces settling and falling"),
-     detail=("full", "full: every component; medium: hiss, roar and crackle only (a fire heard from afar)"))
+     detail=("full", "full: every component; medium: hiss, roar and crackle only (a fire heard from afar)"),
+     species=("", "'' = crackles anywhere in 1.5-16.5 kHz | spruce | douglas | douglas_wet: the bright crackles gather on the acoustic emission peaks of that wood (8-15 kHz)"))
 def fire(sr=DEFAULT_SR, dur=4.0, size=0.4, crackle=12.0, wet=0.2, wind=0.2, seed=0, whine=0.0, woof=0.0, clatter=0.0,
-         detail="full"):
+         detail="full", species=""):
     """Per flame front one shared slow control drives roar, crackle rate and hiss together (one noise per
     generator keeps them coherent); a big fire is up to 4 fronts with their own noises. Whine: relaxation
     oscillations of outgassing; woof: 3-80 Hz air induction following the flames; clatter: wooden impacts."""
+    if species and species not in FIRE_AIE_PEAKS:
+        raise ValueError("fire species must be '' or one of " + ", ".join(FIRE_AIE_PEAKS))
+    pk = FIRE_AIE_PEAKS.get(species)
     rng = _rng(seed, 31)
     n = _n(dur)
     size, wet, wind = (float(np.clip(v, 0.0, 1.0)) for v in (size, wet, wind))
@@ -1518,8 +1632,8 @@ def fire(sr=DEFAULT_SR, dur=4.0, size=0.4, crackle=12.0, wet=0.2, wind=0.2, seed
         cs += c / units
         roar = _unit(combustion_roar(n, rng, c, 0.35 + 0.3 * size + 0.5 * wind, 50.0 + 60.0 * size, 3.0))
         cr = _crackles(n, rng, float(np.clip(crackle, 0.0, 150.0)) * (1.0 - 0.5 * wet) / units * c ** 2,
-                       wood=0.5 + 0.4 * wet, sigma=0.7 + 0.5 * wet)
-        hs = _unit(_lp(_hiss(n, rng), 9000.0, 2)) * c
+                       wood=0.5 + 0.4 * wet, sigma=0.7 + 0.5 * wet, peaks=pk)
+        hs =_unit(_lp(_hiss(n, rng), 9000.0, 2)) * c
         lap = _unit(_lapping(n, rng))
         y += (0.4 + 0.8 * size + 0.4 * wind) * roar + 0.35 * _unit(cr) * math.sqrt(min(crackle, 40.0) / 12.0 + 1e-6) \
             + (0.2 + 0.6 * wet) * hs + (0.3 if full else 0.0) * lap
@@ -1625,6 +1739,35 @@ def _snap(rng, t_noise: float, t_sweep: float = 0.010, f_top: float = 7000.0) ->
     w[:m] = 1.0 - np.arange(m) / m
     v = 1.0 - np.arange(n) / n
     return rng.uniform(-1, 1, n) * 0.5 * v ** 4 + np.sin(2 * np.pi * np.cumsum(20.0 + f_top * w) / SR) * w
+
+
+LASER_SD = ((60.0, 7.0, 5000.0), (90.0, 8.0, 3000.0), (400.0, 9.0, 7000.0), (300.0, 17.0, 6000.0), (600.0, 24.0, 9400.0),
+            (3200.0, 65.0, 12400.0))                      # ms of the sweep, base p, f0 Hz: f = f0 p^env, env 1 -> 0
+LASER_CRACK = ((1.0, 7.0), (0.05, 24.0), (0.3, 12.0), (0.15, 19.0))   # amplitude, ms
+LASER_START = (0.0, 0.0, 5.0, 7.0, 9.0, 15.0)             # ms start of each sweep (the cracks use the first four)
+
+
+def laser_farnell(sr=DEFAULT_SR, dur=0.0, seed=0):
+    """Six exponential sweeps f0 p^env (35 kHz to 806 kHz at the start, folded by the sample rate: the aliasing is the
+    sound) started within 15 ms, with four snaps through the spark formant bank."""
+    rng = np.random.default_rng(int(seed))
+    n = int((max(float(dur), 0.0) or 3.3) * SR)
+    sd = np.zeros(n)
+    for (ms, p, f0), t0 in zip(LASER_SD, LASER_START):
+        m = min(int(ms * 1e-3 * SR), max(n - int(t0 * 1e-3 * SR), 0))
+        if m < 2:
+            continue
+        env = 1.0 - np.arange(m) / (ms * 1e-3 * SR)
+        ph = np.cumsum(f0 * p ** env) / SR
+        a = int(t0 * 1e-3 * SR)
+        sd[a:a + m] += np.sin(2 * np.pi * (ph % 1.0)) * env
+    cr = np.zeros(n)
+    for (amp, ms), t0 in zip(LASER_CRACK, LASER_START):
+        c = _formant(_snap(rng, ms * 1e-3, ms * 1e-3)) * amp
+        a = int(t0 * 1e-3 * SR)
+        m = min(len(c), n - a)
+        cr[a:a + m] += c[:m]
+    return _fin(0.4 * sd + 0.3 * cr / (np.max(np.abs(cr)) + 1e-12), sr, 0.6, 0.0005, 0.05)
 
 
 @sfx("spark", "Electric spark snap: 7 kHz to 20 Hz sweep with a quartic noise burst through a spark formant.",
@@ -1837,6 +1980,7 @@ ICE_C_MAX = 1957.0
 ICE_DEBYE = {False: (6.9e-16, 54810.0, 0.009), True: (3.95e-10, 23305.0, 0.012)}
 ICE_ETA_FLOOR, ICE_LOSS = 0.002, 0.0045
 ICE_C_PARALLEL = 0.2
+ICE_WATER_LOAD = (221.0 / 286.0) ** 2
 
 
 def ice_eta(f, temp_c: float = -10.0, salt: bool = False, c_parallel: bool = False):
@@ -1849,7 +1993,8 @@ def ice_eta(f, temp_c: float = -10.0, salt: bool = False, c_parallel: bool = Fal
 
 
 def ice_chirp(distance: float = 60.0, thickness: float = 0.05, loss: float = ICE_LOSS,
-              return_freq: bool = False, temp: float | None = None, salt: bool = False, c_parallel: bool = False):
+              return_freq: bool = False, temp: float | None = None, salt: bool = False, c_parallel: bool = False,
+              floating: bool = False):
     """The dispersive "pew" of a crack in lake ice, heard ``distance`` m away, at 48 kHz.
 
     Thin-plate (Kirchhoff) flexural waves: w = k^2 a with a = sqrt(D / (rho h)) =
@@ -1863,11 +2008,12 @@ def ice_chirp(distance: float = 60.0, thickness: float = 0.05, loss: float = ICE
     thickness), which gives the top frequency c_max^2 / (8 pi a): about 3 kHz for 5 cm ice and
     500 Hz for 30 cm - thin ice sings, thick ice booms. Stationary-phase amplitude of a dispersed
     impulse: A ~ sqrt(|df/dt|) ~ (t0 / t)^1.5, times exp(-loss 2 pi f (t - t0)), loss = eta / 2 at the
-    relaxation peak, or ``ice_eta(f, temp, salt) / 2`` when ``temp`` (C) is given.
+    relaxation peak, or ``ice_eta(f, temp, salt) / 2`` when ``temp`` (C) is given. ``floating``: the sheet
+    rests on water, whose mass slows the waves: a is scaled by ICE_WATER_LOAD (group speed -22 %).
     """
     h = float(np.clip(thickness, 0.005, 2.0))
     d = float(np.clip(distance, 2.0, 2000.0))
-    a = h * math.sqrt(ICE_E / (12.0 * ICE_RHO * (1.0 - ICE_NU ** 2)))
+    a = h * math.sqrt(ICE_E / (12.0 * ICE_RHO * (1.0 - ICE_NU ** 2))) * (ICE_WATER_LOAD if floating else 1.0)
     c = d * d / (8.0 * math.pi * a)
     t0 = d / ICE_C_MAX
     f_top = min(c / (t0 * t0), 0.4 * SR)
@@ -1890,28 +2036,45 @@ def ice_chirp(distance: float = 60.0, thickness: float = 0.05, loss: float = ICE
 LAKE_E, LAKE_NU, LAKE_RHO, WATER_RHO = 8.5e9, 0.33, 917.0, 1000.0
 
 
-def _acfw_g0(w, h, c, depth):
+def _acfw_g0(w, h, c, depth, e=LAKE_E, nu=LAKE_NU):
     """The floating plate's response denominator for a load moving at the speed of sound,
     G0(w) = D (w/c)^4 + rho_w g - rho_i h w^2 - c rho_w w coth(w H / c)."""
-    D = LAKE_E * h ** 3 / (12.0 * (1.0 - LAKE_NU ** 2))
+    D = e * h ** 3 / (12.0 * (1.0 - nu ** 2))
     x = w * depth / c
     deep = np.real(x) > 20.0                                                   # coth -> 1 (and no tanh overflow)
     coth = np.where(deep, 1.0, 1.0 / np.tanh(np.where(deep, 1.0, x)))
     return D * (w / c) ** 4 + WATER_RHO * 9.81 - LAKE_RHO * h * w * w - c * WATER_RHO * w * coth
 
 
-def acfw_frequency(thickness: float, c: float = 329.0, depth: float = 10.0) -> float:
+def air_sound_speed(celsius: float) -> float:
+    """m/s: 331.3 + 0.606 T."""
+    return 331.3 + 0.606 * float(celsius)
+
+
+def acfw_frequency(thickness: float, c: float = 329.0, depth: float = 10.0, e: float = LAKE_E, nu: float = LAKE_NU) -> float:
     """Frequency of the air-coupled flexural wave (the ice "sings" where the flexural phase speed equals c):
-    the root of G0 with k = w/c. Thin ice sings high: ~725 Hz at 4.3 cm, ~60 Hz at 80 cm."""
+    the root of G0 with k = w/c. Thin ice sings high: ~725 Hz at 4.3 cm, ~195 Hz at 16 cm, ~39 Hz at 80 cm.
+    `e`, `nu`: columnar fresh-water ice is 9.7 GPa and 0.31; `c` from `air_sound_speed`."""
     h = float(np.clip(thickness, 0.005, 3.0))
     lo, hi = 2 * math.pi * 1.0, 2 * math.pi * 40000.0
     for _ in range(80):
         mid = math.sqrt(lo * hi)
-        lo, hi = (mid, hi) if _acfw_g0(mid, h, c, depth) < 0 else (lo, mid)
+        lo, hi = (mid, hi) if _acfw_g0(mid, h, c, depth, e, nu) < 0 else (lo, mid)
     return math.sqrt(lo * hi) / (2 * math.pi)
 
 
-def ice_sing(distance: float = 60.0, thickness: float = 0.05, c: float = C_AIR, depth: float = 10.0,
+SLOSH_LAMBDA = (1.8412, 3.0542, 3.8317)
+
+
+def slosh_hz(radius: float, depth: float, mode: int = 0) -> float:
+    """Sloshing frequency (Hz) of water in an upright round vessel: (1/2pi) sqrt(lam g/R tanh(lam h/R)).
+    A 10 cm bucket filled 15 cm sways at ~2.1 Hz; mode 1 and 2 are the next modes."""
+    lam = SLOSH_LAMBDA[int(np.clip(mode, 0, len(SLOSH_LAMBDA) - 1))]
+    r = max(float(radius), 1e-3)
+    return math.sqrt(lam * 9.81 / r * math.tanh(lam * max(float(depth), 0.0) / r)) / (2 * math.pi)
+
+
+def ice_sing(distance: float = 60.0, thickness: float = 0.05, c: float = 329.0, depth: float = 10.0,
              lead: float = 0.3, tail: float = 0.1) -> np.ndarray:
     """The air-coupled flexural wave of an impulse ``distance`` m away on floating ice: a near-monochromatic
     tone that builds up ahead of the air-borne crack and stops on it (plate velocity
@@ -1979,8 +2142,9 @@ def ice_crack(sr=DEFAULT_SR, dur=1.5, thickness=0.05, distance=60.0, cracks=3, b
 @sfx("ice_cubes", "Ice cubes clinking in a glass of drink.",
      dur=(1.5, "s"), cubes=(3, "number of cubes, 1..12"), glass=(1.0, "glass pitch scale, 0.5..2 (larger glass = lower)"),
      liquid=(0.6, "0..1 fill: damps and lowers the glass, adds a little slosh"),
-     energy=(0.7, "0..1 how hard the glass is swirled"), seed=(0, "variation"))
-def ice_cubes(sr=DEFAULT_SR, dur=1.5, cubes=3, glass=1.0, liquid=0.6, energy=0.7, seed=0):
+     energy=(0.7, "0..1 how hard the glass is swirled"), seed=(0, "variation"),
+     slosh=(0.0, "0..1 depth of the drink's sloshing in the cube collision rate, at `slosh_hz` of the glass (about 5 Hz in a glass 3.5 cm across)"))
+def ice_cubes(sr=DEFAULT_SR, dur=1.5, cubes=3, glass=1.0, liquid=0.6, energy=0.7, seed=0, slosh=0.0):
     """Collisions settle like a decaying swirl (rate falling exponentially). Each is a short contact
     pulse (``physical.core.contact_pulse``) driving a glass body (modal table ``sy_vase`` through
     ``physical.modal``) plus the cube's own click: ice is stiff and ringing, like a wood or metal
@@ -1990,7 +2154,8 @@ def ice_cubes(sr=DEFAULT_SR, dur=1.5, cubes=3, glass=1.0, liquid=0.6, energy=0.7
     n = _n(dur)
     t = np.arange(n) / SR
     lq, en = float(np.clip(liquid, 0, 1)), float(np.clip(energy, 0.05, 1))
-    times = bubble_times(n, rng, 9.0 * float(np.clip(cubes, 1, 12)) * en * np.exp(-t / (0.45 * n / SR)))
+    swirl = 1.0 + float(np.clip(slosh, 0.0, 1.0)) * np.cos(2.0 * np.pi * slosh_hz(0.0175 / float(np.clip(glass, 0.5, 2.0)), 0.07 * lq) * t)
+    times = bubble_times(n, rng, 9.0 * float(np.clip(cubes, 1, 12)) * en * np.exp(-t / (0.45 * n / SR)) * swirl)
     if len(times) == 0:
         times = np.array([int(0.02 * SR)])
     force = np.zeros(n)

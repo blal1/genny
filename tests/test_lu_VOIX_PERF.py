@@ -128,3 +128,47 @@ def test_huron_hidden_octave_needs_two_leaps():
     from genny import choir as CH
     assert CH.parallel_perfects((64, 60, 55, 48), (72, 67, 64, 60)) >= 1
     assert CH.parallel_perfects((71, 67, 62, 43), (72, 67, 64, 48)) == 0
+
+
+def test_prame1994_end_rate_curve():
+    from genny import choir as CH
+    assert CH.END_BOOST == (0.15, 1.7)
+    assert abs(1 + CH.END_BOOST[0] * np.exp(-1 / CH.END_BOOST[1]) - 1.083) < 1e-3
+
+
+def test_briefer2015_valence_gap():
+    from genny import fauna as FA
+    neg, pos = FA.whinny(valence=-1.0), FA.whinny(valence=1.0)
+    assert abs((len(neg) - len(pos)) / 48000 - 2 * FA.WHINNY_VAL[0]) < 0.05
+    assert FA.WHINNY_VAL == (0.145, 71.0, 29.0)
+
+
+def test_voss1975_rhythm_from_1f():
+    from genny import compose as CO
+    base = {"type": "compose", "key": "D", "scale": "dorian", "progression": "i VII VI VII", "bars": 8, "seed": 7,
+            "role": "melody", "mode": "voss"}
+    ev = sorted(CO.generate(dict(base, rhythm="voss")), key=lambda e: e["t"])
+    gaps = [round(e["t"] - p["t"], 3) for p, e in zip(ev, ev[1:])]
+    assert sum(g in (2.0, 1.0, 0.5) for g in gaps) >= 0.8 * len(gaps)
+    assert len(set(gaps) & {2.0, 1.0, 0.5}) >= 2
+    assert CO.generate(base) == CO.generate(dict(base, rhythm=None))
+
+
+def test_lienard1999_f1_rises_with_effort():
+    assert SP.EFFORT_F1 == 3.5 and SP.EFFORT_TILT == 0.31
+    _, vs = SP._resolve({"voice": "male", "effort": 0.9})
+    assert abs(SP.EFFORT_F1 * vs["effort_db"] - 3.5 * 19.6) < 1e-6
+
+
+def test_friberg1999_stopping_steps_keep_their_rate():
+    from genny import creatures as K
+    assert K.STOP_RATE_END == 0.72
+    g = np.diff(K.footsteps_plan("run", 180.0, 10, 0.0, stop=4))
+    assert np.allclose(g[:5], g[0]) and g[-1] / g[0] < 1.5 and g[-1] > g[-2] > g[0]
+
+
+def test_gardner_voss_generators_grow_with_length():
+    from genny import compose as CO
+    a = CO.voss(1024, np.random.default_rng(3))
+    b = CO.voss(1024, np.random.default_rng(3), generators=10)
+    assert np.allclose(a, b)

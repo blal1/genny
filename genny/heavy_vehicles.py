@@ -15,11 +15,13 @@ from .contact import drop, impact, modal_engine, roll, rumble, scrape
 from .core import DEFAULT_SR
 from .creatures import footsteps
 from .cyber import _HN_BR, _impacts, _modes, _third_octave_noise, gearbox
-from .engines import _even, _events, _pulses, _run, _smooth, diesel_engine, two_stroke
+from .engines import TWO_STROKE_KINDS, _even, _events, _pulses, _run, _smooth, diesel_engine, two_stroke
 from .foley import creak
 from .matter import _ar, _fin, _fit, _hp, _lp, _n, _rng, _tvbp, _unit, air_leak
+from . import presets
 from .physical.core import SR
 from .plates import metal_plate
+from .presets import F
 from .reverbs import doppler
 from .road import _grains, _kind, air_system, tyre_roll
 from .sfx import fan, jet_engine, sfx
@@ -116,7 +118,8 @@ MOTO_FINAL = 2.9
 MOTO_WHEEL = 0.31                                   # m: a 150/80-16 rear tyre
 CRUISER_IDLE, CRUISER_LIMIT = 900.0, 5600.0
 SPORT_RPM = 12000.0                                 # 400 Hz on four cylinders
-MOTO_KINDS = ("cruiser", "sport", "passby")
+MOTO_KINDS = ("cruiser", "sport", "passby", "cross_125", "cross_250")
+MOTO_2T = presets.schema("moto_2t", {"preset": F(str, ref="two_stroke")}, shape=lambda d: d["preset"])      # bike kind -> its two-stroke preset of `engines.TWO_STROKE_KINDS`
 BODY_HZ = 50.0                                      # body of a motorcycle engine (`modal_engine`)
 
 
@@ -124,26 +127,30 @@ def moto_rpm(gear, kmh):
     return kmh / 3.6 / (2.0 * math.pi * MOTO_WHEEL) * 60.0 * MOTO_GEARS[int(np.clip(gear, 1, 6)) - 1] * MOTO_FINAL
 
 
-def _moto_engine(kind, rpm, load, crossplane, dur, seed):
+def _moto_engine(kind, rpm, load, crossplane, dur, seed, cut=None):
+    if kind in MOTO_2T:
+        return two_stroke(sr=SR, rpm=rpm, load=load, dur=dur, seed=seed, kind=MOTO_2T[kind], cut=cut)
     if kind == "sport":
         layout = "inline_4_crossplane" if crossplane else "inline_4"
         return _run(layout, rpm, dur, load, seed, headers=None, header=1.0, unequal=0.0)     # short header, 1 ms
     return _run("vtwin_45", rpm, dur, load, seed)
 
 
-@sfx("motorcycle", "Motorcycle: cruiser (45 degree V-twin, 315/405 potato-potato), sport (high-revving inline four, or cross-plane), passby (propulsion only, Doppler and ground).",
-     kind=("cruiser", "cruiser | sport | passby"), rpm=(-1.0, "crankshaft; -1 = idle 900 (cruiser), 12000 (sport); replaced by speed and gear if speed > 0"),
-     speed=(0.0, "km/h: 0 = standing; passby defaults to 80"), gear=(3, "1..6 of 3.34 .. 1.0, final 2.9"), load=(0.6, "0..1"), crossplane=(0, "sport: 1 = fires 90-180-270-180"),
+@sfx("motorcycle", "Motorcycle: cruiser (45 degree V-twin, 315/405 potato-potato), sport (high-revving inline four, or cross-plane), passby (propulsion only, Doppler and ground), cross_125 and cross_250 (two-stroke dirt bikes with a tuned pipe).",
+     kind=("cruiser", "cruiser | sport | passby | cross_125 | cross_250"), rpm=(-1.0, "crankshaft; -1 = idle 900 (cruiser), 12000 (sport), 11500 (cross_125), 8500 (cross_250); replaced by speed and gear if speed > 0"),
+     speed=(0.0, "km/h: 0 = standing; passby defaults to 80"), gear=(3, "1..6 of 3.34 .. 1.0, final 2.9"), load=(0.6, "0..1"), crossplane=(0, "sport: 1 = fires 90-180-270-180"), limiter=(0, "cross: 1 = free revving into the ignition cut (12500 / 9500 rpm)"),
+     idle=(0, "cross: 1 = standing at the idle of the bike (1900 rpm for cross_125, 1600 for cross_250) when no rpm is given"),
      distance=(6.0, "passby: m"), direction=("lr", "passby: lr | rl"), pan=(1, "passby: 1 stereo, 0 mono"), dur=(4.0, "s"), seed=(0, "variation"))
-def motorcycle(sr=DEFAULT_SR, kind="cruiser", rpm=-1.0, speed=0.0, gear=3, load=0.6, crossplane=0, distance=6.0, direction="lr", pan=1, dur=4.0, seed=0):
+def motorcycle(sr=DEFAULT_SR, kind="cruiser", rpm=-1.0, speed=0.0, gear=3, load=0.6, crossplane=0, limiter=0, distance=6.0, direction="lr", pan=1, dur=4.0, seed=0, idle=0):
     """Passby: the engine's spectrum brought to the octave profile of ``moto_noise_levels`` at the speed (`moto_propulsion`)."""
-    k = _kind(kind, MOTO_KINDS, "motorcycle")
+    k = _kind(kind, (*MOTO_KINDS, *MOTO_2T), "motorcycle")
     kmh = float(speed) if speed > 0 else (80.0 if k == "passby" else 0.0)
     n = _n(dur)
-    top = SPORT_RPM if k == "sport" else CRUISER_LIMIT
-    r = float(np.clip(moto_rpm(gear, kmh), 800.0, top)) if kmh > 0 else (float(rpm) if rpm > 0 else (SPORT_RPM if k == "sport" else CRUISER_IDLE))
-    y = _unit(_moto_engine(k, r, load, crossplane, dur, seed))
-    y = y + 0.3 * _unit(_fit(modal_engine(sr=SR, rpm=r, dur=dur, cylinders=4 if k == "sport" else 2, body_freq=BODY_HZ, seed=seed), n))
+    two = TWO_STROKE_KINDS[MOTO_2T[k]] if k in MOTO_2T else None
+    top = SPORT_RPM if k == "sport" else two["limit"] if two else CRUISER_LIMIT
+    r = float(np.clip(moto_rpm(gear, kmh), 800.0, top)) if kmh > 0 else (float(rpm) if rpm > 0 else (SPORT_RPM if k == "sport" else two["idle" if idle else "rpm"] if two else CRUISER_IDLE))
+    y = _unit(_moto_engine(k, r, load, crossplane, dur, seed, cut="machine" if limiter and two else None))
+    y = y + 0.3 * _unit(_fit(modal_engine(sr=SR, rpm=2.0 * r if two else r, dur=dur, cylinders=4 if k == "sport" else 1 if two else 2, body_freq=BODY_HZ, seed=seed), n))
     if k == "passby":
         v = kmh / 3.6
         y = _ar(n, 0.3, 0.3) * (moto_propulsion(y, kmh) + _wind(v, n, seed))
@@ -153,7 +160,7 @@ def motorcycle(sr=DEFAULT_SR, kind="cruiser", rpm=-1.0, speed=0.0, gear=3, load=
     return _fin(y, sr, 0.7, 0.003, 0.02)
 
 
-SCOOTER = {"2t": 7000.0, "4t": 6000.0}              # 116.7 Hz, 50 Hz
+SCOOTER = presets.schema("scooter", {"rpm": F(float, lo=30.0, hi=40000.0, unit="rpm")}, shape=lambda d: d["rpm"])
 
 
 def cvt_rpm(top, dur, n):
@@ -163,13 +170,19 @@ def cvt_rpm(top, dur, n):
 
 
 @sfx("scooter", "Scooter: a 50 cc single, two-stroke or four-stroke, through a CVT: the engine note holds still while the speed climbs, under a belt noise.",
-     kind=("2t", "2t | 4t"), rpm=(-1.0, "where the CVT holds the crank; -1 = 7000 (2t), 6000 (4t)"), load=(0.7, "0..1"), belt=(0.2, "0..1 level of the belt noise"), dur=(4.0, "s"), seed=(0, "variation"))
-def scooter(sr=DEFAULT_SR, kind="2t", rpm=-1.0, load=0.7, belt=0.2, dur=4.0, seed=0):
+     kind=("2t", "2t | 4t"), rpm=(-1.0, "where the CVT holds the crank; -1 = 7000 (2t), 6000 (4t)"), load=(0.7, "0..1"), belt=(0.2, "0..1 level of the belt noise"), limiter=(0, "2t: 1 = the rev limiter cuts the ignition at 9000 rpm (the engine runs free up to it from `slip` seconds on)"),
+     slip=(0.0, "limiter: seconds the CVT holds the crank before the belt lets go and the engine runs free into the limiter (0 = free from the start)"),
+     idle=(0, "1 = standing, the engine at its 1900 rpm idle (2t), no CVT climb"), dur=(4.0, "s"), seed=(0, "variation"))
+def scooter(sr=DEFAULT_SR, kind="2t", rpm=-1.0, load=0.7, belt=0.2, limiter=0, dur=4.0, seed=0, slip=0.0, idle=0):
     """Belt: noise 800-2000 Hz, growing with the road speed."""
     k = _kind(kind, SCOOTER, "scooter")
     n, rng = _n(dur), _rng(seed, 700)
-    rr = cvt_rpm(float(rpm) if rpm > 0 else SCOOTER[k], float(dur), n)
-    eng = two_stroke(sr=SR, rpm=rr, load=load, dur=dur, seed=seed) if k == "2t" else _run("engine_single", rr, dur, load, seed)
+    if idle and k == "2t":
+        rr = np.full(n, TWO_STROKE_KINDS["scooter"]["idle"])
+        belt = 0.0
+    else:
+        rr = cvt_rpm(float(rpm) if rpm > 0 else SCOOTER[k], float(dur), n)
+    eng = two_stroke(sr=SR, rpm=rr, load=load, dur=dur, seed=seed, kind="scooter", cut="machine" if limiter else None, cut_at=float(slip)) if k == "2t" else _run("engine_single", rr, dur, load, seed)
     bn = _unit(_hp(_lp(rng.standard_normal(n), 2000.0, 2), 800.0, 2))
     return _fin(_unit(_fit(eng, n)) + float(np.clip(belt, 0, 1)) * bn * np.linspace(0.3, 1.0, n), sr, 0.7, 0.003, 0.02)
 
@@ -263,7 +276,7 @@ def tractor(sr=DEFAULT_SR, kind="tractor", rpm=-1.0, load=0.5, stroke=4, dur=4.0
         return _fin(_stack(y), sr, 0.7, 0.003, 0.02)
     n, r = _n(dur), float(rpm) if rpm > 0 else 600.0
     two = int(stroke) == 2
-    y = two_stroke(sr=SR, rpm=r, load=load, bore=0.1, dur=dur, seed=seed) if two else _run("engine_single", r, dur, load, seed)
+    y = two_stroke(sr=SR, rpm=r, load=load, dur=dur, seed=seed, kind="vintage") if two else _run("engine_single", r, dur, load, seed)
     body = modal_engine(sr=SR, rpm=2.0 * r if two else r, dur=dur, body_freq=BODY_HZ, seed=seed)   # `modal_engine` is rpm / 120
     return _fin(_unit(_fit(y, n)) + 0.7 * _unit(_fit(body, n)), sr, 0.7, 0.003, 0.02)
 
@@ -273,14 +286,14 @@ def blade_pass(rpm, blades=2):
 
 
 @sfx("mower", "Lawn mower: a single (four-stroke, or two-stroke) over the blade's pass under the deck, cutting grass.",
-     kind=("lawn_mower", "lawn_mower | lawn_mower_2t"), rpm=(3000.0, "crankshaft = blade: 3000 = 25 Hz firing on 4T, 50 Hz on 2T, blade 100 Hz"), blades=(2, "blade tips"), cut=(0.6, "0..1 grass under the deck"), load=(0.6, "0..1"), dur=(3.0, "s"), seed=(0, "variation"))
-def mower(sr=DEFAULT_SR, kind="lawn_mower", rpm=3000.0, blades=2, cut=0.6, load=0.6, dur=3.0, seed=0):
+     kind=("lawn_mower", "lawn_mower | lawn_mower_2t"), rpm=(3000.0, "crankshaft = blade: 3000 = 25 Hz firing on 4T, 50 Hz on 2T, blade 100 Hz"), blades=(2, "blade tips"), cut=(0.6, "0..1 grass under the deck"), load=(0.6, "0..1"), limiter=(0, "2t: 1 = the governor cuts the ignition at 3800 rpm"), dur=(3.0, "s"), seed=(0, "variation"))
+def mower(sr=DEFAULT_SR, kind="lawn_mower", rpm=3000.0, blades=2, cut=0.6, load=0.6, limiter=0, dur=3.0, seed=0):
     """84-94 dB(A), unused: nothing here is absolute. Cutting dominates under the deck; deck `modal_engine` at 300 Hz, damping 150 1/s.
     Grass as `GROUNDS`' Sekere at 40 grains per blade pass, pulsed by it; levels chosen so the cutting holds most of the power at the default."""
     k = _kind(kind, ("lawn_mower", "lawn_mower_2t"), "mower")
     n, rng = _n(dur), _rng(seed, 703)
     r = float(rpm)
-    eng = _run("engine_single", r, dur, load, seed) if k == "lawn_mower" else two_stroke(sr=SR, rpm=r, load=load, dur=dur, seed=seed)
+    eng = _run("engine_single", r, dur, load, seed) if k == "lawn_mower" else two_stroke(sr=SR, rpm=r, load=load, dur=dur, seed=seed, kind="mower", cut="machine" if limiter else None)
     deck = modal_engine(sr=SR, rpm=r if k == "lawn_mower" else 2.0 * r, dur=dur, body_freq=300.0, damping=150.0, modes=8, seed=seed)
     bpf = blade_pass(r, blades)
     wind = fan(sr=SR, dur=dur, rpm=r, blades=int(blades), seed=seed)
@@ -299,24 +312,24 @@ def chain_rate(rpm):
     return CHAIN_LINKS * np.asarray(rpm, float) / 60.0
 
 
-def _two_stroke_tool(rpm, load, dur, seed, body=120.0):
+def _two_stroke_tool(rpm, load, dur, seed, body=120.0, cut=None):
     """`two_stroke` over a light `modal_engine` body at 120 Hz: the 2T force into a modal body, and the exhaust."""
     n = _n(dur)
-    y = two_stroke(sr=SR, rpm=rpm, load=load, dur=dur, seed=seed)
+    y = two_stroke(sr=SR, rpm=rpm, load=load, dur=dur, seed=seed, kind="chainsaw", cut=cut)
     b = modal_engine(sr=SR, rpm=2.0 * np.asarray(rpm, float), dur=dur, body_freq=body, modes=7, seed=seed)
     return _unit(_fit(y, n)) + 0.25 * _unit(_fit(b, n))
 
 
 @sfx("chainsaw", "Chainsaw: a two-stroke single firing once per turn, the chain's whirr rising with it; biting into wood drags the engine down.",
-     rpm=(CHAINSAW_RPM, "crankshaft: 9400 at full throttle, 2800 idle"), load=(1.0, "0..1"), bite=(0.0, "0..1 into the wood, in the middle of the sound: 1 = 15 % off the speed"), dur=(3.0, "s"), seed=(0, "variation"))
-def chainsaw(sr=DEFAULT_SR, rpm=CHAINSAW_RPM, load=1.0, bite=0.0, dur=3.0, seed=0):
+     rpm=(CHAINSAW_RPM, "crankshaft: 9400 at full throttle, 2800 idle"), load=(1.0, "0..1"), bite=(0.0, "0..1 into the wood, in the middle of the sound: 1 = 15 % off the speed"), limiter=(0, "1 = free revving into the ignition cut at 13000 rpm"), dur=(3.0, "s"), seed=(0, "variation"))
+def chainsaw(sr=DEFAULT_SR, rpm=CHAINSAW_RPM, load=1.0, bite=0.0, limiter=0, dur=3.0, seed=0):
     """The chain band sits at the link rate, CHAIN_LINKS rpm / 60, and rises with the engine."""
     n, rng = _n(dur), _rng(seed, 704)
     t = np.arange(n) / SR
     bt = float(np.clip(bite, 0, 1))
     gate = _smooth((t > 0.3 * dur) & (t < 0.8 * dur), 80.0) * bt
     rr = float(rpm) * (1.0 - CHAINSAW_BITE * gate)
-    y = _two_stroke_tool(rr, load, dur, seed)
+    y = _two_stroke_tool(rr, load, dur, seed, cut="machine" if limiter else None)
     y = y + 0.6 * _unit(_tvbp(rng.standard_normal(n), np.minimum(chain_rate(rr), 0.45 * SR), 0.7)) * (rr / CHAINSAW_RPM)
     if bt > 0:
         cut = scrape(sr=SR, dur=dur, speed=8.0, force=1.0, texture="wood", material="wood", size=0.4, seed=seed)
@@ -324,7 +337,7 @@ def chainsaw(sr=DEFAULT_SR, rpm=CHAINSAW_RPM, load=1.0, bite=0.0, dur=3.0, seed=
     return _fin(y, sr, 0.7, 0.003, 0.02)
 
 
-GARDEN = {"souffleur": 7500.0, "taille-haie": 6000.0, "debroussailleuse": 8500.0}
+GARDEN = presets.schema("garden", {"rpm": F(float, lo=30.0, hi=40000.0, unit="rpm")}, shape=lambda d: d["rpm"])
 BLOWER_BLADES, HEDGE_RATIO, TRIMMER_LINES = 12, 5.0, 2
 TRIMMER_GEAR = 1.43                                                                 # bevel reduction: the head turns slower than the crank
 
@@ -401,10 +414,11 @@ def track_rate(kmh, pitch):
     return float(kmh) / 3.6 / float(pitch)
 
 
-def _track(kmh, pitch, wheels, spacing, slack, teeth, weight, n, seed):
+def _track(kmh, pitch, wheels, spacing, slack, teeth, weight, n, seed, stagger=False):
     """Sprocket engaging each link, each road wheel crossing each joint (their spacing sets their phase), the load passing from wheel to
     wheel at v / spacing (depth .5); into the shoes and the hull, over the running gear's rumble 35-90 Hz (`rumble`). The sprocket once a turn (.3),
-    the slack's slaps at a quarter of the link rate. ``weight`` 0..1 scales what a light vehicle has less of."""
+    the slack's slaps at a quarter of the link rate. ``weight`` 0..1 scales what a light vehicle has less of.
+    ``stagger``: every other wheel half a link out of step."""
     rng = _rng(seed, 706)
     v = np.maximum(np.asarray(kmh, float), 0.5) / 3.6
     v = np.full(n, float(v)) if v.ndim == 0 else np.interp(np.linspace(0, 1, n), np.linspace(0, 1, len(v)), v)
@@ -417,7 +431,7 @@ def _track(kmh, pitch, wheels, spacing, slack, teeth, weight, n, seed):
     roller = np.zeros(n)
     w = max(int(wheels), 1)
     for k in range(w):
-        roller += _impacts(n, ph + (k * float(spacing) / float(pitch)) % 1.0, rng, slip=TRACK_JITTER * (1.0 + sl), width=96)
+        roller += _impacts(n, ph + (k * float(spacing) / float(pitch) + (0.5 * (k % 2) if stagger else 0.0)) % 1.0, rng, slip=TRACK_JITTER * (1.0 + sl), width=96)
     am = 1.0 + 0.5 * np.cos(2.0 * np.pi * np.cumsum(v / float(spacing)) / SR)
     force = (sp + roller / w) * am
     if sl > 0:
@@ -432,17 +446,25 @@ def _track(kmh, pitch, wheels, spacing, slack, teeth, weight, n, seed):
     return 1.5 * _unit(thump) + weight * (0.8 * _unit(hull) + 0.25 * _unit(_hp(shoe, 500.0)) + 0.5 * _unit(_fit(rmb, n)))
 
 
-# speed km/h, pitch m, wheels, spacing m, sprocket teeth, slack, weight, engine (kind, rpm).
-# tank_diesel: V12, 2000 rpm, 150 mm. Snowmobile: a 63.5 mm pitch, at the speed that makes 400 Hz of it.
-TRACK_KINDS = {
-    "tracked_vehicle": (30.0, 0.15, 6, 0.7, 12, 0.3, 1.0, ("diesel_6", 2000.0)),
-    "tank_m1": (40.0, M1_PITCH, 7, 0.7, 11, 0.3, 1.0, ("turbine", 0.0)),
-    "tank_diesel": (40.0, 0.15, 6, 0.8, 13, 0.3, 1.0, ("diesel_12", 2000.0)),
-    "snowmobile": (91.44, 0.0635, 2, 0.4, 8, 0.1, 0.25, ("two_stroke", 7000.0)),
-    "bulldozer": (5.0, CAT_PITCHES[0], 6, 0.5, 21, 0.2, 1.0, ("diesel_6", 1800.0)),
-    "excavator_tracks": (5.0, CAT_PITCHES[0], 7, 0.45, 21, 0.3, 1.0, ("diesel_6", 1800.0)),
-}
+def _track_shape(d):
+    return (d["speed_kmh"], d["pitch_m"], d["wheels"], d["spacing_m"], d["teeth"], d["slack"], d["weight"], (d["engine"], d["engine_rpm"]))
+
+
+# Presets of the ``tracks`` family (``genny/presets/tracks.toml``), as the tuple (speed km/h, pitch m, wheels, spacing m, sprocket teeth,
+# slack, weight, (engine, rpm)). Snowmobile: a 63.5 mm pitch, at the speed that makes 400 Hz of it.
+TRACK_KINDS = presets.schema("tracks", {
+    "speed_kmh": F(float, lo=0.1, hi=400.0, unit="km/h"),
+    "pitch_m": F(float, lo=0.01, hi=1.0, unit="m"),
+    "wheels": F(int, lo=1, hi=24),
+    "spacing_m": F(float, lo=0.05, hi=3.0, unit="m"),
+    "teeth": F(int, lo=3, hi=60),
+    "slack": F(float, lo=0.0, hi=1.0),
+    "weight": F(float, lo=0.0, hi=4.0),
+    "engine": F(str, choices=("diesel_6", "diesel_12", "turbine", "two_stroke")),
+    "engine_rpm": F(float, lo=0.0, hi=30000.0, unit="rpm"),
+}, shape=_track_shape)
 SNOW_HZ, SNOW_SHARE = 400.0, 10 ** (-2.0 / 10.0)     # 2 dB under the total
+SNOW_IRREGULAR_DB = -5.0                             # irregular lug spacing: that much less at 400 Hz
 
 
 def _track_engine(spec, rpm, load, dur, seed):
@@ -451,7 +473,7 @@ def _track_engine(spec, rpm, load, dur, seed):
     if what == "turbine":                            # `jet_engine` for the gas turbine
         return jet_engine(sr=SR, dur=dur, throttle=float(np.clip(load, 0.1, 1.0)), seed=seed)
     if what == "two_stroke":
-        return two_stroke(sr=SR, rpm=r, load=load, dur=dur, seed=seed)
+        return two_stroke(sr=SR, rpm=r, load=load, dur=dur, seed=seed, kind="snowmobile")
     return diesel_engine(sr=SR, kind="diesel_i6_truck", rpm=r, load=load, cylinders=12 if what == "diesel_12" else 0, dur=dur, seed=seed)
 
 
@@ -468,22 +490,33 @@ def _with_band_share(track, other, f0, share):
 @sfx("tracks", "Tracked vehicle: each link engaging the sprocket and crossing the road wheels at v / pitch, into the shoes and the hull, with the engine: tracked_vehicle, tank_m1 (193.7 mm, turbine), tank_diesel (V12), snowmobile (light, 400 Hz at speed), bulldozer (blade on gravel), excavator_tracks.",
      kind=("tracked_vehicle", " | ".join(TRACK_KINDS)), speed=(-1.0, "km/h, or a curve; -1 = the kind's"), pitch=(0.0, "m of a link; 0 = the kind's"), wheels=(0, "road wheels; 0 = the kind's"),
      wheel_spacing=(0.0, "m between road wheels; 0 = the kind's"), slack=(-1.0, "0..1 slapping of a loose track; -1 = the kind's"), engine=(0.6, "level of the engine against the track; 0 = track alone; snowmobile: any > 0, the level comes from the 2 dB"), rpm=(-1.0, "engine; -1 = the kind's"),
-     load=(0.6, "engine 0..1"), dur=(4.0, "s"), seed=(0, "variation"))
-def tracks(sr=DEFAULT_SR, kind="tracked_vehicle", speed=-1.0, pitch=0.0, wheels=0, wheel_spacing=0.0, slack=-1.0, engine=0.6, rpm=-1.0, load=0.6, dur=4.0, seed=0):
-    k = _kind(kind, TRACK_KINDS, "tracks")
-    s0, p0, w0, a0, teeth, sl0, weight, eng = TRACK_KINDS[k]
+     load=(0.6, "engine 0..1"), dur=(4.0, "s"), seed=(0, "variation"),
+     irregular=(False, "snowmobile: lugs in an irregular pattern, the 400 Hz line 5 dB lower (needs the engine level > 0)"),
+     stagger=(False, "road / guide wheels in staggered pairs, every other wheel half a link out of step"),
+     gravel=(0.0, "level of large-gravel grains (40 per metre) the shoes throw, centred on 6460 Hz; 0 = none"))
+def tracks(sr=DEFAULT_SR, kind="tracked_vehicle", speed=-1.0, pitch=0.0, wheels=0, wheel_spacing=0.0, slack=-1.0, engine=0.6, rpm=-1.0, load=0.6, dur=4.0, seed=0,
+           irregular=False, stagger=False, gravel=0.0):
+    if isinstance(kind, dict):
+        k, spec = str(kind.get("extends", "inline")), _track_shape(presets.resolve("tracks", kind))
+    else:
+        k = _kind(kind, TRACK_KINDS, "tracks")
+        spec = TRACK_KINDS[k]
+    s0, p0, w0, a0, teeth, sl0, weight, eng = spec
     kmh = s0 if np.ndim(speed) == 0 and float(speed) < 0 else speed
     p = float(pitch) if pitch > 0 else p0
     n = _n(dur)
-    y = _track(kmh, p, int(wheels) if wheels > 0 else w0, float(wheel_spacing) if wheel_spacing > 0 else a0, float(slack) if slack >= 0 else sl0, teeth, weight, n, seed)
+    y = _track(kmh, p, int(wheels) if wheels > 0 else w0, float(wheel_spacing) if wheel_spacing > 0 else a0, float(slack) if slack >= 0 else sl0, teeth, weight, n, seed, bool(stagger))
     if engine > 0:
         e = _unit(_fit(_track_engine(eng, rpm, load, dur, seed), n))
-        y = _with_band_share(y, e, track_rate(kmh, p), SNOW_SHARE) if k == "snowmobile" and np.ndim(kmh) == 0 else y + float(engine) * e
+        y = _with_band_share(y, e, track_rate(kmh, p), SNOW_SHARE * (10 ** (SNOW_IRREGULAR_DB / 10.0) if irregular else 1.0)) if k == "snowmobile" and np.ndim(kmh) == 0 else y + float(engine) * e
     if k == "bulldozer":                             # blade = `scrape` on gravel; grains as `tyre_gravel`, 40 v
         rng = _rng(seed, 707)
         v = float(np.mean(kmh)) / 3.6
         blade = scrape(sr=SR, dur=dur, speed=max(v, 0.5), force=1.0, texture="gritty", material="steel", size=1.2, seed=seed)
         y = y + 0.6 * _unit(_fit(blade, n)) + 0.4 * _lp(_grains("BigRocks", 40.0 * v, n, rng), 9000.0, 2)
+    if gravel > 0:
+        g = _grains("BigRocks", 40.0 * max(float(np.mean(kmh)) / 3.6, 0.5), n, _rng(seed, 708))
+        y = y + float(gravel) * _unit(_tvbp(g, np.full(n, GRAVEL_HZ), 1.5))
     return _fin(y, sr, 0.7, 0.003, 0.02)
 
 
@@ -514,9 +547,12 @@ def _pump_peak(pressure):
 
 
 @sfx("hydraulic_pump", "Hydraulic whine of an axial-piston pump, a line and its harmonics at pistons x rpm / 60, rising with the pressure; arm: the pump under load as a ram travels, hits its stop and blows the relief valve.",
-     kind=("pump", "pump | arm"), rpm=(2000.0, "shaft"), pressure=(150.0, "bar: 80-200 working"), pistons=(9, "odd"), dur=(3.0, "s"), seed=(0, "variation"))
-def hydraulic_pump(sr=DEFAULT_SR, kind="pump", rpm=2000.0, pressure=150.0, pistons=9, dur=3.0, seed=0):
+     kind=("pump", "pump | arm"), rpm=(2000.0, "shaft"), pressure=(150.0, "bar: 80-200 working"), pistons=(9, "odd"), dur=(3.0, "s"), seed=(0, "variation"),
+     rate=(0.0, "Hz of the ripple line (pistons x rpm / 60); > 0 sets the shaft speed from it"))
+def hydraulic_pump(sr=DEFAULT_SR, kind="pump", rpm=2000.0, pressure=150.0, pistons=9, dur=3.0, seed=0, rate=0.0):
     """Arm: relief as `air_leak`, stop as a metal `impact`, and the end of travel at 65 % of the sound."""
+    if rate > 0:
+        rpm = 60.0 * float(rate) / int(pistons)
     k = _kind(kind, ("pump", "arm"), "hydraulic_pump")
     if k == "pump":
         return _fin(_pump(rpm, pressure, pistons, dur, seed), sr, _pump_peak(pressure), 0.01, 0.03)

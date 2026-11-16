@@ -1,6 +1,7 @@
 """Buffer helpers, mixing, normalization and WAV I/O."""
 from __future__ import annotations
 
+import struct
 import wave
 from pathlib import Path
 
@@ -102,19 +103,24 @@ def trim_tail(x: np.ndarray, threshold_db: float = -70.0, keep_ms: float = 30.0,
     return x[:end]
 
 
-def write_wav(path: str | Path, x: np.ndarray, sr: int = DEFAULT_SR, bits: int = 16, dither=None, seed: int = 0) -> Path:
-    """dither: None (plain truncation, the default) or a `dsp.quantize` mode (tpdf, gauss, shaped,
-    fweighted, lipshitz) applied at the output word length with a fixed seed."""
+def write_wav(path: str | Path, x: np.ndarray, sr: int = DEFAULT_SR, bits: int = 16, dither="auto", seed: int = 0, loop=None) -> Path:
+    """dither: "auto" (tpdf at 16 bits, none at 24), None (plain truncation) or a `dsp.quantize` mode (tpdf, gauss,
+    shaped, fweighted, lipshitz) applied at the output word length with a fixed seed; digital silence stays silent.
+    loop: True (the whole file) or (first, last) sample: a `smpl` chunk with one forward loop, read by samplers and
+    game engines."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     x = np.clip(x, -1.0, 1.0)
     channels = 1 if x.ndim == 1 else x.shape[1]
     if bits not in (16, 24):
         raise ValueError("bits must be 16 or 24")
+    if dither == "auto":
+        dither = "tpdf" if bits == 16 else None
     if dither not in (None, False, "", "none"):
         from .dsp import quantize
         S = float(2 ** (bits - 1))
         ints = np.clip(np.round(quantize(x, bits=bits, dither=dither, seed=seed) * S), -S, S - 1)
+        ints[x == 0.0] = 0.0
         if bits == 16:
             data = ints.astype("<i2")
         else:
@@ -129,6 +135,15 @@ def write_wav(path: str | Path, x: np.ndarray, sr: int = DEFAULT_SR, bits: int =
         w.setsampwidth(bits // 8)
         w.setframerate(sr)
         w.writeframes(data.tobytes())
+    if loop is not None and loop is not False and x.shape[0] > 1:
+        first, last = (0, x.shape[0] - 1) if loop is True else (int(loop[0]), int(loop[1]))
+        body = struct.pack("<9I", 0, 0, int(round(1e9 / sr)), 60, 0, 0, 0, 1, 0) + struct.pack("<6I", 0, 0, first, last, 0, 0)
+        with open(path, "r+b") as f:
+            f.seek(0, 2)
+            f.write(b"smpl" + struct.pack("<I", len(body)) + body)
+            size = f.tell()
+            f.seek(4)
+            f.write(struct.pack("<I", size - 8))
     return path
 
 

@@ -272,7 +272,7 @@ def test_drums_and_fills():
 
 # ------------------------------------------------------------------ arrangement
 def test_styles_table():
-    assert len(C.STYLES) == 35
+    assert len(C.STYLES) == 36
     lib = Path(__file__).resolve().parents[1] / "examples" / "library" / "styles.json"
     if lib.exists():
         names = {s["out"][:-4] for s in json.loads(lib.read_text(encoding="utf-8"))["sounds"]}

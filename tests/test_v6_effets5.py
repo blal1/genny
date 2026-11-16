@@ -67,7 +67,8 @@ def test_handclap_exp_rise():
     assert C.CLAP_EXP_RISE == 0.0032 and C.CLAP_EXP_Q == 5.5
     fast = C.handclap(cup=0.3, seed=1)
     exp = C.handclap(cup=0.3, rise="exp", seed=1)
-    pf, pe = np.argmax(np.abs(fast)), np.argmax(np.abs(exp))
+    pf = sum(np.argmax(np.abs(C.handclap(cup=0.3, seed=s))) for s in range(6))
+    pe = sum(np.argmax(np.abs(C.handclap(cup=0.3, rise="exp", seed=s))) for s in range(6))
     assert pe > pf
     assert np.array_equal(fast, C.handclap(cup=0.3, rise="fast", seed=1))
 

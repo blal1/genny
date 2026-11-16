@@ -133,7 +133,9 @@ half the cost). `preset`: `leem1` (default), `leem2`, `leem3` (the three springs
 by Välimäki, Parker & Abel), `sansui` (darker, wobblier), `leem_auto` (leem1 fitted automatically). `tank`:
 `single` | `two_spring` | `three_spring`, springs side by side with echo spacing and cutoff from their geometry
 (`fdstring.spring_geometry(r, R, turns)`). `decay` (1.7 s for leem1), `delay` (s per trip), `cutoff` (4300 Hz,
-top of the low chirps) and `density` (10-200, default 100: more = longer chirps) override the preset.
+top of the low chirps) and `density` (10-200, default 100: more = longer chirps) override the preset. The wire constants
+are steel at 211 GPa and 7800 kg/m3 (`STEEL_E`, `STEEL_RHO`): the speed is 5201 m/s, 3 % above the earlier 200 GPa /
+7850 value, which shortens the echo time by 2.9 % (29.8-51.3 ms over the published springs).
 `efficient=true` runs the low loop at a quarter of the rate (a third of the cost, a small notch at fC/2). `clip`
 hard-limits inside the loop (a kicked, overdriven tank). `model="fd"`: the wire itself as two coupled wave
 equations (slow); `chain` (default) is the allpass loop. `wander`: `smooth` (default, slow 2 Hz drift of the loop
@@ -209,3 +211,9 @@ divides the internal rate by 2 to 4.
 - Not implemented: the book's helical-spring reverb scheme (`spring_reverb model="fd"` solves Fletcher's two coupled
   wave equations instead), the 0.7026 implicit bar scheme, phantom partials
   (longitudinal string motion), whirling strings, coupled bars, `wire_snap`.
+## Newer options (1.3.0)
+
+- `fd_bar resonator=`: a tube tuned under the bar, as `marimba`; materials `padouk`, `rosewood_bar`; the marimba tuning is
+  4 : 9.8.
+- `bowed_string_fd friction= residual=`; `slinky` (the dispersive spring); `rhodes_fd` (the finite-difference tine);
+  `fdstring.Bar.clamp`; `fdstring.table_i_check`: checks the published Table I of Bensa against the model.

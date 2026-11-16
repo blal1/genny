@@ -16,9 +16,17 @@ def _from48(x, sr):
 class Room:
     volume: float = 100.0
     surfaces: dict[str, float] = field(default_factory=lambda: {"plaster": 80.0, "wood": 20.0})
+    absorbers: list = field(default_factory=list)
 
     def t60_bands(self) -> np.ndarray:
-        return _space.sabine_t60(self.volume, self.surfaces)
+        t60 = _space.sabine_t60(self.volume, self.surfaces)
+        if not self.absorbers:
+            return t60
+        bands = np.asarray(_space.ABSORPTION_BANDS, float)
+        total = 0.161 * self.volume / t60
+        for area, alpha in self.absorbers:
+            total = total + float(area) * np.asarray(alpha(bands), float)
+        return 0.161 * self.volume / total
 
     def reverberate(self, x: np.ndarray, *, sr: int = DEFAULT_SR, mix: float = 0.25) -> np.ndarray:
         x48 = _at48(x, sr)
@@ -31,6 +39,24 @@ class Room:
             dry = x48[:n]
         out = (1-mix)*dry + mix*wet[:n]
         return _from48(out, sr)
+
+def absorber(kind: str, area: float = 1.0, **kw):
+    """An (area, alpha(f)) pair for ``Room(absorbers=[...])``.
+    ``layer`` (sigma, thickness): porous layer on a rigid wall. ``helmholtz`` (f0, n, q=5): n resonators, each with its maximum
+    absorption area, a resonance of quality q. ``panel`` (mass, depth_cm, filled=False, q=2, peak=0.5): a panel on an air gap."""
+    if kind == "layer":
+        s, t = float(kw["sigma"]), float(kw["thickness"])
+        return float(area), lambda f: _space.layer_absorption(np.asarray(f, float), s, t)
+    if kind == "helmholtz":
+        f0, q = float(kw["f0"]), float(kw.get("q", 5.0))
+        a = float(kw.get("n", 1)) * _space.helmholtz_absorber(f0)["area_max"]
+        return a, lambda f: 1.0 / (1.0 + (2.0 * q * (np.asarray(f, float) / f0 - 1.0)) ** 2)
+    if kind == "panel":
+        f0 = _space.panel_absorber_f0(float(kw["mass"]), float(kw["depth_cm"]), bool(kw.get("filled", False)))
+        q, pk = float(kw.get("q", 2.0)), float(kw.get("peak", 0.5))
+        return float(area), lambda f: pk / (1.0 + (2.0 * q * (np.asarray(f, float) / f0 - 1.0)) ** 2)
+    raise ValueError("absorber kind: layer, helmholtz or panel")
+
 
 @dataclass
 class Propagation:

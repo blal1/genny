@@ -138,9 +138,11 @@ def test_exp_sigmoid_bounds():
 
 def test_goldstein_intensity_scales_u6():
     from genny.physical.modal import goldstein_intensity
-    i1 = goldstein_intensity(10.0, 0.005, 0.2)
-    i2 = goldstein_intensity(20.0, 0.005, 0.2)
+    i1 = goldstein_intensity(10.0, 0.005, 0.2, length=0.015)
+    i2 = goldstein_intensity(20.0, 0.005, 0.2, length=0.015)
     assert abs(i2 / i1 - 64.0) < 1.0
+    # default length follows Re^-0.245: doubling u gives 64 x 2^-0.245
+    assert abs(goldstein_intensity(20.0, 0.005, 0.2) / goldstein_intensity(10.0, 0.005, 0.2) - 64.0 * 2 ** -0.245) < 0.5
 
 
 def test_lock_state_hysteresis():

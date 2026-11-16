@@ -1,0 +1,26 @@
+schema = "genny.preset/1"
+family = "compressor"
+
+[mastering]
+threshold = -15.0
+ratio = 2.0
+attack = 0.1
+release = 0.25
+auto_makeup = false
+mix = 1.0
+
+[invisible]
+threshold = -35.0
+ratio = 1.1
+attack = 0.1
+release = 0.25
+auto_makeup = false
+mix = 1.0
+
+[parallel]
+threshold = -50.0
+ratio = 2.5
+attack = 0.001
+release = 0.3
+auto_makeup = false
+mix = 0.24

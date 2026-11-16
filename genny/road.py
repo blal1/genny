@@ -12,7 +12,7 @@ from scipy.signal import butter, lfilter, sosfilt
 from . import contact as K
 from . import foley as FO
 from .core import DEFAULT_SR
-from .cyber import gearbox, pipe_engine, road_noise_levels, tyre_squeal, _third_octave_noise
+from .cyber import gearbox, pipe_engine, road_noise_levels, tyre_squeal, wet_road_db, _third_octave_noise
 from .dsp import wall
 from .foley import C_AIR, CATCH, ENDSTOP, P, RATCHET, _fin, _mclick, _n, _nm, _put
 from .friction import squeak
@@ -22,6 +22,8 @@ from .physical import ambience as amb
 from .physical import modal
 from .physical import particles as pt
 from .pinball import solenoid
+from . import presets
+from .presets import F
 from .reverbs import occlude
 from .sfx import electric_motor, sfx
 from .tubes import tube
@@ -34,6 +36,11 @@ def _fit(x: np.ndarray, n: int) -> np.ndarray:
 
 def _band(x: np.ndarray, lo: float, hi: float, sr: int = P, order: int = 2) -> np.ndarray:
     return sosfilt(butter(order, [lo, min(hi, 0.45 * sr)], "bandpass", fs=sr, output="sos"), x)
+
+
+def _kinds(*parts) -> tuple:
+    """The names of the code's own kinds and of the presets of the families that add to them, as they are now."""
+    return tuple(dict.fromkeys(n for p in parts for n in p))
 
 
 def _kind(kind, table, what) -> str:
@@ -58,7 +65,7 @@ def whine_orders(poles: int, slots: int) -> list[int]:
     return sorted({6 * p * k for k in range(1, 5)} | {max(int(slots), 1), 2 * max(int(slots), 1)})
 
 
-def ev_whine(speed=6000.0, poles=4, slots=48, fs=7500.0, load=0.6, sr=DEFAULT_SR, seed=0, *, dur=1.0, fs_spread=0.0) -> np.ndarray:
+def ev_whine(speed=6000.0, poles=4, slots=48, fs=7500.0, load=0.6, sr=DEFAULT_SR, seed=0, *, dur=1.0, fs_spread=0.0, fs_pattern=None, pattern_len=200) -> np.ndarray:
     """Inverter-fed motor, no gears or tyres. ``speed``: motor rpm, number or per-sample array (the array sets the length,
     otherwise ``dur``). ``poles``: pole pairs. ``fs``: carrier Hz, number or per-sample array. ``load``: 0..1, number or array.
     ``fs_spread``: Hz, the carrier jumps at random within fs +- spread. Mono, peak below 1, ends faded by 5 ms.
@@ -72,6 +79,10 @@ def ev_whine(speed=6000.0, poles=4, slots=48, fs=7500.0, load=0.6, sr=DEFAULT_SR
     if fs_spread > 0:
         hop = max(1, int(0.005 * sr))
         fc = fc + float(fs_spread) * np.interp(np.arange(n), np.arange(n // hop + 2) * hop, rng.uniform(-1, 1, n // hop + 2))
+    if fs_pattern is not None:                       # a repeating pseudo-random list of carrier frequencies, each held half a period
+        seq = np.asarray(fs_pattern, float)[np.random.default_rng(int(seed) + 7919).integers(0, len(fs_pattern), max(int(pattern_len), 1))]
+        edge = np.concatenate([[0.0], np.cumsum(0.5 / seq)])
+        fc = seq[np.searchsorted(edge, (np.arange(n) / sr) % edge[-1], "right") - 1]
     shaft = np.cumsum(rpm / 60.0) / sr
     carrier = np.cumsum(fc) / sr
     p = max(int(poles), 1)
@@ -140,14 +151,25 @@ def ev(sr=DEFAULT_SR, kind="voiture_electrique", speed=-1.0, load=0.5, dur=3.0, 
     return _fin(_nm(m) + tyre * _nm(_rolling(kmh, n, rng)), sr, 0.7, fade=0.02, tail=0.05)
 
 
-# speed km/h, wheel m, reduction, pole pairs, slots, tyre gain
-EV = {"voiture_electrique": (50.0, 0.33, 9.0, 4, 48, 0.8), "trottinette": (20.0, 0.1, 1.0, 15, 27, 0.3), "voiturette": (20.0, 0.23, 12.0, 2, 24, 0.5)}
+# Presets of the ``ev`` family (``genny/presets/ev.toml``), as the tuple (speed km/h, wheel m, reduction, pole pairs, slots, tyre gain).
+EV = presets.schema("ev", {
+    "speed_kmh": F(float, lo=1.0, hi=300.0, unit="km/h"),
+    "wheel_m": F(float, lo=0.02, hi=1.0, unit="m"),
+    "reduction": F(float, lo=0.1, hi=50.0),
+    "poles": F(int, lo=1, hi=64, unit="pole pairs"),
+    "slots": F(int, lo=2, hi=200),
+    "tyre": F(float, lo=0.0, hi=4.0),
+}, shape=lambda d: (d["speed_kmh"], d["wheel_m"], d["reduction"], d["poles"], d["slots"], d["tyre"]))
 
 
 # Minimum dB(A) against km/h: 50 at 10, 56 at 20, 47 at 6 in reverse, linear between, clamped outside; FMVSS base 50 dB.
 AVAS_RULES = ("unece", "fmvss")
 AVAS_F = (400.0, 1600.0)                                    # the two bands, one third-octave at 1600 Hz or less
-AVAS_STYLES = {"hum": (1.0, 0.35, 0.0), "chime": (0.5, 1.0, 0.25), "pad": (1.0, 0.7, 0.1)}     # band 1, band 2, FM depth
+AVAS_STYLES = presets.schema("avas_style", {                # band 1, band 2, FM depth
+    "band1": F(float, lo=0.0, hi=4.0),
+    "band2": F(float, lo=0.0, hi=4.0),
+    "fm": F(float, lo=0.0, hi=4.0),
+}, shape=lambda d: (d["band1"], d["band2"], d["fm"]))
 
 
 def avas_level_db(kmh, rule="unece", reverse=False):
@@ -207,15 +229,20 @@ def hybrid_transition(sr=DEFAULT_SR, speed=40.0, at=1.0, dur=3.0, seed=0):
 # =============================================================================================
 # TYRES
 # =============================================================================================
-def _rolling(kmh: float, n: int, rng) -> np.ndarray:
-    """Harmonoise rolling noise; RMS follows the source model's total level, 0.15 at 130 km/h (the 0.15 is a mix level)."""
-    lr, _ = road_noise_levels(kmh)
+def _rolling(kmh: float, n: int, rng, wet: bool = False) -> np.ndarray:
+    """Harmonoise rolling noise; RMS follows the source model's total level, 0.15 at 130 km/h (the 0.15 is a mix level).
+    wet: bands raised by `wet_road_db`."""
+    lr = road_noise_levels(kmh)[0] + (wet_road_db(kmh) if wet else 0.0)
     y = _third_octave_noise(n, rng, lr)
-    return y / (np.sqrt(np.mean(y * y)) + 1e-12) * 0.15 * 10.0 ** ((_rolling_total(kmh) - _rolling_total(130.0)) / 20.0)
+    return y / (np.sqrt(np.mean(y * y)) + 1e-12) * 0.15 * 10.0 ** ((_db_sum(lr) - _rolling_total(130.0)) / 20.0)
+
+
+def _db_sum(levels: np.ndarray) -> float:
+    return 10.0 * math.log10(float(np.sum(10.0 ** (np.asarray(levels) / 10.0))))
 
 
 def _rolling_total(kmh: float) -> float:
-    return 10.0 * math.log10(float(np.sum(10.0 ** (road_noise_levels(kmh)[0] / 10.0))))
+    return _db_sum(road_noise_levels(kmh)[0])
 
 
 def _tread_line(kmh: float, n: int, rng) -> np.ndarray:
@@ -246,9 +273,12 @@ def _grains(preset: str, rate: float, n: int, rng) -> np.ndarray:
     return _nm(np.asarray(y, float))
 
 
-# PhISEM preset (`particles.GROUNDS`), tyre rolling level left under the grains, high-pass of that bed (loose ground takes the lows away).
-SURFACES = {"tyre_gravel": ("BigRocks", 0.6, 120.0), "tyre_dirt": ("Crunch", 0.5, 150.0), "tyre_sand": ("Sandpaper", 0.3, 200.0),
-            "tyre_snow": ("Crunch", 0.25, 250.0), "tyre_mud": ("WaterDrops", 0.3, 200.0)}
+# Presets of the ``tyre_surface`` family (``genny/presets/tyre_surface.toml``): PhISEM preset (`particles.GROUNDS`), tyre rolling level left under the grains, high-pass of that bed (loose ground takes the lows away).
+SURFACES = presets.schema("tyre_surface", {
+    "grains": F(str),
+    "gain": F(float, lo=0.0, hi=4.0),
+    "hp_hz": F(float, lo=10.0, hi=2000.0, unit="Hz"),
+}, shape=lambda d: (d["grains"], d["gain"], d["hp_hz"]))
 TYRE_KINDS = ("tyre_road", "tyre_wet", *SURFACES, "tyre_cobble", "tyre_burnout", "tyre_lockup", "road_cruise_interior")
 COBBLE_L = 0.12                                             # m: a 10-12 cm sett and its joint
 ABS_HZ = 15.0                                               # pressure cycles per second
@@ -277,17 +307,17 @@ def _cobble(kmh: float, n: int, rng) -> np.ndarray:
      kind=("tyre_road", " | ".join(TYRE_KINDS)), speed=(70.0, "km/h"), tread=(0.5, "tyre_road, tyre_wet: level of the tread line"), dur=(3.0, "s"), seed=(0, "variation"))
 def tyre_roll(sr=DEFAULT_SR, kind="tyre_road", speed=70.0, tread=0.5, dur=3.0, seed=0):
     """Levels between speeds are the source model's: no normalisation (`tyre_road`, `tyre_wet`, the surfaces, cobbles).
-    Wet: spray above 2 kHz at 0.8 of the rolling level (as `cyber.pass_by`). Grains at 40 per metre."""
-    k = _kind(kind, TYRE_KINDS, "tyre_roll")
+    Wet: rolling bands raised by `cyber.wet_road_db` (water film, from 1.6 kHz up). Grains at 40 per metre."""
+    k = _kind(kind, _kinds(TYRE_KINDS, SURFACES), "tyre_roll")
     kmh = float(np.clip(speed, 1.0, 250.0))
     n, rng = _n(float(np.clip(dur, 0.05, 60.0))), np.random.default_rng(int(seed))
-    bed = _rolling(kmh, n, rng)
+    bed = _rolling(kmh, n, rng, wet=k == "tyre_wet")
     lvl = float(np.sqrt(np.mean(bed * bed)))
     tr = float(np.clip(tread, 0.0, 2.0)) * lvl
     if k == "tyre_road":
         y = bed + tr * _tread_line(kmh, n, rng)
     elif k == "tyre_wet":
-        y = bed + tr * _tread_line(kmh, n, rng) + 0.8 * lvl * _unit_rms(amb.hip(rng.standard_normal(n), 2000.0))
+        y = bed + tr * _tread_line(kmh, n, rng)
     elif k in SURFACES:
         preset, g, hp = SURFACES[k]
         y = g * amb.hip(bed, hp) + lvl * 3.0 * _grains(preset, 40.0 * kmh / 3.6, n, rng)
@@ -309,10 +339,6 @@ def tyre_roll(sr=DEFAULT_SR, kind="tyre_road", speed=70.0, tread=0.5, dur=3.0, s
     return _fin(y, sr, None, fade=0.02, tail=0.05)
 
 
-def _unit_rms(y: np.ndarray) -> np.ndarray:
-    return y / (np.sqrt(np.mean(y * y)) + 1e-12)
-
-
 @sfx("interior", "Heard from the cabin, driving: engine, tyres, floor vibration, all through the shell. kind car | ev | truck | bus.",
      kind=("car", "car | ev | truck | bus"), speed=(90.0, "km/h"), dur=(4.0, "s"), seed=(0, "variation"))
 def interior(sr=DEFAULT_SR, kind="car", speed=90.0, dur=4.0, seed=0):
@@ -331,8 +357,13 @@ def interior(sr=DEFAULT_SR, kind="car", speed=90.0, dur=4.0, seed=0):
     return _fin(occlude(outside, P, material="metal", thickness=thick, leak=0.1, edge=500.0) + vib * _nm(_fit(np.asarray(rmb, float), n)), sr, 0.6, fade=0.05, tail=0.1)
 
 
-# rpm per km/h, cylinders, vibration level, shell m
-INTERIORS = {"car": (28.0, 4, 0.3, 0.002), "ev": (0.0, 4, 0.2, 0.002), "truck": (15.0, 6, 0.6, 0.0015), "bus": (15.0, 6, 0.5, 0.001)}
+# Presets of the ``interior`` family (``genny/presets/interior.toml``), as the tuple (rpm per km/h, cylinders, vibration level, shell m).
+INTERIORS = presets.schema("interior", {
+    "rpm_per_kmh": F(float, lo=0.0, hi=200.0),
+    "cylinders": F(int, lo=1, hi=16),
+    "vibration": F(float, lo=0.0, hi=4.0),
+    "shell_m": F(float, lo=0.0001, hi=0.05, unit="m"),
+}, shape=lambda d: (d["rpm_per_kmh"], d["cylinders"], d["vibration"], d["shell_m"]))
 
 
 # =============================================================================================
@@ -346,8 +377,11 @@ def _db_peak(db: float) -> float:
     return 0.8 * 10.0 ** ((db - _DB_FULL) / 20.0)
 
 
-# burst s, orifice mm: `air_leak pressure=1` is 343 m/s, sonic like 690-830 kPa
-AIR_LEAKS = {"bus_kneel": (0.8, 8.0), "air_brake_apply": (0.25, 10.0), "air_brake_release": (0.25, 10.0), "air_dryer_purge": (0.15, 20.0)}
+# Presets of the ``air_leak`` family (``genny/presets/air_leak.toml``), as the tuple (burst s, orifice mm): `air_leak pressure=1` is 343 m/s, sonic like 690-830 kPa
+AIR_LEAKS = presets.schema("air_leak", {
+    "burst_s": F(float, lo=0.01, hi=10.0, unit="s"),
+    "orifice_mm": F(float, lo=0.5, hi=100.0, unit="mm"),
+}, shape=lambda d: (d["burst_s"], d["orifice_mm"]))
 AIR_KINDS = ("bus_door", *AIR_LEAKS, "parking_brake_spring")
 MEMBRANE_HZ = 150.0                                         # AM of the valve membrane ("honking")
 DOOR_STROKE = 1.2                                           # s
@@ -357,7 +391,7 @@ DOOR_STROKE = 1.2                                           # s
      kind=("air_brake_release", " | ".join(AIR_KINDS)), seed=(0, "variation"))
 def air_system(sr=DEFAULT_SR, kind="air_brake_release", seed=0):
     """Levels between kinds as measured on air brakes; the bus kinds at the brake level."""
-    k = _kind(kind, AIR_KINDS, "air_system")
+    k = _kind(kind, _kinds(AIR_KINDS, AIR_LEAKS), "air_system")
     if k in AIR_LEAKS:
         burst, orifice = AIR_LEAKS[k]
         y = air_leak(sr=P, dur=max(0.4, 3.0 * burst), pressure=1.0, orifice=orifice, burst=burst, seed=seed)
@@ -381,15 +415,15 @@ def air_system(sr=DEFAULT_SR, kind="air_brake_release", seed=0):
 # =============================================================================================
 # DOORS
 # =============================================================================================
-# band Hz, quality 0 tinny .. 1 solid, panel m, body Hz, length s, closing force.
+# Presets of the ``door`` family (``genny/presets/door.toml``), as the tuple ((band Hz), quality 0 tinny .. 1 solid, panel m, body Hz, length s).
 # Bands: front 200-2000, rear 315-2500; cheap above 500. Panel 20 ms after the latch, 200 ms long.
-DOORS = {
-    "car_door_close": ((200.0, 2000.0), 0.8, 0.9, 160.0, 0.2),
-    "car_door_rear": ((315.0, 2500.0), 0.7, 0.75, 340.0, 0.2),
-    "car_door_cheap": ((500.0, 4000.0), 0.15, 0.8, 300.0, 0.15),
-    "trunk_slam": ((80.0, 1200.0), 0.85, 1.2, 110.0, 0.3),
-    "hood_slam": ((70.0, 1000.0), 0.7, 1.4, 90.0, 0.35),
-}
+DOORS = presets.schema("door", {
+    "band": F(tuple, items=(F(float, lo=10.0, hi=20000.0), F(float, lo=10.0, hi=20000.0)), unit="Hz"),
+    "quality": F(float, lo=0.0, hi=1.0),
+    "panel_m": F(float, lo=0.05, hi=4.0, unit="m"),
+    "body_hz": F(float, lo=10.0, hi=2000.0, unit="Hz"),
+    "length_s": F(float, lo=0.02, hi=5.0, unit="s"),
+}, shape=lambda d: (d["band"], d["quality"], d["panel_m"], d["body_hz"], d["length_s"]))
 DOOR_KINDS = (*DOORS, "car_door_open", "van_sliding_door")
 
 
@@ -413,7 +447,7 @@ def _slam(kind: str, seed: int, quality) -> np.ndarray:
 @sfx("car_door", "Car doors: car_door_close (latch, panel, body), car_door_rear, car_door_cheap (tinny), car_door_open (handle, seal), trunk_slam, hood_slam, van_sliding_door.",
      kind=("car_door_close", " | ".join(DOOR_KINDS)), quality=(-1.0, "0 tinny .. 1 solid (-1 = the kind's own)"), seed=(0, "variation"))
 def car_door(sr=DEFAULT_SR, kind="car_door_close", quality=-1.0, seed=0):
-    k = _kind(kind, DOOR_KINDS, "car_door")
+    k = _kind(kind, _kinds(DOOR_KINDS, DOORS), "car_door")
     if k in DOORS:
         return _fin(_slam(k, seed, quality), sr, 0.8, fade=0.001, tail=0.02)
     rng = np.random.default_rng(int(seed))
@@ -435,15 +469,12 @@ def car_door(sr=DEFAULT_SR, kind="car_door_close", quality=-1.0, seed=0):
 # =============================================================================================
 # HORNS
 # =============================================================================================
-# Hz, horn tube radius m, buzz drive.
-HORNS = {
-    "train_horn_k5la": ((311.0, 370.0, 415.0, 494.0, 622.0), 0.06, 2.5),
-    "train_horn_euro": ((370.0, 440.0), 0.05, 2.5),
-    "truck_air_horn": ((150.0, 180.0), 0.06, 3.0),
-    "air_horn_car": ((370.0, 415.0), 0.03, 2.5),
-    "can": ((420.0, 490.0), 0.02, 4.0),
-    "vuvuzela": ((235.0,), 0.03, 2.0),
-}
+# Presets of the ``horn`` family (``genny/presets/horn.toml``), as the tuple ((tones Hz), horn tube radius m, buzz drive).
+HORNS = presets.schema("horn", {
+    "tones": F(tuple, of=F(float, lo=20.0, hi=8000.0), max_len=16, unit="Hz"),
+    "radius_m": F(float, lo=0.005, hi=0.5, unit="m"),
+    "drive": F(float, lo=0.0, hi=20.0),
+}, shape=lambda d: (d["tones"], d["radius_m"], d["drive"]))
 # Mercedes-style pairs: 335/400; 500 with 405-420; 420-440 with 340-370 (midpoints taken)
 CAR_PAIRS = ((335.0, 400.0), (500.0, 412.0), (430.0, 355.0))
 HORN_KINDS = (*HORNS, "car_pairs")
@@ -467,7 +498,7 @@ def _reed(f: float, pressure: np.ndarray, drive: float, rng) -> np.ndarray:
      kind=("truck_air_horn", " | ".join(HORN_KINDS)), freqs=(None, "override: Hz list, '285/330'"), pair=(0, "car_pairs: 0 335/400, 1 500/412, 2 430/355"), dur=(1.2, "s"), seed=(0, "variation"))
 def air_horn(sr=DEFAULT_SR, kind="truck_air_horn", freqs=None, pair=0, dur=1.2, seed=0):
     """Each tone is a reed into its own half-wave `tube`. Rise 80 ms and the pressure sag at the end."""
-    k = _kind(kind, HORN_KINDS, "air_horn")
+    k = _kind(kind, _kinds(HORN_KINDS, HORNS), "air_horn")
     d = float(np.clip(dur, 0.2, 20.0))
     if k == "car_pairs":
         a, b = _parse_freqs(freqs) if freqs is not None else CAR_PAIRS[int(pair) % len(CAR_PAIRS)]

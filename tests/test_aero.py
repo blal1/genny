@@ -280,7 +280,7 @@ def test_flaps_and_gear_add_noise():
 
 # ------------------------------------------------------------------- rockets
 def test_sls_power_level():
-    assert abs(A.rocket_pwl(39.1e6, 2600.0, 0.0033) - 202.4) < 1.0     # thrust and Ue UNSOURCED, result re Kellison & Gee
+    assert abs(A.rocket_pwl(39.1e6, 2600.0, 0.0033) - 202.4) < 1.0
     assert abs(A.rocket_pwl(1e6, 2000.0, 0.01) - A.rocket_pwl(1e6, 2000.0, 0.005) - 3.01) < 0.01
 
 
@@ -340,7 +340,7 @@ def test_no_tail_on_tandem_and_coaxial():
 
 
 def test_tandem_second_rotor_52_ms_later():
-    assert abs(A.TANDEM_DELAY - 0.052) < 0.001
+    assert abs(A.TANDEM_DELAY - 18.29 / A.C) < 1e-9 and abs(A.TANDEM_DELAY - 0.052) < 0.002   # F 18.29 m: 53.3 ms (LOT34_N)
     def ac(**kw):
         y = A.rotorcraft(sr=SR, craft="ch47", angle=30.0, state="descent", tail_blades=2, dur=4.0, symmetry=0.5, **kw)
         e = np.abs(y - np.convolve(y, np.ones(96) / 96, mode="same"))

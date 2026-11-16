@@ -357,3 +357,34 @@ Each is justified in `research/SOURCES.md` (the markers are gone from the code).
 - `cyber_ui`: the ten figures. Their note ranges, gaps and envelope law come from `procedural-sounds`.
 - `packet_loss`: the 0.7 attenuation per concealed packet.
 - `identify_machine`: every threshold (the 12 dB between a line's double and its sidebands was set on the AHU and FSTF recordings).
+
+## Added in 1.3.0
+
+- `pass_by wet=` (0 dry .. 1 wet road): rolling noise raised per third-octave band by max(15 lg f - 12 lg(v/70) - 48,
+  0) dB (above about 1.6 kHz, less at higher speed); `cyber.wet_road_db(kmh)` gives the table. `road.tyre_roll
+  kind=tyre_wet` is the rolling noise of a wet road plus the tread line, with no spray added.
+## Two-stroke engines, vehicles and newer options (1.3.0)
+
+The modules `engines`, `heavy_vehicles`, `road`, `rail` and `marine` have no page of their own; their tables are presets
+(`docs/presets.md`): a vehicle, layout, ship or door is a TOML table, with `extends`.
+
+- `pipe_engine cycle=2`: ports from the crank-rod geometry (`ports="exhaust-opens,transfer-opens,exhaust-width,transfer-width,stroke,rod,bore"`,
+  default `TWO_STROKE_PORTS = (86, 115, 45, 38, 72, 130, 66.4)`), exhaust blow-down (driving pressure 1.05-1.3 bar + 0.4 of the
+  combustion, emptying through the port area), the crankcase as the intake pump (`induct="reed"|"port"`), scavenging
+  (`DR`, `SE = 1 - exp(-1.3 DR)`) and Markov misfires (`misfire`), the tuned chamber (`tuned_rpm`, `band`, `ccr`, `egt`; Python
+  `tuned_length`, `tuned_chamber`), `steepen` (shock steepening, `tubes.steepen_through`), `cut="limiter"|"soft"|"dfco"` with
+  `rev_limit`, `cut_dyn`, `relight`; `raw=1` keeps the true level; `gate`; `blowdown=1` makes a four-stroke follow the
+  combustion. Four-stroke output is unchanged bit for bit.
+- Other `pipe_engine` options: `muffler_r`, `compression`, `ignition`, `clutch`, `transmission="baldan"`, `ignition_time`,
+  `branch`, `bottle`, `expansion_ir`, `bend`, `step_radius`, `twin`, `twin_phase`, `throttle`, `redline`, `lag_up`, `lag_down`,
+  `cut_at`.
+- `two_stroke kind` is a preset: chainsaw, scooter, mx125, mx250, outboard, snowmobile, mower, vintage; `motorcycle cross_125|cross_250`;
+  `idle`, `cut_at`; the rev limiter works on chainsaw, scooter, mower, motorcycle, outboard. Heard differences: all two-stroke sounds
+  lose the `pf cos` pumping and get a blow-down pulse.
+- `engine_event temperature=`; `tracks gravel=`, `hydraulic_pump rate=`; `scooter slip=`; `curve_squeal straight=`; `rail.vermeulen_force`;
+  `conveyor oiled=`; `bearing preset=`; `induction_motor fault="shorted_turns"`, `drive_hz`; `gear_friction_coefficient`,
+  `gear_rolling_force`, `gear_mesh_efficiency`.
+- `radio_chatter` (sfx); `gsm_call` (fx); `texturize`, `erb_centres`, `equalized_noise`, `limiter_skips`; `transformer` grid spread
+  18.8 mHz at 50 Hz and 18.2 mHz at 60 Hz.
+- Level trims: the two-stroke sounds changed spectrum at the same raw level (0.194 against 0.188); `pig` and the clarinets change
+  level in `_levels.py`.

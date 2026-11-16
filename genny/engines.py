@@ -12,9 +12,11 @@ import numpy as np
 from scipy.ndimage import uniform_filter1d
 
 from .core import DEFAULT_SR
-from .cyber import _along, _modes, pipe_engine, rpm_curve, turbo
+from .cyber import TWO_STROKE_PORTS, _along, _modes, pipe_engine, rpm_curve, turbo
 from .matter import _bp, _fin, _fit, _lp, _hp, _n, _rng, _tvbp, _unit, air_leak
 from .physical.core import SR
+from . import presets
+from .presets import F
 from .sfx import sfx
 
 
@@ -22,34 +24,20 @@ def _even(c):
     return tuple(i / c for i in range(c))
 
 
-# Per kind: offsets (fractions of the cycle, firing order), banks by slot, default rpm, header in ms (a number or one per slot).
-# Offsets are 720/N unless written out.
-LAYOUTS = {
-    "engine_single": dict(offsets=(0.0,), rpm=3000.0, header=2.5),                                     # 3000 rpm = 25 Hz
-    "vtwin_45": dict(offsets=(0.0, 0.4375), rpm=950.0, header=2.5),                                    # 315/405
-    "vtwin_90": dict(offsets=(0.0, 0.375), rpm=1500.0, header=2.5),                                    # 270/450
-    "twin_180": dict(offsets=(0.0, 0.25), rpm=3000.0, header=2.0),                                     # 180/540
-    "twin_270": dict(offsets=(0.0, 0.375), rpm=3000.0, header=2.0),                                    # 270/450
-    "twin_360": dict(offsets=(0.0, 0.5), rpm=3000.0, header=2.0),                                      # 360/360
-    # 1-3-2-4 with longer runners on 2 and 4, so short, short, long, long by slot (1.3:1); idle 700 rpm.
-    # That pattern repeats over 720 degrees (odd multiples of rpm / 120), not over the spec's calculated 360 degrees / 11.7 Hz.
-    "boxer_4": dict(offsets=_even(4), rpm=700.0, header=(1.6, 1.6, 2.08, 2.08)),
-    "boxer_6": dict(offsets=_even(6), banks="RLRLRL", rpm=3000.0, header=1.8),                         # R1-L2-R3-L1-R2-L3
-    "inline_4": dict(offsets=_even(4), rpm=883.0, header=(0.958, 0.333, 0.708, 0.958)),
-    "inline_4_crossplane": dict(offsets=(0.0, 0.125, 0.375, 0.75), rpm=6000.0, header=1.4),            # 90-180-270-180
-    "inline_5": dict(offsets=_even(5), rpm=6000.0, header=1.6),                                        # 1-2-4-5-3, 144
-    "inline_6": dict(offsets=_even(6), rpm=3000.0, header=1.6),                                        # 1-5-3-6-2-4, 120
-    "v6_60": dict(offsets=_even(6), banks="RLRLRL", rpm=3000.0, header=1.6),                           # R1-L1-R2-L2-R3-L3
-    "v6_90": dict(offsets=(0.0, 0.125, 1 / 3, 11 / 24, 2 / 3, 19 / 24), banks="RLRLLR", rpm=3000.0, header=1.6),   # R1-L2-R2-L3-L1-R3, 90/150
-    "v8_crossplane": dict(offsets=_even(8), banks="LRLLRLRR", rpm=1500.0, header=2.0),                 # per bank 180-90-180-270
-    "v8_flatplane": dict(offsets=_even(8), banks="LRLRLRLR", rpm=9000.0, header=1.0),                  # alternating, 9000 rpm = 600 Hz
-    "v10": dict(offsets=_even(10), banks="RLRLRLRLRL", rpm=9000.0, header=1.0),                        # R1-L5-R5-L2-R2-L3-R3-L4-R4-L1, 750 Hz
-    "v12": dict(offsets=_even(12), banks="LRLRLRLRLRLR", rpm=8000.0, header=1.0),                      # 60, 800 Hz
-    # One combustion per shaft turn and per rotor: 2 rotors x 3 chambers of 1080 degrees. 1100-9000 rpm.
-    "wankel": dict(offsets=_even(6), cycle="rotary", rpm=3000.0, header=1.2),
-    "diesel_i4": dict(offsets=_even(4), rpm=1000.0, header=1.6),                                       # 720-4200 rpm, 1000 rpm
-    "diesel_i6_truck": dict(offsets=_even(6), rpm=750.0, header=3.5),                                  # idle 750, nominal 1800-2100
-}
+# Per kind: offsets (fractions of the cycle, firing order), banks by slot, default rpm, header in ms (a number, or ``headers``: one per slot).
+# The kinds are the presets of the ``engine_layout`` family (``genny/presets/engine_layout.toml``).
+def _layout_shape(d):
+    return {("header" if k == "headers" else k): v for k, v in d.items()}
+
+
+LAYOUTS = presets.schema("engine_layout", {
+    "offsets": F(tuple, of=F(float, lo=0.0, hi=1.0), unit="fraction of the cycle"),
+    "banks": F(str, required=False),
+    "cycle": F(str, choices=("rotary",), required=False),
+    "rpm": F(float, lo=30.0, hi=40000.0, unit="rpm"),
+    "header": F(float, lo=0.0, hi=50.0, unit="ms", required=False),
+    "headers": F(tuple, of=F(float, lo=0.0, hi=50.0), unit="ms", required=False),
+}, shape=_layout_shape)
 
 
 def firing_offsets(layout: str) -> list[float]:
@@ -181,12 +169,12 @@ def engine_layout(sr=DEFAULT_SR, kind="inline_4", rpm=-1.0, load=0.5, dur=3.0, s
 
 def expansion_chamber(bore=0.05, egt=800.0):
     """Stepped tuned pipe as (delays in samples, junction reflections, section gains): header .2 m at .6 B, diffuser .3 m in 6
-    steps up to 1.9 B, belly .1 m, counter-cone .2 m in 5 steps down to 1.15 x stinger, stinger .2 m at .32 B.
+    steps up to 1.9 B, belly .1 m, counter-cone .2 m in 5 steps down to 1.15 x stinger, stinger .2 m at .36 B.
     Sound speed sqrt(1.36 x 287 T), T from zones 1, .85, .75, .7, .6 of 300 K..EGT and loss g = exp(-.09 k),
     k = .072 L / sqrt(D / .05) (wall .12 x .6). EGT 800 K, bore 50 mm.
     A wider section reflects a negative wave (the suction that pulls the cylinder clean), a narrower one a positive wave."""
     B = float(bore)
-    d_h, d_b, d_s = 0.6 * B, 1.9 * B, 0.32 * B
+    d_h, d_b, d_s = 0.6 * B, 1.9 * B, 0.36 * B
     sec = [(0.2, d_h, 1.0)]
     sec += [(0.3 / 6, d_h + (d_b - d_h) * (i + 0.5) / 6, 0.85) for i in range(6)]
     sec += [(0.1, d_b, 0.75)]
@@ -199,13 +187,68 @@ def expansion_chamber(bore=0.05, egt=800.0):
             np.exp(-0.09 * 0.072 * L / np.sqrt(D / 0.05)))
 
 
-@sfx("two_stroke", "Two-stroke engine: one firing per turn through piston-controlled ports and a tuned expansion chamber. Moped, chainsaw, dirt bike, outboard.",
-     rpm=(7000.0, "crankshaft, or a curve: 7000 rpm = 116.7 Hz"), cylinders=(1, "1..4, one chamber per bank"), load=(0.6, "0 coasting .. 1 full throttle"),
-     bore=(0.05, "m: sets the chamber's diameters"), dur=(3.0, "s"), seed=(0, "variation"))
-def two_stroke(sr=DEFAULT_SR, rpm=7000.0, cylinders=1, load=0.6, bore=0.05, dur=3.0, seed=0):
+# Presets of the generic two-stroke core (``genny/presets/two_stroke.toml``): ports = (exhaust opens deg, transfer opens deg, exhaust width mm,
+# transfer width mm, stroke mm, rod mm, bore mm); the other keys are ``pipe_engine`` parameters. ``rpm`` working speed, ``limit`` the rev limiter,
+# ``cut`` the way it cuts. A preset without ``tuned_rpm`` has its chamber tuned to the speed asked; ``no_pipe`` (``tuned_rpm=None`` in the view) = no tuned pipe.
+def _two_stroke_shape(d):
+    out = {}
+    for k, v in d.items():
+        if k == "no_pipe":
+            if v:
+                out["tuned_rpm"] = None
+        else:
+            out[k] = v
+    return out
+
+
+TWO_STROKE_KINDS = presets.schema("two_stroke", {
+    "rpm": F(float, lo=30.0, hi=40000.0, unit="rpm"),
+    "idle": F(float, lo=30.0, hi=40000.0, unit="rpm", required=False),
+    "ports": F(str, required=False),
+    "induct": F(str, choices=("port", "reed"), required=False),
+    "tuned_rpm": F(float, lo=30.0, hi=40000.0, unit="rpm", required=False),
+    "no_pipe": F(bool, required=False),
+    "band": F(float, lo=0.0, hi=1.0, required=False),
+    "limit": F(float, lo=30.0, hi=40000.0, unit="rpm", required=False),
+    "cut": F(str, choices=("limiter", "soft"), required=False),
+    "header": F(float, lo=0.0, hi=50.0, unit="ms", required=False),
+    "pipe": F(float, lo=0.0, hi=100.0, unit="ms", required=False),
+}, shape=_two_stroke_shape)
+
+
+@sfx("two_stroke", "Two-stroke engine: one firing per turn through piston-controlled ports, a crankcase pump and a tuned expansion chamber, with its rev limiter. Presets: chainsaw, scooter, mx125, mx250, outboard, snowmobile, mower, vintage.",
+     rpm=(-1.0, "crankshaft, or a curve; -1 = the kind's working speed (default 7000 rpm = 116.7 Hz)"), cylinders=(1, "1..4, one chamber per bank"), load=(0.6, "0 coasting .. 1 full throttle"),
+     bore=(0.0, "m: scales the default port geometry to this bore (0 = as is); ignored by a kind"), kind=("default", "default | chainsaw | scooter | mx125 | mx250 | outboard | snowmobile | mower | vintage"),
+     cut=(None, "None | machine (the kind's own limiter) | limiter | soft | dfco: the ignition cut"), rev_limit=(-1.0, "rpm of the limiter; -1 = the kind's"),
+     idle=(0, "1 = the kind's idle speed when no rpm is given (chainsaw 2800, scooter 1900, mx125 1900, mx250 1600, outboard 750)"), dur=(3.0, "s"), seed=(0, "variation"))
+def two_stroke(sr=DEFAULT_SR, rpm=-1.0, cylinders=1, load=0.6, bore=0.0, dur=3.0, seed=0, kind="default", cut=None, rev_limit=-1.0, tuned_rpm=-1.0, ports=None, idle=0, cut_at=0.0):
+    """The core is ``cyber.pipe_engine(cycle=2)``; ``kind`` only picks its parameters (``TWO_STROKE_KINDS``). Python callers also have
+    ``ports`` and ``tuned_rpm`` (-1 = the kind's, or the speed itself when it has none) and ``cut_at`` (s: the speed follows ``rpm``
+    until then, and runs free into the limiter after it)."""
+    p = _two_stroke_shape(presets.resolve("two_stroke", kind))
+    working, limit, own, idle_rpm = p.pop("rpm"), p.pop("limit", None), p.pop("cut", None), p.pop("idle", None)
+    r = rpm if np.ndim(rpm) or rpm > 0 else idle_rpm if idle and idle_rpm else working
+    p["tuned_rpm"] = float(tuned_rpm) if tuned_rpm > 0 else p["tuned_rpm"] if "tuned_rpm" in p else float(np.median(r))
+    if ports is not None:
+        p["ports"] = ports
+    elif bore > 0 and "ports" not in p:
+        k = float(bore) * 1000.0 / TWO_STROKE_PORTS[6]
+        p["ports"] = (TWO_STROKE_PORTS[0], TWO_STROKE_PORTS[1], *(v * k for v in TWO_STROKE_PORTS[2:]))
+    if cut == "machine":
+        cut = own
+        if cut is None:
+            raise ValueError(f"two_stroke kind {kind!r} has no rev limiter of its own: cut = limiter, soft or dfco")
+    if cut in ("limiter", "soft"):
+        rev_limit = float(rev_limit) if rev_limit > 0 else limit
+        if rev_limit is None:
+            raise ValueError(f"two_stroke kind {kind!r} has no rev limit: pass rev_limit")
+    else:
+        rev_limit = None
     C = int(np.clip(cylinders, 1, 4))
-    y = pipe_engine(sr=SR, dur=dur, rpm=rpm, cylinders=C, load=load, cycle=2, header=0.3, pipe=0.5, unequal=0.0, mic=0.15,
-                    banks=[i % 2 for i in range(C)] if C > 1 else None, chamber=expansion_chamber(bore), seed=seed)
+    p.setdefault("header", 0.3)
+    p.setdefault("pipe", 0.5)
+    y = pipe_engine(sr=SR, dur=dur, rpm=r, cylinders=C, load=load, cycle=2, unequal=0.0, mic=0.15, cut=cut, rev_limit=rev_limit, cut_at=cut_at,
+                    banks=[i % 2 for i in range(C)] if C > 1 else None, seed=seed, **p)
     return _fin(y, sr, 0.7, 0.002, 0.02)
 
 
@@ -219,7 +262,7 @@ def ignition_delay_ms(cetane=51.0, p_bar=60.0, t_k=900.0):
     return 0.44 * (51.0 / float(cetane)) ** 0.6 * float(p_bar) ** -1.19 * math.exp(4650.0 / float(t_k))
 
 
-_DIESEL = {"diesel_i4": dict(bore=0.081, pipe=7.0), "diesel_i6_truck": dict(bore=0.13, pipe=12.0)}    # 130 mm: sc = .66
+_DIESEL = presets.schema("diesel", {"bore": F(float, lo=0.02, hi=1.0, unit="m"), "pipe": F(float, lo=0.0, hi=100.0, unit="ms")})
 
 
 @sfx("diesel_engine", "Diesel: weak exhaust pulses under the combustion clatter, the premixed spike ringing the head panels and the block once per firing. Car or truck.",
@@ -232,8 +275,8 @@ def diesel_engine(sr=DEFAULT_SR, kind="diesel_i4", rpm=-1.0, load=0.3, clatter=1
     x 2.5 on the block [640, 1150, 1900] sc, sc = .086 / B. Noise 400-2000 Hz peaking near 800 at 1000 rpm, 30 % load, bursts near
     1500 Hz: those modes put it there. A layer above 4 kHz per firing that fades as the rate climbs above 80 Hz of firing rate.
     Ignition at .25 of a petrol engine's, strength .5 + .5 load."""
-    if kind not in _DIESEL:
-        raise ValueError(f"diesel_engine kind {kind!r}: use one of {', '.join(_DIESEL)}")
+    if kind not in _DIESEL or kind not in LAYOUTS:
+        raise ValueError(f"diesel_engine kind {kind!r}: use one of {', '.join(k for k in _DIESEL if k in LAYOUTS)} (a diesel preset needs an engine_layout of the same name)")
     rng = _rng(seed, 111)
     n = _n(dur)
     B = float(bore) if bore > 0 else _DIESEL[kind]["bore"]
@@ -474,8 +517,9 @@ def _cranking(rr, cylinders):
      kind=("engine_start", " | ".join(_EVENTS)), layout=("inline_4", "any engine_layout kind"), rpm=(-1.0, "the speed it happens at; -1 = the kind's own"),
      load=(0.5, "0..1"), gear=(3, "shifts: from this gear, 1..6"), speed=(60.0, "shifts: km/h"), limit=(8000.0, "rev_limiter: cut here, back at limit - 120"),
      bore=(0.086, "knock, tick, rod: m (86 mm = knock at 6.47 kHz)"), severity=(0.5, "knock, rod: 0..1"), cycles=(0, "engine_bank: loop length in engine cycles (0 = 3.2 s of them)"),
+     temperature=(0.0, "K coolant temperature; 0 = warm engine. A cold engine idles faster (idle x (1 + 0.4 c^2 + 0.15 c), c = clip((345 - T) / 60, 0, 1)) and the overrun ends at that idle + 350 rpm"),
      dur=(0.0, "s; 0 = the kind's own length"), seed=(0, "variation"))
-def engine_event(sr=DEFAULT_SR, kind="engine_start", layout="inline_4", rpm=-1.0, load=0.5, gear=3, speed=60.0, limit=8000.0, bore=0.086, severity=0.5, cycles=0, dur=0.0, seed=0):
+def engine_event(sr=DEFAULT_SR, kind="engine_start", layout="inline_4", rpm=-1.0, load=0.5, gear=3, speed=60.0, limit=8000.0, bore=0.086, severity=0.5, cycles=0, temperature=0.0, dur=0.0, seed=0):
     if kind not in _EVENTS:
         raise ValueError(f"engine_event kind {kind!r}: use one of {', '.join(_EVENTS)}")
     firing_offsets(layout)
@@ -484,12 +528,15 @@ def engine_event(sr=DEFAULT_SR, kind="engine_start", layout="inline_4", rpm=-1.0
     n = _n(dur)
     C = len(LAYOUTS[layout]["offsets"])
     idle = LAYOUTS[layout]["rpm"]
+    recover = 1400.0
+    if temperature > 0:
+        idle, recover = cold_idle(idle, temperature)
     t = np.arange(n) / SR
     ld = float(np.clip(load, 0, 1))
     r0 = float(rpm) if np.ndim(rpm) == 0 and rpm > 0 else None
     if kind == "dfco_overrun":
         # g_DFCO = max(-torque, eps), eps = .02: air through the shut throttle while the fuel is off; brake torque rpm / 7500.
-        rr = np.linspace(r0 or 4500.0, 1400.0, n)
+        rr = np.linspace(r0 or 4500.0, recover, n)
         y = _unit(_run(layout, rr, dur, 0.0, seed, fire=0.0))
         g = np.maximum(rr / 7500.0, 0.02)
         y = y + 0.5 * g * _unit(_bp(rng.standard_normal(n), 900.0, 0.7))

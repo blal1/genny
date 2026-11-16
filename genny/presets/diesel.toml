@@ -1,0 +1,11 @@
+schema = "genny.preset/1"
+family = "diesel"
+# bore: m. pipe: ms of straight pipe before the muffler. A diesel preset needs an engine_layout of the same name.
+
+[diesel_i4]
+bore = 0.081
+pipe = 7.0
+
+[diesel_i6_truck]
+bore = 0.13
+pipe = 12.0

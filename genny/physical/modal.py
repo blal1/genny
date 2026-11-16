@@ -206,6 +206,26 @@ def resolve(table: dict | str, f_scale: float = 1.0, position: float = 0.0, *, d
     raise ValueError(f"table kind {kind!r} is not a modal body")
 
 
+def body_interp(shape: float, scale: float) -> dict:
+    """Guitar body between the nine measured tables, mode by mode, bilinear in ``shape`` (0 square, 1 semi-round,
+    2 round) and ``scale`` (0 small, 1 mid, 2 big) on frequency, gain and T60. A table for ``resolve``."""
+    x, y = float(np.clip(shape, 0.0, 2.0)), float(np.clip(scale, 0.0, 2.0))
+    rows = [[md.BODY_SQUARESMALL, md.BODY_SEMSMALL, md.BODY_ROUNDSMALL],
+            [md.BODY_SQUAREMID, md.BODY_SEMMID, md.BODY_ROUNDMID],
+            [md.BODY_SQUAREBIG, md.BODY_SEMBIG, md.BODY_ROUNDBIG]]
+    i, j = min(int(x), 1), min(int(y), 1)
+    a, b = x - i, y - j
+
+    def field(get):
+        z = [[np.asarray(get(rows[jj][ii]), float) for ii in (i, i + 1)] for jj in (j, j + 1)]
+        lo = z[0][0] + (z[0][1] - z[0][0]) * a
+        hi = z[1][0] + (z[1][1] - z[1][0]) * a
+        return lo + (hi - lo) * b
+
+    return {"kind": "faust", "freqs": field(lambda t: t["freqs"]), "gains": [field(lambda t: t["gains"][0])],
+            "t60": field(lambda t: t["t60"]), "source": "body_interp"}
+
+
 def _stk_fold(f: float) -> float:
     """Modal.cpp:90-101: a mode above Nyquist is halved until it fits."""
     while f >= SR / 2:
@@ -289,6 +309,14 @@ def faust_strike(n: int, rng: np.random.Generator, cutoff: float = 7000.0, sharp
     m = min(n, len(env))
     out[:m] = (x * env * gain)[:m]
     return out
+
+
+def chirped_impact(f0: float, sigma: float, alpha: float, dur: float, amp: float = 1.0) -> np.ndarray:
+    """Chirped impact atom: amp sin(2 pi (f0 t + sigma t^2 / 2)) exp(-alpha t), the instantaneous frequency
+    f0 + sigma t moving linearly (Hz, Hz/s, 1/s). Frequencies that leave (0, SR/2) are clipped to that range."""
+    t = np.arange(seconds(dur)) / SR
+    f = np.clip(f0 + sigma * t, 1.0, 0.5 * SR - 1.0)
+    return amp * np.sin(2.0 * np.pi * np.cumsum(f) / SR) * np.exp(-alpha * t)
 
 
 def micro_collisions(force: np.ndarray, modes: Modes, count: int, contact_ms: float, velocity: float,
@@ -676,9 +704,13 @@ def _cascade_bp(x, f, q):
     return tv_bandpass(tv_bandpass(x, f, q), f, q)
 
 
-CORR_LENGTH_D = 3.0
-WAKE_GAMMA = 0.2
+WAKE_GAMMA, WAKE_B = 1e-4, 0.7
 WAKE_POLE = 0.99
+
+
+def corr_length(re, d: float):
+    """Spanwise correlation length (m) of the shedding: 10^1.536 Re^-0.245 d (13 d at Re 47, 3.6 d at 1e4, 1.7 d at 2e5)."""
+    return 10.0 ** 1.536 * np.maximum(np.asarray(re, float), 1.0) ** -0.245 * d
 
 
 def exp_sigmoid(x, exponent: float = 10.0, max_value: float = 2.0, threshold: float = 1e-7):
@@ -690,9 +722,9 @@ def goldstein_intensity(u, d: float, st, *, length: float | None = None, theta: 
                         r: float = 1.0, kappa: float = 1.0):
     """Lift-dipole intensity (W/m^2) of a cylinder of diameter ``d`` at speed ``u``:
     sqrt(2 pi) kappa^2 St^2 l b rho u^6 sin^2 th cos^2 ph / (32 c^3 r^2 (1 - M cos th)^4)
-    x exp(-0.5 (2 pi M St l / d)^2 sin^2 th sin^2 ph), b = d, l = correlation length (``CORR_LENGTH_D`` d)."""
+    x exp(-0.5 (2 pi M St l / d)^2 sin^2 th sin^2 ph), b = d, l = correlation length (``corr_length``)."""
     u = np.asarray(u, float)
-    l = CORR_LENGTH_D * d if length is None else float(length)
+    l = corr_length(RHO_AIR * u * d / MU_AIR, d) if length is None else float(length)
     th, ph = math.radians(theta), math.radians(phi)
     M = u / C_SOUND
     I = (math.sqrt(2 * math.pi) * kappa ** 2 * st ** 2 * l * d * RHO_AIR * u ** 6 * math.sin(th) ** 2 * math.cos(ph) ** 2
@@ -701,11 +733,11 @@ def goldstein_intensity(u, d: float, st, *, length: float | None = None, theta: 
 
 
 def wake_intensity(u, d: float, st, *, length: float | None = None, theta: float = 90.0, phi: float = 0.0,
-                   r: float = 1.0, kappa: float = 1.0, B: float = 1.0, gamma: float = WAKE_GAMMA):
+                   r: float = 1.0, kappa: float = 1.0, B: float = WAKE_B, gamma: float = WAKE_GAMMA):
     """Lateral-quadrupole wake intensity: Gamma sqrt(2 pi) kappa^2 St^2 l b rho u^8 / (16 pi^2 c^5 (1 - M cos(pi - th))^5 r^2)
     x [1 + B cos^4 th - (B + 3)/4 sin^2(2 th) sin^2 ph], B in [-1, 3]."""
     u = np.asarray(u, float)
-    l = CORR_LENGTH_D * d if length is None else float(length)
+    l = corr_length(RHO_AIR * u * d / MU_AIR, d) if length is None else float(length)
     th, ph = math.radians(theta), math.radians(phi)
     B = float(np.clip(B, -1.0, 3.0))
     M = u / C_SOUND
@@ -732,13 +764,15 @@ def wake_noise(u, d: float, dur: float, rng: np.random.Generator, **kw) -> np.nd
 
 def aeolian_tone(u: np.ndarray | float, d: float, dur: float, rng: np.random.Generator,
                  model: str = "patch", *, physical: bool = False, wake: bool = False, theta: float = 90.0,
-                 phi: float = 0.0, r: float = 1.0, length: float | None = None) -> np.ndarray:
+                 phi: float = 0.0, r: float = 1.0, length: float | None = None,
+                 gamma: float = WAKE_GAMMA) -> np.ndarray:
     """One compact cylinder source at speed ``u`` (m/s, scalar or per-sample), diameter ``d`` (m).
 
     Lift fundamental only (unit gain): noise through two cascaded band-passes at St(Re) u / d
     with the bandwidth-derived Q. ``model="loq"`` fixes St = 0.2 and Q = 10 (Selfridge LoQ).
     ``physical``: the tone is scaled to the dipole pressure sqrt(I rho c) in Pa (``goldstein_intensity``
-    at elevation ``theta``, azimuth ``phi``, distance ``r``); ``wake`` adds ``wake_noise`` on the same scale.
+    at elevation ``theta``, azimuth ``phi``, distance ``r``); ``wake`` adds ``wake_noise`` on the same scale,
+    with wake scale ``gamma`` (1e-4; 0.2 is the thesis value, audibly hissier).
     """
     n = seconds(dur)
     u = np.broadcast_to(np.asarray(u, float), (n,)).copy()
@@ -752,7 +786,7 @@ def aeolian_tone(u: np.ndarray | float, d: float, dur: float, rng: np.random.Gen
     kw = dict(length=length, theta=theta, phi=phi, r=r)
     y = y / (np.sqrt(np.mean(y * y)) + 1e-30) * np.sqrt(goldstein_intensity(u, d, st, **kw) * RHO_AIR * C_SOUND)
     if wake:
-        y = y + wake_noise(u, d, dur, rng, **kw)
+        y = y + wake_noise(u, d, dur, rng, gamma=gamma, **kw)
     return y
 
 
@@ -882,7 +916,11 @@ def edge_track(u, h, delta: float, profile: str = "parabolic"):
     else:
         c = np.asarray(_EDGE_FIT)[mode - 1]
         st = c[:, 0] + c[:, 1] * re_d + c[:, 2] * ratio + c[:, 3] * re_d ** 2 + c[:, 4] * re_d * ratio + c[:, 5] * ratio ** 2
-    st = np.maximum(st, 0.0)                                       # the fit goes negative in places: max~ 0
+    if not top:                                                    # the fit goes negative in places: Brown's law there
+        j = np.array([1.0, 2.3, 3.8, 5.4, 6.95])[mode - 1]
+        brown = 0.466 * j * np.maximum(100.0 * u - 40.0, 0.0) * np.maximum(1.0 / (100.0 * h) - 0.07, 0.0) * d / u
+        st = np.where(st <= 0.0, brown, st)
+    st = np.maximum(st, 0.0)
     c1, c2, c3 = _EDGE_VAIK_CO["top_hat" if top else "parabolic"]
     st_co = np.where(co, np.maximum((c1 - c2 / re_d) * (1.0 / ratio - c3), 0.0), 0.0)
     q = np.clip(0.5 * (87.715 - 5.296 * np.log(re_h) + 137.571 - 12.1602 * np.log(re_d)), 2.0, 90.0)
@@ -986,7 +1024,8 @@ def lock_state(V, lo: float = 0.8, hi: float = 1.27, hyst: float = LOCK_HYST) ->
 
 
 def aeolian_harp(u, notes, dur: float, rng: np.random.Generator, *, diameter: float = 5e-4,
-                 mass_damping: float = 0.05, index: float = 1.0, hysteresis: bool = False) -> np.ndarray:
+                 mass_damping: float = 0.05, index: float = 1.0, hysteresis: bool = False,
+                 density: float | None = None, zeta: float | None = None) -> np.ndarray:
     """Strings in the wind (Selfridge, Moffat, Reiss & Avital, ICSV24 2017). Each string sheds an Aeolian
     tone at St(Re) u / d; when that frequency nears string harmonic eta (eq. 9) and the reduced velocity
     V = u / (2 pi d f_eta) (eq. 3) lies in the lock-in range 0.8..1.27, the shedding locks to f_eta and the
@@ -994,7 +1033,10 @@ def aeolian_harp(u, notes, dur: float, rng: np.random.Generator, *, diameter: fl
     the Govardhan-Williamson peak amplitude (eq. 7) for mass-damping alpha = ``mass_damping`` * eta (eq. 12).
     ``notes`` are the strings' fundamentals (Hz).
     ``hysteresis``: lock-in follows ``lock_state`` (a sweeping wind holds the string past the window edges)
-    instead of the smooth window. Lambda, the window steepness and the default mass_damping are voicing choices."""
+    instead of the smooth window. ``density`` (kg/m3 of the string) with ``zeta`` (damping ratio) replace
+    ``mass_damping`` by alpha = density / rho_air zeta eta; the thesis strings (2432 kg/m3, 0.006) give alpha = 12 eta,
+    past the range of the fit, so they stop singing. Lambda, the window steepness and the default mass_damping are
+    voicing choices."""
     n = seconds(dur)
     u = np.maximum(np.broadcast_to(np.asarray(u, float), (n,)), 0.05)
     d = max(float(diameter), 1e-5)
@@ -1010,7 +1052,8 @@ def aeolian_harp(u, notes, dur: float, rng: np.random.Generator, *, diameter: fl
             lock = uniform_filter1d(lock_state(V), seconds(0.01), mode="nearest")
         else:
             lock = _sig((V - 0.8) / 0.02) * _sig((1.27 - V) / 0.02)
-        al = np.minimum(mass_damping * eta, 1.87)               # past the vertex the fit no longer holds
+        m_zeta = mass_damping if density is None or zeta is None else density / RHO_AIR * zeta
+        al = np.minimum(m_zeta * eta, 1.87)                     # past the vertex the fit no longer holds
         coef = np.where(re > 500.0, 1 - 1.12 * al + 0.30 * al * al, 1 - 1.29 * al + 0.59 * al * al)
         # amax and lock jump where eta rounds to the next harmonic: a step in the singing tone (measured d2 -41 dB). 10 ms:
         sung = uniform_filter1d(np.maximum(coef, 0.0) * a_re * lock, seconds(0.01), mode="nearest")
@@ -1025,14 +1068,29 @@ def aeolian_harp(u, notes, dur: float, rng: np.random.Generator, *, diameter: fl
     return y
 
 
-def _swing_kinematics(p: dict, lead: float, tail: float):
+def _great_circle(phi1, lam1, phi2, lam2):
+    """Angle (rad) of the great-circle arc between two (elevation, azimuth) points given in degrees."""
+    phi1, lam1, phi2, lam2 = np.radians([phi1, lam1, phi2, lam2])
+    h = np.sin((phi2 - phi1) / 2) ** 2 + np.cos(phi1) * np.cos(phi2) * np.sin((lam2 - lam1) / 2) ** 2
+    return 2.0 * np.arcsin(np.sqrt(np.clip(h, 0.0, 1.0)))
+
+
+def _swing_kinematics(p: dict, lead: float, tail: float, arc: str = "azimuth"):
     """Trapezoid tip speed peaking at azimuth 180 deg (SwordCorInterp): returns t, azimuth (deg),
-    elevation (deg), tip speed (m/s), swing direction sign."""
+    elevation (deg), tip speed (m/s), swing direction sign. ``arc`` haversine: the two half-swings are great-circle arcs
+    through the elevation at mid-swing (the mean of the start and end elevations), not the azimuth difference alone."""
     top = p["TopSpeed"]
     rt = p["Len"] + ARM
     pre, post = p["PreAzim"], p["PostAzim"]
-    s1 = abs(180.0 - pre) * np.pi / 180 * rt
-    s2 = abs(post - 180.0) * np.pi / 180 * rt
+    if arc == "haversine":
+        mid = 0.5 * (p["PreElev"] + p["PostElev"])
+        s1 = _great_circle(90.0 - p["PreElev"], pre, 90.0 - mid, 180.0) * rt         # elevation is measured from the vertical
+        s2 = _great_circle(90.0 - mid, 180.0, 90.0 - p["PostElev"], post) * rt
+    elif arc == "azimuth":
+        s1 = abs(180.0 - pre) * np.pi / 180 * rt
+        s2 = abs(post - 180.0) * np.pi / 180 * rt
+    else:
+        raise ValueError(f"sword_swing arc {arc!r}: use azimuth or haversine")
     t1 = s1 / (top / 2)
     t2 = s2 / (top / 2)
     n_lead, n1, n2, n_tail = seconds(lead), max(seconds(t1), 1), max(seconds(t2), 1), seconds(tail)
@@ -1052,8 +1110,9 @@ def _swing_kinematics(p: dict, lead: float, tail: float):
 def sword_swing(preset: str | dict = "SWD1", rng: np.random.Generator | None = None, *,
                 model: str = "patch", doppler: bool = True, n_sources: int = 8,
                 top_speed: float | None = None, lead: float = 0.05, tail: float = 0.15,
-                partials: tuple[int, ...] = (1, 2, 3, 4, 5)) -> np.ndarray:
+                partials: tuple[int, ...] = (1, 2, 3, 4, 5), natural: bool = True, arc: str = "azimuth") -> np.ndarray:
     """Selfridge Aeolian swing, stereo (n, 2), from a ``SWORD_PRESETS`` preset (SWD1, SWD2, PGA, MLB), or BROOM, WOODSWD (``SWING_PRESETS``).
+    ``arc`` azimuth | haversine: the length of the swing, from the azimuth difference alone or from the great-circle arc with the elevation.
 
     Per source k (8, stepping 7 d inward from the tip, d tapering linearly hilt -> tip):
     u_k = u_tip * (arm + pos_k) / (arm + Len); Re = rho u d / mu; St (Fey) or 0.2 (LoQ);
@@ -1061,7 +1120,8 @@ def sword_swing(preset: str | dict = "SWD1", rng: np.random.Generator | None = N
     lift gain G_L = sqrt(2 pi) rho St^2 (7 d) Len u^6 D_L / (32 c^3 r^2 (1 - M cos theta)^4),
     drag gain G_D = 0.1 x the same with D_D; partials f (G_L), 2f (G_D), 3f (dB x 0.6),
     4f (drag, dB x 0.125), 5f (dB x 0.1), each through two cascaded band-passes of one white
-    noise per source; equal-power pan; output x preset Gain.
+    noise per source; equal-power pan; output x preset Gain. ``natural=False``: the 4f and 5f branches use the base-10
+    logarithm like the 3f branch (the exponents of the published harmonic-gain table), not the natural log of the patch.
     Directivities: D_L = n . (a x v), D_D = n . v with n the unit vector source -> listener, a the
     blade axis and v the motion direction - the vector form of Goldstein's sin(theta) cos(phi)
     dipole pattern that the patch evaluates from elevation and azimuth.
@@ -1070,7 +1130,7 @@ def sword_swing(preset: str | dict = "SWD1", rng: np.random.Generator | None = N
     p = dict(SWING_PRESETS[preset]) if isinstance(preset, str) else dict(preset)
     if top_speed is not None:
         p["TopSpeed"] = top_speed
-    az, el, u_tip, sign = _swing_kinematics(p, lead, tail)
+    az, el, u_tip, sign = _swing_kinematics(p, lead, tail, arc)
     n = len(az)
     L = p["Len"]
     hilt, tip = p["HiltThick"], p["TipThick"]
@@ -1134,8 +1194,8 @@ def sword_swing(preset: str | dict = "SWD1", rng: np.random.Generator | None = N
         noise = rng.standard_normal(n)
         sig = np.zeros(n)
         live = np.sin(0.5 * np.pi * np.clip(u / 2.0, 0.0, 1.0)) ** 2     # the dB-scaled partials go as u^.6: a hard cut at rest is a step. 2 m/s
-        for mult, gain in ((1, gl), (2, gd), (3, _db_scale(gl, 0.6, False)), (4, _db_scale(gd, 0.125, True)),
-                           (5, _db_scale(gl, 0.1, True))):
+        for mult, gain in ((1, gl), (2, gd), (3, _db_scale(gl, 0.6, False)), (4, _db_scale(gd, 0.125, natural)),
+                           (5, _db_scale(gl, 0.1, natural))):
             if mult not in partials:
                 continue
             fc = np.clip(mult * f, 20.0, 0.45 * SR)

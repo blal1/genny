@@ -1,0 +1,17 @@
+schema = "genny.preset/1"
+family = "bearing"
+
+[turbine]
+rpm = 12000.0
+resonance = 12000.0
+band = 0.0
+
+[helicopter]
+rpm = 1750.0
+resonance = 18800.0
+band = 1175.0
+
+[radar]
+rpm = 1750.0
+resonance = 2755.0
+band = 517.0

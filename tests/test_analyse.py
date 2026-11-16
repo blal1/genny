@@ -39,11 +39,12 @@ def test_hnr_reads_the_signal_to_noise_ratio_of_a_periodic_tone():
 
 
 def test_genny_voice_hnr_against_finger_and_a_recording():
-    """Measured, not tuned here: genny's solo voice reads about 28.5 dB at A3 and A4, above Finger et al. 2009
-    (women, Praat: 19.3 +- 3.7 dB, max 26.5). Reported to the Voix theme; the test pins the measurement."""
+    """Measured, not tuned here: genny's solo voice reads about 20.7 dB at A3 and 24.6 dB at A4 (Hann, 6 periods,
+    Boersma 1993; 28.5 dB with the former 4.5 periods), Finger et al. 2009 (women, Praat): 19.3 +- 3.7 dB, max 26.5.
+    The test pins the measurement."""
     for note in ("A3", "A4"):
         y, sr = _render({"type": "synth", "inst": "voice", "notes": note, "dur": 2.0})
-        assert 26.5 < A.hnr(y, sr) < 30.5, note
+        assert 18.0 < A.hnr(y, sr) < 27.0, note
     if VOWEL.exists():
         from genny.core import read_wav
         x, sr = read_wav(VOWEL)

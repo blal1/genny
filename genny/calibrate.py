@@ -135,6 +135,33 @@ def esprit(x: np.ndarray, sr: int, n_modes: int = 16, *, dur: float = 0.1, fmin:
     return dict(freqs=fr[keep][order], decays=dec[keep][order], amps=2 * np.abs(amp[keep])[order], residual=bands)
 
 
+def esprit_benchmark(n_modes: int = 20, sr: int = 48000, dur: float = 0.1, seed: int = 0, gap: float = 100.0) -> dict:
+    """Mean relative error (percent) of ``esprit`` on synthetic exponentially decaying sinusoids with frequencies uniform in
+    200 Hz .. 0.45 sr (at least ``gap`` Hz apart), decays log-uniform in 0.1 .. 1000 1/s and random phases: each true mode
+    is matched to the nearest estimated frequency. Returns f_err, d_err (percent) and ``found`` (modes matched within 1 % of
+    a gap)."""
+    rng = np.random.default_rng(seed)
+    f = np.sort(rng.uniform(200.0, 0.45 * sr, n_modes))
+    while np.any(np.diff(f) < gap):
+        f = np.sort(rng.uniform(200.0, 0.45 * sr, n_modes))
+    d = np.exp(rng.uniform(math.log(0.1), math.log(1000.0), n_modes))
+    t = np.arange(int(dur * sr) + 1) / sr
+    x = np.zeros_like(t)
+    for fi, di, ph in zip(f, d, rng.uniform(0.0, 2 * np.pi, n_modes)):
+        x += np.exp(-di * t) * np.sin(2 * np.pi * fi * t + ph)
+    x = np.concatenate([np.zeros(8), x])
+    est = esprit(x, sr, n_modes, dur=dur)
+    fe, de = est["freqs"], est["decays"]
+    if fe.size == 0:
+        return dict(f_err=float("inf"), d_err=float("inf"), found=0)
+    j = np.argmin(np.abs(f[:, None] - fe[None, :]), axis=1)
+    ok = np.abs(fe[j] - f) < 0.01 * gap
+    if not ok.any():
+        return dict(f_err=float("inf"), d_err=float("inf"), found=0)
+    return dict(f_err=float(100.0 * np.mean(np.abs(fe[j][ok] - f[ok]) / f[ok])),
+                d_err=float(100.0 * np.mean(np.abs(de[j][ok] - d[ok]) / d[ok])), found=int(ok.sum()))
+
+
 def rayleigh_fit(freqs, decays) -> tuple[float, float]:
     """(alpha, beta) >= 0 of d = (alpha + beta w^2) / 2 fitted to mode decays (1/s) in least squares."""
     from scipy.optimize import nnls
@@ -142,6 +169,15 @@ def rayleigh_fit(freqs, decays) -> tuple[float, float]:
     s = 1.0 / max(float(w2.max()), 1.0)                      # scale the beta column (w^2 ~ 1e9)
     sol = nnls(np.stack([np.full(w2.size, 0.5), 0.5 * w2 * s], axis=1), np.asarray(decays, float))[0]
     return float(sol[0]), float(sol[1] * s)
+
+
+def rayleigh_modes(freqs, alpha: float, beta: float) -> tuple[np.ndarray, np.ndarray]:
+    """(damped frequencies Hz, decays 1/s) of undamped modes ``freqs`` under Rayleigh damping C = alpha M + beta K:
+    d = (alpha + beta lam) / 2 and f = sqrt(lam - d^2) / 2 pi with lam = w^2; a mode with d >= w is overdamped and
+    comes out at 0 Hz. For the usual d << w this is the undamped frequency."""
+    lam = (2.0 * np.pi * np.asarray(freqs, float)) ** 2
+    d = 0.5 * (alpha + beta * lam)
+    return np.sqrt(np.maximum(lam - d * d, 0.0)) / (2.0 * np.pi), d
 
 
 def emg_fit(freqs, decays) -> tuple[float, float, float, float]:
@@ -185,16 +221,63 @@ def stats_snr(sa: dict, sb: dict) -> dict:
 
 
 # ------------------------------------------------------------------------------------------- roughness
+def _bark(f):
+    f = np.asarray(f, float)
+    return 13.0 * np.arctan(0.00076 * f) + 3.5 * np.arctan((f / 7500.0) ** 2)
+
+
+def _rough_frame(x: np.ndarray, sr: int) -> float:
+    """One frame: 47 critical-band channels 0.5 Bark apart (raised-cosine, 1 Bark each side), envelope of each, its
+    modulation depth through a band-pass peaked at 70 Hz (30 Hz for the lowest carriers), times the correlation of the
+    envelopes of the two neighbouring channels; r = sum (m k)^2 / 4."""
+    n = len(x)
+    X = np.fft.rfft(x * np.hanning(n))
+    f = np.fft.rfftfreq(n, 1.0 / sr)
+    zf = _bark(f)
+    fm = np.fft.rfftfreq(n, 1.0 / sr)
+    ac, depth = [], []
+    for zc in np.arange(0.5, 24.0, 0.5):
+        w = np.where(np.abs(zf - zc) < 1.0, np.cos(0.5 * np.pi * (zf - zc)) ** 2, 0.0)
+        fc = float(np.interp(zc, zf, f))
+        a = np.fft.ifft(np.concatenate([2.0 * X * w, np.zeros(n - X.size)]))[:n]
+        e = np.abs(a)
+        m0 = float(np.mean(e)) + 1e-30
+        fp = float(np.clip(70.0 * (fc / 1000.0) ** 0.4, 30.0, 70.0))
+        H = np.exp(-0.5 * (np.log2(np.maximum(fm, 1.0) / fp) / 0.8) ** 2) * ((fm > 3.0) & (fm < 400.0))
+        e_ac = np.fft.irfft(np.fft.rfft(e - m0) * H, n)
+        spl = 20.0 * np.log10(m0 / 2e-5 / 0.5 + 1e-30)
+        ac.append(e_ac)
+        depth.append(min(1.0, float(np.sqrt(np.mean(e_ac ** 2))) / m0) if spl > 5.0 else 0.0)
+    r = 0.0
+    for i in range(1, len(ac) - 1):
+        a, b = ac[i - 1], ac[i + 1]
+        k = float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-30))
+        r += (depth[i] * max(k, 0.0)) ** 2
+    return 0.25 * r
+
+
+def _rough_ref(sr: int) -> float:
+    t = np.arange(int(0.2 * sr)) / sr
+    x = np.sin(2 * np.pi * 1000.0 * t) * (1.0 + np.sin(2 * np.pi * 70.0 * t))
+    x = x / np.sqrt(np.mean(x * x)) * 2e-5 * 10 ** 3.0
+    return _rough_frame(x, sr)
+
+
 def roughness(x: np.ndarray, sr: int, *, level_db: float = 60.0) -> float:
-    """Daniel & Weber roughness (asper), the median over 200 ms frames, of ``x`` played at ``level_db`` SPL
-    (its RMS); needs ``pip install genny[eval]`` (MoSQITo)."""
-    try:
-        from mosqito.sq_metrics import roughness_dw
-    except ImportError as e:                                # pragma: no cover - optional
-        raise ImportError("roughness needs MoSQITo: pip install 'genny[eval]'") from e
+    """Roughness in asper (1 asper = a 1 kHz tone at 60 dB, 100 % AM at 70 Hz), the median over 200 ms frames of ``x``
+    played at ``level_db`` SPL (its RMS). MoSQITo's Daniel and Weber model when installed (``genny[eval]``); else a
+    numpy model of the same structure (``_rough_frame``) scaled so that the reference tone reads 1 asper."""
     x = np.asarray(x, float)
     x = x.mean(axis=1) if x.ndim == 2 else x
     x = x / (np.sqrt(np.mean(x * x)) + 1e-30) * 2e-5 * 10 ** (level_db / 20)
+    try:
+        from mosqito.sq_metrics import roughness_dw
+    except ImportError:
+        n = int(0.2 * sr)
+        hop = n // 2
+        frames = [_rough_frame(x[i:i + n], sr) for i in range(0, max(1, len(x) - n + 1), hop)] if len(x) >= n \
+            else [_rough_frame(np.pad(x, (0, n - len(x))), sr)]
+        return float(np.median(frames)) / _rough_ref(sr)
     R = np.atleast_1d(roughness_dw(x, sr, overlap=0.5)[0])
     return float(np.median(R))
 
@@ -204,31 +287,38 @@ def _q(s: str) -> str:
     return "'" + str(s).replace("'", "''") + "'"
 
 
-def webmushra(reference: str, conditions: dict, out_dir: str, *, name: str = "genny listening test",
+def webmushra(reference, conditions: dict, out_dir: str, *, name: str = "genny listening test",
               question: str = "Rate how close each sound is to the reference.", anchors: bool = True) -> Path:
     """Write ``out_dir/configs/<test>.yaml`` and copy the audio to ``out_dir/configs/resources/audio/``: one
     MUSHRA page (hidden reference, the conditions, the 3.5 and 7 kHz low-pass anchors unless ``anchors`` is
-    false) and a finish page that writes the results. ``conditions``: label -> wav path."""
+    false) and a finish page that writes the results. ``conditions``: label -> wav path.
+    Several references: ``reference`` is item -> wav path and ``conditions`` item -> (label -> wav path); each item gets
+    its own page, trial1, trial2... (a page has one reference), its files named ``<item>_<label>``."""
     out = Path(out_dir)
     audio = out / "configs" / "resources" / "audio"
     audio.mkdir(parents=True, exist_ok=True)
-    test = "".join(c if c.isalnum() else "_" for c in name.lower()).strip("_") or "genny"
+    clean = lambda s, d: "".join(c if c.isalnum() else "_" for c in str(s)) or d      # noqa: E731
+    test = clean(str(name).lower(), "genny").strip("_") or "genny"
+    multi = isinstance(reference, dict)
+    items = {k: (reference[k], conditions[k]) for k in reference} if multi else {None: (reference, conditions)}
 
     def put(src, label):
         dst = audio / f"{label}{Path(src).suffix or '.wav'}"
         shutil.copyfile(src, dst)
         return f"configs/resources/audio/{dst.name}"
 
-    ref = put(reference, "reference")
     lines = [f"testname: {_q(name)}", f"testId: {test}", "bufferSize: 2048", "stopOnErrors: true",
-             "showButtonPreviousPage: true", "remoteService: service/write.php", "", "pages:",
-             "    - type: mushra", "      id: trial1", f"      name: {_q(name)}", f"      content: {_q(question)}",
-             "      showWaveform: true", "      enableLooping: true", f"      reference: {ref}",
-             f"      createAnchor35: {'true' if anchors else 'false'}",
-             f"      createAnchor70: {'true' if anchors else 'false'}", "      stimuli:"]
-    for i, (label, path) in enumerate(conditions.items(), 1):
-        key = "".join(c if c.isalnum() else "_" for c in str(label)) or f"C{i}"
-        lines.append(f"          {key}: {put(path, key)}")
+             "showButtonPreviousPage: true", "remoteService: service/write.php", "", "pages:"]
+    for n, (item, (ref_path, conds)) in enumerate(items.items(), 1):
+        pre = f"{clean(item, 'item')}_" if multi else ""
+        title = f"{name}: {item}" if multi else name
+        lines += ["    - type: mushra", f"      id: trial{n}", f"      name: {_q(title)}", f"      content: {_q(question)}",
+                  "      showWaveform: true", "      enableLooping: true", f"      reference: {put(ref_path, pre + 'reference')}",
+                  f"      createAnchor35: {'true' if anchors else 'false'}",
+                  f"      createAnchor70: {'true' if anchors else 'false'}", "      stimuli:"]
+        for i, (label, path) in enumerate(conds.items(), 1):
+            key = clean(label, f"C{i}")
+            lines.append(f"          {key}: {put(path, pre + key)}")
     lines += ["    - type: finish", "      name: Thank you", "      content: Thank you!", "      showResults: true",
               "      writeResults: true", ""]
     cfg = out / "configs" / f"{test}.yaml"
@@ -486,6 +576,15 @@ def multiscale_spectral_distance(a: np.ndarray, b: np.ndarray, ffts=MSS_FFTS, ov
     return d
 
 
+def esr(estimate: np.ndarray, target: np.ndarray) -> float:
+    """Error-to-signal ratio sum (y - y~)^2 / sum y^2 of an emulation against its target (0 = identical, 1 = silence).
+    The shorter signal is zero-padded."""
+    n = max(len(estimate), len(target))
+    a = np.pad(np.asarray(estimate, float), (0, n - len(estimate)))
+    b = np.pad(np.asarray(target, float), (0, n - len(target)))
+    return float(np.sum((b - a) ** 2) / max(np.sum(b ** 2), 1e-30))
+
+
 def spectral_flux_error(x: np.ndarray, ref: np.ndarray, sr: int, win: float = 0.0232, hop: float = 0.0058) -> float:
     """Mean absolute difference of the half-wave rectified spectral flux curves (onsets, transients) of a render
     and a reference, each normalised by its own maximum; 0 = the same transient pattern."""
@@ -561,3 +660,48 @@ def distortion_grid(x: np.ndarray, sr: int, seed: int = 0):
     for b in FAD_BITS:
         q = 2.0 ** (b - 1)
         yield f"bits_{b}", np.round(np.clip(x, -1, 1) * q) / q
+
+
+def double_slope(ir: np.ndarray, sr: int, knee_db: float = -10.0, floor_db: float = -35.0) -> dict:
+    """Early and late decay of an impulse response on Schroeder's backward-integrated curve: ``t_early`` the slope from 0 dB to
+    ``knee_db``, ``t_late`` the slope from ``knee_db`` to ``floor_db``, both extrapolated to 60 dB, in s; ``ratio`` = late / early
+    (about 1 for an exponential decay, well above 1 for coupled or poorly diffuse rooms). A part the decay never reaches gives nan."""
+    h = np.asarray(ir, float)
+    h = h.mean(axis=1) if h.ndim == 2 else h
+    edc = np.cumsum((h * h)[::-1])[::-1]
+    db = 10.0 * np.log10(edc / max(edc[0], 1e-30) + 1e-30)
+    t = np.arange(len(h)) / sr
+
+    def slope(hi, lo):
+        m = (db <= hi) & (db >= lo)
+        if m.sum() < 3 or db.min() > lo:
+            return float("nan")
+        a = np.polyfit(t[m], db[m], 1)[0]
+        return float(-60.0 / a) if a < 0 else float("nan")
+
+    te, tl = slope(0.0, knee_db), slope(knee_db, floor_db)
+    return {"t_early": te, "t_late": tl, "ratio": tl / te if te == te and tl == tl else float("nan")}
+
+
+def match(render, target: np.ndarray, start: dict, bounds: dict, *, steps: int = 60, seed: int = 0) -> dict:
+    """Sound matching by search: the parameters of ``render(**params) -> signal`` that bring its multiscale spectral
+    distance to ``target`` down. ``start`` holds the first values, ``bounds`` a (low, high) per parameter to tune; a
+    coordinate search with a shrinking step (Gaussian perturbations of one parameter at a time, kept when the
+    distance falls), ``steps`` renders at most. Returns {"params", "distance", "start_distance", "renders"}."""
+    rng = np.random.default_rng(seed)
+    p = dict(start)
+    dist = lambda q: multiscale_spectral_distance(np.asarray(render(**q), float), target)
+    best = d0 = dist(p)
+    keys = list(bounds)
+    renders = 1
+    for i in range(max(0, int(steps) - 1)):
+        k = keys[i % len(keys)]
+        lo, hi = bounds[k]
+        scale = 0.25 * (hi - lo) * (1.0 - i / max(steps, 1)) + 0.01 * (hi - lo)
+        q = dict(p)
+        q[k] = float(np.clip(p[k] + rng.normal(0.0, scale), lo, hi))
+        d = dist(q)
+        renders += 1
+        if d < best:
+            best, p = d, q
+    return {"params": p, "distance": best, "start_distance": d0, "renders": renders}

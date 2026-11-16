@@ -74,8 +74,12 @@ def test_matthews_and_layer_exponents():
     assert math.isclose(d, 0.368 * 1e-4, rel_tol=0.01)
     k, al = C.layer_k(1e6, 0.3, 1e-3, 0.01)
     kb, _ = C.layer_k(1e6, 0.3, 1e-3, 0.01, bonded=True)
+    assert al == 2.0 and math.isclose(kb / k, 0.7 / (1.3 * 0.4))
+    assert C.layer_k(1e6, 0.5, 1e-3, 0.01, bonded=True)[1] == 3.0
+    k, al = C.layer_line_k(1e6, 0.3, 1e-3, 0.01)
+    kb, _ = C.layer_line_k(1e6, 0.3, 1e-3, 0.01, bonded=True)
     assert al == 1.5 and math.isclose(kb / k, 0.49 / 0.4)
-    assert C.layer_k(1e6, 0.5, 1e-3, 0.01, bonded=True)[1] == 2.5
+    assert C.layer_line_k(1e6, 0.5, 1e-3, 0.01, bonded=True)[1] == 2.5
 
 
 def test_wavy_gw_and_rough_sphere():
@@ -249,7 +253,7 @@ def test_coil_spring_round_trip_from_geometry():
     from genny import friction as X
     from genny.fdstring import spring_geometry
     td = spring_geometry(1e-4, 2.5e-3, 112)["td"]
-    c = math.sqrt(2.0e11 / 7850.0)
+    c = math.sqrt(2.11e11 / 7800.0)   # steel constants of the published spring tables (was 2.0e11 / 7850: +3 % in c on purpose)
     assert 0.025 < td < 0.045 and math.isclose(td, 4 * (2 * math.pi * 2.5e-3 * 112) * 2.5e-3 / (1e-4 * c), rel_tol=0.02)
     a = X.coil_spring(220.0, 0.3, SR)
     assert np.allclose(a, X.coil_spring(220.0, 0.3, SR, wire=0.1, coil=2.5, turns=112))

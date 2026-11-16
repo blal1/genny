@@ -26,6 +26,7 @@ from scipy.linalg import eig_banded
 from scipy.signal import butter, cheby1, ellip, lfilter, resample_poly, sosfilt
 
 from . import filters as F
+from . import presets
 from .core import DEFAULT_SR, samples
 from .fx import effect
 from .instruments import instrument
@@ -384,9 +385,11 @@ def _fd_kernel(U, U1, nstep, N, h, k, lam2, mu2, s0, s1, bcl, bcr, phi3, iphi, k
 
 
 @njit(cache=True)
-def _bow_kernel(u, u1, nstep, N, h, k, lam2, mu2, s0, s1, bcl, bcr, phi3, iphi, xb, fb, vb, a, pick):
+def _bow_kernel(u, u1, nstep, N, h, k, lam2, mu2, s0, s1, bcl, bcr, phi3, iphi, xb, fb, vb, a, pick, hard=-1.0):
     """Bowed string/bar (7.32): v_rel + g*phi(v_rel) - b = 0 at a moving, linearly interpolated point,
-    phi(v) = sqrt(2a) v exp(-a v^2 + 1/2) (g01 3.6 curve c). g is clamped so the solve is unique (7.34)."""
+    phi(v) = sqrt(2a) v exp(-a v^2 + 1/2) (g01 3.6 curve c). g is clamped so the solve is unique (7.34).
+    hard >= 0: the dry law phi(v) = sign(v) (hard + (1 - hard) exp(-a |v|)), set-valued at 0: sticks while |b| <= g
+    (force b / g), else a bisection on 0 < |v| < |b|."""
     un = np.zeros(N + 1)
     qv = np.zeros(N + 1)
     qp = np.zeros(N + 1)
@@ -415,6 +418,51 @@ def _bow_kernel(u, u1, nstep, N, h, k, lam2, mu2, s0, s1, bcl, bcr, phi3, iphi, 
         Jn = ((1.0 - al) ** 2 + al ** 2) / h
         b = ((1.0 - al) * (un[lb] - u1[lb]) + al * (un[lb + 1] - u1[lb + 1])) / (2.0 * k) - vb[n]
         g = min(0.5 * k * Jn * fb[n] * inv, gmax)
+        if hard >= 0.0:
+            g = 0.5 * k * Jn * fb[n] * inv
+            sg = 1.0 if b >= 0.0 else -1.0
+            bb = abs(b)
+            if bb <= g:
+                v = 0.0
+                f = 2.0 * k * b / (h * Jn)
+            else:
+                vp = abs(v)
+                best = -1.0
+                prev_x = 0.0
+                prev_f = g - bb
+                for gi in range(1, 65):             # all roots of the non-monotone relation (up to three), then the one on the branch of the previous velocity
+                    xg = bb * (gi / 64.0) ** 2
+                    fg = xg + g * (hard + (1.0 - hard) * np.exp(-a * xg)) - bb
+                    if (prev_f < 0.0) != (fg < 0.0):
+                        lo_ = prev_x
+                        hi_ = xg
+                        for it in range(50):
+                            vm = 0.5 * (lo_ + hi_)
+                            if (vm + g * (hard + (1.0 - hard) * np.exp(-a * vm)) - bb < 0.0) == (prev_f < 0.0):
+                                lo_ = vm
+                            else:
+                                hi_ = vm
+                        rt = 0.5 * (lo_ + hi_)
+                        if best < 0.0 or abs(rt - vp) < abs(best - vp):
+                            best = rt
+                    prev_x = xg
+                    prev_f = fg
+                if best < 0.0:
+                    best = bb
+                v = sg * best
+                f = 2.0 * k * g * sg * (hard + (1.0 - hard) * np.exp(-a * abs(v))) / (h * Jn)
+            un[lb] -= f * (1.0 - al)
+            un[lb + 1] -= f * al
+            for c in range(2):
+                out[n, c] = (1.0 - pf[c]) * un[pi_[c]] + pf[c] * un[pi_[c] + 1]
+            tmp = u1
+            u1 = u
+            u = un
+            un = tmp
+            tmp = qp
+            qp = qv
+            qv = tmp
+            continue
         lo_ = b - g
         hi_ = b + g
         v = min(max(v, lo_), hi_)
@@ -864,6 +912,24 @@ class _FD:
             self.el = np.vstack([self.el, [3.0, l, float(mass) * self.N, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
         return self
 
+    def clamp(self, side="left", stiffness=100.0, mass=0.0, damp=0.0, span=2):
+        """Replace a rigid clamp by an elastic one: the end is freed and held by two springs `span` grid points apart (a
+        translation and a rotation stiffness K (span h)^2), K = M_string (2 pi stiffness)^2, stiffness in Hz; the base
+        carries `mass` (x the bar's mass) and a damper damp = R / M_string (1/s). The base takes up energy as it moves:
+        the bar rings lower, shorter and with the mode splitting of a tine on a resonating tonebar."""
+        l, l2 = (0, int(span)) if side in ("left", 0) else (self.N, self.N - int(span))
+        if l == 0:
+            self.bcl = FR
+        else:
+            self.bcr = FR
+        self._imp = None
+        w0 = 2.0 * math.pi * float(stiffness)
+        for p in (l, l2):
+            self.el = np.vstack([self.el, [1.0, p, w0 * w0, 0.0, 0.5 * float(damp), 0.0, 0.0, 0.0, 0.0]])
+        if mass > 0.0:
+            self.el = np.vstack([self.el, [3.0, l, float(mass) * self.N, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
+        return self
+
     def rattle(self, pos, w=3000.0, eps=0.05, mass_ratio=1.0, alpha=2.0, offset=0.0, gravity=0.0):
         """Rattle with free play eps (g02 8.2). mass_ratio = string / rattle mass; 0 = a rigid stop at `offset`.
         ``gravity``: weight on a free rattle, u_R'' = -F - g, in string lengths per s^2 (g / L: 9.81 / 0.65 on a
@@ -901,12 +967,13 @@ class _FD:
             *self._spread(), np.zeros(0) if scan is None else np.ascontiguousarray(scan, dtype=np.float64))
         return (out, en) if energy else out
 
-    def bow(self, force, speed, pos, pickups=(0.3, 0.73), a=100.0):
-        """Bow the (first) string with per-step arrays force (F_B), speed (v_B) and contact position."""
+    def bow(self, force, speed, pos, pickups=(0.3, 0.73), a=100.0, hard=-1.0):
+        """Bow the (first) string with per-step arrays force (F_B), speed (v_B) and contact position.
+        hard >= 0 swaps the smooth curve for the dry law sign(v)(hard + (1 - hard) exp(-a |v|)) with a true stick phase."""
         return _bow_kernel(self.U[0].copy(), self.U1[0].copy(), len(force), self.N, self.h, self.k, self.lam2[0],
                            self.mu2[0], self.s0, self.s1, self.bcl, self.bcr, self.phi ** 3, 1.0 / self.phi,
                            np.ascontiguousarray(pos, dtype=np.float64), np.ascontiguousarray(force, dtype=np.float64),
-                           np.ascontiguousarray(speed, dtype=np.float64), float(a), np.asarray(pickups, dtype=np.float64))
+                           np.ascontiguousarray(speed, dtype=np.float64), float(a), np.asarray(pickups, dtype=np.float64), float(hard))
 
     def audio(self, y):
         """Internal-rate signal -> output rate."""
@@ -979,6 +1046,22 @@ class Bar(_FD):
         self.s1 = 2.0 * self.sig1 * self.k / self.h ** 2
 
 
+def table_i_check(key, sr=DEFAULT_SR, partials=(1, 2, 3, 5, 8)):
+    """The scheme of ``StiffString`` against the PDE of a ``piano_data.BENSA_TABLE_I`` row: the string is built from
+    partial 1, B and two (frequency, T60) points of the PDE, then rows (p, PDE Hz, scheme Hz, error cents,
+    PDE T60 s, scheme T60 s) are listed for the partials asked."""
+    from .physical.piano_data import stiff_string_mode, table_i_inharmonicity
+    f, s = stiff_string_mode(key, np.arange(1, 13))
+    st = StiffString(float(f[0]), sr, B=table_i_inharmonicity(key),
+                     t60=(float(f[0]), _LN1000 / float(s[0]), float(f[5]), _LN1000 / float(s[5])))
+    rows = []
+    for p in partials:
+        fs, ts = st.partial(int(p))
+        fp, sp = stiff_string_mode(key, p)
+        rows.append((int(p), float(fp), fs, 1200.0 * math.log2(fs / float(fp)), _LN1000 / float(sp), ts))
+    return rows
+
+
 # ------------------------------------------------------------------ voicing helpers
 def _finish(y, sr, dur, vel, level, rel=0.0, lp=5000.0, hp=30.0):
     """DC removal, brightness ceiling, level from velocity, damper after `dur`, short fades."""
@@ -1036,7 +1119,7 @@ def _t60(freq, lo, hi):
     return (float(freq), float(max(lo, 0.02)), float(max(4000.0, 3.0 * freq)), float(np.clip(hi, 0.01, lo)))
 
 
-def _bow_note(freq, dur, sr, vel, force, speed, pos, travel, B, t60_lo, t60_hi, pickup, tail):
+def _bow_note(freq, dur, sr, vel, force, speed, pos, travel, B, t60_lo, t60_hi, pickup, tail, hard=-1.0):
     # measured: the bowed note reads 3..7 cents sharp across the span, so tune 5 cents flat; finer grid for the bow
     s = StiffString(freq * 2.0 ** (-5.0 / 1200.0), sr, B=_key_B(B, freq), t60=_t60(freq, t60_lo, t60_hi),
                     oversample=max(1, int(np.ceil(80.0 * freq / sr))))
@@ -1047,7 +1130,7 @@ def _bow_note(freq, dur, sr, vel, force, speed, pos, travel, B, t60_lo, t60_hi, 
     fb = float(np.clip(force, 0.05, 4.0)) * (0.4 + 0.6 * vel) * 0.12 * s.gamma * env
     vb = np.full(n, 0.2 * float(np.clip(speed, 0.1, 4.0)) * (0.5 + 0.5 * vel))
     xb = np.clip(pos + travel * np.clip(t / max(dur, 1e-3), 0.0, 1.0), 0.04, 0.96)
-    return s, s.bow(fb, vb, xb, _pick(pickup))
+    return s, s.bow(fb, vb, xb, _pick(pickup), hard=hard)
 
 
 # ------------------------------------------------------------------ instruments
@@ -1297,15 +1380,39 @@ _MATERIAL = {"wood": (0.7, 0.06), "metal": (4.0, 0.9), "glass": (1.6, 0.35), "pl
              "rosewood": (13.8155 * 2.13e10 / ((2 * np.pi * 440.0) ** 2 * 5.0e3), 13.8155 * 2.13e10 / ((2 * np.pi * 4000.0) ** 2 * 5.0e3))}
 _BOUNDARY = {"free": ("free", "free"), "clamped_free": ("clamped", "free"), "clamped": ("clamped", "clamped"),
              "supported": ("ss", "ss")}
-_TUNING = {"none": 0.0, "xylophone": (3.0, 6.0), "marimba": (4.0, 10.0)}
+_TUNING = {"none": 0.0, "xylophone": (3.0, 6.0), "marimba": (4.0, 9.8)}
+_BAR_LOSS = {"padouk": (12.44 / 2.0, 9.16e-8), "rosewood_bar": (51.58 / 2.0, 2.35e-7)}
+MALLET_HERTZ = {"rubber": (3.7e7, 0.0236), "boxwood": (1.31e9, 0.0262)}
+
+
+def bar_t60(material, freq):
+    """T60 of a bare bar whose amplitude decays at a0 + 2 pi^2 tau f^2 per second (fluid + Kelvin-Voigt losses)."""
+    a0, tau = _BAR_LOSS[material]
+    return float(2.0 * math.log(1000.0) / (2.0 * a0 + 4.0 * math.pi ** 2 * tau * float(freq) ** 2))
+
+
+def hertz_contact_time(K, mass, v):
+    """Contact duration of a mass hitting a rigid body with F = K u^(3/2): 2.9432 u_max / v, u_max = (5 m v^2 / (4 K))^(2/5)."""
+    return float(2.9432 * (1.25 * mass * v * v / K) ** 0.4 / v)
+
+
+def mallet_hardness(name, v0=1.5, freq=440.0):
+    """The fd_bar `mallet` value whose contact time at speed v0 equals that of a Hertz mallet from MALLET_HERTZ."""
+    K, m = MALLET_HERTZ[name]
+    tc = hertz_contact_time(K, m, v0)
+    ref = 2.5e-3 * float(np.clip((440.0 / freq) ** 0.4, 0.4, 2.5))
+    return float(np.clip(math.log10(ref / tc), 0.0, 1.0))
 
 
 def _bar_note(freq, n_sec, sr, vel, material, boundary, mallet, tuning, position, pickup, quality, decay=1.0,
               theta=0.0, scan=0.0):
-    if material not in _MATERIAL or boundary not in _BOUNDARY or tuning not in _TUNING:
+    if (material not in _MATERIAL and material not in _BAR_LOSS) or boundary not in _BOUNDARY or tuning not in _TUNING:
         raise ValueError("fd_bar: unknown material, boundary or tuning")
-    lo, hi = _MATERIAL[material]
-    lo *= decay * float(np.clip((440.0 / freq) ** 0.5, 0.3, 3.0))
+    if material in _BAR_LOSS:
+        lo, hi = bar_t60(material, freq) * decay, bar_t60(material, max(4000.0, 3.0 * freq))
+    else:
+        lo, hi = _MATERIAL[material]
+        lo *= decay * float(np.clip((440.0 / freq) ** 0.5, 0.3, 3.0))
     N = (20, 32, 48)[int(np.clip(quality, 0, 2))]
     ratio = _TUNING[tuning] if boundary == "free" else 0.0
     s = Bar(freq, sr, _BOUNDARY[boundary], _t60(freq, lo, min(hi, lo)), N, ratio, theta=theta)
@@ -1339,10 +1446,10 @@ def amplitude_glide(y, sr, cents):
 
 @instrument("fd_bar", "Finite-difference bar struck by a mallet: wood/metal/glass, free (marimba, xylophone, glockenspiel) or clamped (tine, ruler).",
             family="mallet", span=("C3", "C7"),
-            material=("wood", "wood | metal | glass | plastic | rosewood (E and viscosity of a measured xylophone bar) (sets the ring time)"),
+            material=("wood", "wood | metal | glass | plastic | rosewood (E and viscosity of a measured xylophone bar) | padouk | rosewood_bar (bare bars, fluid + viscoelastic loss, measured) (sets the ring time)"),
             boundary=("free", "free (partials 1 : 2.76 : 5.40) | clamped_free (1 : 6.27 : 17.5) | clamped | supported (1 : 4 : 9)"),
             mallet=(0.5, "mallet hardness 0 (soft yarn, contact about 2.7 ms at A4) .. 1 (hard, 0.45 ms, clicky)"),
-            tuning=("none", "undercut arch for free bars: none | xylophone (2nd partial at 3x) | marimba (2nd and 3rd at 4x and 10x)"),
+            tuning=("none", "undercut arch for free bars: none | xylophone (2nd partial at 3x) | marimba (2nd and 3rd at 4x and 9.8x)"),
             position=(0.5, "strike point 0..1"),
             pickup=(0.42, "readout point 0..1"),
             decay=(1.0, "ring-time scale"),
@@ -1350,17 +1457,52 @@ def amplitude_glide(y, sr, cents):
             bright=(1.0, "0.5 mellow .. 2 open"),
             glide=(0.0, "cents the note starts sharp when hit hard (amplitude stiffening), settling as it decays"),
             scan=(0.0, "Hz: the readout sweeps +-0.3 of the bar around `pickup` (a moving microphone; 0 = fixed)"),
-            scheme=("explicit", "explicit | implicit (theta = 1/4: unconditionally stable, 4x lower internal rate)"))
+            scheme=("explicit", "explicit | implicit (theta = 1/4: unconditionally stable, 4x lower internal rate)"),
+            resonator=(0.0, "0..2 level of a stopped tube tuned to the bar's fundamental under it (as marimba and vibraphone); 0 = none"))
 def fd_bar(freq, dur, sr=DEFAULT_SR, vel=1.0, material="wood", boundary="free", mallet=0.5, tuning="none", position=0.5,
-           pickup=0.42, decay=1.0, quality=1, bright=1.0, glide=0.0, scan=0.0, scheme="explicit"):
+           pickup=0.42, decay=1.0, quality=1, bright=1.0, glide=0.0, scan=0.0, scheme="explicit", resonator=0.0):
     if scheme not in ("explicit", "implicit"):
         raise ValueError("fd_bar scheme must be explicit or implicit")
-    ring = max(dur, min(2.5, 1.2 * _MATERIAL.get(material, (1.0,))[0] * decay * float(np.clip((440.0 / freq) ** 0.5, 0.3, 3.0))))
+    t_ring = bar_t60(material, freq) if material in _BAR_LOSS else _MATERIAL.get(material, (1.0,))[0] * float(np.clip((440.0 / freq) ** 0.5, 0.3, 3.0))
+    ring = max(dur, min(2.5, 1.2 * t_ring * decay))
     s, y = _bar_note(freq, ring + 0.05, sr, vel, material, boundary, mallet, tuning, position, pickup, quality, decay,
                      0.25 if scheme == "implicit" else 0.0, float(max(scan, 0.0)))
     out = _vel_out(s, y)
     out = amplitude_glide(out, sr, float(np.clip(glide, 0.0, 200.0)) * float(np.clip(vel, 0.0, 1.0)))
+    if resonator > 0:
+        from .instruments import _bar_tube
+        out = _bar_tube(out, freq, sr, resonator)
     return _finish(out, sr, ring, vel, 0.9, 0.05, _lp(freq, bright), hp=min(60.0, 0.4 * freq))
+
+
+def _tine(f1, sr, clamp, base, damp, lo, position, vel, pickup, n_sec):
+    s = Bar(f1, sr, ("clamped", "free"), _t60(f1, lo, lo), 32)
+    s.clamp("left", float(clamp) * f1, float(base), float(damp))
+    s.hammer(position, mass=0.3, w=3000.0, alpha=2.0, v=0.5 * 10.0 ** float(np.clip(vel, 0.0, 1.0)))
+    return s, s.run(int(n_sec * s.sr_i), _pick(pickup))
+
+
+@instrument("rhodes_fd", "Electric-piano tine as a finite-difference bar: clamped-free, the clamp elastic (a tonebar that gives under it and carries a mass), "
+            "struck near the base, read near the tip.",
+            family="keys", span=("E1", "E5"),
+            clamp=(60.0, "stiffness of the clamp, in multiples of the note: 60 = almost rigid, 15 = a tine that loads its tonebar (lower, shorter, rounder)"),
+            base=(1.0, "mass of the tonebar end against the tine, 0..30: heavy = the tonebar hardly moves"),
+            damp=(0.0, "damping of the base, 1/s: the tonebar's own losses"),
+            position=(0.15, "strike point 0..1 from the clamp"),
+            pickup=(0.9, "readout point 0..1 (the tine tip)"),
+            decay=(1.0, "ring-time scale"),
+            bright=(1.0, "0.5 mellow .. 2 open"))
+def rhodes_fd(freq, dur, sr=DEFAULT_SR, vel=1.0, clamp=60.0, base=1.0, damp=0.0, position=0.15, pickup=0.9, decay=1.0, bright=1.0):
+    lo = 3.0 * float(decay) * float(np.clip((440.0 / freq) ** 0.5, 0.3, 3.0))
+    s0, y0 = _tine(freq, sr, clamp, base, damp, lo, position, vel, pickup, max(0.25, 24.0 / freq))
+    v0 = _vel_out(s0, y0)
+    X = np.abs(np.fft.rfft(v0 * np.hanning(v0.size), 1 << 16))
+    fr = np.fft.rfftfreq(1 << 16, 1.0 / sr)
+    X[fr < 0.5 * freq] = 0.0
+    X[fr > 1.5 * freq] = 0.0
+    f1 = freq * freq / max(float(fr[int(np.argmax(X))]), 1.0) if X.max() > 0 else freq       # the elastic clamp lowers the pitch: retune once
+    s, y = _tine(float(np.clip(f1, 0.7 * freq, 1.4 * freq)), sr, clamp, base, damp, lo, position, vel, pickup, min(max(dur, 0.5) + 0.3, 2.5))
+    return _finish(_vel_out(s, y), sr, dur, vel, 0.8, 0.08, _lp(freq, bright) * min(1.0, (freq / 110.0) ** 2), hp=min(40.0, 0.4 * freq))
 
 
 @instrument("bowed_string_fd", "Bowed stiff string (finite difference, implicit friction solve) with a bow that can travel along the string.",
@@ -1372,11 +1514,15 @@ def fd_bar(freq, dur, sr=DEFAULT_SR, vel=1.0, material="wood", boundary="free", 
             B=(5e-5, "stiffness / inharmonicity"),
             decay=(2.5, "seconds of free ring at the note"),
             pickup=(0.3, "readout point 0..1"),
-            bright=(1.0, "0.5 mellow .. 2 open"))
+            bright=(1.0, "0.5 mellow .. 2 open"),
+            friction=("smooth", "smooth (the Gaussian-bump curve) | hard (dry Coulomb with a true stick phase and a residual)"),
+            residual=(0.3, "friction=hard: the friction left at high slip speed, 0..1 of the static value"))
 def bowed_string_fd(freq, dur, sr=DEFAULT_SR, vel=1.0, force=1.0, speed=1.0, position=0.12, travel=0.03, B=5e-5,
-                    decay=2.5, pickup=0.3, bright=1.0):
+                    decay=2.5, pickup=0.3, bright=1.0, friction="smooth", residual=0.3):
+    if friction not in ("smooth", "hard"):
+        raise ValueError("friction must be smooth or hard")
     s, y = _bow_note(freq, dur, sr, vel, force, speed, float(np.clip(position, 0.04, 0.5)), travel, B, decay,
-                     0.3 * decay, pickup, 0.3)
+                     0.3 * decay, pickup, 0.3, float(np.clip(residual, 0.0, 1.0)) if friction == "hard" else -1.0)
     return _finish(_vel_out(s, y), sr, dur, vel, 0.55, 0.08, _lp(freq, bright))
 
 
@@ -1441,6 +1587,35 @@ def twang(sr=DEFAULT_SR, kind="band", freq=140.0, dur=0.9, amount=1.0, slide=0.0
     return _finish(_vel_out(s, y), sr, dur, 1.0, 0.7, 0.0, 6000.0, hp=25.0)
 
 
+SLINKY_KAPPA = 0.06
+
+
+def slinky_modes(sr, kappa=SLINKY_KAPPA):
+    """Mode numbers and frequencies (Hz) of a unit-length bar with pivoting ends, w = kappa (n pi)^2, below 0.45 sr."""
+    kap = float(np.clip(kappa, 0.005, 1.0))
+    ns = np.arange(1, int(math.sqrt(0.9 * sr / (kap * math.pi))) + 1)
+    return ns, 0.5 * kap * math.pi * ns ** 2
+
+
+@sfx("slinky", "Slinky spring tapped at one end and heard at the other: a bar-like, very dispersive chain of echoes (low frequencies arrive late), the 'laser gun' zap.",
+     kappa=(SLINKY_KAPPA, "0.01..1 dispersion constant (0.06 fits a measured 75-turn Slinky): the end-to-end delay at f is 1 / (2 sqrt(2 pi kappa f)) s"),
+     dur=(2.0, "seconds"), decay=(3.0, "s, T60 of the lowest modes"), decay_hi=(0.6, "s, T60 at 10 kHz"),
+     pos=(0.03, "0..0.5 strike and read point from each end"))
+def slinky(sr=DEFAULT_SR, kappa=SLINKY_KAPPA, dur=2.0, decay=3.0, decay_hi=0.6, pos=0.03):
+    dur = float(np.clip(dur, 0.1, 8.0))
+    ns, f = slinky_modes(sr, kappa)
+    n = int(round(dur * sr))
+    t = np.arange(n) / sr
+    s0 = 6.9078 / max(float(decay), 0.05)
+    s1 = max(6.9078 / max(float(decay_hi), 0.05) - s0, 0.0) / 10000.0
+    amp = (-1.0) ** (ns + 1) * np.sin(ns * math.pi * float(np.clip(pos, 0.005, 0.5))) ** 2
+    y = np.zeros(n)
+    for i in range(0, len(ns), 16):
+        k = slice(i, i + 16)
+        y += (amp[k, None] * np.exp(-(s0 + s1 * f[k, None]) * t) * np.sin(2.0 * np.pi * f[k, None] * t)).sum(axis=0)
+    return _finish(y, sr, dur, 1.0, 0.7, 0.0, 18000.0, hp=25.0)
+
+
 def length_slide(y, slide, n):
     """Read a clamped-free bar's sound as its free length goes L0 (1 - slide u), u = 0..1 over n samples: every
     mode scales as 1/L^2, so the time base runs at 1/(1 - slide u)^2; ``y`` must last n / (1 - slide)."""
@@ -1449,16 +1624,15 @@ def length_slide(y, slide, n):
     return np.interp(tau, np.arange(len(y)), y, right=0.0)
 
 
-STEEL_E = 2.0e11
-STEEL_RHO = 7850.0
+STEEL_E = 2.11e11
+STEEL_RHO = 7800.0
 
-SPRING_PRESETS = {
-    "leem1": dict(td=0.056, fc=4300.0, a=0.62, M=100, g=-0.8, gmod=8.0, c1=0.1, g_rip=0.1, g_echo=0.1, f_eq=95.0, b_eq=130.0),
-    "leem2": dict(td=0.044, fc=4400.0, a=0.62, M=100, g=-0.8, gmod=12.0, c1=0.1, g_rip=0.1, g_echo=0.1, f_eq=95.0, b_eq=130.0),
-    "leem3": dict(td=0.047, fc=4450.0, a=0.62, M=100, g=-0.8, gmod=10.0, c1=0.1, g_rip=0.1, g_echo=0.1, f_eq=95.0, b_eq=130.0),
-    "sansui": dict(td=0.056, fc=3526.0, a=0.62, M=100, g=-0.8, gmod=6.0, c1=0.2, g_rip=-0.2, g_echo=0.1, f_eq=95.0, b_eq=130.0),
-    "leem_auto": dict(td=0.056, fc=4275.0, a=0.63, M=100, g=-0.64, gmod=8.0, c1=0.1, g_rip=0.1, g_echo=0.1, f_eq=183.0, b_eq=146.0),
-}
+SPRING_PRESETS = presets.schema("spring", {
+    "td": presets.F(float, lo=0.001, hi=0.5, unit="s"), "fc": presets.F(float, lo=100.0, hi=20000.0, unit="Hz"),
+    "a": presets.F(float, lo=-1.0, hi=1.0), "M": presets.F(int, lo=10, hi=200), "g": presets.F(float, lo=-1.0, hi=1.0),
+    "gmod": presets.F(float, lo=0.0, hi=100.0), "c1": presets.F(float, lo=-1.0, hi=1.0), "g_rip": presets.F(float, lo=-1.0, hi=1.0),
+    "g_echo": presets.F(float, lo=-1.0, hi=1.0), "f_eq": presets.F(float, lo=1.0, hi=20000.0, unit="Hz"),
+    "b_eq": presets.F(float, lo=1.0, hi=20000.0, unit="Hz")})
 SPRING_TANKS = {
     "single": None,
     "two_spring": ((1.0e-4, 2.5e-3, 112), (1.0e-4, 2.5e-3, 126)),

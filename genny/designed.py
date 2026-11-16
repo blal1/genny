@@ -14,9 +14,11 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import tempfile
 
 import numpy as np
+from scipy.signal import lfilter
 
 from .contact import impact
 from .core import DEFAULT_SR, write_wav
@@ -221,6 +223,35 @@ def ui_slide(sr=DEFAULT_SR, direction="in", dur=0.18, seed=0):
     return _fin(y, sr, 0.8, fade=0.002, tail=0.01)
 
 
+UI_GESTURES = ("haptic", "liquid")
+
+
+@sfx("ui_gesture", "Interface gestures: haptic (a short band-passed noise tick over a low thump, as a vibration motor feels) and liquid (a sine easing two semitones down to its root, frequency-modulated).",
+     kind=("haptic", " | ".join(UI_GESTURES)), pitch=(440.0, "Hz of the root (liquid)"),
+     size=(0.5, "0..1 across the ranges: haptic noise 900-2000 Hz for 8-15 ms and thump 90-170 Hz for 50-90 ms; liquid glide 50-100 ms, FM ratio 1.3-2.6, depth 40-120 Hz"),
+     seed=(0, "noise seed"))
+def ui_gesture(sr=DEFAULT_SR, kind="haptic", pitch=440.0, size=0.5, seed=0):
+    k = _kind(kind, UI_GESTURES, "ui_gesture")
+    s = float(np.clip(size, 0.0, 1.0))
+    if k == "haptic":
+        n = _n(0.12)
+        env = lambda ms: np.exp(-np.arange(n) / P / (ms * 1e-3 / 4.6)) * (np.arange(n) < _n(ms * 1e-3))   # noqa: E731
+        tick = amb.bp(_noise(n, seed), 900.0 * (2000.0 / 900.0) ** s, 1.5) * env(8.0 + 7.0 * s)
+        f = 90.0 + 80.0 * s
+        t = np.arange(n) / P
+        sub = (np.sin(2 * np.pi * f * t) + 0.3 * np.sin(4 * np.pi * f * t)) * env(50.0 + 40.0 * s)
+        y = 0.7 * _nm(tick) + 0.6 * _nm(sub)
+    else:
+        n = _n(0.4)
+        t = np.arange(n) / P
+        f0 = float(np.clip(pitch, 40.0, 4000.0))
+        glide = (50.0 + 50.0 * s) * 1e-3
+        f = f0 * 2.0 ** (2.0 / 12.0 * np.clip(1.0 - t / glide, 0.0, 1.0))
+        mod = (40.0 + 80.0 * s) * np.sin(2 * np.pi * f * (1.3 + 1.3 * s) * t)
+        y = np.sin(2 * np.pi * np.cumsum(f + mod) / P) * np.minimum(t / 0.003, 1.0) * np.exp(-t / 0.08)
+    return _fin(y, sr, 0.7, fade=0.001, tail=0.01)
+
+
 # =============================================================================================
 # RADIO, PHONE LINE
 # =============================================================================================
@@ -363,22 +394,32 @@ MORSE = {"A": ".-", "B": "-...", "C": "-.-.", "D": "-..", "E": ".", "F": "..-.",
          "L": ".-..", "M": "--", "N": "-.", "O": "---", "P": ".--.", "Q": "--.-", "R": ".-.", "S": "...", "T": "-", "U": "..-", "V": "...-",
          "W": ".--", "X": "-..-", "Y": "-.--", "Z": "--..", "1": ".----", "2": "..---", "3": "...--", "4": "....-", "5": ".....", "6": "-....",
          "7": "--...", "8": "---..", "9": "----.", "0": "-----", ".": ".-.-.-", ",": "--..--", "?": "..--..", "/": "-..-.", "=": "-...-",
-         "+": ".-.-.", "-": "-....-", "@": ".--.-.", "'": ".----.", "(": "-.--.", ")": "-.--.-", ":": "---...", '"': ".-..-."}
+         "+": ".-.-.", "-": "-....-", "@": ".--.-.", "'": ".----.", "(": "-.--.", ")": "-.--.-", ":": "---...", '"': ".-..-.",
+         "É": "..-..", "×": "-..-"}
+
+
+# procedural signals, sent as one run-together character: write them <AR> in the text
+PROSIGNS = {"AR": ".-.-.", "AS": ".-...", "BT": "-...-", "KN": "-.--.", "SK": "...-.-", "VE": "...-.", "CT": "-.-.-", "HH": "........"}
 
 
 def morse_units(text: str) -> list[tuple[bool, int]]:
     """(key down, units) for ``text``. Dit 1, dah 3, within a letter 1, between letters 3, between words 7.
-    A trailing space keeps its word gap, so "PARIS " is 50 units."""
+    A trailing space keeps its word gap, so "PARIS " is 50 units. ``<AR>``: a prosign, its letters run together."""
     out: list[tuple[bool, int]] = []
     upper = str(text).upper()
     words = upper.split()
     for w, word in enumerate(words):
-        for l, ch in enumerate(word):
-            if ch not in MORSE:
+        chars = re.findall(r"<[^>]*>|.", word)
+        for l, ch in enumerate(chars):
+            if ch[:1] == "<" and ch[1:-1] in PROSIGNS:
+                code = PROSIGNS[ch[1:-1]]
+            elif ch in MORSE:
+                code = MORSE[ch]
+            else:
                 raise ValueError(f"morse: no code for {ch!r}")
             if l:
                 out.append((False, 3))
-            for e, sym in enumerate(MORSE[ch]):
+            for e, sym in enumerate(code):
                 if e:
                     out.append((False, 1))
                 out.append((True, 1 if sym == "." else 3))
@@ -736,6 +777,30 @@ def rubber_duck(sr=DEFAULT_SR, squeezes=1, pitch=1.0, seed=0):
     return _fin(y, sr, 0.8, fade=0.003, tail=0.02)
 
 
+SUIKINKUTSU_HZ = (520.0, 780.0, 1150.0)      # the buried pot's modes (connaissance: the source gives no dimension)
+
+
+@sfx("suikinkutsu", "Japanese water-chime: drops fall into a buried, water-filled pot and its metallic ring comes up out of the ground, muffled by the earth.",
+     rate=(0.5, "drops per second"), pot=(1.0, "pot size: pitches scale as 1 / size"), dur=(8.0, "s"), earth=(1500.0, "Hz: low-pass of the soil over the pot"), seed=(0, "variation"))
+def suikinkutsu(sr=DEFAULT_SR, rate=0.5, pot=1.0, dur=8.0, earth=1500.0, seed=0):
+    """Each drop: a plop, then three damped modes of the pot (T60 1.8 s, 1.2 s, 0.8 s) with a 2 Hz beating twin on the first,
+    through a one-pole low-pass for the soil."""
+    d = _dur(dur, 0.5, 60.0)
+    rng = np.random.default_rng(int(seed))
+    t = np.arange(_n(2.0)) / P
+    sz = float(np.clip(pot, 0.3, 3.0))
+    ring = sum(a * np.exp(-6.91 * t / t60) * (np.sin(2 * np.pi * f / sz * t) + (0.6 * np.sin(2 * np.pi * (f / sz + 2.0) * t) if i == 0 else 0.0))
+               for i, (f, a, t60) in enumerate(zip(SUIKINKUTSU_HZ, (1.0, 0.5, 0.25), (1.8, 1.2, 0.8))))
+    ring = _nm(ring * np.minimum(1.0, t * 800.0))
+    y = np.zeros(_n(d + 2.0))
+    for tt in np.cumsum(rng.exponential(1.0 / max(float(rate), 0.05), int(max(rate, 0.05) * d * 3) + 2)):
+        if tt < d:
+            _put(y, ring, float(tt), float(rng.uniform(0.5, 1.0)))
+    a = math.exp(-2 * math.pi * float(np.clip(earth, 200.0, 8000.0)) / P)
+    y = lfilter([1.0 - a], [1.0, -a], y)
+    return _fin(y, sr, 0.8, fade=0.002, tail=0.3)
+
+
 def water_whistle_pitch(n: int, length: float, warble: float) -> np.ndarray:
     """Hz: a pipe stopped by the water, f = c / 4 (L - depth), depth bobbing at ``warble`` Hz, depth 0.1..0.4 L."""
     depth = float(length) * (0.25 + 0.15 * np.sin(2 * np.pi * float(warble) * np.arange(n) / P))
@@ -797,25 +862,43 @@ STRIKES_PER_S = 1.5                                         # per pendulum
 BALL_RATE = 3.0                                             # per s
 
 
-def cage_hits(pendulums: int, dur: float, rng) -> np.ndarray:
-    """Strike times: each pendulum passes at its own steady rate; the number of pendulums sets the density."""
+def cage_hits(pendulums: int, dur: float, rng, driver: str = "pendulum") -> np.ndarray:
+    """Strike times. pendulum: each one passes at its own steady rate, the number sets the density. washer: one rotating
+    driver, one strike per turn at a steady period. balls3: three balls at 120 degrees, three strikes per turn. wind: random
+    gusts, a Poisson stream whose rate swells and falls slowly."""
+    if driver == "washer":
+        return np.arange(rng.uniform(0.0, 1.0 / STRIKES_PER_S), dur, 1.0 / (STRIKES_PER_S * int(pendulums)))
+    if driver == "balls3":
+        turn = 3.0 / (STRIKES_PER_S * int(pendulums))
+        return np.sort(np.concatenate([np.arange(k * turn / 3.0, dur, turn) for k in range(3)]))
+    if driver == "wind":
+        t = np.cumsum(rng.exponential(1.0 / (STRIKES_PER_S * int(pendulums)), int(STRIKES_PER_S * int(pendulums) * dur * 4) + 4))
+        keep = rng.random(t.size) < 0.5 * (1.0 + np.sin(2 * np.pi * t / 7.0 + rng.uniform(0.0, 6.3))) * 0.8 + 0.2
+        return t[keep & (t < dur)]
+    if driver != "pendulum":
+        raise ValueError("rod_cage driver: pendulum, washer, balls3 or wind")
     out = [np.arange(rng.uniform(0.0, 1.0 / STRIKES_PER_S), dur, 1.0 / (STRIKES_PER_S * rng.uniform(0.9, 1.1))) for _ in range(int(pendulums))]
     return np.sort(np.concatenate(out)) if out else np.zeros(0)
 
 
 @sfx("rod_cage", "Sound sculpture left to itself: pendulums strike a cage of metal rods, a rod drawn at random each time, with glass or wooden balls rattling free inside.",
-     pendulums=(2, "their number sets the density"), ball=("glass", "glass | wood | none"), dur=(6.0, "s"), seed=(0, "variation"))
-def rod_cage(sr=DEFAULT_SR, pendulums=2, ball="glass", dur=6.0, seed=0):
+     pendulums=(2, "their number sets the density"), ball=("glass", "glass | wood | none"), dur=(6.0, "s"), seed=(0, "variation"),
+     driver=("pendulum", "pendulum | washer (one rotating arm, one strike per turn) | balls3 (three balls at 120 degrees) | wind (random gusts)"),
+     order=("auto", "which rod each strike meets: random | cycle (the rods in turn, as a rotating arm meets them) | auto = cycle for washer and balls3, random otherwise"))
+def rod_cage(sr=DEFAULT_SR, pendulums=2, ball="glass", dur=6.0, seed=0, driver="pendulum", order="auto"):
     """`rod_bank` kernel, random rod."""
     if ball not in ("glass", "wood", "none"):
         raise ValueError(f"rod_cage ball {ball!r}: use glass, wood or none")
+    if order not in ("auto", "random", "cycle"):
+        raise ValueError("rod_cage order: auto, random or cycle")
+    cycle = order == "cycle" or (order == "auto" and driver in ("washer", "balls3"))
     d = _dur(dur, 0.5, 60.0)
     rng = np.random.default_rng(int(seed))
     p = int(np.clip(pendulums, 1, 8))
     y = np.zeros(_n(d + 1.0))
     bank = [_nm(_m(rod_bank(f, 0.5, sr=P, decay=1.0, seed=seed))) for f in ROD_HZ]
-    for t in cage_hits(p, d, rng):
-        _put(y, bank[int(rng.integers(len(bank)))], float(t), float(rng.uniform(0.6, 1.0)))
+    for i, t in enumerate(cage_hits(p, d, rng, driver)):
+        _put(y, bank[i % len(bank) if cycle else int(rng.integers(len(bank)))], float(t), float(rng.uniform(0.6, 1.0)))
     if ball != "none":
         hit = [_nm(_m(impact(sr=P, material=ball, shape="bar", size=0.03, velocity=1.0, dur=0.08, seed=seed + i))) for i in range(3)]
         for t in np.cumsum(rng.exponential(1.0 / BALL_RATE, int(BALL_RATE * d * 2) + 1)):

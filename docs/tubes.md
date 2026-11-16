@@ -239,3 +239,25 @@ to the edge, plus a flag where f R/U0 >= 1 (a rounded edge).
 
 Mouth pressure is in units of rho c^2: the reed starts to sound at 0.012, beats against the mouthpiece above
 about 0.017, and is held shut at 0.035.
+
+## Added in 1.3.0
+
+- `reed_characteristic(pM, ks, cp, sc)`: quasi-static characteristic of a single or double reed (double reeds with
+  diffuser recovery, `DOUBLE_REED`).
+- `free_reed(freq, dur, kind="+-"|"-+", v0, L1)`: a self-oscillating free reed in a volume, a pipe and the reed
+  (harmonica, accordion, harmonium, sho). Blowing (+,-) plays above the reed's own frequency, drawing (-,+) below it.
+  `free_reed_section` gives the open section with the reed thickness.
+- `mesh_vowel`: wall reflection 0.92 (was 0.97).
+- `space.pipe_reflection`: exact Levine-Schwinger end correction near ka 3.8. `physical.winds.keefe_hole(inner=True)`
+  adds the inner inertance of a closed hole.
+## Newer options (1.3.0)
+
+- `reed_tube` and `reed_cone`: `bend`, `bend_share` (0.2), `rest` (an elbow's inertance), `temperature` (the pitch follows c(T)),
+  `apex`, `reed="sax_alto"`. `tube bend= bend_m= model="fd"|"impedance"`; `vowel_tube sinuses="lumped"|"mri"`, `wall`.
+- `story.nasal_area(volume_cm3=)`, `SINUSES_MRI`, `nasal_branch(sinuses="mri")` (Dang and Honda 1994); `subglottal_pair`,
+  `subglottal_filter`; `impedance.tube_loss_alpha`, `round_trip_loss`; `networks.MultiHoleBore` vent
+  (`vent_*`, `set_vent`, `blowhole_coefficients`); `winds.tmm_impedance(bore, hole_model, v0)`, `lip_params(preset)`,
+  `brass_shock`, `trombone_lip(lips, lip_q, hysteresis, shock)`, `register_track(fingering)`,
+  `auvray_recorder(recorder, trajectory, regime)`, `modal_clarinet(peaks)`.
+- The pipe engine treats waves as plane under the first non-planar cutoff, ka = 1.8412: f = 1.8412 c / (2 pi R), 4020 Hz for R =
+  25 mm; above it a 1-D pipe is no longer valid (trombone, bell: about 750 Hz cutoff).

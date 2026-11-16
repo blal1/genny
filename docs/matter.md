@@ -178,7 +178,7 @@ bubble counts and frequency ranges per scene; the vessel resonance formulas; the
 (`p = dI/dt`, 30 Hz high-pass, 180 Hz hand-over, `f^−α`); Strouhal scaling; the Farnell crackle,
 hiss, snap, spark formant, hum, wind and thunder recipes.
 
-Assumptions, marked `# UNSOURCED` in the code: the flame flux `I(t)` (the paper takes it from a
+Assumptions (`connaissance` in `research/SOURCES.md`): the flame flux `I(t)` (the paper takes it from a
 fluid simulation; here it is smooth noise shaped per flame kind), the jet power law, the
 balloon, drain, sizzle and boil-rumble models, every ice constant, bubble start depths and the
 per-bubble gain spread.
@@ -187,3 +187,35 @@ Two deviations from the findings' reference code, both measured: the bubble is i
 exact amplitude/phase recursion instead of the midpoint rule (which at 48 kHz was 2.9 % sharp at
 3.3 kHz and halved the damping), and the fire extension gain is capped at three times its median
 (the printed per-window formula produced isolated loud windows).
+
+## Added in 1.3.0
+
+- `drip regime=tap` (default `terminal`): a tap drip, one bubble near 8 kHz (`TAP_R`, `TAP_DELAY`, `TAP_CLICK`).
+- `matter.slosh_hz(radius, depth, mode=0)`: Hz of the water slosh in a round vessel (`SLOSH_LAMBDA`).
+- `rain_on model=hail|drops` (default `hail`): `drops` uses Marshall-Palmer drops at terminal speed and Schmid's
+  impact force (`drop_force(d_mm, v, sr, pitch)`, the momentum normal to the roof, cos of the slope) on the modal
+  plate.
+- Geophysics: `geyser rate` defaults to 2 (was 40); `debris_flow approach=`; `geo.geyser_tau`, `geo.lava_f0`,
+  `GEYSER_REBOUNDS`, `GEYSER_PEAK`, `DUNE_HARMONICS`, `LAVA_VENT_R`; `snow_avalanche` rumbles the powder cloud
+  for `geo.AVALANCHE_CLOUD` = 0.5 of its length.
+## Geophysics (family U) and newer options (1.3.0)
+
+New sfx in the `geo` module (the module has no page of its own): `rockfall_hertz` (blocks of power-law size, Hertz
+impacts: `b`, `dmin`, `dmax`, `restitution`, `roll`, `material`), `debris_flow_granular` (`speed`, `grain`, `depth`, `mud`,
+`water`, `arrival`), `avalanche_flow` (`speed`, `size`, `powder`, `chunk`, `infra`), `icequake_swarm` (Brune spectra,
+`rate`, `size`, `thickness`, `distance`, `b`, `temp`), `iceberg_fizz` (`melt`, `bubble`), `dune_sound` (`mode` boom|squeak|silent,
+`grain`, `speed`, `hz`, `beat`), `granular_pour` (`kind`, `flow`, `grain`, `height`, `wet`), `lahar`, `strombolian`,
+`mud_volcano`, `branch_break`, `lake_ice` (an alias of `ice_crack`), `snow_rub`. Also:
+
+- `strombolian_pulse(...)`: one vibration cycle of an overpressured bubble under a magma film (R0 0.8 m, L 22 m, dP 0.47 bar,
+  2 cm, 400 Pa s), about 0.32 s, +-30 Pa at 250 m; `lava(slug=0..1)` adds it before every burst.
+- `cavity_depth(d, v)`: maximum crater depth of a drop, (d^3 v^2 / 3g)^(1/4). `ice_chirp(floating=True)`: a plate on
+  water, group velocity -22 % (`ICE_WATER_LOAD`). `acfw_frequency(e, nu)`, `air_sound_speed`.
+- `viscous.burst_freq(r, measured=True)`: 49.4 Hz - 1.333 kHz/m x r (30 Pa s liquid, 5-20 mm bubbles). The default is now
+  30 Hz at r = 10 mm and mu = 30 Pa s (was 650 Hz): every `viscous` sound (`mud`, `gore`, `slime`, `blood`, `chem`,
+  `burn_flesh`, `bone` with bubbles) has a lower, duller burst; blood (3.5 mPa s) stays near 1.5 kHz.
+- `nature`: `tornado spectrum="bands"|"psd"`, `roughness`, `wind`, `approach`; `fire species=`; `foliage wind= leaf=`;
+  `fountain` has 64 jets; `waterfall`, `rapids`, `stream` take `bedload` and `pebble`; `ice_cubes slosh=`; `ball_bounce modes=`.
+- `bubble_params(thermal="prosperetti")`, `bubble_thermal(full=)`; `particles.DELTA_TH` 0.026 (gurgle, drain and splash
+  decay about 18 % faster); `surfacing_bubble(film)`; `rain(drops, wind, on_solids, on_leaves, small_alpha)`; a
+  doubled `GLASS_ALPHA` 1.4 (a full glass rings at 631 Hz).

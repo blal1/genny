@@ -53,6 +53,49 @@ def loudness(y: np.ndarray, sr: int, window: float = 0.4) -> float:
     return float(-0.691 + 10 * np.log10((c[n:] - c[:-n]).max() / n + 1e-12))
 
 
+DURATION_LOUDNESS_DB = ((0.020, -7.0), (0.100, -2.5), (0.200, -1.0), (0.500, 0.0))   # (burst duration s, level heard against the long sound)
+ATTACK_AUDIBLE_DB = -10.0       # an attack is heard once it is within 10 dB of the peak
+TRANSIENT_MS = (5.0, 50.0)      # events shorter than 5 ms click, 5-50 ms are transients, beyond they are notes
+ORDER_MS = 20.0                 # two events less than 20 ms apart keep their temporal order only barely
+ROUGHNESS_BARK = 0.25           # roughness peaks when two partials are about a quarter of a critical band apart
+TONE_SEQUENCE_MS = 100.0        # a tone sequence is heard as notes from 100 ms per tone
+
+
+def duration_loudness_offset(dur: float) -> float:
+    """dB by which a burst of `dur` s is heard below the same level held long: -7 dB at 20 ms, -2.5 at 100 ms, -1 at 200 ms,
+    nothing from 0.5 s. Linear in log time between the points, the 20-100 ms slope carried below 20 ms (floor -30 dB)."""
+    xs, ys = zip(*DURATION_LOUDNESS_DB)
+    lt = math.log(max(float(dur), 1e-4))
+    if dur < xs[0]:
+        slope = (ys[1] - ys[0]) / (math.log(xs[1]) - math.log(xs[0]))
+        return max(-30.0, ys[0] + slope * (lt - math.log(xs[0])))
+    if dur >= xs[-1]:
+        return 0.0
+    return float(np.interp(lt, np.log(xs), ys))
+
+
+def short_loudness(y: np.ndarray, sr: int) -> float:
+    """`loudness` of the whole sound, with the ear's shortfall for a short burst taken off (gunshots, casings, clicks)."""
+    x = _mono(np.asarray(y, float))
+    return loudness(x, sr, window=max(x.size, 1) / sr) + duration_loudness_offset(x.size / sr)
+
+
+def maxima_slope(y: np.ndarray, sr: int, f0: float | None = None, periods: float = 4.0) -> float:
+    """Decay in dB/s read on the maxima: the sound is cut in windows of about `periods` periods of f0 (found by
+    `estimate_f0` when not given), the largest |y| of each window gives a point (time, dB), a straight line through them
+    is the slope (negative for a decay). A plain envelope follower smooths the beating between partials; the maxima do not."""
+    x = _mono(np.asarray(y, float))
+    f0 = float(f0) if f0 else estimate_f0(x[:min(x.size, 8 * 4096)], sr)
+    w = max(8, int(periods * sr / max(f0, 20.0)))
+    m = x.size // w
+    if m < 3:
+        return 0.0
+    pk = np.abs(x[:m * w]).reshape(m, w).max(axis=1)
+    ok = pk > 1e-9 * max(float(pk.max()), 1e-30)
+    t = (np.arange(m) + 0.5) * w / sr
+    return float(np.polyfit(t[ok], 20 * np.log10(pk[ok]), 1)[0])
+
+
 def _ear_weight(f: np.ndarray) -> np.ndarray:
     """Linear gain of the ear weighting at frequencies f: IEC A-weighting x a +4 dB bump at 3.3 kHz."""
     f2 = np.maximum(f, 1.0) ** 2
@@ -241,22 +284,32 @@ def _sinc_peak(r: np.ndarray, i: int, half: int = 16) -> tuple[float, float]:
     return float(res.x), -float(res.fun)
 
 
-def periodicity(y: np.ndarray, sr: int, floor: float = 75.0, ceiling: float = 600.0, periods: float = 4.5,
-                step: float = 0.01, silence: float = 0.1) -> dict:
+def periodicity(y: np.ndarray, sr: int, floor: float = 75.0, ceiling: float = 600.0, periods: float | None = None,
+                step: float = 0.01, silence: float = 0.1, window: str = "hann") -> dict:
     """Boersma's (1993) accurate autocorrelation: Hann frames ``periods`` / ``floor`` long every ``step`` s, mean
     removed, ACF divided by the window's ACF, maximum over lags 1/ceiling .. 1/floor sinc-interpolated. Praat
     defaults for "To Harmonicity (ac)": step 0.01 s, pitch floor 75 Hz, silence threshold 0.1 (frames whose
-    peak is under 0.1 of the global peak are silent), 4.5 periods per window (manual page Sound: To Harmonicity
-    (ac)). Per frame HNR = 10 log10(r / (1 - r)) (Praat manual, Harmonicity: 99 % periodic = 20 dB).
+    peak is under 0.1 of the global peak are silent). ``periods`` default: 6 for Hann (article, Table 1), 4.5 for
+    ``window="gauss"``, the Gaussian window of the article's postscript (Praat's value), ``periods`` effective
+    periods inside a physical length twice as long. Per frame HNR = 10 log10(r / (1 - r)) (Praat manual, Harmonicity: 99 % periodic = 20 dB).
 
     Returns {"hnr": mean dB over the non-silent frames with r > 0, "r": median r, "f0": median Hz,
     "frames_hnr": per-frame dB (nan when silent or r <= 0)}. Simplification: Praat's Viterbi path over pitch
     candidates is not ported; the strongest ACF peak in the range is taken."""
     x = _mono(np.asarray(y, float))
+    if periods is None:
+        periods = 4.5 if window == "gauss" else 6.0
     n = int(round(periods / floor * sr))
+    if window == "gauss":
+        u = np.arange(2 * n) / n - 0.5
+        w = (np.exp(-12.0 * (u - 0.5) ** 2) - math.exp(-12.0)) / (1.0 - math.exp(-12.0))
+        n *= 2
+    elif window == "hann":
+        w = np.hanning(n)
+    else:
+        raise ValueError("window must be hann or gauss")
     if x.size < n or not np.any(x):
         return {"hnr": float("nan"), "r": float("nan"), "f0": float("nan"), "frames_hnr": np.zeros(0)}
-    w = np.hanning(n)
     nfft = 1 << int(math.ceil(math.log2(2 * n)))
     rw = np.fft.irfft(np.abs(np.fft.rfft(w, nfft)) ** 2)[:n]
     rw /= rw[0]
@@ -273,7 +326,10 @@ def periodicity(y: np.ndarray, sr: int, floor: float = 75.0, ceiling: float = 60
         ra = np.fft.irfft(np.abs(np.fft.rfft(fr, nfft, axis=1)) ** 2, axis=1)[:, :hi + 20]
         for k in np.flatnonzero(loud & (ra[:, 0] > 0)):
             r = ra[k] / ra[k, 0] / rw[:ra.shape[1]]
-            i = lo + int(np.argmax(r[lo:hi + 1]))
+            seg = r[lo:hi + 1]
+            i = lo + int(np.flatnonzero(seg >= 0.95 * seg.max())[0])      # shortest lag within 5 % of the best: no subharmonic pick on a periodic frame (octave cost, simplified)
+            while i < hi and r[i + 1] > r[i]:
+                i += 1
             lag, rmax = _sinc_peak(r, i)
             rmax = min(rmax, 1.0 - 1e-9)                    # Praat caps HNR (r -> 1) as well
             if rmax > 0:
@@ -286,7 +342,7 @@ def periodicity(y: np.ndarray, sr: int, floor: float = 75.0, ceiling: float = 60
             "frames_hnr": hnr_f}
 
 
-def hnr(y: np.ndarray, sr: int, floor: float = 75.0, periods: float = 4.5) -> float:
+def hnr(y: np.ndarray, sr: int, floor: float = 75.0, periods: float | None = None) -> float:
     """Harmonics-to-noise ratio in dB, Praat "To Harmonicity (ac)" defaults (see ``periodicity``).
     Finger et al. 2009 (women, Praat): 19.3 +- 3.7 dB, range 12.6-26.5."""
     return periodicity(y, sr, floor=floor, periods=periods)["hnr"]
@@ -601,6 +657,24 @@ def vassilakis_roughness(freqs, amps) -> float:
     d = np.abs(f[i] - f[j])
     r = 0.5 * (am * an) ** 0.1 * (2 * np.minimum(am, an) / (am + an + 1e-30)) ** 3.11 * (np.exp(-3.5 * s * d) - np.exp(-5.75 * s * d))
     return float(r.sum())
+
+
+SETHARES_DISS = (3.5, 5.75, 0.24, 0.021, 19.0)        # b1, b2, x*, s1, s2
+
+
+def sethares_dissonance(freqs, amps, alpha: float | None = None) -> float:
+    """Sethares' sensory dissonance of sine partials: the sum over pairs of
+    min(a_i, a_j) (e^(-b1 s df) - e^(-b2 s df)), s = x* / (s1 f_low + s2). With `alpha`, the dissonance of the
+    sound with itself transposed by alpha (both copies' pairs and the cross pairs): sweep alpha for a dissonance curve,
+    whose minima are the intervals the timbre wants."""
+    b1, b2, xs, s1, s2 = SETHARES_DISS
+    f, a = np.asarray(freqs, float).ravel(), np.asarray(amps, float).ravel()
+    if alpha is not None:
+        f, a = np.concatenate([f, float(alpha) * f]), np.concatenate([a, a])
+    i, j = np.triu_indices(f.size, 1)
+    s = xs / (s1 * np.minimum(f[i], f[j]) + s2)
+    d = np.abs(f[i] - f[j])
+    return float(np.sum(np.minimum(a[i], a[j]) * (np.exp(-b1 * s * d) - np.exp(-b2 * s * d))))
 
 
 # ------------------------------------------------------------------------------------------
@@ -1016,18 +1090,20 @@ def duration_loudness_db(dur: float) -> float:
 
 
 def yin(y: np.ndarray, sr: int, fmin: float = 60.0, fmax: float = 1000.0, threshold: float = 0.1,
-        frame: float = 0.04, hop: float = 0.01) -> np.ndarray:
+        frame: float = 0.04, hop: float = 0.01, local: bool = False) -> np.ndarray:
     """F0 track (Hz, 0 = unvoiced) by YIN: cumulative-mean-normalised difference, first dip under ``threshold``,
-    parabolic interpolation of the lag."""
+    parabolic interpolation of the lag on the raw difference function (the normalised one is slightly biased).
+    ``local``: best local estimate, each frame takes the estimate of the frame with the lowest dip within +-1/(2 fmin) of it."""
     x = _mono(np.asarray(y, float))
     w, h = int(frame * sr), int(hop * sr)
     lo, hi = max(2, int(sr / fmax)), min(int(sr / fmin), w - 1)
-    out = []
+    out, dips = [], []
     for s in range(0, max(1, x.size - w - hi), h):
         a = x[s:s + w]
         d = np.array([np.sum((a[:w - hi] - a[k:k + w - hi]) ** 2) for k in range(hi + 1)])
         c = d[1:] * np.arange(1, hi + 1) / (np.cumsum(d[1:]) + 1e-30)
         c = np.concatenate(([1.0], c))
+        dips.append(float(np.min(c[lo:hi])) if hi > lo else 1.0)
         below = np.flatnonzero(c[lo:hi] < threshold)
         if below.size == 0:
             out.append(0.0)
@@ -1035,9 +1111,79 @@ def yin(y: np.ndarray, sr: int, fmin: float = 60.0, fmax: float = 1000.0, thresh
         k = lo + below[0]
         while k + 1 < hi and c[k + 1] < c[k]:
             k += 1
-        den = c[k - 1] - 2 * c[k] + c[k + 1]
-        out.append(sr / (k + (0.5 * (c[k - 1] - c[k + 1]) / den if den else 0.0)))
-    return np.array(out)
+        den = d[k - 1] - 2 * d[k] + d[k + 1]
+        out.append(sr / (k + (0.5 * (d[k - 1] - d[k + 1]) / den if den else 0.0)))
+    out = np.array(out)
+    if local and out.size:
+        r, dips = max(1, int(round(0.5 / fmin / hop))), np.array(dips)
+        out = np.array([out[max(0, i - r) + int(np.argmin(dips[max(0, i - r):i + r + 1]))] for i in range(out.size)])
+    return out
+
+
+def pyin(y: np.ndarray, sr: int, fmin: float = 60.0, fmax: float = 1000.0, frame: float = 0.04, hop: float = 0.01,
+        thresholds: int = 100, beta: tuple = (2.0, 18.0), no_trough: float = 0.01, bins_per_semitone: int = 10,
+        max_rate: float = 35.92, switch: float = 0.01, return_prob: bool = False):
+    """Probabilistic YIN: instead of one threshold, ``thresholds`` of them weighted by a Beta(``beta``) law give each frame a set
+    of pitch candidates with probabilities (a frame with no dip under a threshold counts its deepest dip at ``no_trough`` of
+    the weight); a Viterbi path over voiced pitch bins (``bins_per_semitone`` per semitone, fmin..fmax) and unvoiced states then
+    picks one per frame, the pitch moving at most ``max_rate`` octaves/s and a voiced/unvoiced switch costing ``switch``. For melodic
+    voices; the track is smoother than ``yin`` and an unvoiced frame is 0. Returns f0 (Hz), and the voiced probability of each frame
+    with ``return_prob``."""
+    from scipy.signal import fftconvolve
+    from scipy.stats import beta as beta_law
+    x = _mono(np.asarray(y, float))
+    w, h = int(frame * sr), int(hop * sr)
+    lo, hi = max(2, int(sr / fmax)), min(int(sr / fmin), w - 2)
+    bps = int(bins_per_semitone)
+    nb = int(np.ceil(12 * bps * np.log2(fmax / fmin))) + 1
+    grid = np.arange(thresholds + 1) / thresholds
+    wt = np.diff(beta_law.cdf(grid, *beta))
+    thr = grid[1:]
+    obs, vprob = [], []
+    W = w - hi
+    for s in range(0, max(1, x.size - w), h):
+        a = x[s:s + w]
+        if a.size < w:
+            break
+        cs = np.concatenate(([0.0], np.cumsum(a * a)))
+        r = fftconvolve(a, a[:W][::-1])[W - 1:W + hi]
+        d = cs[W] + (cs[W:W + hi + 1] - cs[:hi + 1]) - 2.0 * r
+        d = np.maximum(d, 0.0)
+        c = np.concatenate(([1.0], d[1:] * np.arange(1, hi + 1) / (np.cumsum(d[1:]) + 1e-30)))
+        seg = c[lo:hi]
+        mins = np.flatnonzero((seg[1:-1] < seg[:-2]) & (seg[1:-1] <= seg[2:])) + 1 if seg.size > 2 else np.zeros(0, int)
+        cand = np.zeros(nb)
+        kmin = lo + int(np.argmin(seg))
+        for t, p in zip(thr, wt):
+            ok = mins[seg[mins] < t]
+            k, p_ = (lo + int(ok[0]), p) if ok.size else (kmin, p * no_trough)
+            den = d[k - 1] - 2 * d[k] + d[k + 1]
+            f = sr / (k + (0.5 * (d[k - 1] - d[k + 1]) / den if den else 0.0))
+            if fmin <= f <= fmax:
+                cand[int(round(12 * bps * np.log2(f / fmin)))] += p_
+        obs.append(cand)
+        vprob.append(min(1.0, float(cand.sum())))
+    if not obs:
+        return (np.zeros(0), np.zeros(0)) if return_prob else np.zeros(0)
+    obs, vprob = np.asarray(obs), np.asarray(vprob)
+    emit = np.concatenate([obs, np.repeat(((1.0 - vprob) / nb)[:, None], nb, axis=1)], axis=1)
+    width = max(1, int(round(max_rate * hop * 12 * bps)))
+    tri = np.maximum(0.0, 1.0 - np.abs(np.subtract.outer(np.arange(nb), np.arange(nb))) / (width + 1.0))
+    tri /= tri.sum(axis=1, keepdims=True)
+    T = np.log(np.block([[tri * (1 - switch), tri * switch], [tri * switch, tri * (1 - switch)]]) + 1e-300)
+    E = np.log(emit + 1e-300)
+    lp = E[0] - np.log(2 * nb)
+    back = np.zeros((len(E), 2 * nb), dtype=np.int32)
+    for i in range(1, len(E)):
+        m = lp[:, None] + T
+        back[i] = np.argmax(m, axis=0)
+        lp = m[back[i], np.arange(2 * nb)] + E[i]
+    path = np.zeros(len(E), dtype=int)
+    path[-1] = int(np.argmax(lp))
+    for i in range(len(E) - 1, 0, -1):
+        path[i - 1] = back[i, path[i]]
+    f0 = np.where(path < nb, fmin * 2.0 ** (path / (12.0 * bps)), 0.0)
+    return (f0, vprob) if return_prob else f0
 
 
 def bark_flux(y: np.ndarray, sr: int, win: float = 0.0232, hop: float = 0.0058) -> np.ndarray:
@@ -1059,6 +1205,50 @@ def mfcc(y: np.ndarray, sr: int, n: int = 13, n_mels: int = 40) -> np.ndarray:
     return dct(logmel_frames(y, sr, n_mels=n_mels), type=2, norm="ortho", axis=1)[:, :n]
 
 
+DAVIS_CENTERS = tuple(100.0 * i for i in range(1, 11)) + tuple(1000.0 * 4.0 ** (j / 10.0) for j in range(1, 11))
+
+
+def mfcc_davis(y: np.ndarray, sr: int, n: int = 10, win: float = 0.0256, hop: float = 0.0064) -> np.ndarray:
+    """Mel-frequency cepstrum of Davis & Mermelstein: 20 triangular filters on the magnitude spectrum below 5 kHz (centres every
+    100 Hz to 1 kHz, then log-spaced to 4 kHz, each triangle running to its neighbours' centres), c_i = sum_k X_k cos(i (k - 1/2) pi / 20)
+    on the log-energies X_k, i = 1..``n``; Hamming frames of 25.6 ms every 6.4 ms."""
+    x = _mono(np.asarray(y, float))
+    m, r = int(round(win * sr)), int(round(hop * sr))
+    if x.size < m:
+        x = np.pad(x, (0, m - x.size))
+    S = np.abs(np.fft.rfft(np.lib.stride_tricks.sliding_window_view(x, m)[::r] * np.hamming(m), axis=1))
+    f = np.fft.rfftfreq(m, 1.0 / sr)
+    c = np.array((0.0,) + DAVIS_CENTERS + (DAVIS_CENTERS[-1] * 4.0 ** 0.1,))
+    fb = np.stack([np.clip(np.minimum((f - c[k]) / (c[k + 1] - c[k]), (c[k + 2] - f) / (c[k + 2] - c[k + 1])), 0.0, 1.0)
+                   for k in range(20)])
+    X = np.log10(np.maximum(S @ fb.T, 1e-12))
+    kk = np.arange(1, 21)
+    return X @ np.cos(np.outer(kk - 0.5, np.arange(1, n + 1)) * math.pi / 20.0)
+
+
+def lfcc_davis(y: np.ndarray, sr: int, n: int = 10, win: float = 0.0256, hop: float = 0.0064) -> np.ndarray:
+    """Linear-frequency cepstrum of Davis & Mermelstein (eq. 2): c_i = sum_{k=0}^{K-1} Y_k cos(pi i k / K), Y_k the log10 magnitude
+    of the DFT up to Nyquist (K bins), i = 1..``n``; same frames as ``mfcc_davis``."""
+    x = _mono(np.asarray(y, float))
+    m, r = int(round(win * sr)), int(round(hop * sr))
+    if x.size < m:
+        x = np.pad(x, (0, m - x.size))
+    Y = np.log10(np.maximum(np.abs(np.fft.rfft(np.lib.stride_tricks.sliding_window_view(x, m)[::r] * np.hamming(m), axis=1)), 1e-12))
+    K = Y.shape[1]
+    return Y @ np.cos(np.outer(np.arange(K), np.arange(1, n + 1)) * math.pi / K)
+
+
+def lpc_cepstrum(a, n: int = 10) -> np.ndarray:
+    """Cepstrum of the LPC polynomial 1 + a_1 z^-1 + ... + a_p z^-p, ``a`` = (a_1..a_p), in Davis & Mermelstein's sign (eq. 3):
+    c_i = a_i + sum_{k=1}^{i-1} (k - i) / i c_{i-k} a_k, i = 1..``n``."""
+    a = np.concatenate(([0.0], np.asarray(a, float)))
+    c = np.zeros(n + 1)
+    for i in range(1, n + 1):
+        c[i] = (a[i] if i < a.size else 0.0) + sum((k - i) / i * c[i - k] * (a[k] if k < a.size else 0.0)
+                                                   for k in range(1, i) if k < a.size)
+    return c[1:]
+
+
 def jitter_shimmer(periods, amps) -> dict:
     """Local jitter (%) and shimmer (%, dB) from successive periods and peak amplitudes, as Praat defines them:
     mean |T_i - T_i+1| / mean T, mean |A_i - A_i+1| / mean A, mean |20 log10(A_i+1 / A_i)|."""
@@ -1066,6 +1256,27 @@ def jitter_shimmer(periods, amps) -> dict:
     return {"jitter": 100 * float(np.mean(np.abs(np.diff(t))) / np.mean(t)),
             "shimmer": 100 * float(np.mean(np.abs(np.diff(a))) / np.mean(a)),
             "shimmer_db": float(np.mean(np.abs(20 * np.log10(a[1:] / a[:-1]))))}
+
+
+def cycle_periods(y: np.ndarray, sr: int, f0: float, search: float = 0.2) -> np.ndarray:
+    """Successive periods (s) of a voiced signal by cross-correlating each cycle with the next one, the lag searched within
+    +-``search`` of the nominal 1 / ``f0`` and refined by a parabola through the peak. Breath noise moves a zero-crossing or a peak
+    picker by whole samples; it barely moves the correlation maximum, so ``jitter_measures`` of these periods is not inflated by it."""
+    x = _mono(np.asarray(y, float))
+    t0 = sr / float(f0)
+    n = int(round(t0))
+    lo, hi = int(round(t0 * (1.0 - search))), int(round(t0 * (1.0 + search)))
+    out, pos = [], 0
+    while pos + hi + n + 1 < x.size:
+        a = x[pos:pos + n]
+        r = np.array([np.dot(a, x[pos + k:pos + k + n]) / (np.linalg.norm(a) * np.linalg.norm(x[pos + k:pos + k + n]) + 1e-30)
+                      for k in range(lo - 1, hi + 2)])
+        i = int(np.argmax(r[1:-1])) + 1
+        d = r[i - 1] - 2.0 * r[i] + r[i + 1]
+        k = lo - 1 + i + (0.5 * (r[i - 1] - r[i + 1]) / d if d else 0.0)
+        out.append(k / sr)
+        pos += int(round(k))
+    return np.asarray(out)
 
 
 def tempo_from_loudness(y: np.ndarray, sr: int, lo: float = 40.0, hi: float = 240.0) -> float:
@@ -1334,12 +1545,76 @@ def phase_track(y: np.ndarray, sr: int, f0: float, frame: float = 0.005) -> np.n
     return np.array([np.angle(np.mean(np.exp(1j * ph[i:i + m]))) for i in range(0, x.size - m + 1, m)])
 
 
-def wichern_features(y: np.ndarray, sr: int, frame: int = 1024) -> dict:
-    """Six frame-wise descriptors (medians): loudness (dB RMS), spectral centroid (Hz), spectral sparsity
-    (max / sum of the magnitude spectrum), harmonicity (peak of the normalised autocorrelation, 50-1000 Hz),
-    temporal sparsity (max / sum of the frame energies over 10 frames), transient index (spectral flux of the
-    mel-like log spectrum)."""
+def goldstein_harmonicity(freqs, kmax: int | None = None, c: float = 0.01 / math.sqrt(2.0), fmin: float = 50.0) -> tuple:
+    """Likelihood that two of the spectral peaks ``freqs`` (Hz) are harmonics k1 < k2 <= kmax of a fundamental (Goldstein's
+    optimum-processor likelihood, the pairwise approximation): the product of two Gaussians centred on k f0 with sd c k f0,
+    f0 = ((f1 / k1)^2 + (f2 / k2)^2) / (f1 / k1 + f2 / k2); the maximum over pairs, harmonic numbers, with f0 > ``fmin``. ``kmax``
+    defaults to twice the number of peaks. Returns (likelihood, f0), (0, 0) for fewer than two peaks."""
+    f = np.sort(np.asarray(freqs, float))
+    best, f0b = 0.0, 0.0
+    km = int(kmax or 2 * f.size)
+    for i in range(f.size):
+        for j in range(i + 1, f.size):
+            for k1 in range(1, km):
+                for k2 in range(k1 + 1, km + 1):
+                    a, b = f[i] / k1, f[j] / k2
+                    f0 = (a * a + b * b) / (a + b)
+                    if f0 <= fmin:
+                        continue
+                    p = 1.0
+                    for fj, kj in ((f[i], k1), (f[j], k2)):
+                        s = c * kj * f0
+                        p *= math.exp(-0.5 * ((fj - kj * f0) / s) ** 2) / (s * math.sqrt(2.0 * math.pi))
+                    if p > best:
+                        best, f0b = p, f0
+    return best, f0b
+
+
+def wichern_features(y: np.ndarray, sr: int, frame: int = 1024, legacy: bool = False, harmonicity: str = "autocorr", peaks: int = 6) -> dict:
+    """Six descriptors (medians) after Wichern et al.: Hamming frames of 40 ms every 20 ms; loudness 20 log10 of the frame rms; spectral
+    centroid in Bark, weighted by the Bark width of each bin and |X|^2 (zero-padded STFT); spectral sparsity max |X| / sum |X|;
+    temporal sparsity max / sum of the frame rms over 49 frames; transient index the sum over 49 frames of the Euclidean distance between
+    successive 15-coefficient MFCC vectors; harmonicity the peak of the normalised autocorrelation, 50-1000 Hz (the paper's Goldstein
+    likelihood is not reproduced). ``legacy``: 1024-sample frames, centroid in Hz, temporal sparsity on 10 frame energies, transient index
+    the spectral flux of the log spectrum. ``harmonicity="goldstein"``: the `goldstein_harmonicity` likelihood of the ``peaks`` strongest
+    spectral peaks of each frame (above 5 % of the frame's maximum) instead of the autocorrelation peak."""
+    if harmonicity not in ("autocorr", "goldstein"):
+        raise ValueError("harmonicity: autocorr|goldstein")
     x = _mono(np.asarray(y, float))
+    if not legacy:
+        from scipy.fft import dct
+        from .calibrate import logmel_frames
+        m, h = int(round(0.04 * sr)), int(round(0.02 * sr))
+        if x.size < m:
+            x = np.pad(x, (0, m - x.size))
+        fr = np.lib.stride_tricks.sliding_window_view(x, m)[::h] * np.hamming(m)
+        rms = np.sqrt(np.mean(fr ** 2, axis=1) + 1e-24)
+        nf = 1 << (2 * m - 1).bit_length()
+        X = np.abs(np.fft.rfft(fr, nf, axis=1))
+        b = _zwicker_bark(np.fft.rfftfreq(nf, 1.0 / sr))
+        w = np.diff(b, prepend=0.0)
+        cen = ((X ** 2) @ (b * w)) / ((X ** 2) @ w + 1e-24)
+        lo, hi = int(sr / 1000), int(sr / 50)
+        harm = []
+        if harmonicity == "goldstein":
+            fq = np.fft.rfftfreq(nf, 1.0 / sr)
+            for mag in X:
+                pk = np.nonzero((mag[1:-1] > mag[:-2]) & (mag[1:-1] >= mag[2:]) & (mag[1:-1] > 0.05 * mag.max()))[0] + 1
+                pk = pk[np.argsort(mag[pk])[::-1][:int(peaks)]]
+                harm.append(goldstein_harmonicity(fq[pk])[0])
+        else:
+            for v in fr:
+                r = np.correlate(v, v, "full")[m - 1:]
+                harm.append(float(np.max(r[lo:min(hi, m - 1)]) / (r[0] + 1e-12)) if r[0] > 0 else 0.0)
+        n = 49
+        ts = [rms[max(0, i - n + 1):i + 1].max() / (rms[max(0, i - n + 1):i + 1].sum() + 1e-24) for i in range(rms.size)]
+        cep = dct(logmel_frames(x, sr, n_mels=40, win=0.04, hop=0.02), type=2, norm="ortho", axis=1)[:, :15]
+        d = np.linalg.norm(np.diff(cep, axis=0), axis=1)
+        ti = [d[max(0, i - n + 1):i + 1].sum() for i in range(d.size)] if d.size else [0.0]
+        return {"loudness": float(np.median(20 * np.log10(rms))), "centroid": float(np.median(cen)),
+                "spectral_sparsity": float(np.median(X.max(axis=1) / (X.sum(axis=1) + 1e-24))),
+                "harmonicity": float(np.median(harm)), "temporal_sparsity": float(np.median(ts)),
+                "transient_index": float(np.median(ti))}
     fr = [x[i:i + frame] * np.hanning(frame) for i in range(0, max(1, x.size - frame + 1), frame // 2)]
     f = np.fft.rfftfreq(frame, 1 / sr)
     S = np.array([np.abs(np.fft.rfft(v, frame)) for v in fr])
@@ -1476,6 +1751,22 @@ def mixing_time(ir: np.ndarray, sr: int, win: float = 0.020) -> float:
     return float(t[k[0]]) if k.size else float("nan")
 
 
+def kurtosis_echo_density(ir: np.ndarray, sr: int, win: float = 0.020) -> tuple[np.ndarray, np.ndarray]:
+    """Echo density from the fourth moment: sigma / ((1/3) sum w h^4)^(1/4) over a Hann-weighted ``win`` window,
+    1 for a Gaussian late field, smoother there than `normalized_echo_density` but with less range on sparse echoes."""
+    x = _mono(np.asarray(ir, float))
+    n = max(3, int(round(win * sr)) | 1)
+    w = np.hanning(n)
+    w /= w.sum()
+    hop = max(1, n // 4)
+    if x.size < n:
+        x = np.pad(x, (0, n - x.size))
+    fr = np.lib.stride_tricks.sliding_window_view(x, n)[::hop]
+    sd = np.sqrt((fr ** 2 * w).sum(axis=1))
+    m4 = ((fr ** 4) * w).sum(axis=1) / 3.0
+    return (np.arange(sd.size) * hop + n // 2) / sr, sd / (m4 ** 0.25 + 1e-30)
+
+
 def ratio_pitch_mel(f) -> np.ndarray:
     """Ratio pitch in mel = 100 x critical-band rate (Zwicker's arctangent form): 125 Hz ~ 125 mel,
     1300 Hz ~ 1050 mel, 8 kHz ~ 2100 mel."""
@@ -1510,6 +1801,148 @@ def virtual_pitch(freqs, levels_db, tol: float = 0.03) -> float:
     return best
 
 
+def _zwicker_bark(f):
+    k = np.asarray(f, float) / 1000.0
+    return 13.0 * np.arctan(0.76 * k) + 3.5 * np.arctan((k / 7.5) ** 2)
+
+
+def tonal_components(spectrum_db, df: float, bump_db: float = 7.0, level_add_db: float = 2.0):
+    """Tonal components of a Hann-windowed spectrum in dB: a sample higher than both neighbours and more than
+    ``bump_db`` above the samples 2 and 3 bins away; frequency interpolated by 0.46 Hz/dB (L+ - L-) at 12.5 Hz spacing
+    (scaled to ``df``), level + ``level_add_db``. Returns (freqs, levels)."""
+    L = np.asarray(spectrum_db, float)
+    fr, lv = [], []
+    for i in range(3, L.size - 3):
+        if L[i] > L[i - 1] and L[i] >= L[i + 1] and all(L[i] - L[i + j] > bump_db for j in (-3, -2, 2, 3)):
+            fr.append(i * df + 0.46 * (df / 12.5) * (L[i + 1] - L[i - 1]))
+            lv.append(L[i] + level_add_db)
+    return np.array(fr), np.array(lv)
+
+
+def tonal_noise_db(spectrum_db, df: float, freqs) -> np.ndarray:
+    """Noise intensity (dB) around each tonal component for ``spl_excess(noise_db=)``: the sum of the intensities of the
+    spectrum samples within +-0.5 Bark of the component, the five samples centred on each tonal component left out."""
+    L = np.asarray(spectrum_db, float)
+    f = np.asarray(freqs, float)
+    bins = np.round(f / df).astype(int)
+    keep = np.ones(L.size, bool)
+    for b in bins:
+        keep[max(b - 2, 0):b + 3] = False
+    zs = _zwicker_bark(np.arange(L.size) * df)
+    inten = np.where(keep, 10.0 ** (L / 10.0), 0.0)
+    out = np.empty(f.size)
+    for u, fu in enumerate(f):
+        zu = float(_zwicker_bark(fu))
+        out[u] = 10.0 * np.log10(inten[np.abs(zs - zu) <= 0.5].sum() + 1e-30)
+    return out
+
+
+def spl_excess(freqs, levels_db, noise_db=None) -> np.ndarray:
+    """SPL excess LX of tonal components (Terhardt, Stoll & Seewann): level minus the masking of the others, 27 dB/Bark
+    below a masker and -24 - 0.23 kHz/f + 0.2 L above it, the amplitudes of the maskers added, with the noise
+    intensity (dB, one value or per component) and the threshold in quiet. Positive = aurally relevant."""
+    f = np.asarray(freqs, float)
+    L = np.asarray(levels_db, float)
+    z = _zwicker_bark(f)
+    n = np.zeros(f.size) if noise_db is None else 10.0 ** (np.broadcast_to(np.asarray(noise_db, float), f.shape) / 10.0)
+    out = np.empty(f.size)
+    for u in range(f.size):
+        amp = 0.0
+        for v in range(f.size):
+            if v == u:
+                continue
+            s = 27.0 if f[u] <= f[v] else -24.0 - 230.0 / f[v] + 0.2 * L[v]
+            amp += 10.0 ** ((L[v] - s * (z[v] - z[u])) / 20.0)
+        out[u] = L[u] - 10.0 * np.log10(amp * amp + n[u] + 10.0 ** (threshold_in_quiet(f[u]) / 10.0))
+    return out
+
+
+def spectral_pitch_weight(freqs, lx) -> np.ndarray:
+    """Terhardt's spectral-pitch weight: (1 - exp(-LX / 15 dB)) / sqrt(1 + 0.07 (f / 700 - 700 / f)^2), 0 for LX < 0."""
+    f = np.asarray(freqs, float)
+    lx = np.asarray(lx, float)
+    dom = 1.0 / np.sqrt(1.0 + 0.07 * (f / 700.0 - 700.0 / f) ** 2)
+    return np.where(lx >= 0.0, (1.0 - np.exp(-np.maximum(lx, 0.0) / 15.0)) * dom, 0.0)
+
+
+def spectral_pitch_shift(freqs, levels_db) -> np.ndarray:
+    """Pitch shift v of each component (fraction of its frequency) by the level and the neighbours: 2e-4 (L - 60)(f - 2)
+    + 1.5e-2 exp(-LX' / 20) (3 - ln f) + 3e-2 exp(-LX'' / 20) (0.36 + ln f), f in kHz, LX' / LX'' the excess against the lower / higher components."""
+    f = np.asarray(freqs, float)
+    L = np.asarray(levels_db, float)
+    z = _zwicker_bark(f)
+    k = f / 1000.0
+    v = np.zeros(f.size)
+    for u in range(f.size):
+        lo = hi = 0.0
+        for w in range(f.size):
+            if w == u:
+                continue
+            s = 27.0 if f[u] <= f[w] else -24.0 - 230.0 / f[w] + 0.2 * L[w]
+            a = 10.0 ** ((L[w] - s * (z[w] - z[u])) / 20.0)
+            if w < u:
+                lo += a
+            else:
+                hi += a
+        e1 = math.exp(-(L[u] - 20.0 * math.log10(lo)) / 20.0) if lo > 0 else 0.0
+        e2 = math.exp(-(L[u] - 20.0 * math.log10(hi)) / 20.0) if hi > 0 else 0.0
+        v[u] = (2e-4 * (L[u] - 60.0) * (k[u] - 2.0) + 1.5e-2 * e1 * (3.0 - math.log(k[u]))
+                + 3e-2 * e2 * (0.36 + math.log(k[u])))
+    return v
+
+
+def terhardt_pitch(freqs, levels_db, m_max: int = 12, delta: float = 0.08, true_pitch: bool = False, noise_db=None,
+                   top: int = 5) -> dict:
+    """Spectral-pitch and virtual-pitch patterns of tonal components (Terhardt, Stoll & Seewann 1982). Components sorted by
+    ``spectral_pitch_weight``; those within 70 % of the heaviest each offer their subharmonics f / m (m <= ``m_max``);
+    its weight is beta = 1 / (1 + (H / 800)^4) times the sum over the other components of
+    sqrt(WS_i WS_j / (m n)) (1 - gamma / delta), n = round(m f_j / f_i), gamma = |n f_i / (m f_j) - 1| <= ``delta``, n <= 20.
+    ``true_pitch`` applies the pitch shifts and the subharmonic stretch. Returns {"spectral": [(Hz, weight)],
+    "virtual": [(Hz, weight)] heaviest ``top`` pitches, one per pitch within 2 %}."""
+    f = np.asarray(freqs, float)
+    L = np.asarray(levels_db, float)
+    order = np.argsort(f)
+    f, L = f[order], L[order]
+    lx = spl_excess(f, L, noise_db)
+    ws = spectral_pitch_weight(f, lx)
+    keep = ws > 0.0
+    f, L, ws = f[keep], L[keep], ws[keep]
+    if f.size == 0:
+        return {"spectral": [], "virtual": []}
+    v = spectral_pitch_shift(f, L) if true_pitch else np.zeros(f.size)
+    sp = [(float(fi * (1.0 + vi)), float(w)) for fi, vi, w in zip(f, v, ws)]
+    idx = np.argsort(-ws)
+    imax = int(np.sum(ws >= 0.7 * ws[idx[0]]))
+    found = []
+    for i in idx[:imax]:
+        for m in range(1, m_max + 1):
+            tot = 0.0
+            for j in range(f.size):
+                if j == i:
+                    continue
+                n = int(m * f[j] / f[i] + 0.5)
+                if n < 1 or n > 20:
+                    continue
+                g = abs(n * f[i] / (m * f[j]) - 1.0)
+                if g <= delta:
+                    tot += math.sqrt(ws[i] * ws[j] / (m * n)) * (1.0 - g / delta)
+            h = f[i] / m * (1.0 + v[i])
+            if true_pitch and m > 1:
+                k = f[i] / 1000.0 / m
+                h -= f[i] / m * 1e-3 * (18.0 + 2.5 * m - (50.0 - 7.0 * m) * k + 0.1 * k ** -2)
+            beta = 1.0 / (1.0 + (h / 800.0) ** 4)
+            if tot > 0.0:
+                found.append((float(h), float(beta * tot)))
+    found.sort(key=lambda p: -p[1])
+    vp = []
+    for h, w in found:
+        if all(abs(h / q - 1.0) > 0.02 for q, _ in vp):
+            vp.append((h, w))
+        if len(vp) >= top:
+            break
+    return {"spectral": sp, "virtual": vp}
+
+
 def _frames_spectra(y, sr, win=0.0232, hop=0.0058):
     x = _mono(np.asarray(y, float))
     M, R = int(round(win * sr)), int(round(hop * sr))
@@ -1535,6 +1968,31 @@ def spectral_descriptors(y: np.ndarray, sr: int) -> dict:
     ku = (p * d ** 4).sum(axis=1) / (s ** 4 + 1e-30)
     return {"centroid": float(np.median(c)), "spread": float(np.median(s)), "skewness": float(np.median(sk)),
             "kurtosis": float(np.median(ku))}
+
+
+def estimate_f0(y: np.ndarray, sr: int, fmin: float = 40.0, fmax: float = 2000.0, H: int = 8, refine: bool = True) -> float:
+    """Fundamental by the product of spectral magnitudes at the first H multiples (harmonic product, in the log domain so a
+    missing partial costs but does not zero the score), over a 1 Hz grid; then parabolic interpolation of the score peak.
+    Half-bin accuracy of a plain FFT peak is 23 cents at 400 Hz with N=4096; the refinement removes most of it."""
+    y = np.asarray(y, float)
+    y = y if y.ndim == 1 else y.mean(axis=1)
+    n = int(2 ** math.ceil(math.log2(max(len(y), 1024))))
+    X = np.abs(np.fft.rfft(y * np.hanning(len(y)), n))
+    hz = sr / n
+    grid = np.arange(max(fmin, 2 * hz), min(fmax, sr / (2 * H)), 0.5)
+    ks = np.arange(1, H + 1)
+    pos = grid[:, None] * ks[None, :] / hz
+    i0 = np.floor(pos).astype(int)
+    w = pos - i0
+    mag = X[i0] * (1 - w) + X[np.minimum(i0 + 1, X.size - 1)] * w
+    score = np.log(mag + 1e-9 * X.max()).sum(axis=1)
+    k = int(np.argmax(score))
+    if refine and 0 < k < score.size - 1:
+        a, b, c = score[k - 1], score[k], score[k + 1]
+        d = a - 2 * b + c
+        if d < 0:
+            return float(grid[k] + 0.5 * 0.5 * (a - c) / d)
+    return float(grid[k])
 
 
 def hnr_ma(y: np.ndarray, sr: int, f0: float, H: int = 10) -> float:
@@ -1678,3 +2136,220 @@ def harmonic_centroid(powers) -> float:
     p = np.asarray(powers, float)
     n = np.arange(1, p.size + 1)
     return float((n * p).sum() / (p.sum() + 1e-30))
+
+
+def _hann_dtft(delta, N: int) -> np.ndarray:
+    n = np.arange(N)
+    w = 0.5 - 0.5 * np.cos(2 * np.pi * n / N)
+    return np.exp(-2j * np.pi * np.multiply.outer(np.atleast_1d(np.asarray(delta, float)), n) / N) @ w
+
+
+def _bin_estimate(Xc: np.ndarray, b: int, N: int):
+    lm = np.log(np.abs(Xc[b - 1:b + 2]) + 1e-30)
+    p = float(np.clip(0.5 * (lm[0] - lm[2]) / min(lm[0] - 2 * lm[1] + lm[2], -1e-12), -0.5, 0.5))
+    amp = math.exp(lm[1] - 0.25 * (lm[0] - lm[2]) * p) * 2.0 / (N / 2.0)
+    phi = float(np.angle(Xc[b]) - np.angle(_hann_dtft(-p, N)[0]))
+    return b + p, amp, phi
+
+
+def sine_peaks(y: np.ndarray, sr: int, start: int = 0, npts: int = 1024, npeak: int = 20, passes: int = 2,
+               maxfreq: float | None = None) -> dict:
+    """Sinusoids of one Hann-windowed frame: freq (Hz), amp (linear), phase (radians at the frame start), by
+    descending frequency. Greedy picking: the strongest bin above a mask that falls as 1 / (1 + d^4) over +-50 bins
+    around each pick (twice the peak within 2 bins), which must beat 0.6 x the sum of the bins two away; stop under
+    1e-10 of the total power. Each pick is refined by a parabola through the log magnitudes, then `passes` times
+    again after subtracting the Hann leakage of every other pick within 8 bins (close partials separate)."""
+    x = _mono(np.asarray(y, float))[start:start + npts]
+    N = int(npts)
+    x = np.pad(x, (0, N - len(x)))
+    w = 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(N) / N)
+    X = np.fft.rfft(x * w)
+    P = np.abs(X) ** 2
+    K = len(P)
+    kmax = K - 2 if maxfreq is None else int(min(K - 2, maxfreq * N / sr))
+    mask = np.zeros(K)
+    ptot = float(P.sum()) + 1e-30
+    k = np.arange(K)
+    bins = []
+    while len(bins) < npeak and kmax > 3:
+        c = P[2:kmax]
+        cand = np.flatnonzero((c > mask[2:kmax]) & (c > P[1:kmax - 1]) & (c >= P[3:kmax + 1]) & (c > 0.6 * (P[0:kmax - 2] + P[4:kmax + 2]))) + 2
+        if not len(cand):
+            break
+        b = int(cand[np.argmax(P[cand])])
+        if P[b] < 1e-10 * ptot:
+            break
+        bins.append(b)
+        d = np.abs(k - b)
+        m = np.where(d < 2, 2.0 * P[b], P[b] / (1.0 + d.astype(float) ** 4))
+        mask = np.maximum(mask, np.where(d <= 50, m, 0.0))
+    est = [_bin_estimate(X, b, N) for b in bins]
+    for _ in range(passes if len(bins) > 1 else 0):
+        new = []
+        for i, b in enumerate(bins):
+            kk = np.arange(b - 1, b + 2)
+            Xc = X.copy()
+            for j, (nu, a, phi) in enumerate(est):
+                if j != i and abs(nu - est[i][0]) < 8.0:
+                    Xc[kk] -= 0.5 * a * np.exp(1j * phi) * _hann_dtft(kk - nu, N)
+            new.append(_bin_estimate(Xc, b, N))
+        est = new
+    est.sort()
+    nu = np.array([e[0] for e in est])
+    return {"freq": nu * sr / N, "amp": np.array([e[1] for e in est]), "phase": np.array([e[2] for e in est])}
+
+
+def multi_pitch(y: np.ndarray, sr: int, start: int = 0, npts: int = 2048, npitch: int = 3, npeaks: int = 12,
+                fmin: float = 40.0, tol: float = 0.023, nharm: int = 16, min_quality: float = 0.3) -> list[dict]:
+    """Up to `npitch` simultaneous pitches of one frame by a harmonic sieve. The `npeaks` strongest sinusoids vote,
+    on a 48-per-octave axis, for their subharmonics 1..nharm (weight 30 (4 l / sum l) / (j + 7), l = sqrt(amp), a
+    parabolic bump 2 bins wide). Local maxima in decreasing order become pitches unless they are an integer ratio of
+    a stronger one or explain mostly partials that one already claimed; partials within `tol` of a harmonic confirm it and the pitch is their mean of f / h weighted by
+    amp h. Per pitch: freq, quality (share of the loudness the pitch explains), evenness (share of that on the even
+    harmonics: about 0 for a clarinet, high for a saw), level_db (100 = amplitude 1)."""
+    pk = sine_peaks(y, sr, start, npts, npeaks)
+    f, a = pk["freq"], pk["amp"]
+    f, a = f[f > fmin], a[f > fmin]
+    if not len(f):
+        return []
+    loud = np.sqrt(a)
+    tot = float(loud.sum())
+    nb = int(48 * math.log2(0.5 * sr / fmin)) + 1
+    H = np.zeros(nb)
+    for fi, li in zip(f, loud):
+        for j in range(nharm):
+            fs = fi / (j + 1)
+            if fs < fmin:
+                break
+            c = 48.0 * math.log2(fs / fmin)
+            for q in range(max(0, math.ceil(c - 2)), min(nb - 1, math.floor(c + 2)) + 1):
+                H[q] += 30.0 * (4.0 * li / tot) / (j + 7) * (1.0 - ((q - c) / 2.0) ** 2)
+    lm = np.flatnonzero((H > 0) & (H >= np.roll(H, 1)) & (H >= np.roll(H, -1)))
+    out = []
+    claimed = np.zeros(len(f), bool)
+    for q in lm[np.argsort(-H[lm])]:
+        f0 = fmin * 2.0 ** (q / 48.0)
+        if any(abs(r - round(r)) < tol * max(round(r), 1) and round(r) >= 2
+               for o in out for r in (f0 / o["freq"], o["freq"] / f0)):
+            continue
+        h = np.round(f / f0)
+        ok = (h >= 1) & (h <= nharm) & (np.abs(f / f0 - h) < tol * np.maximum(h, 1))
+        if not ok.any():
+            continue
+        quality = float(loud[ok].sum() / tot)
+        if quality < min_quality or (out and loud[ok & ~claimed].sum() < 0.5 * loud[ok].sum()):
+            continue
+        claimed |= ok
+        wgt = a[ok] * h[ok]
+        f0r = float((wgt * f[ok] / h[ok]).sum() / wgt.sum())
+        even = float(loud[ok][h[ok] % 2 == 0].sum() / loud[ok].sum())
+        out.append({"freq": f0r, "quality": quality, "evenness": even,
+                    "level_db": float(100.0 + 10.0 * math.log10(float((a[ok] ** 2).sum()) / 2.0 + 1e-30))})
+        if len(out) >= npitch:
+            break
+    return out
+
+
+def _band_centres(n: int = 11) -> list[float]:
+    cf = [1.0]
+    while len(cf) < n:
+        cf.append(max(cf[-1] + 1.5, cf[-1] * 2 ** 0.5))
+    return cf
+
+
+def band_energies(y: np.ndarray, sr: int, npts: int = 256, hop: int = 128, nbands: int = 11) -> np.ndarray:
+    """(frames, nbands) power in constant-Q bands (a half-octave apart, at least 1.5 bins of npts wide, centres
+    from 1 to 64 bins of sr / npts). Each band is a complex sine-windowed kernel of npts 0.75 / bw samples, its
+    squared output averaged over the quarter-length shifts that fit in the frame; a unit sine at a band centre
+    reads 0.25."""
+    from scipy.signal import fftconvolve
+    x = _mono(np.asarray(y, float))
+    F = max(0, (len(x) - npts) // hop + 1)
+    t = np.arange(F) * hop
+    out = np.zeros((F, nbands))
+    for j, cf in enumerate(_band_centres(nbands)):
+        bw = max(1.5, cf * (2 ** 0.5 - 1))
+        L = max(4, int(npts * 0.75 / bw))
+        w = np.sin(np.pi * np.arange(L) / L)
+        kern = w * np.exp(2j * np.pi * cf * np.arange(L) / npts)
+        p = np.abs(fftconvolve(x, kern[::-1], "valid")) ** 2 / w.sum() ** 2 if len(x) >= L else np.zeros(1)
+        s = max(1, L // 4)
+        nh = max(1, (npts - L) // s + 1)
+        idx = np.minimum(t[:, None] + s * np.arange(nh)[None, :], len(p) - 1)
+        out[:, j] = p[idx].mean(axis=1)
+    return out
+
+
+def band_attacks(y: np.ndarray, sr: int, npts: int = 256, hop: int = 128, grow_on: float = 5.0, grow_off: float = 2.5,
+                 minvel: float = 7.0, mask_decay: float = 0.7, mask_hold: int = 4, wait: int = 4,
+                 debounce_decay: float = 0.9) -> list[dict]:
+    """Percussive attacks from the 11 band energies. growth = sum over bands of max(0, P / mask - 1), the mask the
+    held maximum of each band that decays by `mask_decay` per frame after `mask_hold` frames. growth over `grow_on`
+    arms the detector; the attack is reported when growth falls under `grow_off` or after `wait` frames, with the
+    band energies held since. velocity = 0.5 x the mean of 100 P^(1/4) over the bands (1 = amplitude 1 -> about 50);
+    temperature = centroid of that spectrum in band index; attacks under `minvel` are dropped, and one has to beat
+    the previous velocity decayed by `debounce_decay` per frame. Returns dicts: time (s), velocity,
+    temperature, spectrum (100 P^(1/4) per band, for matching against templates)."""
+    P = band_energies(y, sr, npts, hop)
+    nb = P.shape[1]
+    mask, age = np.zeros(nb), np.zeros(nb)
+    armed, held, cnt, t0, deb = False, None, 0, 0, 0.0
+    out = []
+    for t in range(P.shape[0]):
+        p = P[t]
+        growth = float(np.sum(np.maximum(0.0, p / (mask + 1e-15) - 1.0)))
+        up = p > mask
+        mask = np.where(up, p, mask)
+        age = np.where(up, 0, age + 1)
+        mask = np.where(age > mask_hold, mask * mask_decay, mask)
+        deb *= debounce_decay
+        if not armed:
+            if growth > grow_on:
+                armed, held, cnt, t0 = True, p.copy(), 0, t
+        else:
+            held = np.maximum(held, p)
+            cnt += 1
+            if growth < grow_off or cnt >= wait:
+                armed = False
+                spec = 100.0 * held ** 0.25
+                vel = float(spec.mean() * 0.5)
+                if vel >= minvel and vel > deb:
+                    deb = vel
+                    out.append({"time": (t0 * hop + npts // 2) / sr, "velocity": vel,
+                                "temperature": float((np.arange(nb) * spec).sum() / (spec.sum() + 1e-30)), "spectrum": spec})
+    return out
+
+
+# ---------------------------------------------------------------------------------------- equal-loudness contours (ISO 226)
+ISO226_F = np.array([20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500,
+                     3150, 4000, 5000, 6300, 8000, 10000, 12500], float)
+ISO226_AF = np.array([0.532, 0.506, 0.480, 0.455, 0.432, 0.409, 0.387, 0.367, 0.349, 0.330, 0.315, 0.301, 0.288, 0.276, 0.267, 0.259,
+                      0.253, 0.250, 0.246, 0.244, 0.243, 0.243, 0.243, 0.242, 0.242, 0.245, 0.254, 0.271, 0.301])
+ISO226_LU = np.array([-31.6, -27.2, -23.0, -19.1, -15.9, -13.0, -10.3, -8.1, -6.2, -4.5, -3.1, -2.0, -1.1, -0.4, 0.0, 0.3, 0.5, 0.0,
+                      -2.7, -4.1, -1.0, 1.7, 2.5, 1.2, -2.1, -7.1, -11.2, -10.7, -3.1])
+ISO226_TF = np.array([78.5, 68.7, 59.5, 51.1, 44.0, 37.5, 31.5, 26.5, 22.1, 17.9, 14.4, 11.4, 8.6, 6.2, 4.4, 3.0, 2.2, 2.4, 3.5, 1.7,
+                      -1.3, -4.2, -6.0, -5.4, -1.5, 6.0, 12.6, 13.9, 12.3])
+
+
+def equal_loudness_spl(phon, f=None):
+    """Sound pressure level (dB SPL) of a pure tone as loud as ``phon`` phon (20..90) at each frequency ``f`` (Hz, 20..12500; default the 29
+    standard third-octave centres): ISO 226 equal-loudness contours, interpolated in log frequency between the tabulated centres."""
+    ph = float(phon)
+    Af = 4.47e-3 * (10.0 ** (0.025 * ph) - 1.15) + (0.4 * 10.0 ** ((ISO226_TF + ISO226_LU) / 10.0 - 9.0)) ** ISO226_AF
+    Lp = 10.0 / ISO226_AF * np.log10(Af) - ISO226_LU + 94.0
+    if f is None:
+        return Lp
+    return np.interp(np.log(np.asarray(f, float)), np.log(ISO226_F), Lp)
+
+
+def phon_of_tone(spl, f):
+    """Loudness level in phon of a pure tone of ``spl`` dB at ``f`` Hz: the inverse of ``equal_loudness_spl`` (bisection on 0..130 phon,
+    the contours extended beyond 20..90 by the same formula)."""
+    lo, hi = 0.0, 130.0
+    for _ in range(40):
+        mid = 0.5 * (lo + hi)
+        if float(equal_loudness_spl(mid, f)) < float(spl):
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)

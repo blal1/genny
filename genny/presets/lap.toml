@@ -1,0 +1,24 @@
+schema = "genny.preset/1"
+family = "lap"
+# period: s between waves. band: Hz of the noise. modes: Hz of the hollow modes. hollow: level. bubbles: bubble rate.
+
+[clapot]
+period = [1.2, 2.2]
+band = [120.0, 900.0]
+modes = [95.0, 170.0, 310.0]
+hollow = 0.9
+bubbles = 40.0
+
+[quai]
+period = [1.8, 3.0]
+band = [250.0, 2500.0]
+modes = []
+hollow = 0.0
+bubbles = 80.0
+
+[baignade]
+period = [1.0, 1.8]
+band = [400.0, 3500.0]
+modes = []
+hollow = 0.0
+bubbles = 25.0

@@ -6,7 +6,7 @@
 Sung voice and choirs are not here: see `genny/choir.py`.
 
 Numbers come from Farnell (*Designing Sound*, Practicals 26-29 and his Pd patches), Cook, Visell, Smyth & Smith,
-Dolbear, Weissler and the LovelyHeart patch. Where no source gives a number the code line is marked `# UNSOURCED`;
+Dolbear, Weissler and the LovelyHeart patch. Where no source gives a number, the value is a design choice listed as `connaissance` in `research/SOURCES.md`;
 the big unsourced groups are named below.
 
 ## The one control that runs through everything: `size`
@@ -226,3 +226,24 @@ A near-pure tone with breath noise around the pitch. In tune within 2 cents, abo
   {"type": "sfx", "kind": "whistle_human", "params": {"kind": "taxi", "freq": 2200}, "at": 0.8, "gain": 0.3}],
  "fx": [{"type": "reverb", "mix": 0.2, "size": 0.6}, {"type": "fade", "out": 1.2}]}
 ```
+
+## Added in 1.3.0
+
+- `handclap rise=exp`: the attack grows exponentially over 3.2 ms (from 0.25 to 1, constant 2.26 ms, resonators Q
+  5.5); the default `fast` is unchanged (`creatures.clap_rise`).
+- `birdsong source=laje coupling>0`: delayed acoustic feedback of the tract on the labia (1 = the thesis values);
+  period doubling (subharmonics) appears when the syrinx pressure or asymmetry vary.
+- The whinny takes its valence into duration and G0 (`WHINNY_VAL`); `footsteps stop` lowers the step rate only a
+  little (0.72, `STOP_RATE_END`): the runner shortens the steps.
+## Newer options (1.3.0)
+
+- `footsteps speed=` (m/s: cadence goes as speed^0.5, trot and gallop of Heglund and Taylor), `snow_depth=` (cm: more bass in
+  deep snow), `species=`, `rhythm="ar9"`, `incline`, `accel`; `purr inhale=`, `breath`; `roar formants=`; `birdsong centre=`,
+  `model="tmg"` (respiratory gestures of the forced air-sac model, `tmg_pressure`; `gestures` is the forcing frequency),
+  `bird_call source="farnell"`, `ring`; `applause warm= ritard=`; `thunder horizontal=`; `creature_steps`.
+- `laugh`, `scream`, `cry`, `moan` take `rhythm="preset"|"oscillator"|"calls"`; the laugh pause is 90 ms (men) and 110 ms
+  (women); `cricket` falls in pitch over the whole song (not within each pulse); the second wing of `fly` is slowly modulated.
+- Speech (module `speech`, no page of its own): voice onset time by place: voiced b, d, g 1, 5, 21 ms
+  (`VOICED_VOT`), aspirated p, t, k 58, 70, 80 ms (`ASPIRATED_VOT`), Spanish 4, 9, 29 ms (`SPANISH_VOT`).
+- `fauna`: `pig(kind="grognement_couinement")`, a lower F0 for `grognement` and `trompe`; `pig` level to recalibrate.
+- Recipe for the tyrant hum: `animal(size=8, pitch=240, roughness=0, contour="flat")` gives f0 30 Hz and a 1.36 m tract.

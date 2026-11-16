@@ -1,6 +1,6 @@
 [project]
 name = "genny"
-version = "1.2.1"
+version = "1.3.0"
 description = "Procedural and physically informed sound synthesis: DSP, modal bodies, waveguides, particles, fluids, voices, environments and acoustics."
 readme = "README.md"
 authors = [{ name = "blal1" }]
@@ -17,6 +17,8 @@ dependencies = [
 [project.optional-dependencies]
 # genny.calibrate.roughness (Daniel & Weber via MoSQITo; MoSQITo 1.2 imports matplotlib at load)
 eval = ["mosqito>=1.2", "matplotlib"]
+# genny.family_v.load_hrir reads measured .sofa HRIR sets through h5py
+sofa = ["h5py>=3"]
 
 [project.scripts]
 genny = "genny.cli:main"
@@ -27,3 +29,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["genny"]
+
+[tool.hatch.build.targets.sdist]
+include = ["genny", "tests", "examples", "docs", "skill", "README.md", "CHANGELOG.md", "AGENTS.md", "THIRD_PARTY_*", "install.py", "uv.lock"]
+exclude = ["genny/out", "**/__pycache__", "*.pyc", "*.wav", "*.nbi", "*.nbc", "*.npz", "*.pdf"]

@@ -35,8 +35,9 @@ TREBLE_MIDI, TREBLE_CENTS = 78, (-1.8, 0.0, 1.6)
 BRIDGE_RES_HZ = 470.0
 HORIZ_SHARE = 0.1
 HORIZ_Y = 0.1
-HORIZ_CENTS = 0.3
+HORIZ_CENTS = 0.1
 ORTH_RADIATION = 10 ** (-10.0 / 20.0)
+ORTH_PROFILE_DB = ((0.0, -27.0), (300.0, -27.0), (500.0, -25.0), (1000.0, -14.0), (1500.0, -2.0), (2000.0, 0.0))
 DAMPER_TAU = 0.12
 DAMPER_TOP_MIDI = 89
 LID_HZ = 2000.0
@@ -45,8 +46,10 @@ ACTION_NOISE_S = (0.1, 0.04)
 ACTION_BOARD_HZ = 90.0
 ACTION_SHOCK_HZ = (300.0, 600.0)
 RIB_HZ = 1150.0
-RIB_DENSITY = 2.0
-RIB_MOBILITY = 0.5
+RIB_DENSITY = 0.4
+RIB_MOBILITY = 3.5
+RIB_BRIDGE_HZ = 2500.0
+BRIDGE_PROFILE_DB = ((1.0, -9.0), (17.0, -9.0), (18.0, 0.0), (75.0, 0.0), (83.0, -10.0))
 SYMP_FMAX = 4000.0
 SYMP_PARTIALS = 10
 SYMP_DC_HZ = 10.0
@@ -75,6 +78,20 @@ def strings_per_key(midi: float) -> int:
 def damped(midi: float) -> bool:
     """False for the top keys, which have no damper."""
     return midi <= DAMPER_TOP_MIDI
+
+
+def bridge_mobility_db(midi: float) -> float:
+    """Mean bridge mobility of the key relative to the middle register (dB): the bass bridge is higher and stiffer,
+    the top of the treble bridge ends near the rim."""
+    k, db = zip(*BRIDGE_PROFILE_DB)
+    return float(np.interp(midi - 20.0, k, db))
+
+
+def orth_radiation_gain(f) -> np.ndarray:
+    """Radiated level of the horizontal string plane relative to the vertical one, per frequency (linear): about
+    27 dB down below 500 Hz, 14 dB down at 1 kHz, level above 2 kHz."""
+    fr, db = zip(*ORTH_PROFILE_DB)
+    return 10.0 ** (np.interp(np.asarray(f, float), fr, db) / 20.0)
 
 
 def bridge_admittance(f, peak: float = 0.0, f0: float = BRIDGE_RES_HZ):
@@ -273,15 +290,16 @@ def _resonator(f, sigma, A, sr):
 def soundboard_filter(sr: int, n_poles: int = 100, f_lo: float = 30.0, seed: int = 0, ribs: bool = False):
     """(a1, a2, d0, d1) of the fixed-pole parallel filter: poles log-spaced from f_lo to 0.45 sr, radii from the
     soundboard damping law. Without a measured response to fit, the numerators have unit magnitude and random
-    sign (a flat, dense modal response). ``ribs``: above RIB_HZ the modes are confined between the ribs,
-    RIB_DENSITY times as many poles there, each with RIB_MOBILITY of the gain."""
+    sign (a flat, dense modal response). ``ribs``: above RIB_HZ the modes are confined between the ribs: the
+    bridge sees RIB_DENSITY times as many poles, each 1/RIB_DENSITY stronger (same mean mobility); above
+    RIB_BRIDGE_HZ the mean mobility rises RIB_MOBILITY times."""
     f = np.geomspace(f_lo, 0.45 * sr, n_poles)
     g = np.ones(n_poles)
     if ribs and RIB_HZ < 0.45 * sr:
         lo = f[f < RIB_HZ]
-        hi = np.geomspace(RIB_HZ, 0.45 * sr, int(RIB_DENSITY * (n_poles - lo.size)))
+        hi = np.geomspace(RIB_HZ, 0.45 * sr, max(1, int(RIB_DENSITY * (n_poles - lo.size))))
         f = np.concatenate((lo, hi))
-        g = np.concatenate((np.ones(lo.size), np.full(hi.size, RIB_MOBILITY)))
+        g = np.concatenate((np.ones(lo.size), np.where(hi < RIB_BRIDGE_HZ, 1.0, RIB_MOBILITY) / RIB_DENSITY))
         n_poles = f.size
     sigma = SB_A * f * f + SB_B * f
     p = np.exp(2j * np.pi * f / sr - sigma / sr)
@@ -454,7 +472,9 @@ def note(freq: float, dur: float, sr: int = 48000, vel: float = 0.8, *, tail: fl
          bidirectional: bool = False, bridge_res: float = 0.0, bridge_angle: float | None = None,
          weighting: tuple | None = None, long_place: bool = False, pedal: bool = False,
          sympathetic_strings: bool = False, lid_state: str = "open", ribs: bool = False,
-         action_kind: str = "tones", air: str = "stokes") -> np.ndarray:
+         action_kind: str = "tones", air: str = "stokes", bridge_profile: bool = False,
+         orth_profile: bool = False, horiz_y: float | None = None,
+         horiz_cents: float | None = None) -> np.ndarray:
     """One piano key: ``vel`` 0..1 maps to a hammer speed of 0.5..4.5 m/s; ``loss`` scales every string decay rate,
     ``hardness`` the felt stiffness K.
     ``una_corda``: the action shifts and the hammer misses one string of a bichord or trichord.
@@ -465,7 +485,7 @@ def note(freq: float, dur: float, sr: int = 48000, vel: float = 0.8, *, tail: fl
     ``soundboard_ir``: a measured soundboard impulse response, fitted by ``fit_parallel_filter``.
     ``soundboard``: "filter" (parallel modal filter) or "fdn" (the board as a reverberator: the bridge signal plus a
     feedback-delay-network tail ringing long in the bass and short in the treble, at the filter's RMS level).
-    ``polarisations`` 2: the horizontal plane (hammer share 0.1, 0.3 cent sharp, a tenth of the bridge loss, radiated
+    ``polarisations`` 2: the horizontal plane (hammer share 0.1, 0.1 cent sharp, a tenth of the bridge loss, radiated
     10 dB down): a slow second decay, and its slopes add to the tension (more phantom partials).
     ``bidirectional``: the tension acts back on the transverse modes (pitch glide of a hard blow, mode exchange).
     ``bridge_res``: conductance peak of a soundboard mode at 470 Hz, in multiples of the flat bridge conductance
@@ -475,7 +495,14 @@ def note(freq: float, dur: float, sr: int = 48000, vel: float = 0.8, *, tail: fl
     ``long_place``: longitudinal modes moved off the transverse peaks (no metallic ringing).
     ``pedal``: sustain pedal: no damper at note-off, and every other string resonates through the bridge.
     ``sympathetic_strings``: without pedal, the undamped top strings resonate. ``lid_state``: open | half | closed. ``ribs``: soundboard modes confined between the
-    ribs above RIB_HZ. ``action_kind``: tones (key and key-bed tones) | noise (two filtered noises)."""
+    ribs above RIB_HZ. ``action_kind``: tones (key and key-bed tones) | noise (two filtered noises).
+    ``bridge_profile``: the bridge conductance follows the key (bridge_mobility_db): bass and top treble keys
+    couple less to the board (a smaller bridge share of the decay, a weaker two-stage decay).
+    ``orth_profile``: with ``polarisations`` 2, the horizontal plane radiates by frequency (orth_radiation_gain:
+    27 dB down in the low register, level above 2 kHz) instead of the flat 10 dB.
+    ``horiz_y``: with ``polarisations`` 2, the share of the vertical-plane loss the horizontal plane keeps (default 0.1;
+    0.2 to 0.5 couples it more to the board: faster second decay); ``horiz_cents``: its detuning, held within +-1 cent
+    (default 0.1) so the two planes never beat as a mistuned pair."""
     if soundboard not in ("filter", "fdn"):
         raise ValueError(f"soundboard must be 'filter' or 'fdn', not {soundboard!r}")
     midi = 69.0 + 12.0 * math.log2(max(freq, 1.0) / 440.0)
@@ -521,13 +548,14 @@ def note(freq: float, dur: float, sr: int = 48000, vel: float = 0.8, *, tail: fl
     if una_corda and ns > 1:
         struck[-1] = 0.0
     floor = float(loss) * b3 * wk_ * wk_ + (air_rate_vc if air == "vc" else air_rate)(fk, r["d"], r["rho"])
+    yscale = 10.0 ** (bridge_mobility_db(midi) / 20.0) if bridge_profile else 1.0
     if bridge_res > 0.0:
-        Y = bridge_admittance(fk, float(bridge_res))
+        Y = bridge_admittance(fk, float(bridge_res)) * yscale
         eta = wk_ * math.sqrt(T0 * mu) * Y.real / math.pi
         zeta = np.minimum(eta, np.maximum(sigma - floor, 0.0) / ns)
         react = zeta * Y.imag / Y.real
     else:
-        eta = wk_ * math.sqrt(T0 * mu) * Y_BRIDGE / math.pi
+        eta = wk_ * math.sqrt(T0 * mu) * Y_BRIDGE * yscale / math.pi
         zeta = np.minimum(eta, np.maximum(sigma - floor, 0.0) / ns)
         react = zeta * np.random.default_rng(4321 + seed).choice([-1.0, 1.0], k.size)
     if weighting is not None:
@@ -544,12 +572,15 @@ def note(freq: float, dur: float, sr: int = 48000, vel: float = 0.8, *, tail: fl
         cw[q] = (one @ V) * (U @ struck) / struck.sum()
     y = _transverse(Fh, n, float(sr), lam, cw, A * win * wb)
     two = int(polarisations) >= 2
+    hy = HORIZ_Y if horiz_y is None else float(np.clip(horiz_y, 0.0, 1.0))
+    hc = HORIZ_CENTS if horiz_cents is None else float(np.clip(horiz_cents, -1.0, 1.0))
     if two:
-        sig_h = floor + HORIZ_Y * np.maximum(sigma - floor, 0.0)
-        w_h = wk_ * 2.0 ** (HORIZ_CENTS / 1200.0)
+        sig_h = floor + hy * np.maximum(sigma - floor, 0.0)
+        w_h = wk_ * 2.0 ** (hc / 1200.0)
         lam_h = (-sig_h + 1j * w_h).astype(np.complex128)[:, None]
         cw_h = np.full((k.size, 1), float(struck.sum()), np.complex128)
-        y = y + ORTH_RADIATION * _transverse(HORIZ_SHARE * Fh, n, float(sr), lam_h, cw_h, A * win * wb)
+        og = orth_radiation_gain(fk) if orth_profile else ORTH_RADIATION
+        y = y + _transverse(HORIZ_SHARE * Fh, n, float(sr), lam_h, cw_h, A * win * wb * og)
     ES = E_STEEL * S
     fl0 = math.sqrt(ES / mu) / (2.0 * L)
     Hf = np.abs(np.fft.rfft(Fh, 8192))
@@ -573,7 +604,7 @@ def note(freq: float, dur: float, sr: int = 48000, vel: float = 0.8, *, tail: fl
             y = y + struck.sum() * corr
         if two:
             sh = sig_h[half]
-            fh_ = fk[half] * 2.0 ** (HORIZ_CENTS / 1200.0)
+            fh_ = fk[half] * 2.0 ** (hc / 1200.0)
             c1, c2, cb = _resonator(fh_, sh, A[half], sr)
             yh, _ = _longitudinal(HORIZ_SHARE * Fh, n, float(sr), c1, c2, cb, win[half], k[half], ES, L,
                                   la1, la2, lb, ldc, lk, bool(long_full), False, wb[half])

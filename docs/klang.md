@@ -353,7 +353,7 @@ has it; **no** = not ported, with the reason.
 | `qa_catalogue.py`, `qa_beds.py` | loudness vs class target, clipping, loop seams, near-duplicate takes | klang `coverage` (`--deep`: seed-ignored = duplicate takes); loop-seam metrics not ported (genny loops are made by `"loop"`) |
 | `listen.py` | spectrogram and loudness plots (matplotlib) | no: new dependency |
 | `AUDIO_CHARTER.md`, `proposed_manifest_ids.md` | one game's sound grammar and ids | no: game-specific |
-| `PLAN.md`, `WAVE2.md` | the rules the Python modules were written under (port, cite, 48 kHz, numba, UNSOURCED) | same rules as genny's contract |
+| `PLAN.md`, `WAVE2.md` | the rules the Python modules were written under (port, cite, 48 kHz, numba, no-source tagging) | same rules as genny's contract |
 | `SFX_HYBRID.md` | recordings resynthesised by LPC; later switched off by the author | no: no outside material |
 | `MUSIC_V3.md` | sampler + convolution rooms + notated scores | klang `sampler` layer (generic folder); the rest no |
 
@@ -374,3 +374,7 @@ HYBRID = os.environ.get("SYNTHGEN_HYBRID", "1") != "0"
 ```
 genny should take the `"0"` default with its comment. No function exists in one copy and not
 the other.
+## Newer options (1.3.0)
+
+`bassoon lattice=`, and the changed formants of `bassoon` (+2000 and 3500 Hz), `contrabassoon` (250, 450, 800), `bass_trombone` (370
+Hz), `a_clarinet` and `eb_clarinet` (even partials -22 to -30 dB in the low register). `slide_clarinet` is in `acoustic`.

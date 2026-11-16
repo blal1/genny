@@ -48,17 +48,17 @@ DEFAULTS = dict(nSyl=1, sylLen=500, pauseLen=200, pitch=(100, 150, 100), pitchGl
 # soundgen presets (M1 = adult man, F1 = adult woman). Anchors: a tuple of values spread evenly, or (times, values)
 # with times in 0..1 (ms for ``noise``).
 PRESETS = {
-    ("laugh", "male"): dict(nSyl=5, sylLen=120, pauseLen=120, pitch=(180, 166), pitchGlobal=((0, 0.3, 1), (1, 2, 0)),
+    ("laugh", "male"): dict(nSyl=5, sylLen=120, pauseLen=90, pitch=(180, 166), pitchGlobal=((0, 0.3, 1), (1, 2, 0)),
                             rolloff=-15, temperature=0.1, nonlinBalance=50, jitterDep=0.8, attackLen=10,
                             formants=((860, 550, 550), (1430, 2300, 2300), (2900, 2800, 2800), (4000,)),
                             shortestEpoch=50, noise=((-10, 57, 237), (-35, -20, -30)), rolloffNoise=-6,
                             ampl=((0, 0.32, 1), (0, -10, 0)), amplGlobal=((0, 0.77, 1), (0, -11, -40))),
-    ("laugh", "female"): dict(nSyl=3, sylLen=60, pauseLen=90, pitch=(368, 284), temperature=0.075, attackLen=10,
+    ("laugh", "female"): dict(nSyl=3, sylLen=60, pauseLen=110, pitch=(368, 284), temperature=0.075, attackLen=10,
                               formants=((900,), (1300,), (3300,), (4340,)), noise=((0, 67, 86, 186), (-15, -17, -59, -80)),
                               rolloffNoise=-8, ampl=(0, -10)),
     ("scream", "female"): dict(sylLen=1110, pitch=((0, 0.05, 0.95, 1), (900, 1832, 1618, 1200)), temperature=0.1,
-                               nonlinBalance=70, jitterDep=1, shimmerDep=10, rolloff=-6, vocalTract=13.5, amFreq=400,
-                               amDep=20, rolloffNoise=0, attackLen=(10, 200)),
+                               nonlinBalance=70, jitterDep=1, shimmerDep=10, rolloff=-6, vocalTract=13.5, amFreq=100,
+                               amDep=40, rolloffNoise=0, attackLen=(10, 200)),
     ("cry", "female"): dict(sylLen=1600, pitch=(610, 511), temperature=0.2, nonlinBalance=40, vocalTract=13.5,
                             amFreq=125, amDep=10, jitterDep=1.5, mouth=(0,), ampl=(0, -20)),
     ("moan", "male"): dict(sylLen=800, pitch=((0, 0.21, 1), (230, 181, 143)), jitterDep=1, jitterLen=60, attackLen=100,
@@ -95,6 +95,21 @@ def damped_calls(n_calls: int, rate=LAUGH_RATE, decay: float = LAUGH_DECAY):
         lens.append(1000.0 * (b - a))
         gains.append(20.0 * np.log10(np.exp(-decay * c)))
     return np.array(starts), np.array(lens), np.array(gains)
+LAUGH_FIRST_S, LAUGH_NEXT_S, LAUGH_GAP_S = 0.28, 0.13, 0.13
+LAUGH_FORMANTS = {"male": (535.0, 1592.0, 2576.0, 3667.0, 4593.0), "female": (653.0, 1713.0, 2875.0, 3673.0, 4506.0)}
+
+
+def laugh_calls(n_calls: int, gap_slope: float = 0.4):
+    """Call pattern of a laugh bout: a long first call, shorter ones after, intercall gaps that grow along the bout
+    (mean LAUGH_GAP_S). Returns (starts s, lengths s)."""
+    n = int(n_calls)
+    lens = np.full(n, LAUGH_NEXT_S)
+    lens[0] = LAUGH_FIRST_S
+    gaps = LAUGH_GAP_S * (1.0 + gap_slope * np.linspace(-1.0, 1.0, max(n - 1, 1)))[:max(n - 1, 0)]
+    starts = np.concatenate([[0.0], np.cumsum(lens[:-1] + gaps)])
+    return starts, lens
+
+
 MALE_FROM_FEMALE = (0.5, 17.5)
 
 
@@ -151,7 +166,7 @@ def _envelope(freqs, n_frames: int, p: dict) -> np.ndarray:
     nyq = 0.5 * SR
     tracks = [_curve(f, n_frames) for f in given]
     k = len(tracks) + 1
-    while (2 * k - 1) * C_CM / (4 * vtl) < nyq:
+    while float(p.get("temperature", 1.0)) > 0.0 and (2 * k - 1) * C_CM / (4 * vtl) < nyq:
         tracks.append(np.full(n_frames, (2 * k - 1) * C_CM / (4 * vtl)))
         k += 1
     shift = (_curve(p["mouth"], n_frames, 0.5) - 0.5) * C_CM / (4 * vtl) if p["mouth"] is not None else 0.0
@@ -265,7 +280,8 @@ def vocalize(kind: str, voice: str = "female", rng=None, *, n_syl: int | None = 
              subharmonic: float = 0.0, rhythm: str = "preset") -> np.ndarray:
     """One bout of ``kind`` (laugh, scream, cry, moan, moan_sova) at SR, peak 1. ``pitch`` scales f0, ``n_syl`` the
     bout. ``subharmonic`` > 0 (depth 0..1): a random walk moves the syllable through no effect, subharmonics, and
-    chaos. ``rhythm="oscillator"``: call times, lengths and levels from `damped_calls` instead of the preset's."""
+    chaos. ``rhythm="oscillator"``: call times, lengths and levels from `damped_calls` instead of the preset's;
+    ``rhythm="calls"``: a long first call, shorter ones after, growing gaps (`laugh_calls`), and for a laugh its measured formants."""
     rng = rng or np.random.default_rng(0)
     p = {**preset(kind, voice), "subDep": float(subharmonic)}
     ns = int(n_syl or p["nSyl"])
@@ -276,6 +292,11 @@ def vocalize(kind: str, voice: str = "female", rng=None, *, n_syl: int | None = 
         starts.append(t)
         t += L + p["pauseLen"] * 2.0 ** rng.normal(0.0, temp)
     osc = None
+    if rhythm == "calls":
+        st_, ln_ = laugh_calls(ns)
+        starts, lens = list(1000.0 * st_), list(1000.0 * ln_)
+        if kind == "laugh":
+            p["formants"] = tuple((f,) for f in LAUGH_FORMANTS["male" if str(voice).startswith("m") else "female"])
     if rhythm == "oscillator":
         st_, ln_, osc = damped_calls(ns)
         starts, lens = list(st_), [max(0.02, x) for x in ln_]

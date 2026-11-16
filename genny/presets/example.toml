@@ -1,0 +1,10 @@
+schema = "genny.preset/1"
+family = "example"
+
+[base]
+size = 1.0
+label = "a"
+
+[wide]
+extends = "base"
+size = 2.5

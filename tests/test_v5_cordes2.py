@@ -73,13 +73,13 @@ def test_lid_closed_darkens():
     assert abs(band_db(yc, 50, 500) - band_db(y, 50, 500)) < 1.0
 
 
-def test_ribs_more_poles_less_treble():
+def test_ribs_fewer_poles_more_treble():
     a = bp.soundboard_filter(SR)[0]
     b = bp.soundboard_filter(SR, ribs=True)[0]
-    assert b.size > a.size
+    assert b.size < a.size
     y0 = bp.note(261.6, 0.4, SR, 0.8, tail=0.2)
     y1 = bp.note(261.6, 0.4, SR, 0.8, tail=0.2, ribs=True)
-    assert band_db(y1, 1200, 8000) - band_db(y1, 50, 1000) < band_db(y0, 1200, 8000) - band_db(y0, 50, 1000)
+    assert band_db(y1, 3000, 8000) - band_db(y1, 50, 1000) > band_db(y0, 3000, 8000) - band_db(y0, 50, 1000)
 
 
 def test_bidirectional_and_noise_action_finite():

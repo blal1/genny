@@ -87,7 +87,8 @@ def test_effort_defaults_leave_the_voice_alone_and_soft_loud_follow_brockmann():
     assert m["effort_db"] == pytest.approx(98.8 - 79.2)
 
 
-def test_effort_flattens_a3_re_a1_by_the_lienard_slope():
+def test_effort_flattens_a3_re_a1_by_the_lienard_slope(monkeypatch):
+    monkeypatch.setattr(S, "EFFORT_F1", 0.0)                                 # the F1 shift moves A1 by itself: isolate the spectral tilt
     def a31(**kw):
         y = _vowel(S.render_speech(None, SP, phonemes="AA1", voice="male", intonation="flat", **kw))
         return _band_db(y, (2200, 2900)) - _band_db(y, (500, 1000))
@@ -257,7 +258,7 @@ def test_end_boost_speeds_the_last_half_second_of_vibrato(monkeypatch):
 
 
 def test_default_end_boost_is_prame(monkeypatch):
-    # Prame 1994: rate +15 % over the last ~5 cycles; extra phase 2 pi 0.15 r (5 / r) / 2 = 0.75 pi whatever the rate
+    # rate x (1 + 0.15 e^(x/1.7)) over the last 9 cycles: extra phase 2 pi 0.15 1.7 (1 - e^(-9/1.7)) = 1.59 rad
     f0s = []
     kernel = C._kernel
 
@@ -270,8 +271,8 @@ def test_default_end_boost_is_prame(monkeypatch):
     C.sing_phrase(n, SP, voice="tenor", stereo=False, seed=1)
     d = 1200 * np.log2(f0s[1] / f0s[0])
     win = lambda a, b: np.abs(d[int(a * SP):int(b * SP)]).max()
-    assert win(0.0, 1.85) < 1e-6
-    assert 85.0 < win(2.9, 3.0) < 125.0
+    assert win(0.0, 1.2) < 1e-6
+    assert 50.0 < win(2.9, 3.0) < 100.0
 
 
 def test_closed_mouth_nasalises_f1(monkeypatch):

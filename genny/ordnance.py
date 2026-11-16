@@ -120,11 +120,12 @@ def blast(w_kg: float, r: float, rng, height: float = 1.5, fireball: float = 1.0
     return space.distance(y, r, ref=r)
 
 
-def ground_wave(w_kg: float, r: float, rng) -> list:
-    """Pre-rumble through the ground: (seconds before the blast, Pa) for P, S, Rayleigh. Level 2 % of the blast at 10 m and the 80 Hz thud."""
+def ground_wave(w_kg: float, r: float, rng, vp: float = V_P, vs: float = V_S, vr: float = V_R) -> list:
+    """Pre-rumble through the ground: (seconds before the blast, Pa) for P, S, Rayleigh. Level 2 % of the blast at 10 m and the 80 Hz thud.
+    ``vp``, ``vs``, ``vr``: wave speeds of the ground in m/s (soil slower, granite faster)."""
     p10 = 0.02 * blast_wave(w_kg, 10.0)[0]
     out = []
-    for v, share, fall in zip((V_P, V_S, V_R), GROUND_SHARE, (10.0 / r, 10.0 / r, math.sqrt(10.0 / r))):
+    for v, share, fall in zip((vp, vs, vr), GROUND_SHARE, (10.0 / r, 10.0 / r, math.sqrt(10.0 / r))):
         k = _n(0.25)
         thud = amb.lop(rng.uniform(-1, 1, k), 80.0) * np.sin(np.pi * np.arange(k) / k) ** 2
         out.append((r / C_AIR - r / v, _nm(thud) * p10 * math.sqrt(share) * min(fall, 1.0)))
@@ -164,10 +165,11 @@ def launch_tube(length: float, closed: bool, burst: np.ndarray, modes: int = 4, 
     return sum(amb.bp(burst, min(base * h, 0.45 * P), 8.0) / (i + 1) for i, h in enumerate(ratios))
 
 
-def rocket_motor(dur: float, rng, u: float = 1000.0, d: float = 0.066, st: float = 0.05, rise: float = 0.09) -> np.ndarray:
+def rocket_motor(dur: float, rng, u: float = 1000.0, d: float = 0.066, st: float = 0.05, rise: float = 0.09, fall: float = 0.0) -> np.ndarray:
     """K4: jet noise peaking at St U/D (St 0.2 lab jet, 0.01-0.02 launchers; 0.05 for a small rocket estimated), through Farnell's rocket
     (Fig 55.8-9): a comb sweeping over the noise, a notch rising as a power curve, the pipe growing as fuel burns (0.2 -> 0.5 m, 51 cm rocket,
-    0.2 estimated); louder as it burns, square-root swell (rise 90 ms, c10), exhaust jitter (low-pass 9 Hz)."""
+    0.2 estimated); louder as it burns, square-root swell (rise 90 ms, c10), exhaust jitter (low-pass 9 Hz). ``fall`` > 0: seconds over which
+    the thrust dies away after the swell (a motor that fades over 8 s), 0 keeps the burn constant."""
     n = _n(dur)
     t = np.arange(n) / P
     fc = min(st * u / d, 0.4 * P)
@@ -177,6 +179,8 @@ def rocket_motor(dur: float, rng, u: float = 1000.0, d: float = 0.066, st: float
     x = x + 0.5 * launch_tube(0.5, True, x, f=C_AIR / (4.0 * np.linspace(0.2, 0.5, n)))
     jit = 1.0 + 0.3 * amb.lop(rng.uniform(-1, 1, n), 9.0) * 20.0
     env = np.sqrt(np.clip(t / rise, 0.0, 1.0)) * (0.7 + 0.3 * t / max(dur, 1e-3))
+    if fall > 0.0:
+        env = env * np.clip(1.0 - t / fall, 0.05, 1.0)
     k = min(_n(0.01), n)
     env[-k:] *= np.linspace(1.0, 0.0, k)                                           # burn-out
     return _nm(x * env * jit)
@@ -206,24 +210,138 @@ def moving(x: np.ndarray, v, closest: float, x0: float = 0.0, c: float = C_AIR) 
 # energy left in the bubble after each contraction
 UW_PM, UW_T, UW_D = 52.39e6, 2.108, 10.06
 UW_KEPT = (0.34, 0.54)
+# first bubble pulse: optimum peak UW_PULSE_PM W^(1/3)/R (Pa, kg, m) for a bubble at rest, UW_PULSE_EFF of it for a rising one
+UW_PULSE_PM, UW_PULSE_EFF = 7.084e6, 0.277
+UW_P_ATM, UW_RHO_G = 101325.0, 1025.0 * 9.81
+# positive-pressure duration of the bubble pulse, as a fraction of its period
+UW_PULSE_FRAC = 0.22
+# free-surface shortening of the bubble period: T (1 - UW_SURF (rQW)^(1/3) / (d (d + 33)^(1/3))), lb, ft, rQ = UW_RQ cal/g
+UW_SURF, UW_RQ = 0.341, 456.0
+# charge on the bottom: peak and impulse gains
+UW_BOTTOM = (1.10, 1.23)
 
 
-def underwater_blast(w_kg: float, r: float, depth: float, rng, pulses: int = 3, surface: bool = False) -> np.ndarray:
+# shock tail after theta: UW_TAIL[0] exp(-UW_TAIL[1] t / theta) + UW_TAIL[2] exp(-UW_TAIL[3] t / theta)
+UW_TAIL = (0.8251, 1.338, 0.1749, 0.1805)
+# bubble period constant K5 of the explosive (s kg^(-1/3) m^(5/6)); the period scales as K5 / K5(TNT)
+UW_K5 = {"tnt": 2.11, "pentolite": 2.11, "rdx": 2.63, "hbx3": 2.63, "petn": 2.52, "h6": 2.52, "hbx1": 2.41}
+# detonation gas p = UW_KG rho^UW_GAMMA (SI), seawater density, radius of the first bubble in charge radii
+UW_GAMMA, UW_KG, UW_RHO, UW_A0 = 1.25, 7.29e4, 1025.0, 2.0
+
+
+def bubble_period_factor(explosive: str = "tnt") -> float:
+    """Bubble period of ``explosive`` relative to TNT of the same mass."""
+    return UW_K5[str(explosive).lower()] / UW_K5["tnt"]
+
+
+def bubble_ode(w_kg: float, r: float, depth: float, period: float, kept=UW_KEPT, pulses: int = 3, rate: int = P):
+    """Pressure above hydrostatic at ``r`` from the radial motion of the gas bubble, as (start time s, Pa samples at ``rate``).
+    Keller's compressible equation with the gas law p = KG rho^1.25, started at rest at 2 charge radii. The time axis is scaled so that
+    the first collapse falls at ``period``; at each collapse the energy is cut to ``kept`` of its value at the previous maximum.
+    The record starts at the first maximum radius."""
+    from scipy.integrate import solve_ivp
+
+    g = UW_GAMMA
+    ph = UW_P_ATM + UW_RHO_G * float(depth)
+    ah = (3.0 * w_kg * (UW_KG / ph) ** (1.0 / g) / (4.0 * math.pi)) ** (1.0 / 3.0)
+    ac = charge_radius(w_kg)
+    a0 = min(UW_A0 * ac / ah, 0.9)
+    mach = math.sqrt(ph / UW_RHO) / C_WATER
+
+    def rhs(t, y, k):
+        a, v = y
+        pg = k * a ** (-3.0 * g)
+        top = (1.0 + mach * v) * (pg - 1.0) - 3.0 * g * mach * pg * v - 1.5 * v * v * (1.0 - mach * v / 3.0)
+        return [v, top / (a * (1.0 - mach * v))]
+
+    def peak(t, y, k):
+        return y[1]
+
+    def low(t, y, k):
+        return y[1] if t > t_lo[0] + 0.1 else 1.0
+
+    peak.terminal, peak.direction = False, -1.0
+    low.terminal, low.direction = True, 1.0
+    segs, k, y, t, cuts, tm, e_prev, t_lo = [], 1.0, [a0, 0.0], 0.0, [], 0.0, 1.0, [0.0]
+    for i in range(int(pulses)):
+        t_lo[0] = t
+        s = solve_ivp(rhs, [t, t + 8.0], y, args=(k,), method="LSODA", rtol=1e-8, atol=1e-11, dense_output=True, events=[peak, low], max_step=0.02)
+        if len(s.t_events[1]) == 0:
+            break
+        segs.append((s, k))
+        if i == 0:
+            tm = float(s.t_events[0][0]) if len(s.t_events[0]) else 0.0
+            am = float(s.sol(tm)[0])
+            e_prev = am ** 3 * (1.0 + k * am ** (-3.0 * g) / (g - 1.0))
+        t, y = float(s.t_events[1][0]), [float(s.y_events[1][0][0]), 0.0]
+        cuts.append(t)
+        e_prev *= float(kept[min(i, len(kept) - 1)])
+        k = max((g - 1.0) * (e_prev / y[0] ** 3 - 1.0), 1e-3) * y[0] ** (3.0 * g)
+    if not segs:
+        return 0.0, np.zeros(0)
+    scale = period / (cuts[0] * ah * math.sqrt(UW_RHO / ph))
+    t0 = ah * scale * math.sqrt(UW_RHO / ph)
+    t_start = tm
+    t_end = cuts[-1] + 0.15 * cuts[0]
+    tt = np.arange(int(math.ceil(t_start * t0 * rate)), int(math.ceil(t_end * t0 * rate))) / rate / t0
+    out = np.zeros(len(tt))
+    lo = 0.0
+    for (s, kk), hi in zip(segs, cuts):
+        m = (tt >= lo) & (tt <= hi)
+        if m.any():
+            a, v = s.sol(tt[m])
+            pg = kk * a ** (-3.0 * g)
+            acc = ((1.0 + mach * v) * (pg - 1.0) - 3.0 * g * mach * pg * v - 1.5 * v * v * (1.0 - mach * v / 3.0)) / (a * (1.0 - mach * v))
+            out[m] = a * a * acc + 2.0 * a * v * v
+        lo = hi
+    return t_start * t0, ph * ah * scale / float(r) * out
+
+
+def surface_period_factor(w_kg: float, depth: float) -> float:
+    """Bubble period near the free surface relative to deep water (<= 1; 0.5 floor, where the theory stops holding)."""
+    d, z = depth / 0.3048, (depth + UW_D) / 0.3048
+    return max(0.5, 1.0 - UW_SURF * (UW_RQ * w_kg * 2.20462) ** (1.0 / 3.0) / (d * z ** (1.0 / 3.0)))
+
+
+def bubble_pulse_peak(w_kg: float, r: float) -> float:
+    """First bubble-pulse peak above hydrostatic, Pa."""
+    return UW_PULSE_EFF * UW_PULSE_PM * w_kg ** (1.0 / 3.0) / r
+
+
+def underwater_blast(w_kg: float, r: float, depth: float, rng, pulses: int = 3, surface: bool = False, near_surface: bool = False, bottom: bool = False,
+                     tail: str = "exp", bubble: str = "cole", explosive: str = "tnt") -> np.ndarray:
     """Peak 1: exponential shock Pm e^(-t/theta), theta = 96.5 W^(1/3) (W^(1/3)/R)^-0.22 us, then bubble pulses. The first comes T after
-    the shock with 0.84 x its impulse; each contraction keeps ``UW_KEPT`` of the energy, so the next period shrinks as its cube root and
-    the pulse amplitude as its square root. Pulse width 0.2 T. ``surface``: the free surface's inverted image cuts the shock, 2 D / c later.
+    the shock with 0.84 x its impulse and the peak `bubble_pulse_peak`, which sets its width (2 ms to 0.22 T); each contraction keeps
+    ``UW_KEPT`` of the energy, so the next period shrinks as its cube root and the pulse amplitude as its square root. ``surface``: the
+    free surface's inverted image cuts the shock, 2 D / c later, and the water cannot pull below zero absolute pressure (cavitation).
+    ``near_surface``: the bubble period is shortened by the surface (``surface_period_factor``). ``bottom``: a charge on a hard
+    sandy bottom, peak x1.10 and impulse x1.23 (measured, well under the rigid-wall x1.26 and x1.59).
+    ``tail`` double: after theta the shock falls as the two-exponential measured profile (``UW_TAIL``), 30-40 % more impulse than the single exponential.
+    ``bubble`` keller: the pulses are the radiated pressure of the bubble's radial motion (``bubble_ode``) instead of the shaped lumps; the first
+    collapse stays at the period T. ``explosive``: scales the bubble period (``bubble_period_factor``); the shock stays TNT's.
     Above the depth's hull, the ear hears it low-passed."""
     a = w_kg ** (1.0 / 3.0)
     pm = UW_PM * (a / r) ** 1.13
     theta = 96.5e-6 * a * (a / r) ** -0.22
-    T = UW_T * a / (depth + UW_D) ** (5.0 / 6.0)
+    if bottom:
+        pm, theta = pm * UW_BOTTOM[0], theta * UW_BOTTOM[1] / UW_BOTTOM[0]
+    T = UW_T * a / (depth + UW_D) ** (5.0 / 6.0) * (surface_period_factor(w_kg, depth) if near_surface else 1.0) * bubble_period_factor(explosive)
     y = np.zeros(_n(3.0 * T + 1.5))
-    m = max(16, _n(8.0 * theta))
-    _put(y, np.exp(-np.arange(m) / P / theta), 0.0, pm)
+    if tail == "double":
+        x = np.arange(max(16, _n(20.0 * theta))) / P / theta
+        shock = np.where(x < 1.0, np.exp(-x), UW_TAIL[0] * np.exp(-UW_TAIL[1] * x) + UW_TAIL[2] * np.exp(-UW_TAIL[3] * x))
+    else:
+        shock = np.exp(-np.arange(max(16, _n(8.0 * theta))) / P / theta)
+    _put(y, shock, 0.0, pm)
     t, gap, g = 0.0, T, 0.84
+    k = int(np.clip(2.0 * P * g * pm * theta / bubble_pulse_peak(w_kg, r), _n(0.002), max(_n(0.002), _n(UW_PULSE_FRAC * T))))
+    if bubble == "keller":
+        t_s, pb = bubble_ode(w_kg, r, depth, T, pulses=pulses)
+        if len(pb):
+            _put(y, amb.hip(pb, 15.0), t_s)
+        pulses = 0
     for i in range(pulses):
         t += gap
-        k = _n(max(0.02, 0.2 * T))
         lump = np.sin(np.pi * np.arange(k) / k) ** 2
         lump = lump * (1.0 + 0.5 * _nm(amb.lop(rng.uniform(-1, 1, k), max(60.0, 4.0 / T))))
         _put(y, lump, t - k / P / 2.0, g * pm * theta / (float(np.sum(lump)) / P))
@@ -233,6 +351,7 @@ def underwater_blast(w_kg: float, r: float, depth: float, rng, pulses: int = 3, 
     if surface:
         z = y.copy()
         _put(y, z, 2.0 * depth / C_WATER, -1.0)
+        y = np.maximum(y, -(UW_P_ATM + UW_RHO_G * depth))
     return _nm(amb.lop(y, 4000.0) + 0.1 * y)
 
 
@@ -648,11 +767,12 @@ def torpedo(sr=DEFAULT_SR, kind="steam", dur=4.0, speed=0.0, distance=50.0, char
 
 
 @sfx("depth_charge", "A depth charge from inside a hull: the distant thump, its bubble pulses, the plates ringing, drops falling.",
-     charge=(118.0, "kg TNT (Mk 9: 91 kg Torpex)"), distance=(50.0, "m"), depth=(75.0, "m"), hull=(0.5, "0..1 hull rattling"),
-     sink=(False, "true = the splash first, then the fall at 4.4 m/s (17 s to 75 m)"), seed=(0, "variation"))
-def depth_charge(sr=DEFAULT_SR, charge=118.0, distance=50.0, depth=75.0, hull=0.5, sink=False, seed=0):
+     charge=(118.0, "kg TNT (Mk 9: 91 kg Torpex)"), distance=(50.0, "m"), depth=(75.0, "m"), hull=(0.5, "0..1 hull rattling"), bottom=(False, "true = charge on a hard bottom: peak +10 %, impulse +23 %"),
+     sink=(False, "true = the splash first, then the fall at 4.4 m/s (17 s to 75 m)"), bubble=("cole", "cole = shaped pulses | keller = pulses from the bubble's radial motion"),
+     tail=("exp", "exp | double = the shock's measured two-exponential tail"), seed=(0, "variation"))
+def depth_charge(sr=DEFAULT_SR, charge=118.0, distance=50.0, depth=75.0, hull=0.5, bottom=False, sink=False, bubble="cole", tail="exp", seed=0):
     rng = np.random.default_rng(int(seed))
-    shot = underwater_blast(float(charge), float(distance), float(depth), rng)
+    shot = underwater_blast(float(charge), float(distance), float(depth), rng, bottom=bool(bottom), bubble=str(bubble), tail=str(tail))
     h = float(np.clip(hull, 0.0, 1.0))
     ring = _nm(metal_plate(P, size=2.0, thickness=25.0, decay=1.5))
     drops = _nm(Ma.drops(P, dur=2.5, rate=6.0, rate_end=0.5, seed=int(seed)))

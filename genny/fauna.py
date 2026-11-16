@@ -173,15 +173,28 @@ def farm_bird(sr=DEFAULT_SR, kind="oie", seed=0):
 # CATTLE AND HORSES
 # =============================================================================================
 PIG = {
-    "grognement": ([(0, 95), (0.5, 120), (1, 80)], 0.94, 0.6, 0.75, "U-@-U", 0.3),
+    "grognement": ([(0, 80), (0.5, 95), (1, 65)], 0.94, 0.6, 0.75, "U-@-U", 0.3),
     "couinement": ([(0, 1100), (0.3, 1700), (1, 1200)], 1.0, 0.45, 0.8, "ae-E", 2.8),
     "aboiement": ([(0, 380), (0.25, 520), (1, 300)], 0.21, 0.55, 0.65, "A-@", 1.6),
-    "trompe": ([(0, 260), (0.6, 640), (1, 520)], 0.7, 0.5, 0.45, "@-A-ae", 1.3),
+    "trompe": ([(0, 230), (0.6, 400), (1, 340)], 0.7, 0.5, 0.45, "@-A-ae", 1.3),
 }
 
 
-@sfx("pig", "Pig calls: grognement (0.94 s), couinement, aboiement (0.21 s), trompe.", kind=("grognement", " | ".join(PIG)), seed=(0, "variation"))
+GRUNT_SQUEAL_MIX = 0.5
+
+
+@sfx("pig", "Pig calls: grognement (0.94 s), couinement, aboiement (0.21 s), trompe, grognement_couinement (grunt sliding into squeal).",
+     kind=("grognement", " | ".join(PIG) + " | grognement_couinement"), seed=(0, "variation"))
 def pig(sr=DEFAULT_SR, kind="grognement", seed=0):
+    if kind == "grognement_couinement":
+        parts = []
+        for k in ("grognement", "couinement"):
+            pts, d, size, r, vw, br = PIG[k]
+            parts.append(_voice(pts, d, size=size, rough=r, vowels=vw, seed=seed, bright=br))
+        n = min(parts[0].size, parts[1].size)
+        ramp = np.clip(np.linspace(-GRUNT_SQUEAL_MIX, 1.0 + GRUNT_SQUEAL_MIX, n), 0.0, 1.0)
+        y = parts[0][:n] * (1.0 - ramp) + parts[1][:n] * ramp
+        return _fin(y, sr, 0.7, fade=0.005, tail=0.01)
     pts, d, size, r, vw, br = PIG[_kind(kind, PIG, "pig")]
     return _fin(_voice(pts, d, size=size, rough=r, vowels=vw, seed=seed, bright=br), sr, 0.7, fade=0.005, tail=0.01)
 
@@ -202,18 +215,20 @@ WHINNY_F0, WHINNY_G0 = 399.22, 1543.26
 INTRO = 1.0 - 0.794                                                   # G0 alone: the overlap is 79.4 % of the call
 WHISTLE_G = 0.5
 WHINNY_S = 1.4
+WHINNY_VAL = (0.145, 71.0, 29.0)                                      # half the negative-positive gap: s of duration, Hz of G0 at the start, Hz of G0 after
 
 
 def whinny(f0=WHINNY_F0, g0=WHINNY_G0, dur=WHINNY_S, valence=0.0, seed=0) -> np.ndarray:
     """Two sources: cords through the tract (F0), a sine whistle in the larynx (G0), not harmonically related.
     Negative whinnies start higher and last longer."""
     v = float(np.clip(valence, -1.0, 1.0))
-    d = float(dur) * (1.0 - 0.2 * v)
+    d = max(float(dur) - WHINNY_VAL[0] * v, 0.2)
     n = _n(d)
     rng = np.random.default_rng([abs(int(seed)), 123])
     t = np.arange(n) / P
     u = t / d
-    g = g0 * np.interp(u, [0.0, INTRO, 0.8, 1.0], [1.12 - 0.1 * v, 1.04, 0.96, 0.88]) * (1.0 + 0.012 * np.sin(2 * np.pi * 6.0 * t))
+    shift = v * np.interp(u, [0.0, 0.08], [WHINNY_VAL[1], WHINNY_VAL[2]])
+    g = (g0 * np.interp(u, [0.0, 0.08, INTRO, 0.8, 1.0], [0.9, 1.04, 1.04, 0.96, 0.88]) - shift) * (1.0 + 0.012 * np.sin(2 * np.pi * 6.0 * t))
     whistle = np.sin(2 * np.pi * np.cumsum(g) / P + rng.uniform(0, 6.28)) * np.interp(u, [0.0, 0.03, 0.8, 1.0], [0.0, 1.0, 0.8, 0.0])
     m = _n(d * (1.0 - INTRO))
     cords = _voice([(0, f0 * 1.06), (0.7, f0), (1, f0 * 0.8)], d * (1.0 - INTRO), size=2.0, rough=0.12, vowels="ae-A-@", seed=seed, rise=0.15, trill=(6.0, 0.02), am=(6.0, 0.25))

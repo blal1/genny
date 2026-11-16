@@ -1,0 +1,43 @@
+schema = "genny.preset/1"
+family = "case_dim"
+# L: length, dia: base diameter, wall: wall thickness, all mm. Dimensions of the ringing shell used by casing, casing_physical.
+
+[9mm]
+L = 19.15
+dia = 9.93
+wall = 0.35
+
+[45acp]
+L = 22.8
+dia = 12.1
+wall = 0.35
+
+[556]
+L = 44.7
+dia = 9.58
+wall = 0.3
+
+[762]
+L = 51.2
+dia = 11.9
+wall = 0.35
+
+[50bmg]
+L = 99.31
+dia = 20.42
+wall = 0.6
+
+[12ga]
+L = 16.0
+dia = 20.2
+wall = 0.5
+
+[20mm]
+L = 102.0
+dia = 29.0
+wall = 1.0
+
+[105mm]
+L = 370.0
+dia = 120.0
+wall = 1.5

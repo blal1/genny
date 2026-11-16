@@ -1,0 +1,47 @@
+schema = "genny.preset/1"
+family = "free_reed"
+
+[harmonica]
+Q = 100.0
+h0 = 0.5
+G = 1.0
+u0 = 0.3
+pipe = 0.0
+cents = 0.0
+tone = 7000.0
+
+[accordion]
+Q = 120.0
+h0 = 0.5
+G = 1.0
+u0 = 0.3
+pipe = 0.0
+cents = 9.0
+tone = 6000.0
+
+[melodica]
+Q = 70.0
+h0 = 0.5
+G = 1.0
+u0 = 0.3
+pipe = 0.0
+cents = 0.0
+tone = 5000.0
+
+[sho]
+Q = 150.0
+h0 = 0.5
+G = 1.0
+u0 = 0.3
+pipe = 0.95
+cents = 0.0
+tone = 7000.0
+
+[khaen]
+Q = 90.0
+h0 = 0.4
+G = 1.0
+u0 = 0.3
+pipe = 0.95
+cents = 0.0
+tone = 8000.0

@@ -1,0 +1,19 @@
+schema = "genny.preset/1"
+family = "air_leak"
+# burst_s: duration of the discharge. orifice_mm: orifice diameter.
+
+[bus_kneel]
+burst_s = 0.8
+orifice_mm = 8.0
+
+[air_brake_apply]
+burst_s = 0.25
+orifice_mm = 10.0
+
+[air_brake_release]
+burst_s = 0.25
+orifice_mm = 10.0
+
+[air_dryer_purge]
+burst_s = 0.15
+orifice_mm = 20.0

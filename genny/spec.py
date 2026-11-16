@@ -77,6 +77,41 @@ def master_loudness(y: np.ndarray, sr: int, target, true_peak: float | None = No
     return x
 
 
+UI_LEVEL = dict(window=0.05, hop=0.01, strength=0.75, target=-25.5, peak=-1.0, limit=24.0)
+UI_LEVEL_OFFSETS = {"hover": -6.0, "tap": 0.0, "default": 0.0}
+
+
+def ui_level(y: np.ndarray, sr: int, offset: float = 0.0, window: float = UI_LEVEL["window"],
+             strength: float = UI_LEVEL["strength"], peak: float = UI_LEVEL["peak"]) -> float:
+    """Gain in dB that brings a short sound to the loudest `window` s of its RMS (hop 10 ms): the target is
+    -25.5 + offset dB, only `strength` of the distance is closed, never above `peak` dB for the sample peak,
+    clamped to +-24 dB."""
+    x = np.asarray(to_mono(np.asarray(y, float)), float)
+    if not x.size or not np.any(x):
+        return 0.0
+    w, h = max(1, int(round(window * sr))), max(1, int(round(UI_LEVEL["hop"] * sr)))
+    c = np.concatenate(([0.0], np.cumsum(x * x)))
+    starts = np.arange(0, max(len(x) - w, 0) + 1, h)
+    ends = np.minimum(starts + w, len(x))
+    rms = np.sqrt((c[ends] - c[starts]) / np.maximum(ends - starts, 1))
+    win_db = 20.0 * np.log10(max(float(rms.max()), 1e-9))
+    db = (UI_LEVEL["target"] + float(offset) - win_db) * float(strength)
+    db = min(db, float(peak) - 20.0 * np.log10(max(float(np.max(np.abs(x))), 1e-9)))
+    return float(np.clip(db, -UI_LEVEL["limit"], UI_LEVEL["limit"]))
+
+
+def _ui_params(v) -> dict:
+    if isinstance(v, dict):
+        return dict(offset=float(UI_LEVEL_OFFSETS.get(v.get("kind"), 0.0) if "offset" not in v else v["offset"]),
+                    window=float(v.get("window", UI_LEVEL["window"])), strength=float(v.get("strength", UI_LEVEL["strength"])),
+                    peak=float(v.get("peak", UI_LEVEL["peak"])))
+    if isinstance(v, str):
+        if v not in UI_LEVEL_OFFSETS:
+            raise SpecError(f"unknown ui_level {v!r}; use a dB offset, a dict or one of {sorted(UI_LEVEL_OFFSETS)}")
+        return dict(offset=UI_LEVEL_OFFSETS[v])
+    return dict(offset=0.0 if v is True else float(v))
+
+
 class SpecError(ValueError):
     pass
 
@@ -125,7 +160,7 @@ def render_layer(layer: dict, sr: int, bpm: float | None = None) -> tuple[np.nda
         freqs = parse_pitch_list(notes)
         dur = float(layer.get("dur", 1.0 if bpm else 0.5)) * q
         strum = float(layer.get("strum", 0.0))
-        y = I.render_chord(inst, freqs, dur, sr, vel, strum=strum, **_params(layer))
+        y = I.render_chord(inst, freqs, dur, sr, vel, strum=strum, strum_var=float(layer.get("strum_var", 0.0)), **_params(layer))
 
     elif kind in ("seq", "sequence", "melody"):
         y = render_sequence(layer, sr, q)
@@ -155,7 +190,10 @@ def render_layer(layer: dict, sr: int, bpm: float | None = None) -> tuple[np.nda
             y = mix(parts, sr) if parts else silence(len(steps) * bars * step, sr)
 
     elif kind == "sfx":
-        y = S.render_sfx(layer.get("kind", "beep"), sr, **_params(layer))
+        p = _params(layer)
+        if layer.get("level") is not None:
+            p["out_level"] = layer["level"]
+        y = S.render_sfx(layer.get("kind", "beep"), sr, **p)
 
     elif kind in ("speech", "say", "voice"):
         y = SPK.render_speech(layer.get("text"), sr, phonemes=layer.get("phonemes"), **_params(layer))
@@ -200,9 +238,11 @@ def render_sequence(layer: dict, sr: int, q: float = 1.0) -> np.ndarray:
             else:
                 pitches = s.get("notes", s.get("note", s.get("pitches", [])))
                 pitches = parse_pitch_list(pitches) if pitches not in ([], None, "-") else []
-                norm.append({"pitches": pitches, "dur": float(s.get("dur", default_dur)), "vel": float(s.get("vel", 1.0))})
+                norm.append({"pitches": pitches, "dur": float(s.get("dur", default_dur)), "vel": float(s.get("vel", 1.0)),
+                             "pedal": s.get("pedal")})
         steps = norm
     legato = float(layer.get("legato", 1.0))
+    artic = layer.get("articulation")
     gap = float(layer.get("gap", 0.0)) * q
     strum = float(layer.get("strum", 0.0))
     vel = float(layer.get("vel", 1.0))
@@ -213,7 +253,11 @@ def render_sequence(layer: dict, sr: int, q: float = 1.0) -> np.ndarray:
     for st in steps:
         if st["pitches"]:
             freqs = [f * 2 ** (transpose / 12) for f in st["pitches"]]
-            y = I.render_chord(inst, freqs, st["dur"] * q * legato, sr, vel * st["vel"], strum=strum, **params)
+            pedal = st.get("pedal") if st.get("pedal") is not None else layer.get("pedal")
+            kw = dict(params, pedal=int(bool(pedal))) if pedal is not None and "pedal" in I.REGISTRY[inst]["params"] else params
+            lg = legato * (float(artic) if artic is not None and st["dur"] * q > 0.1 else 1.0)
+            y = I.render_chord(inst, freqs, st["dur"] * q * lg, sr, vel * st["vel"], strum=strum,
+                               strum_var=float(layer.get("strum_var", 0.0)), **kw)
             parts.append((y, t))
         t += st["dur"] * q + gap
     if not parts:
@@ -256,6 +300,11 @@ def _duck(parts: list, layers: list[dict], sr: int) -> list:
                 sig = sig * g
         out.append((sig, at))
     return out
+
+
+def _leveled(layers) -> bool:
+    return any(l.get("level") is not None and l.get("type") == "sfx" or "out_level" in (l.get("params") or {}) or _leveled(l.get("layers") or [])
+               for l in layers if isinstance(l, dict))
 
 
 def render_layers(layers: list[dict], sr: int, bpm: float | None = None) -> np.ndarray:
@@ -317,7 +366,11 @@ def render_spec(spec: dict, sr: int | None = None) -> tuple[np.ndarray, int]:
                             headroom_only=bool(spec.get("headroom_only", False)))
         y = y * float(spec.get("gain", 1.0))
         return np.clip(y, -1, 1), sr
-    lvl = spec.get("normalize", -1.0)
+    if spec.get("ui_level") is not None and spec.get("ui_level") is not False:
+        y = y * 10 ** (ui_level(y, sr, **_ui_params(spec["ui_level"])) / 20)
+        y = y * float(spec.get("gain", 1.0))
+        return np.clip(y, -1, 1), sr
+    lvl = spec.get("normalize", None if _leveled(layers) else -1.0)
     if lvl is not None and lvl is not False:
         y = normalize(y, float(lvl))
     # Peak level says little about how loud a sound is heard: a clean tone at 2-4 kHz normalised to
@@ -337,7 +390,8 @@ def render_to_file(spec: dict, out: str | Path | None = None, out_dir: str | Pat
     path = Path(out or spec.get("out") or "out.wav")
     if out_dir and not path.is_absolute():
         path = Path(out_dir) / path
-    return write_wav(path, y, sr, bits=int(spec.get("bits", 16)), dither=spec.get("dither"), seed=int(spec.get("dither_seed", 0)))
+    return write_wav(path, y, sr, bits=int(spec.get("bits", 16)), dither=spec.get("dither", "auto"), seed=int(spec.get("dither_seed", 0)),
+                     loop=True if spec.get("loop") else None)
 
 
 def load_specs(source: str | Path | dict | list) -> list[dict]:
@@ -358,7 +412,7 @@ def load_specs(source: str | Path | dict | list) -> list[dict]:
         specs = []
         for sp in data["sounds"]:
             sp = dict(sp)
-            for k in ("sr", "fx", "normalize", "max_loudness", "loudness", "true_peak", "bpm"):
+            for k in ("sr", "fx", "normalize", "max_loudness", "loudness", "true_peak", "bpm", "ui_level"):
                 if k in data and k not in sp:
                     sp[k] = data[k]
             if out_dir and "out" in sp and not Path(sp["out"]).is_absolute():

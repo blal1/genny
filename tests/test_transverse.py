@@ -312,7 +312,9 @@ def test_wet_wood_obataya_minus_6_percent_e_over_rho_plus_24_percent_loss(monkey
     K.impact(material="wood", dur=0.05, moisture=1.0)
     K.impact(material="steel", dur=0.05, moisture=1.0)
     K.impact(material="steel", dur=0.05)
-    assert np.allclose(got[1][0] / got[0][0], math.sqrt(0.94)) and np.allclose(got[1][1] / got[0][1], 1.24)
+    ff, fd = K.wood_moisture_factors(12.0)
+    assert abs(ff - math.sqrt(0.93)) < 1e-2 and abs(fd - 1.25) < 1e-2
+    assert np.allclose(got[1][0] / got[0][0], ff) and np.allclose(got[1][1] / got[0][1], fd)
     assert np.array_equal(got[2][0], got[3][0]) and np.array_equal(got[2][1], got[3][1])
 
 
@@ -323,7 +325,8 @@ def test_wet_wood_keeps_its_loss_through_a_material_angle(monkeypatch):
     monkeypatch.setattr(K, "ImpactInteractor", lambda body, **kw: (got.append((body.freqs.copy(), body.decays.copy())), real(body, **kw))[1])
     K.impact(material="wood", dur=0.05, material_angle=120.0)
     K.impact(material="wood", dur=0.05, material_angle=120.0, moisture=1.0)
-    assert np.allclose(got[1][0] / got[0][0], math.sqrt(0.94)) and np.allclose(got[1][1] / got[0][1], 1.24)
+    ff, fd = K.wood_moisture_factors(12.0)
+    assert np.allclose(got[1][0] / got[0][0], ff) and np.allclose(got[1][1] / got[0][1], fd)
 
 
 def test_reflected_blast_is_at_least_twice_the_incident_one():

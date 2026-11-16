@@ -15,6 +15,8 @@ More instruments live in acoustic.py and synths.py (imported at the bottom, same
 """
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from . import filters as F
@@ -30,19 +32,49 @@ C5 = 523.25
 
 # Tone variants every instrument accepts unless it has a control of its own by that name: shelving EQ after
 # the note, 0.5 = as voiced (no filtering). bright: high shelf at 2.5 kHz, -9 .. +9 dB; warmth: low shelf at
-# 300 Hz, -9 .. +9 dB. onset_lag: the partials above 2.5 f0 fade in over that many ms (sin^2), the onset
-# asynchrony Grey (JASA 61:1270, 1977) found to be a timbre cue: upper harmonics enter a few ms late.
+# 300 Hz, -9 .. +9 dB. onset_lag: the partials above 2.5 f0 fade in over that many ms (sin^2): upper harmonics
+# enter a few ms late.
 VARIANTS = {"bright": (0.5, "0 dark .. 0.5 as voiced .. 1 bright (high shelf at 2.5 kHz, +-9 dB)"),
             "warmth": (0.5, "0 thin .. 0.5 as voiced .. 1 warm (low shelf at 300 Hz, +-9 dB)"),
-            "onset_lag": (0.0, "ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech")}
+            "onset_lag": (0.0, "ms the upper partials (above 2.5 f0) lag the fundamental at the onset; 5-20 = brass- or bow-like speech"),
+            "level3k": (0.0, "0..1 pulls the 2.5-3.5 kHz peak toward the level measured under the spectral maximum at forte (20 dB in general, 30-50 on low notes, 12 for a high oboe, 10 for a high violin); 0 = as voiced"),
+            "valve": (0.0, "0..1 valve or piston click at the onset (a 20 ms noise burst around 2 kHz)")}
+
+LEVEL_3K_LOW_DB = -40.0       # the middle of the 30-50 dB the low notes sit under their maximum
+
+
+# Gain (dB) that flattens the loudness of an instrument across its register, as (MIDI notes, dB): applied to the
+# registered function, interpolated between the notes and held beyond the ends.
+REGISTER_DB = {
+    "harmonica_reed": ((48, 51, 54, 57, 60, 63, 66, 69, 72, 75, 78, 81, 84), (25.6, 19.9, 9.7, 4.6, 1.8, 0.4, 0.0, -2.6, -5.1, -5.9, -5.6, -5.1, -4.4)),
+    "accordion_reed": ((48, 51, 54, 57, 60, 63, 66, 69, 72, 75, 78, 81, 84), (23.0, 23.5, 18.7, 12.7, 6.4, 2.7, 0.0, -2.4, -3.7, -3.9, -3.5, -3.5, -2.8)),
+    "melodica_reed": ((48, 51, 54, 57, 60, 63, 66, 69, 72, 75, 78, 81, 84), (26.3, 26.4, 20.3, 15.3, 12.3, 10.6, 0.0, -0.1, -1.1, -2.0, -2.8, -2.7, -2.3)),
+    "sho_reed": ((48, 51, 54, 57, 60, 63, 66, 69, 72, 75, 78, 81, 84), (19.8, 16.8, 10.7, 11.8, 1.8, 1.3, -0.7, -2.5, -4.5, -3.7, -2.5, -0.9, 0.0)),
+    "khaen_reed": ((48, 51, 54, 57, 60, 63, 66, 69, 72, 75, 78, 81, 84), (12.0, 4.0, 2.6, 1.0, 1.2, 0.6, -0.9, -2.3, -3.6, -3.3, -2.5, -1.4, 0.0)),
+    "morin_khuur": ((41, 44, 47, 50, 53, 56, 59, 62, 65, 68, 71, 74, 77), (-4.0, -4.0, -4.0, -4.0, -4.0, -0.8, 0.6, 1.6, 0.3, 2.1, 1.4, 2.6, -2.0)),
+    "trautonium": ((36, 39, 42, 45, 48, 51, 54, 57, 60, 63, 66, 69, 72, 75, 78, 81, 84), (5.2, 4.6, 3.4, 2.5, 1.8, 0.8, 0.8, -0.5, -1.8, -0.4, -1.7, -4.6, -6.7, -1.0, -2.8, 0.0, 0.1)),
+}
+
+
+def _register_flat(name, fn):
+    import functools
+    notes, db = REGISTER_DB[name]
+
+    @functools.wraps(fn)
+    def flat(freq, *a, **k):
+        m = 69.0 + 12.0 * math.log2(max(float(freq), 1.0) / 440.0)
+        y = fn(freq, *a, **k) * 10.0 ** (float(np.interp(m, notes, db)) / 20.0)
+        return y * min(1.0, 3.0 / (TRIM.get(name, 1.0) * float(np.max(np.abs(y))) + 1e-12))     # a 30 ms note can peak far above its sustained level
+    return flat
 
 
 def instrument(name: str, desc: str, family: str = "synth", span: tuple[str, str] = ("C2", "C6"), **params):
     """Register an instrument. `span` is the register it is voiced for (it still plays outside it)."""
     def deco(fn):
+        reg = _register_flat(name, fn) if name in REGISTER_DB else fn
         generic = [k for k in VARIANTS if k not in params]
         params.update({k: VARIANTS[k] for k in generic})
-        REGISTRY[name] = {"fn": fn, "desc": desc, "params": params, "family": family, "range": f"{span[0]}-{span[1]}",
+        REGISTRY[name] = {"fn": reg, "desc": desc, "params": params, "family": family, "range": f"{span[0]}-{span[1]}",
                           "generic": generic}
         return fn
     return deco
@@ -54,7 +86,59 @@ def _steinway_B(freq):
     return steinway_B(69.0 + 12.0 * np.log2(max(float(freq), 1.0) / 440.0))
 
 
-def _variants(y, sr, freq, bright=0.5, warmth=0.5, onset_lag=0.0):
+def level3k_target(inst, freq):
+    """dB of the 2.5-3.5 kHz peak under the spectral maximum at forte: LEVEL_3K_LOW_DB at 130 Hz and below, the instrument's
+    high-register value (`physical.winds.LEVEL_3K_FORTE`) from 1 kHz up, log-interpolated between."""
+    from .physical.winds import LEVEL_3K_FORTE
+    hi = LEVEL_3K_FORTE["general"]
+    if inst == "oboe":
+        hi = LEVEL_3K_FORTE["oboe_high"]
+    elif inst == "violin":
+        hi = LEVEL_3K_FORTE["violin_high"]
+    x = float(np.clip(np.log2(max(freq, 1.0) / 130.0) / np.log2(1000.0 / 130.0), 0.0, 1.0))
+    return LEVEL_3K_LOW_DB + (hi - LEVEL_3K_LOW_DB) * x
+
+
+def _gap_3k(y, sr):
+    S = np.abs(np.fft.rfft(y * np.hanning(len(y))))
+    f = np.fft.rfftfreq(len(y), 1.0 / sr)
+    band = S[(f >= 2500.0) & (f <= 3500.0)]
+    if band.size == 0 or S.max() < 1e-9 or band.max() < 1e-9 * S.max():
+        return None
+    return 20.0 * np.log10(band.max() / S.max())
+
+
+def match_3k(y, sr, inst, freq, amount=1.0):
+    """Shelf above 2.3 kHz that moves the 2.5-3.5 kHz peak toward `level3k_target` (a few passes: a shelf also moves its own
+    neighbourhood), 12 dB at a time; a note with nothing at 3 kHz is left alone."""
+    tgt = level3k_target(inst, freq)
+    a = float(np.clip(amount, 0.0, 1.0))
+    goal = None
+    for _ in range(6):
+        gap = _gap_3k(y, sr)
+        if gap is None:
+            break
+        goal = gap + (tgt - gap) * a if goal is None else goal
+        if abs(goal - gap) < 0.5:
+            break
+        y = F.highshelf(y, 2300.0, sr, gain_db=float(np.clip(goal - gap, -12.0, 12.0)))
+    return y
+
+
+def valve_click(y, sr, freq, level):
+    """Valve or piston noise: 20 ms of noise around 2 kHz at `level` x 0.3 of the note's own RMS."""
+    n = min(len(y), samples(0.02, sr))
+    if n < 8:
+        return y
+    rng = np.random.default_rng(int(freq * 10) % 9973)
+    b = F.bandpass(rng.standard_normal(n), 2000.0, sr, 1.5) * np.exp(-np.arange(n) / (0.006 * sr))
+    ref = np.sqrt(np.mean(y[:min(len(y), samples(0.3, sr))] ** 2)) + 1e-12
+    y = y.copy()
+    y[:n] += float(np.clip(level, 0.0, 1.0)) * 0.3 * ref * b / (np.sqrt(np.mean(b ** 2)) + 1e-12)
+    return y
+
+
+def _variants(y, sr, freq, bright=0.5, warmth=0.5, onset_lag=0.0, level3k=0.0, valve=0.0, inst=None):
     if onset_lag > 0.0 and y.ndim == 1:
         lo = F.lowpass(y, min(2.5 * freq, 0.45 * sr), sr, order=2)
         k = min(len(y), samples(onset_lag / 1000.0, sr))
@@ -65,6 +149,10 @@ def _variants(y, sr, freq, bright=0.5, warmth=0.5, onset_lag=0.0):
         y = F.highshelf(y, 2500.0, sr, gain_db=18.0 * (float(np.clip(bright, 0.0, 1.0)) - 0.5))
     if warmth != 0.5:
         y = F.lowshelf(y, 300.0, sr, gain_db=18.0 * (float(np.clip(warmth, 0.0, 1.0)) - 0.5))
+    if level3k > 0.0 and y.ndim == 1:
+        y = match_3k(y, sr, inst, freq, level3k)
+    if valve > 0.0 and y.ndim == 1:
+        y = valve_click(y, sr, freq, valve)
     return y
 
 
@@ -159,16 +247,25 @@ def _harmonics(freq, n, sr, amps):
     return y
 
 
+PRAME_END = (0.15, 1.7, 9.0)
+
+
 def _vibrato(freq, n, sr, rate=5.5, depth=0.3, delay=0.15, ramp=0.25, scoop=0.0, end_boost=0.0):
     """Per-sample frequency: vibrato (`depth` semitones) that fades in after `delay`, and an optional
-    onset `scoop` (semitones the note starts flat by, gone in ~40 ms). `end_boost` Hz is added to the
-    rate over the last 0.5 s of a held note: singers and violinists speed up "a couple of Hz during the
-    last few vibrato cycles" (Prame 1992/1994, reported by Liljencrants, MMD 1999.10.13; Nix 2023)."""
+    onset `scoop` (semitones the note starts flat by, gone in ~40 ms). Singers and string players speed
+    the vibrato up over the last cycles of a held note: `end_boost` < 0 follows the measured mean tail,
+    rate x (1 + 0.15 e^(x/1.7)) over the last 9 cycles (x = cycles before the end); `end_boost` > 0 adds
+    that many Hz over the last 0.5 s instead; 0 = off."""
     t = np.arange(n) / sr
     onset = np.clip((t - delay) / max(ramp, 1e-3), 0.0, 1.0)
     T = n / sr
     if end_boost and T > delay + ramp + 1.0:
-        r = rate + float(end_boost) * np.clip((t - (T - 0.5)) / 0.5, 0.0, 1.0)
+        if end_boost < 0:
+            a, e, span = PRAME_END
+            x = (t - T) * rate
+            r = rate * (1.0 + a * np.exp(x / e) * (x >= -span))
+        else:
+            r = rate + float(end_boost) * np.clip((t - (T - 0.5)) / 0.5, 0.0, 1.0)
         ph = 2 * np.pi * np.concatenate(([0.0], np.cumsum(r[:-1]) / sr))
     else:
         ph = 2 * np.pi * rate * t
@@ -256,8 +353,9 @@ ORGAN_CLICK_DECAY = 0.07
             family="keys", span=("C2", "C6"), rotary=(0.3, "0..1"), upper=(1.0, "level of the upper drawbars: 0 = flute stops only .. 1.5 = full"),
             registration=("", "nine drawbar digits 0-8 (16', 5 1/3', 8', 4', 2 2/3', 2', 1 3/5', 1 1/3', 1'), e.g. 888000000 jazz, 888888888 full; 3 dB per step; empty = the default voicing"),
             key_click=(0.0, "0..1 key-contact click: 1 ms of noise at 0.1 x the note level"),
-            click=("noise", "noise | wheel: the click is the 6th harmonic keyed with the note, fading to zero in 70 ms"))
-def organ(freq, dur, sr=DEFAULT_SR, vel=1.0, rotary=0.3, upper=1.0, registration="", key_click=0.0, click="noise"):
+            click=("noise", "noise | wheel: the click is the 6th harmonic keyed with the note, fading to zero in 70 ms"),
+            crosstalk=(0.0, "0..1 leakage of the neighbouring tonewheels (a semitone either side, and the fifth) into the note; 1 = -40 dB"))
+def organ(freq, dur, sr=DEFAULT_SR, vel=1.0, rotary=0.3, upper=1.0, registration="", key_click=0.0, click="noise", crosstalk=0.0):
     rel = 0.05
     n = _n(dur, sr, rel)
     x = np.zeros(n)
@@ -280,6 +378,10 @@ def organ(freq, dur, sr=DEFAULT_SR, vel=1.0, rotary=0.3, upper=1.0, registration
             x += g * (upper if h > 2 else 1.0) * float(_roll(fh, 3500.0) / _roll(freq, 3500.0)) * O.sine(fh, n, sr)
         x /= 2.6
         env = adsr(dur, 0.01, 0.0, 1.0, rel, sr)
+    if crosstalk > 0:
+        g = 10.0 ** (-40.0 / 20.0) * float(np.clip(crosstalk, 0.0, 1.0))
+        for r in (2.0 ** (1 / 12), 2.0 ** (-1 / 12), 1.5):
+            x += g * O.sine(freq * r, n, sr)
     if rotary > 0:
         x *= 1 - rotary * 0.3 * (1 + lfo(n / sr, 6.0, sr)[:n]) / 2
     y = apply(x, env)
@@ -508,34 +610,71 @@ def bell(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=2.0, ratio=3.5, bright=1.0):
     return x * decay_env(n, ring / 3, sr) * perc(ring, 0.003, sr, curve=1.2) * 0.7 * (0.55 + 0.45 * vel)
 
 
-@instrument("glass", "Glassy crystal tone (UI, sparkle): a singing wine glass, pure rather than sharp.", family="mallet", span=("C4", "C7"))
-def glass(freq, dur, sr=DEFAULT_SR, vel=1.0):
+GLASS_FILL_MASS = 1.2           # water mass / effective wall mass at a full glass (connaissance: the source gives no law)
+
+
+@instrument("glass", "Glassy crystal tone (UI, sparkle): a singing wine glass, pure rather than sharp.", family="mallet", span=("C4", "C7"),
+            fill=(0.0, "0..1 how full of water the glass is: pitch falls by 1 / sqrt(1 + 1.2 fill) and the ring shortens"))
+def glass(freq, dur, sr=DEFAULT_SR, vel=1.0, fill=0.0):
     ring = max(dur, 0.8)
+    fill = float(np.clip(fill, 0.0, 1.0))
+    freq = freq / math.sqrt(1.0 + GLASS_FILL_MASS * fill)          # water adds mass to the vibrating wall
+    ring = ring / (1.0 + fill)
     n = _n(ring, sr)
-    x = _modes(freq, n, sr, [(1.0, 1.0, ring / 3), (2.32, 0.32, ring / 7), (4.25, 0.14, ring / 14)], corner=2400.0, beat=1.2)
+    x = _modes(freq, n, sr, [(1.0, 1.0, ring / 3), (1.89, 0.32, ring / 7), (3.21, 0.14, ring / 14)], corner=2400.0, beat=1.2)
     return x * perc(ring, 0.004, sr, curve=1.2) * 0.75 * (0.55 + 0.45 * vel)
 
 
-def _bar_tube(x, freq, sr, level):
+def _unit(y, g=0.5):
+    return g * y / (np.max(np.abs(y)) + 1e-12)
+
+
+@instrument("slide_clarinet", "Slide clarinet: a clarinet with a trombone-like slide in its bore, so the note can glide continuously by several semitones.",
+            family="winds", span=("C3", "C6"), glide=(3.0, "semitones the slide travels over the note (negative = down)"),
+            at=(0.5, "0..1 of the note at which the slide starts to move"))
+def slide_clarinet(freq, dur, sr=DEFAULT_SR, vel=1.0, glide=3.0, at=0.5):
+    n = _n(dur, sr, 0.1)
+    t = np.arange(n) / sr
+    a0 = float(np.clip(at, 0.0, 0.95))
+    u = np.clip((t / max(dur, 0.1) - a0) / (1.0 - a0), 0.0, 1.0)
+    f = freq * 2.0 ** (float(glide) * u / 12.0)
+    ph = 2 * np.pi * np.cumsum(f) / sr
+    y = sum(np.sin(h * ph) / h ** 1.3 for h in (1, 3, 5, 7, 9))
+    y = _soften(y, freq * 2.0 ** (max(float(glide), 0.0) / 12.0), sr, harm=6.0, lo=2200.0, hi=3800.0)
+    return _unit(y * _GATE(n, sr), 0.33 * (0.55 + 0.45 * vel))
+
+
+def _GATE(n, sr, a=0.03, r=0.08):
+    """Linear attack a s and release r s (the last r s of the buffer) around a steady body."""
+    t = np.arange(n) / sr
+    return np.minimum(1.0, t / a) * np.minimum(1.0, (n / sr - t) / r)
+
+
+def _bar_tube(x, freq, sr, level, rise=0.0):
     """Bar plus its tuned stopped tube (Doutaut, Matignon & Chaigne, JASA 1998, sec. III-IV): radius 18.5 mm, the tube
     keeps the fundamental, the bar's upper partials stay about 20 dB under it. wet level = the bar's RMS x `level`;
-    bars above 2 kHz (a 4 cm tube) go without. # ponytail: the 2(d + l)/c arrival is the tube's own transit, d = 0."""
+    bars above 2 kHz (a 4 cm tube) go without. `rise` ms: the tube answers by building up (10-20 ms, its Q over pi f), not by a
+    propagation delay: the wet part grows as 1 - exp(-t / rise). # ponytail: the 2(d + l)/c arrival is the tube's own transit, d = 0."""
     if level <= 0 or freq > 2000.0:
         return x
     from .tubes import _pipe, _through
     t = _pipe(round(float(freq), 2), 0.0185, 1.0)
     wet = np.asarray(_through(x, sr, lambda u: t.run(u, src_pos=1.5 / t.N, pick_pos=0.72)["u_out"], 1.0))
-    return x + min(float(level), 2.0) * wet * np.sqrt(np.mean(x * x) / (np.mean(wet * wet) + 1e-30))
+    wet = wet * np.sqrt(np.mean(x * x) / (np.mean(wet * wet) + 1e-30))
+    if rise > 0:
+        wet = wet * (1.0 - np.exp(-np.arange(len(wet)) / (float(rise) * 1e-3 * sr)))
+    return x + min(float(level), 2.0) * wet
 
 
 @instrument("marimba", "Wooden mallet on a rosewood bar with resonator: round, woody, short.", family="mallet", span=("C2", "C7"),
-            decay=(0.6, "seconds"), resonator=(1.0, "0..2 level of the stopped tube under the bar"))
-def marimba(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=0.6, resonator=1.0):
+            decay=(0.6, "seconds"), resonator=(1.0, "0..2 level of the stopped tube under the bar"),
+            rise=(0.0, "ms the tube takes to build up under the bar (10-20 measured; 0 = at once)"))
+def marimba(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=0.6, resonator=1.0, rise=0.0):
     ring = max(dur, decay * _kt(freq, 1.3, 0.6, f_lo=130.0))
     n = _n(ring, sr)
     x = _modes(freq, n, sr, [(1.0, 1.0, ring / 2.2), (4.0, 0.3 * vel, ring / 9), (9.2, 0.1 * vel, ring / 22)], corner=2600.0)
     click = F.bandpass(O.white(n, seed=11), _cut(freq, 3, 700, 2200), sr, 0.8) * decay_env(n, 0.004, sr) * 0.12 * vel
-    x = _bar_tube(x, freq, sr, resonator)
+    x = _bar_tube(x, freq, sr, resonator, rise)
     return (x + click) * perc(ring, 0.001, sr, curve=1.0) * (0.6 + 0.4 * vel)
 
 
@@ -548,15 +687,23 @@ def kalimba(freq, dur, sr=DEFAULT_SR, vel=1.0):
     return (x + tick) * perc(ring, 0.001, sr, curve=1.0) * 0.8 * (0.6 + 0.4 * vel)
 
 
-@instrument("vibraphone", "Vibraphone: soft mallets on metal bars with motor tremolo.", family="mallet", span=("F3", "F6"),
-            motor=(4.5, "tremolo Hz (0 = motor off)"), resonator=(1.0, "0..2 level of the stopped tube under the bar"))
-def vibraphone(freq, dur, sr=DEFAULT_SR, vel=1.0, motor=4.5, resonator=1.0):
+VIBES_F = (175.0, 394.0, 784.0)
+VIBES_R = ((4.0, 4.0, 3.8), (9.7, 8.9, 7.6))
+VIBES_AM = 0.5
+
+
+@instrument("vibraphone","Vibraphone: soft mallets on metal bars with motor tremolo.", family="mallet", span=("F3", "F6"),
+            motor=(4.5, "tremolo Hz (0 = motor off)"), resonator=(1.0, "0..2 level of the stopped tube under the bar"),
+            rise=(0.0, "ms the tube takes to build up under the bar (10-20 measured; 0 = at once)"))
+def vibraphone(freq, dur, sr=DEFAULT_SR, vel=1.0, motor=4.5, resonator=1.0, rise=0.0):
     ring = max(dur, 1.8)
     n = _n(ring, sr)
-    x = _modes(freq, n, sr, [(1.0, 1.0, 0.9), (4.0, 0.25 * vel, 0.3), (10.0, 0.06 * vel, 0.06)], corner=2800.0)
-    x = _bar_tube(x, freq, sr, resonator)
+    lf = np.log2(max(float(freq), 1.0))
+    r2, r3 = (float(np.interp(lf, np.log2(VIBES_F), VIBES_R[k])) for k in (0, 1))
+    x = _modes(freq, n, sr, [(1.0, 1.0, 0.9), (r2, 0.25 * vel, 0.3), (r3, 0.06 * vel, 0.06)], corner=2800.0)
+    x = _bar_tube(x, freq, sr, resonator, rise)
     if motor > 0:
-        x *= 1 - 0.3 * (1 + lfo(n / sr, motor, sr)[:n]) / 2
+        x *= 1 - VIBES_AM * (1 + lfo(n / sr, motor, sr)[:n]) / 2
     return x * perc(ring, 0.002, sr, curve=1.0) * _off(n, dur + 0.6, sr, 0.25) * 0.8 * (0.6 + 0.4 * vel)
 
 
@@ -588,6 +735,26 @@ def flute(freq, dur, sr=DEFAULT_SR, vel=1.0, breath=0.15):
     air = F.bandpass(O.white(n, seed=5), _cut(freq, 2, 700, 1900), sr, 2.0) * breath * _kt(freq, 1.0, 0.45)
     chiff = F.bandpass(O.white(n, seed=6), _cut(freq, 3, 900, 2400), sr, 1.5) * decay_env(n, 0.02, sr) * breath * 0.8
     return apply(x + air + chiff, adsr(dur, 0.07, 0.1, 0.85, rel, sr)) * 0.6 * (0.6 + 0.4 * vel)
+
+
+PEA_WHISTLE = dict(drop=0.07, swell=2.0, noise=0.1, noise_swell=1.26, harm=(1.0, 0.316, 0.056))
+
+
+@instrument("pea_whistle", "Referee / police whistle: a cork pea spins in the chamber; each pass at the fipple drops the "
+            "pitch about 7 % and swells the tone, hence the trill.", family="wind", span=("A5", "G7"),
+            spin=(25.0, "pea turns per second (trill rate, 0 = no pea)"))
+def pea_whistle(freq, dur, sr=DEFAULT_SR, vel=1.0, spin=25.0):
+    p = PEA_WHISTLE
+    rel = 0.04
+    n = _n(dur, sr, rel)
+    t = np.arange(n) / sr
+    rng = np.random.default_rng(31)
+    wob = np.cumsum(rng.standard_normal(n)) * (2 * np.pi * 0.2 / np.sqrt(sr))
+    near = np.clip(np.cos(2 * np.pi * float(spin) * t + wob), 0.0, 1.0) ** 4 if spin > 0 else np.zeros(n)
+    x = _harmonics(freq * (1.0 - p["drop"] * near), n, sr, p["harm"]) * (1.0 + (p["swell"] - 1.0) * near)
+    hiss = F.bandpass(O.white(n, seed=32), min(freq, 0.4 * sr), sr, 1.0)
+    hiss *= p["noise"] * (1.0 + (p["noise_swell"] - 1.0) * near) / (np.std(hiss) + 1e-12) / np.sqrt(2)
+    return apply(x + hiss, adsr(dur, 0.015, 0.05, 0.9, rel, sr)) * 0.35 * (0.6 + 0.4 * vel)
 
 
 # ---------------------------------------------------------------- retro / raw
@@ -688,7 +855,7 @@ def render_note(name: str, freq: float, dur: float, sr: int = DEFAULT_SR, vel: f
     var = {k: float(params.pop(k)) for k in entry.get("generic", ()) if k in params}
     y = entry["fn"](freq, dur, sr, vel, **params)
     if var:
-        y = _variants(y, sr, freq, **var)
+        y = _variants(y, sr, freq, inst=name, **var)
     if y.ndim == 1 and y.shape[0] > 8:   # no note carries DC (blown and bowed models did: up to 18 % of peak); 5 Hz, far below any pitch
         from scipy.signal import lfilter
         y = lfilter([1.0, -1.0], [1.0, -(1.0 - 2 * np.pi * 5.0 / sr)], y)
@@ -699,10 +866,23 @@ def render_note(name: str, freq: float, dur: float, sr: int = DEFAULT_SR, vel: f
     return y * (key_gain(freq) * TRIM.get(name, 1.0))
 
 
-def render_chord(name: str, freqs: list[float], dur: float, sr: int = DEFAULT_SR, vel: float = 1.0, strum: float = 0.0, **params) -> np.ndarray:
-    """Sum several notes; `strum` delays each successive note by that many seconds."""
+def render_chord(name: str, freqs: list[float], dur: float, sr: int = DEFAULT_SR, vel: float = 1.0, strum: float = 0.0,
+                 strum_var: float = 0.0, **params) -> np.ndarray:
+    """Sum several notes; `strum` delays each successive note by that many seconds. `strum_var` > 0 draws, per note, the
+    delay as i x strum x exp(N(0, var)) and, when the instrument has them, `decay` (the t60) and `pick` (the plucking
+    position) times exp(N(0, var)); the draw is fixed by the notes."""
     from .core import mix
-    parts = [(render_note(name, f, dur, sr, vel, **params), i * strum) for i, f in enumerate(freqs)]
+    rng = np.random.default_rng(int(sum(freqs) * 100) % (2 ** 31))
+    var = max(float(strum_var), 0.0)
+    known = REGISTRY[name]["params"] if var > 0 else {}
+    parts = []
+    for i, f in enumerate(freqs):
+        kw = dict(params)
+        for k in ("decay", "pick"):
+            if k in known:
+                kw[k] = float(kw.get(k, known[k][0])) * float(np.exp(var * rng.standard_normal()))
+                kw[k] = min(kw[k], 0.5) if k == "pick" else kw[k]
+        parts.append((render_note(name, f, dur, sr, vel, **kw), i * strum * float(np.exp(var * rng.standard_normal()))))
     y = mix(parts, sr)
     return y / np.sqrt(max(1, len(freqs)))
 
@@ -747,3 +927,25 @@ def piano_wg(freq, dur, sr=DEFAULT_SR, vel=1.0, decay=2.5, bright=1.0):
     # deliberately broader because it is also exposed directly via genny.Piano.
     y = F.lowpass(y, min(5800.0, max(1400.0, 1700.0 + 2800.0 * b)), sr, 0.7)
     return y * 0.72
+
+
+STEELPAN_NEIGHBOURS = (1.5, 2.0 / 3.0, 2.0)
+
+
+@instrument("steelpan", "Steel pan: a note tuned on its fundamental, octave and twelfth, sounding the neighbouring notes of the pan through the shared shell.",
+            family="mallet", span=("C3", "C6"),
+            coupling=(0.25, "0..1 level of the neighbouring notes (fifth above, fifth below, octave) that the strike sets ringing, entering about 4 ms late"),
+            mallet=(0.5, "0 hard rubber .. 1 soft: the upper modes fall"))
+def steelpan(freq, dur, sr=DEFAULT_SR, vel=1.0, coupling=0.25, mallet=0.5):
+    ring = max(dur, 1.6)
+    n = _n(ring, sr)
+    m = float(np.clip(mallet, 0.0, 1.0))
+    x = _modes(freq, n, sr, [(1.0, 1.0, 1.1), (2.0, 0.55 * (1 - 0.5 * m), 0.8), (3.0, 0.3 * vel * (1 - 0.7 * m), 0.5), (4.1, 0.05 * vel, 0.1)], corner=2800.0, beat=0.5)
+    c = float(np.clip(coupling, 0.0, 1.0))
+    if c > 0:
+        lag = int(0.004 * sr)
+        for r in STEELPAN_NEIGHBOURS:
+            nb = _modes(freq * r, n, sr, [(1.0, 1.0, 0.7)], corner=2800.0)
+            x[lag:] += 0.18 * c * nb[:n - lag]
+    thump = F.lowpass(O.white(n, seed=24), 350, sr) * decay_env(n, 0.01, sr) * 0.4 * vel
+    return (x + thump) * perc(ring, 0.002, sr, curve=1.0) * 0.7 * (0.6 + 0.4 * vel)

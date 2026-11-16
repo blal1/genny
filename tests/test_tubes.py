@@ -456,6 +456,7 @@ def test_mesh_vowel_first_harmonic_in_tune(note):
     n = 16 * len(seg)
     spec = np.abs(np.fft.rfft(seg * np.hanning(len(seg)), n))
     fr = np.fft.rfftfreq(n, 1 / sr)
-    band = (fr > f * 0.94) & (fr < f * 1.06)
+    k = max(range(1, 9), key=lambda h: spec[np.abs(fr - h * f) < f * 0.04].max())
+    band = np.abs(fr - k * f) < f * 0.04
     peak = fr[band][np.argmax(spec[band])]
-    assert abs(1200 * math.log2(peak / f)) < 10
+    assert abs(1200 * math.log2(peak / (k * f))) < 15

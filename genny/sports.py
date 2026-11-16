@@ -55,6 +55,27 @@ def cavity_modes(a, c=C_AIR):
     return tuple(ka * c / (2.0 * math.pi * a) for ka in KA)
 
 
+def sphere_cavity_modes(a, n=8, c=C_AIR):
+    """Air modes of a rigid sphere of inner radius a: roots k a of j_l'(k a) = 0, as (Hz, l, k a) sorted by frequency (l = 0 is
+    the breathing mode, 4.49; the lowest, l = 1, is 2.08;
+    each l >= 1 is 2 l + 1 times degenerate)."""
+    from scipy.optimize import brentq
+    from scipy.special import spherical_jn
+    out = []
+    for l in range(0, 14):
+        x, prev = 0.5, spherical_jn(l, 0.5, derivative=True)
+        found = 0
+        while found < 4 and x < 30.0:
+            x2 = x + 0.05
+            cur = spherical_jn(l, x2, derivative=True)
+            if prev * cur < 0 and not (l == 0 and x < 1.0):
+                out.append((brentq(lambda u: spherical_jn(l, u, derivative=True), x, x2), l))
+                found += 1
+            x, prev = x2, cur
+    out.sort()
+    return [(ka * c / (2.0 * math.pi * a), l, ka) for ka, l in out[:int(n)]]
+
+
 def thump_pa(a, v, r=HEAR_AT):
     """Monopole thump, Pa at r."""
     return RHO * a * v * v / r
@@ -188,7 +209,7 @@ def _ball_params(kind, radius):
     return b["M"], (float(radius) if radius > 0 else b["a"]), b["P"], b["e"]
 
 
-def _ball_train(kind, height, surface, cavity, ring_cycles, radius, seed):
+def _ball_train(kind, height, surface, cavity, ring_cycles, radius, seed, modes=2):
     """Bounce train in Pa at HEAR_AT, with the first impact 10 ms in. Each contact: thump as v^2, ring and shell as v: small bounces ring relatively more."""
     mass, a, pressure, e = _ball_params(kind, radius)
     s = SURFACES[surface]
@@ -206,6 +227,9 @@ def _ball_train(kind, height, surface, cavity, ring_cycles, radius, seed):
     tau = max(float(ring_cycles), 0.1) / f1                 # damped in about a single cycle
     # l = 2 at half l = 1
     ring = _free_mode(f1, tau, m, T) + 0.5 * _free_mode(f2, tau * f1 / f2, m, T)
+    for f, _, _ in (sphere_cavity_modes(a, int(modes))[2:] if modes > 2 else ()):
+        if f < 0.45 * P:
+            ring = ring + 0.5 * _free_mode(f, tau * f1 / f, m, T)
     ring = ring / np.max(np.abs(ring))
     shell = sum((g * _free_mode(f, BALL_MODE_TAU[f], m, T) for f, g in BALL_MODES.get(kind, ())), np.zeros(m))
     force = np.zeros(n)
@@ -224,11 +248,12 @@ def _ball_train(kind, height, surface, cavity, ring_cycles, radius, seed):
 @sfx("ball_bounce", "Inflated ball bouncing to rest: a low thump (one cycle over the contact, -cos 2wt) and the ring of the air inside (ka = 2.082). Basket 82 + 997 Hz, 12 ms; tennis, foot, volley (breathing mode 150 Hz).",
      kind=("basket", "basket | tennis | foot | volley"), height=(1.0, "m of the drop"), surface=("parquet", " | ".join(SURFACES)),
      cavity=(1.0, "level of the air and shell modes: 0 = thump alone, 1 = as computed"), ring_cycles=(1.0, "cycles to decay: 1 bouncing, more for a ball held away from the floor"),
-     radius=(0.0, "m inside the ball, 0 = the kind's; .116 is a measured basketball"), roll_speed=(0.0, "m/s of rolling after the bounces, slowed by the rolling resistance"), seed=(0, "variation"))
-def ball_bounce(sr=DEFAULT_SR, kind="basket", height=1.0, surface="parquet", cavity=1.0, ring_cycles=1.0, radius=0.0, roll_speed=0.0, seed=0):
+     radius=(0.0, "m inside the ball, 0 = the kind's; .116 is a measured basketball"), roll_speed=(0.0, "m/s of rolling after the bounces, slowed by the rolling resistance"), seed=(0, "variation"),
+     modes=(2, "air modes of the cavity that ring, 2 = the first two; more adds the next roots of the rigid sphere (`sphere_cavity_modes`), up to 12"))
+def ball_bounce(sr=DEFAULT_SR, kind="basket", height=1.0, surface="parquet", cavity=1.0, ring_cycles=1.0, radius=0.0, roll_speed=0.0, seed=0, modes=2):
     k = _kind(kind, tuple(BALLS), "ball_bounce")
     surf = _kind(surface, tuple(SURFACES), "ball_bounce surface")
-    y, t = _ball_train(k, float(np.clip(height, 0.02, 10.0)), surf, cavity, ring_cycles, radius, seed)
+    y, t = _ball_train(k, float(np.clip(height, 0.02, 10.0)), surf, cavity, ring_cycles, radius, seed, int(np.clip(modes, 2, 12)))
     if roll_speed > 0:
         mass, a, pressure, _ = _ball_params(k, radius)
         soft = SURFACES[surf]["soft"]

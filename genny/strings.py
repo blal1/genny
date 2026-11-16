@@ -548,14 +548,14 @@ class FretboardGeometry:
 
 def _render_exciter(self: DispersiveString, dur: float, exciter: StringExciter, *,
                     velocity: float=.8, bridge_velocity: float=0.0,
-                    palm_mute: float=0.0, glide_cents: float=0.0) -> np.ndarray:
+                    palm_mute: float=0.0, glide_cents: float=0.0, glide_couple: float=0.0) -> np.ndarray:
     n=max(1,int(round(float(dur)*self.sr))); out=np.zeros(n,float)
     pulse=exciter.pulse(self.sr,velocity)
     mute=float(np.clip(palm_mute,0.0,1.0))
     if bridge_velocity == 0.0:
         # Palm contact is local bridge damping, not a post-render envelope.
         out=self._run(np.asarray(pulse,float),n,exciter.position,damper=.72*mute,
-                      glide=2.0**(max(float(glide_cents),0.0)/1200.0)-1.0)
+                      glide=2.0**(max(float(glide_cents),0.0)/1200.0)-1.0,couple=glide_couple)
     else:
         for i in range(n):
             e=float(pulse[i]) if i<len(pulse) else 0.0

@@ -236,3 +236,60 @@ limit.
 Not modelled: NES length counters, the Game Boy's power-on and "zombie" quirks.
 
 Examples: `examples/chiptune/nes_overworld.json`, `examples/chiptune/gb_cave.json`, `examples/chiptune/md_stage.json`.
+
+## Added in 1.3.0
+
+- `chowning` winds (clarinet, woodwind, bassoon): the index follows the amplitude through the attack and the held
+  note, then stays put while it dies away; brass keeps the index proportional to the amplitude.
+## Konami SCC, Namco WSG, HuC6280 (family Q)
+
+- `scc` (Konami SCC and SCC+): five channels of a 32-byte signed waveform. `wave` selects the shape, `volume` 0-15.
+  The divider is an integer, so the pitch is the one the chip plays (`scc_hz`): at high notes it is some cents off the
+  equal-tempered note, like the hardware. `chip` layer system `scc` (`ch1`-`ch5`, `plus`).
+- `namco_wsg` (Pac-Man, Galaga): three voices of a 32-sample 4-bit waveform in PROM. `wave` 0-7 plays the eight blocks of
+  the real PROM (`PROM_DEFAULT`; the default `wave=0` is the PROM sine, quantised to 4 bits differently from the computed
+  sine of before), or a name, or 32 values. `generic=True` restores the eight generic waves of earlier versions (sine,
+  saw, triangle, square, pulse, organ, bell, half); a wave given by name (`wave="saw"`) is unchanged. Layer system `wsg`
+  (`v1`-`v3`, `prom`, `generic`).
+- `huc6280` (PC Engine): six channels of a 32-sample waveform with the second channel as an LFO source. `wave`,
+  `noise` and `noise_freq` (channels 5-6, an 18-bit LFSR), `lfo_mode`, `lfo_hz`; `bal` (left, right 0..15, 3 dB a step;
+  the deficits of master and channel balance add up, capped at 31); `dda` (direct 5-bit value, minus 16, resets the
+  waveform index) and `dda_hz`; layer system `huc6280` (`ch1`-`ch6`, `lfo_mode`, `lfo_freq`, `pan` L|C|R, `master`).
+
+## Konami VRC6, Namco 163, Famicom Disk System, Amiga Paula, OPL2 and OPL3 (family R)
+
+- `vrc6`: two pulse channels with eight duty cycles (`duty` 0-7) and one saw (`wave` pulse|saw); layer key `shift` 0 | 4 | 8
+  (frequency register $9003: x1, x16, x256; halt is not modelled).
+- `n163`: one to eight channels reading a wavetable (`wave`, `length`, `channels` 1-8; layer system `n163`, `n`).
+- `fds`: 64-step wavetable with a modulator (`wave`, `master` 0-3, `mod_gain`, `mod_hz`, `mod_table`, `mod_counter`).
+  Each of the 32 entries of `mod_table` acts twice (a cycle of 64 steps); `mod_hz` stays in cycles per second, so with
+  `mod_gain` > 0 the modulation is twice as fast per table cycle as before.
+- `paula`: four DMA channels of 8-bit samples (`wave`, `volume` 0-64, `clock` PAL or NTSC, `filter`, `led`); layer system
+  `paula` with `modulates` am|fm between channels. A **MOD player** reads Amiga modules: `chiptune_r.mod_parse` and
+  `render_mod(..., hw_limit=False)`. Effects read: 0 arpeggio, 1 / 2 / 3 portamento, 4 vibrato, 5, 6, 7 tremolo, 8xx and
+  E8x panning (gains min(1, 2(1-p)) and min(1, 2p)), 9, A, B (also with D on the same row), C, D, E1, E2, E3 glissando,
+  E4 / E7 waveforms (sine, ramp, square; bit 4 = no retrig), E5, E6 pattern loop, E9 retrigger, EA, EB, EC, ED, EE
+  pattern delay, F. Finetune comes from the original 16 x 36 period tables (`PT_PERIODS`) and the vibrato from
+  `PT_VIBRATO`; the vibrato reads its position before advancing (the first tick has no offset). `hw_limit=True` clamps the
+  period at 124 (NTSC hardware limit) instead of 113.
+- `opl2` / `opl3`: two-operator FM with the chip's log-sine and exponential tables and its accumulator (`patch` sine,
+  organ, bell, bass, brass, pluck, wow4 or a dict, `fb`, `wave`, `mod_wave`, `trem`, `vib_lfo`); layer systems `opl2` and
+  `opl3` (`rhythm`, `pan`).
+- Integer-divider chips (`scc`, `huc6280`, `vrc6`, `fds`, `paula`, `wonderswan`) play the pitch their divider gives.
+
+## Later chips
+
+`opll` (YM2413: five patches were corrected, `clarinet`, `trumpet`, `synth`, `harpsichord`, `electric_guitar` sound
+different), `snes` (the real S-DSP: gaussian interpolation table, BRR filters with arithmetic-shift rounding, and an echo with
+the 8-tap `fir`, delay rounded to 16 ms; the echo only runs when `echo_ms` > 0), `saa1099`, `wonderswan`, `ppg_wave`,
+`optigan`, `chamberlin`. Level trims are not in `_levels.py` yet.
+
+Checked against the sources (verification round): `opl2` / `opl3` / `opll` `ksl` 1 is 3 dB per octave and 2 is 1.5 dB per
+octave (they were exchanged: patches using them changed); `snes` decay has the time constant table time / 2.3 (it was
+/ 4.6, twice too fast); `saa1099` noise is the 18-bit LFSR with taps 17 and 10 (periods 256 / 512 / 1024); `wonderswan`
+noise is the XNOR LFSR of the hardware taps (`WS_NOISE_TAPS`). Open: the SAA1099 frequency has a factor of 2 between the
+formula used and one reference; SNES GAIN modes are not modelled; the PPG Wave table size is unsettled.
+
+DX7 (`synth_s`): the 32 algorithms match the published table; detune is 0.9 cent per step (fixed-frequency voices
+detune only above 7); LFO speed, delay, pitch depth and pitch envelope use the published tables. The four shipped
+presets are unchanged.

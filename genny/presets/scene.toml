@@ -1,0 +1,465 @@
+schema = "genny.preset/1"
+family = "scene"
+
+[air]
+bed = "open"
+layers = [
+  {sfx = "noise_bed", db = -12, wide = true, params = {kind = "rumble"}},
+  {sfx = "gust", db = -4, every = [6, 12], params = {through = "gap"}},
+]
+
+[alpine]
+bed = "alpine"
+layers = [
+  {sfx = "gust", db = -3, every = [6, 12], params = {through = "canyon"}},
+  {sfx = "bird_kind", db = -14, every = [10, 22], params = {kind = "rapaces"}},
+  {sfx = "distant_bell", db = -20, every = [14, 28], params = {distance = 800.0}},
+]
+
+[amusement]
+layers = [
+  {sfx = "crowd_murmur", db = -3, wide = true, params = {mood = 0.9, distance = 0.3, people = 12}},
+  {sfx = "ride", db = -6, every = [9, 16], params = {kind = "manege", dur = 8.0}},
+  {sfx = "slot_machine", db = -12, every = [5, 11], params = {state = "spin"}},
+  {sfx = "crowd", db = -6, every = [7, 14], params = {kind = "ah"}},
+  {sfx = "scream", db = -14, every = [9, 20], params = {syllables = 2}},
+]
+
+[birdsong]
+bed = "meadow"
+layers = [
+  {sfx = "dawn_chorus", db = 3, wide = true},
+]
+
+[celebration]
+layers = [
+  {sfx = "crowd_murmur", db = -2, wide = true, params = {mood = 1.0, distance = 0.3, people = 12}},
+  {sfx = "applause", db = -6, every = [9, 18], params = {dur = 3.0}},
+  {sfx = "cork_pop", db = -10, every = [6, 14]},
+  {sfx = "party_horn", db = -13, every = [5, 11]},
+  {sfx = "firework", db = -14, every = [8, 16], params = {kind = "pop", distance = 400.0}},
+]
+
+[construction]
+bed = "town"
+layers = [
+  {sfx = "jackhammer", db = -3, every = [6, 12], params = {dur = 2.5}},
+  {sfx = "power_tool", db = -6, every = [5, 10], params = {kind = "disqueuse", dur = 2.0}},
+  {sfx = "hammering", db = -6, every = [4, 8], params = {strikes = 5}},
+  {sfx = "saw", db = -10, every = [7, 13], params = {strokes = 5}},
+  {sfx = "backup_beeper", db = -16, every = [10, 20], params = {dur = 3.0}},
+  {sfx = "excavator", db = -8, every = [10, 18], params = {dur = 4.0}},
+]
+
+[desert]
+bed = "desert"
+layers = [
+  {sfx = "sand_storm", db = -6, wide = true, params = {wind = 0.42, hard = 0.3}},
+  {sfx = "night_insects", db = -20, wide = true, params = {density = 0.15, temp = 30.0}},
+  {sfx = "gust", db = -5, every = [7, 14], params = {through = "gap"}},
+]
+
+[designed]
+act = "awakening"
+layers = [
+  {sfx = "dark_drone", db = -2},
+  {sfx = "shepard", db = -16, params = {direction = "down", rate = 0.05}},
+]
+
+[emergency]
+bed = "city"
+layers = [
+  {sfx = "siren_wail", db = -3, every = [7, 13], params = {kind = "ambulance", dur = 5.0, echo = 0.8}},
+  {sfx = "crowd", db = -8, wide = true, params = {kind = "panique", voices = 12}},
+  {sfx = "shout", db = -10, every = [5, 10], params = {kind = "hurlement"}},
+  {sfx = "alarm_bell", db = -16, every = [8, 16], params = {dur = 2.0}},
+]
+
+[fantasy]
+bed = "forest"
+layers = [
+  {sfx = "dark_drone", db = -8, params = {note = 45.0}},
+  {sfx = "magic_kind", db = -8, every = [5, 11], params = {kind = "shimmer"}},
+  {sfx = "wings", db = -14, every = [8, 15], params = {dur = 2.0}},
+  {sfx = "creature", db = -16, every = [12, 24], params = {kind = "fantome", dur = 2.5}},
+]
+
+[farm]
+bed = "meadow"
+layers = [
+  {sfx = "moo", db = -6, every = [7, 15]},
+  {sfx = "chicken", db = -10, every = [3, 7], params = {kind = "caquet"}},
+  {sfx = "farm_animal", db = -10, every = [6, 13], params = {kind = "mouton"}},
+  {sfx = "pig", db = -12, every = [8, 16]},
+  {sfx = "horse", db = -12, every = [12, 24]},
+  {sfx = "birdsong", db = -12, every = [12, 24], params = {species = "rooster"}},
+  {sfx = "tractor", db = -18, every = [15, 30], params = {dur = 4.0}},
+]
+
+[forest]
+bed = "forest"
+layers = [
+  {sfx = "dawn_chorus", db = -6, wide = true, params = {birds = 6}},
+  {sfx = "foliage", db = -8, every = [6, 12], params = {kind = "branches"}},
+  {sfx = "wild_animal", db = -18, every = [14, 28], params = {kind = "cerf"}},
+  {sfx = "crack", db = -18, every = [11, 22], params = {kind = "branche"}},
+]
+
+[grassland]
+bed = "meadow"
+layers = [
+  {sfx = "night_insects", db = -7, wide = true, params = {density = 0.4}},
+  {sfx = "foliage", db = -8, every = [4, 9], params = {kind = "herbe"}},
+  {sfx = "bird_kind", db = -18, every = [12, 24], params = {kind = "rapaces"}},
+]
+
+[historical]
+bed = "town"
+layers = [
+  {sfx = "crowd_murmur", db = -5, wide = true, params = {mood = 0.3, distance = 0.6, people = 12}},
+  {sfx = "footsteps", db = -9, every = [5, 10], params = {ground = "cobblestone", steps = 6}},
+  {sfx = "door_family", db = -12, every = [10, 20], params = {kind = "donjon"}},
+  {sfx = "wagon", db = -8, every = [8, 16], params = {dur = 4.0}},
+  {sfx = "distant_bell", db = -15, every = [12, 24], params = {distance = 300.0}},
+]
+
+[hitech]
+layers = [
+  {sfx = "hvac", db = -5, params = {state = "fan"}},
+  {sfx = "room_tone", db = -14, params = {kind = "bureau"}},
+  {sfx = "cyber_ui", db = -12, every = [4, 9], params = {kind = "scan"}},
+  {sfx = "hard_drive", db = -14, every = [6, 12], params = {dur = 1.5}},
+  {sfx = "servo", db = -14, every = [7, 14]},
+]
+room = "studio"
+
+[hospital]
+layers = [
+  {sfx = "hvac", db = -8, params = {state = "cool"}},
+  {sfx = "medical", db = -10, params = {kind = "moniteur"}},
+  {sfx = "medical", db = -14, params = {kind = "respirateur"}},
+  {sfx = "crowd_murmur", db = -14, every = [8, 16], params = {people = 4, mood = 0.15, dur = 4.0}},
+  {sfx = "cart", db = -12, every = [9, 18], params = {kind = "chariot", dur = 3.0}},
+  {sfx = "elevator", db = -14, every = [15, 28], params = {kind = "carillon"}},
+  {sfx = "door_family", db = -12, every = [10, 20], params = {kind = "coulissante"}},
+]
+room = "hall"
+
+[industrial]
+layers = [
+  {sfx = "industrial", db = -2, params = {kind = "usine"}},
+  {sfx = "conveyor", db = -6},
+  {sfx = "transformer", db = -12, params = {loose = 0.3}},
+  {sfx = "industrial", db = -3, every = [5, 10], params = {kind = "presse", dur = 2.0}},
+  {sfx = "air_system", db = -10, every = [7, 14], params = {kind = "air_dryer_purge"}},
+]
+room = "hall"
+
+[insect]
+bed = "meadow"
+layers = [
+  {sfx = "night_insects", db = 2, wide = true, params = {density = 0.8}},
+  {sfx = "swarm", db = -6, wide = true, params = {kind = "cigales", count = 8}},
+]
+
+[lakeside]
+bed = "lake"
+layers = [
+  {sfx = "lap", db = -2, wide = true, params = {kind = "clapot"}},
+  {sfx = "dawn_chorus", db = -8, wide = true, params = {birds = 5}},
+  {sfx = "frog", db = -13, every = [7, 14], params = {kind = "ribbit"}},
+  {sfx = "farm_bird", db = -14, every = [10, 20], params = {kind = "canard"}},
+]
+
+[market]
+layers = [
+  {sfx = "crowd_murmur", db = -1, wide = true, params = {mood = 0.8, distance = 0.4, people = 12}},
+  {sfx = "coins", db = -11, every = [4, 8], params = {kind = "comptage"}},
+  {sfx = "shout", db = -9, every = [5, 11], params = {kind = "encouragement"}},
+  {sfx = "cart", db = -9, every = [7, 14], params = {kind = "charrette"}},
+  {sfx = "chicken", db = -15, every = [9, 17], params = {kind = "caquet"}},
+  {sfx = "clink", db = -15, every = [5, 11]},
+]
+
+[nautical]
+bed = "harbour"
+layers = [
+  {sfx = "lap", db = -3, wide = true, params = {kind = "quai"}},
+  {sfx = "sailboat", db = -6, wide = true},
+  {sfx = "creak", db = -11, every = [6, 12], params = {material = "wood"}},
+  {sfx = "ship_bell", db = -14, every = [12, 24], params = {ring = 1.5}},
+  {sfx = "foghorn", db = -12, every = [15, 30], params = {distance = 800.0}},
+  {sfx = "bird_kind", db = -15, every = [8, 16], params = {kind = "marins"}},
+]
+
+[office]
+layers = [
+  {sfx = "hvac", db = -8, params = {state = "fan"}},
+  {sfx = "crowd_murmur", db = -14, wide = true, params = {people = 5, mood = 0.3, distance = 0.7}},
+  {sfx = "keyboard_typing", db = -9, every = [5, 9], params = {keys = 20}},
+  {sfx = "printer", db = -13, every = [12, 22], params = {lines = 2}},
+  {sfx = "office", db = -13, every = [7, 15], params = {kind = "agrafeuse"}},
+  {sfx = "phone_bell", db = -15, every = [14, 26]},
+]
+room = "studio"
+
+[park]
+bed = "meadow"
+layers = [
+  {sfx = "dawn_chorus", db = -4, wide = true, params = {birds = 6}},
+  {sfx = "crowd_murmur", db = -12, wide = true, params = {people = 8, mood = 0.5, distance = 0.9}},
+  {sfx = "fountain", db = -13, wide = true},
+  {sfx = "bicycle", db = -11, every = [10, 18], params = {dur = 4.0}},
+  {sfx = "bark", db = -16, every = [11, 20], params = {size = "small", count = 2}},
+  {sfx = "ball_bounce", db = -16, opt = true, every = [8, 15], params = {kind = "foot", surface = "turf"}},
+]
+
+[prison]
+layers = [
+  {sfx = "crowd_murmur", db = -10, wide = true, params = {people = 8, mood = 0.25, distance = 0.8}},
+  {sfx = "chain", db = -8, every = [6, 13], params = {dur = 2.0}},
+  {sfx = "door_family", db = -5, every = [10, 20], params = {kind = "prison"}},
+  {sfx = "lock", db = -9, every = [9, 18], params = {kind = "verrou"}},
+  {sfx = "footsteps", db = -11, every = [6, 11], params = {ground = "concrete", shoe = "boot", steps = 6}},
+  {sfx = "shout", db = -13, every = [8, 16], params = {kind = "hurlement"}},
+]
+room = "hall"
+
+[protest]
+bed = "city"
+layers = [
+  {sfx = "crowd", db = -1, wide = true, params = {kind = "chants", voices = 12}},
+  {sfx = "shout", db = -8, every = [4, 9], params = {kind = "cri de guerre", people = 4}},
+  {sfx = "crowd", db = -6, every = [9, 16], params = {kind = "huee", dur = 3.0}},
+  {sfx = "applause", db = -10, every = [12, 22], params = {dur = 3.0}},
+  {sfx = "siren_wail", db = -18, every = [15, 28], params = {kind = "police_fr", dur = 4.0, bright = 0.5}},
+]
+
+[public]
+layers = [
+  {sfx = "crowd_murmur", db = -2, wide = true, params = {mood = 0.3, distance = 0.6, people = 12}},
+  {sfx = "footsteps", db = -9, every = [4, 8], params = {ground = "hard_floor", steps = 6}},
+  {sfx = "alert_tone", db = -15, every = [14, 26], params = {preset = "information"}},
+  {sfx = "door_family", db = -14, every = [10, 20], params = {kind = "tournante", dur = 3.0}},
+]
+room = "hall"
+
+[religious]
+layers = [
+  {inst = "church_organ", db = -6, notes = ["C3", "G3", "C4", "E4"]},
+  {sfx = "crowd_murmur", db = -15, wide = true, params = {people = 8, mood = 0.1, distance = 0.8}},
+  {sfx = "distant_bell", db = -12, every = [9, 18], params = {distance = 100.0}},
+  {sfx = "cough", db = -18, every = [9, 18]},
+]
+room = "church"
+
+[residential]
+layers = [
+  {sfx = "room_tone", db = 0, wide = true, params = {kind = "salon"}},
+  {sfx = "clock", db = -14, params = {size = "mantle"}},
+  {sfx = "appliance", db = -12, params = {kind = "frigo"}},
+  {sfx = "door_family", db = -10, every = [12, 24], params = {kind = "battante"}},
+  {sfx = "faucet", db = -13, every = [10, 22], params = {dur = 2.0}},
+  {sfx = "kettle", db = -18, every = [20, 40], params = {dur = 4.0}},
+]
+room = "bedroom"
+
+[restaurant]
+layers = [
+  {sfx = "crowd_murmur", db = -1, wide = true, params = {mood = 0.8, distance = 0.4, people = 12}},
+  {sfx = "clink", db = -10, every = [2, 5]},
+  {sfx = "eat", db = -15, every = [6, 12]},
+  {sfx = "cork_pop", db = -14, every = [12, 24]},
+  {sfx = "frying_pan", db = -14, every = [9, 18]},
+  {sfx = "footsteps", db = -14, every = [7, 13], params = {ground = "wood", steps = 5}},
+]
+room = "studio"
+
+[room]
+layers = [
+  {sfx = "room_tone", db = 0, wide = true, params = {kind = "salon"}},
+]
+
+[rural]
+bed = "meadow"
+layers = [
+  {sfx = "dawn_chorus", db = -6, wide = true, params = {birds = 5}},
+  {sfx = "moo", db = -14, every = [9, 18]},
+  {sfx = "tractor", db = -18, every = [15, 30], params = {dur = 4.0}},
+  {sfx = "bark", db = -20, every = [11, 22], params = {count = 2}},
+]
+
+[school]
+layers = [
+  {sfx = "crowd", db = -2, wide = true, params = {kind = "enfants", voices = 12}},
+  {sfx = "alarm_bell", db = -12, every = [16, 30], params = {dur = 2.0}},
+  {sfx = "ball_bounce", db = -14, opt = true, every = [6, 12], params = {kind = "basket", surface = "concrete"}},
+  {sfx = "door_family", db = -12, every = [9, 18], params = {kind = "battante"}},
+  {sfx = "footsteps", db = -11, every = [5, 9], params = {ground = "hard_floor", gait = "run", steps = 6}},
+]
+room = "hall"
+
+[scifi]
+layers = [
+  {sfx = "dark_drone", db = -3, params = {note = 40.0}},
+  {sfx = "force_field", db = -12, params = {freq = 80}},
+  {sfx = "hvac", db = -12, params = {state = "fan"}},
+  {sfx = "cyber_ui", db = -12, every = [4, 9], params = {kind = "scan"}},
+  {sfx = "servo", db = -13, every = [7, 14]},
+  {sfx = "door_family", db = -9, every = [10, 19], params = {kind = "hi_tech"}},
+]
+
+[seaside]
+bed = "sea"
+layers = [
+  {sfx = "surf", db = -2, wide = true, params = {distance = 60.0}},
+  {sfx = "bird_kind", db = -10, every = [5, 11], params = {kind = "marins"}},
+  {sfx = "birdsong", db = -14, every = [7, 15], params = {species = "gull"}},
+  {sfx = "crowd_murmur", db = -19, wide = true, params = {people = 8, mood = 0.6, distance = 1.0}},
+]
+
+[sport]
+layers = [
+  {sfx = "crowd", db = -1, wide = true, params = {kind = "ovation", voices = 16}},
+  {sfx = "crowd", db = -4, every = [7, 13], params = {kind = "oh"}},
+  {sfx = "applause", db = -8, every = [9, 16], params = {dur = 3.0}},
+  {sfx = "pea_whistle", db = -8, opt = true, every = [9, 16], params = {blasts = 2}},
+  {sfx = "ball_bounce", db = -14, opt = true, every = [4, 8], params = {kind = "basket"}},
+]
+
+[suburban]
+bed = "meadow"
+layers = [
+  {sfx = "dawn_chorus", db = -7, wide = true, params = {birds = 5}},
+  {sfx = "pass_by", db = -6, every = [8, 15], params = {dur = 5.0, speed = 45.0}},
+  {sfx = "bark", db = -16, every = [10, 20], params = {count = 2}},
+  {sfx = "mower", db = -17, every = [16, 30], params = {dur = 4.0}},
+  {sfx = "car_door", db = -14, every = [11, 20]},
+]
+
+[swamp]
+bed = "swamp"
+layers = [
+  {sfx = "night_insects", db = -3, wide = true, params = {density = 0.7, temp = 26.0}},
+  {sfx = "frog", db = -5, every = [4, 9], params = {kind = "croak", calls = 4}},
+  {sfx = "frog", db = -9, every = [5, 10], params = {kind = "trill", calls = 2}},
+  {sfx = "bubbles", db = -14, every = [8, 15], params = {dur = 2.0}},
+  {sfx = "mud", db = -14, opt = true, every = [9, 18], params = {kind = "bulles", dur = 2.0}},
+]
+
+[town]
+bed = "town"
+layers = [
+  {sfx = "crowd_murmur", db = -5, wide = true, params = {mood = 0.3, distance = 0.6, people = 12}},
+  {sfx = "pass_by", db = -5, every = [7, 14], params = {dur = 5.0, speed = 40.0}},
+  {sfx = "distant_bell", db = -14, every = [12, 24], params = {distance = 300.0}},
+  {sfx = "bike_bell", db = -14, every = [10, 20]},
+  {sfx = "footsteps", db = -12, every = [6, 11], params = {ground = "stone", steps = 6}},
+]
+
+[traffic]
+bed = "city"
+layers = [
+  {sfx = "tyre_roll", db = -7, wide = true, params = {speed = 60.0}},
+  {sfx = "pass_by", db = 0, every = [2, 5], params = {dur = 4.0}},
+  {sfx = "truck", db = -1, every = [8, 15], params = {kind = "truck_passby", dur = 5.0}},
+  {sfx = "motorcycle", db = -4, every = [9, 18], params = {kind = "passby", dur = 4.0}},
+  {sfx = "car_horn", db = -12, every = [8, 16], params = {dur = 0.5}},
+]
+
+[transportation]
+layers = [
+  {sfx = "crowd_murmur", db = -3, wide = true, params = {mood = 0.3, distance = 0.6, people = 12}},
+  {sfx = "escalator", db = -13},
+  {sfx = "rail", db = -2, every = [14, 24], params = {kind = "metro_start"}},
+  {sfx = "alert_tone", db = -14, every = [12, 22], params = {preset = "information"}},
+  {sfx = "footsteps", db = -10, every = [4, 8], params = {ground = "hard_floor", steps = 6}},
+]
+room = "hall"
+
+[tropical]
+bed = "jungle"
+layers = [
+  {sfx = "night_insects", db = -4, wide = true, params = {density = 0.7, temp = 28.0}},
+  {sfx = "rain_on", db = -9, wide = true, params = {surface = "feuilles", intensity = 0.3}},
+  {sfx = "bird_kind", db = -8, every = [4, 9], params = {kind = "tropicaux"}},
+  {sfx = "primate", db = -13, every = [11, 20], params = {kind = "singe"}},
+  {sfx = "birdsong", db = -14, every = [8, 15], params = {species = "cuckoo"}},
+]
+
+[tundra]
+bed = "tundra"
+layers = [
+  {sfx = "snowfall", db = -10, wide = true, params = {hiss = 0.3}},
+  {sfx = "gust", db = -3, every = [7, 14], params = {through = "canyon"}},
+  {sfx = "wild_animal", db = -14, every = [15, 28], params = {kind = "loup"}},
+  {sfx = "ice_crack", db = -14, every = [11, 22], params = {distance = 80.0}},
+]
+
+[underground]
+bed = "cave"
+layers = [
+  {sfx = "cave_drips", db = -3, wide = true},
+  {sfx = "noise_bed", db = -10, wide = true, params = {kind = "rumble"}},
+  {sfx = "rail", db = -9, every = [15, 25], params = {kind = "metro_start"}},
+]
+
+[underwater]
+layers = [
+  {sfx = "underwater_ambience", db = 3, wide = true},
+  {sfx = "bubbles", db = -8, every = [6, 12], params = {dur = 2.0, underwater = 1}},
+  {sfx = "whale", db = -15, every = [12, 24]},
+  {sfx = "submarine", db = -14, every = [16, 28], params = {dur = 6.0}},
+]
+
+[urban]
+bed = "city"
+layers = [
+  {sfx = "crowd_murmur", db = -6, wide = true, params = {mood = 0.3, distance = 0.6, people = 12}},
+  {sfx = "pass_by", db = -2, every = [4, 8], params = {dur = 4.0, speed = 50.0}},
+  {sfx = "bus", db = -8, every = [14, 26], params = {dur = 5.0}},
+  {sfx = "siren_wail", db = -18, every = [15, 28], params = {kind = "police_fr", dur = 4.0, bright = 0.5}},
+  {sfx = "car_horn", db = -14, every = [8, 16], params = {dur = 0.5}},
+  {sfx = "air_system", db = -14, every = [12, 22], params = {kind = "air_dryer_purge"}},
+]
+
+[warfare]
+bed = "war"
+climax = 0.7
+layers = [
+  {sfx = "firearm", db = -6, every = [3, 7], params = {distance = 120.0, shots = 4, echo = 0.3, render = "pressure"}},
+  {sfx = "firearm", db = -9, every = [4, 9], params = {weapon = "ak47", distance = 200.0, shots = 3, echo = 0.3, render = "pressure"}},
+  {sfx = "howitzer", db = -5, every = [7, 13], params = {distance = 900.0}},
+  {sfx = "shell_incoming", db = -7, every = [8, 15], params = {distance = 300.0}},
+  {sfx = "crowd", db = -11, every = [9, 17], params = {kind = "combat", voices = 8, dur = 3.0}},
+  {sfx = "shout", db = -13, every = [7, 13], params = {kind = "cri de guerre", people = 3}},
+]
+room = "street"
+
+[wildfire]
+bed = "burn"
+layers = [
+  {sfx = "fire", db = 2, wide = true, params = {size = 1.0, wind = 0.6}},
+  {sfx = "crack", db = -6, every = [3, 7], params = {kind = "branche"}},
+  {sfx = "tree", db = -9, every = [11, 22], params = {kind = "chute"}},
+  {sfx = "gust", db = -5, every = [7, 13], params = {through = "leaves"}},
+]
+
+[cacophony]
+bed = "city"
+layers = [
+  {sfx = "crowd", db = -2, wide = true, params = {kind = "panique", voices = 12}},
+  {sfx = "car_alarm", db = -4, every = [5, 9], params = {seq = "01", motif = 3.0}},
+  {sfx = "air_horn", db = -4, every = [3, 6], params = {dur = 1.2}},
+  {sfx = "siren_wail", db = -4, every = [5, 9], params = {dur = 4.0}},
+  {sfx = "jackhammer", db = -5, every = [4, 8], params = {dur = 2.0}},
+  {sfx = "alarm_bell", db = -7, every = [4, 8], params = {dur = 2.0}},
+]
+
+[environmental]
+bed = "open"
+layers = [
+  {sfx = "noise_bed", db = -9, wide = true, params = {kind = "hum"}},
+  {sfx = "pass_by", db = -9, every = [7, 14], params = {dur = 4.0}},
+  {sfx = "flyby_jet", db = -13, every = [18, 30], params = {dur = 8.0, closest = 800.0}},
+]

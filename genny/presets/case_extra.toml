@@ -1,0 +1,33 @@
+schema = "genny.preset/1"
+family = "case_extra"
+# db: base diameter, dn: neck outer diameter, h: wall, neck: neck length (0 = straight), all mm. cap: cm3. mass: g. mat: brass | pe.
+
+[45acp]
+L = 22.8
+db = 12.1
+dn = 12.1
+h = 0.35
+cap = 1.6
+mass = 5.0
+mat = "brass"
+neck = 0.0
+
+[20mm]
+L = 102.0
+db = 29.0
+dn = 29.0
+h = 1.0
+cap = 60.0
+mass = 90.0
+mat = "brass"
+neck = 0.0
+
+[105mm]
+L = 370.0
+db = 120.0
+dn = 120.0
+h = 1.5
+cap = 3000.0
+mass = 3000.0
+mat = "brass"
+neck = 0.0

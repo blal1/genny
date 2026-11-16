@@ -141,7 +141,7 @@ def test_ensemble_sigma_and_nma():
 
 
 def test_emotion_palettes():
-    assert C.EMOTIONS["sad"]["tempo"] == 0.85 and C.EMOTIONS["angry"]["level_db"] == 3.0
+    assert abs(C.EMOTIONS["sad"]["tempo"] - 1 / 1.3) < 1e-9 and C.EMOTIONS["angry"]["level_db"] == 8.0
     L = dict(BASE, role="melody")
     ref = C.generate(L, 120)
     sad = C.generate(dict(L, emotion="sad"), 120)

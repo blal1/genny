@@ -46,7 +46,7 @@ def test_bubble_field_damping_follows_radius():
         beta = float(m.bubble_params(r)[1])
         assert abs(_decay_rate(y) / beta - 1) < 0.03
         if r < 0.5e-3:
-            assert abs(beta / (math.pi * f * (P.DELTA_RAD + P.DELTA_TH)) - 2.0) < 0.05
+            assert abs(beta / (math.pi * f * (P.DELTA_RAD + P.DELTA_TH)) - 1.70) < 0.05
 
 
 def test_minnaert_rises_with_depth():

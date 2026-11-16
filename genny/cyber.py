@@ -12,7 +12,9 @@ rates slipping 1-2 % at random, the housing fitted to recordings.
 """
 from __future__ import annotations
 
+import functools
 import math
+import warnings
 
 import numba
 import numpy as np
@@ -21,6 +23,7 @@ from scipy.ndimage import uniform_filter1d
 from scipy.signal import lfilter, resample, resample_poly
 
 from . import filters as F
+from . import presets
 from . import osc as O
 from . import spectral as S
 from .calibrate import stats_snr
@@ -35,6 +38,20 @@ from .sfx import _round, sfx
 
 def _modes(x, freqs, decays, gains):
     return M.render_modes(x, M.Modes(freqs, decays, gains, "zeros"))
+
+
+def throttle_rpm(pedal, idle: float, top: float, lag_up: float = 1.4, lag_down: float = 2.0) -> np.ndarray:
+    """Engine speed (rpm, one value per sample) following ``pedal`` (0..1) from ``idle`` to ``top`` through a first-order lag
+    that is quicker rising than falling; the lag runs at 200 Hz and is interpolated."""
+    n = len(pedal)
+    m = max(int(n / SR * 200.0), 2)
+    tgt = idle + (top - idle) * np.interp(np.linspace(0, n - 1, m), np.arange(n), pedal)
+    out, x, dt = np.empty(m), idle, 1.0 / 200.0
+    for i in range(m):
+        tau = max(lag_up if tgt[i] > x else lag_down, dt)
+        x += (tgt[i] - x) * (1.0 - math.exp(-dt / tau))
+        out[i] = x
+    return np.interp(np.arange(n), np.linspace(0, n - 1, m), out)
 
 
 def _ramp(a: float, b: float, n: int) -> np.ndarray:
@@ -94,7 +111,7 @@ def core_strain(b, joints=0.0, packet=0):
 
 GRID_EPSILON = {"DE": 1.1, "US": 1.35, "EE": 1.4, "RU": 1.5, "GB": 1.7, "SE": 2.6, "ZA": 2.7, "ES-PM": 3.4, "ES-GC": 4.7,
                 "IS": 6.5, "FO": 9.8}
-GRID_TAU = 10.0
+GRID_TAU = 300.0
 
 
 def grid_frequency(n, f0, eps_mhz, rng, tau=GRID_TAU, rate=100.0):
@@ -125,6 +142,9 @@ def transformer_leq_db(tesla):
     return np.where(x < b[0], lo, np.where(x > b[-1], hi, np.interp(x, b, l)))
 
 
+MAINS_SD_MHZ = ((50.0, 60.0), (18.8, 18.2))      # mains Hz -> sd of the long-term frequency offset, mHz
+
+
 @sfx("transformer", "Power transformer / substation hum from the core's magnetostriction: 100 or 120 Hz and its multiples, tank resonances, loose-lamination buzz.",
      dur=(4.0, "s"), mains=(50.0, "Hz supply (50 or 60): the hum is at twice this"),
      flux=(0.8, "0.3..1.3 core induction relative to saturation: higher = more harmonics, harsher"),
@@ -140,8 +160,8 @@ def transformer_leq_db(tesla):
 def transformer(sr=DEFAULT_SR, dur=4.0, mains=50.0, flux=0.8, dc_bias=0.0, load=0.3, loose=0.0, size=1.0, strip=0.0, seed=0,
                 joints=0.0, stress=0.0, packet=0, grid="", tesla=0.0):
     """The radiated sound is taken as the strain velocity (a large tank radiates as its surface
-    velocity) plus the tank's modes. The grid frequency is off by a constant drawn from the seed, sd 3.8e-4
-    (18.8 mHz at 50 Hz): over a few seconds a real grid holds still."""
+    velocity) plus the tank's modes. The grid frequency is off by a constant drawn from the seed, sd 18.8 mHz at 50 Hz
+    and 18.2 mHz at 60 Hz: over a few seconds a real grid holds still."""
     rng = _rng(seed, 71)
     n = _n(dur)
     gain_t = 1.0
@@ -149,7 +169,9 @@ def transformer(sr=DEFAULT_SR, dur=4.0, mains=50.0, flux=0.8, dc_bias=0.0, load=
         bt = float(np.clip(tesla, 0.5, 2.0))
         flux = bt / TRANSFORMER_BSAT
         gain_t = 10 ** ((float(transformer_leq_db(bt)) - float(transformer_leq_db(1.5))) / 20.0)
-    f = float(np.clip(mains, 20.0, 400.0)) * (1.0 + 3.8e-4 * rng.standard_normal())
+    f = float(np.clip(mains, 20.0, 400.0))
+    sd = float(np.interp(f, *MAINS_SD_MHZ)) * 1e-3 if 45.0 <= f <= 65.0 else 3.8e-4 * f
+    f += sd * rng.standard_normal()
     if grid:
         if grid not in GRID_EPSILON:
             raise ValueError("transformer grid: " + " | ".join(GRID_EPSILON))
@@ -266,6 +288,11 @@ def gear_housing(housing):
     return float(np.clip(housing, 200.0, 8000.0)) * np.array([1.0, 1.42, 2.05, 2.9]), [1.0, 0.6, 0.4, 0.25]
 
 
+BEARING_RESONANCE_PRESETS = presets.schema("bearing", {
+    "rpm": presets.F(float, lo=1.0, hi=200000.0, unit="rpm"), "resonance": presets.F(float, lo=100.0, hi=20000.0, unit="Hz"),
+    "band": presets.F(float, lo=0.0, hi=20000.0, unit="Hz")}, shape=lambda d: (d["rpm"], d["resonance"], d["band"]))
+
+
 def bearing_frequencies(rpm: float, balls: int = 9, ball_mm: float = 7.94, pitch_mm: float = 39.04,
                         angle_deg: float = 0.0) -> dict:
     """Kinematic rates in Hz for a fixed outer race: ball pass outer / inner, ball spin, cage (FTF)."""
@@ -317,14 +344,23 @@ def mirror_gain(f, c=343.0, d=MIRROR_D, cap_db=30.0):
      rotating=("inner", "inner (shaft) | outer: the outer ring turns (planet gear, wheel hub): an inner-race defect stays in the load zone and ticks evenly, an outer-race defect swells once per turn"),
      defect=(0.0, "deg of race the defect spans: 0 = a point; wider = an entry and an exit shock, merging past the ball spacing"),
      ring=(1.0, "x on the housing ring time: 3-5 for a slow crane or turret bearing"),
-     mirror=(0, "1 = recorded through a 90 mm parabolic mirror: highs lifted as (pi D f / c)^2"), seed=(0, "variation"))
+     mirror=(0, "1 = recorded through a 90 mm parabolic mirror: highs lifted as (pi D f / c)^2"),
+     preset=("", " | ".join(("", *BEARING_RESONANCE_PRESETS)) + ": a housing resonance far above the shaft rate (rpm 1750 and resonance 1000 are replaced by the preset's)"),
+     seed=(0, "variation"))
 def bearing(sr=DEFAULT_SR, dur=3.0, rpm=1750.0, rpm_end=-1.0, state="healthy", severity=0.6, balls=9, ball_mm=7.94,
             pitch_mm=39.04, resonance=1000.0, seed=0, size="", angle=0.0, creep=0, load=0.0, rotating="inner", defect=0.0,
-            ring=1.0, mirror=0):
+            ring=1.0, mirror=0, preset=""):
     """States beyond the classic four: pitting (several small pits, uneven ticks at BPFO), crack (sharp inner-race
     clicks), spall (an extended worn spall: no sharp shocks, a level that follows the shaft harmonics and noise
     swelling in the load zone), polished (the same, with a small shock as each ball leaves it), cage (irregular
     knocks at the cage rate)."""
+    if preset:
+        if preset not in BEARING_RESONANCE_PRESETS:
+            raise ValueError(f"bearing preset {preset!r}: use one of {', '.join(BEARING_RESONANCE_PRESETS)}")
+        p_rpm, resonance, band = BEARING_RESONANCE_PRESETS[preset]
+        rpm = p_rpm if rpm == 1750.0 else rpm
+        if band:
+            ring = 140.0 / (math.pi * band)
     if size:
         if str(size) not in BEARING_SIZES:
             raise ValueError(f"bearing size {size!r}: use one of {', '.join(BEARING_SIZES)}")
@@ -353,7 +389,7 @@ def bearing(sr=DEFAULT_SR, dur=3.0, rpm=1750.0, rpm_end=-1.0, state="healthy", s
     # these are the 700 Hz, 1 kHz, 2 kHz and 4.1 kHz peaks of recordings of an SKF 6004.
     f0 = float(np.clip(resonance, 200.0, 19000.0))
     res = np.minimum(f0 * np.array([0.7, 1.0, 2.0, 4.1]), 0.45 * SR)
-    dec = np.array([120.0, 140.0, 180.0, 260.0]) / float(np.clip(ring, 0.2, 10.0))
+    dec = np.array([120.0, 140.0, 180.0, 260.0]) / float(np.clip(ring, 0.04, 10.0))
     housing = lambda force: _modes(force, res, dec, [0.7, 1.0, 1.0, 0.3])
     # Rolling noise: surface roughness under the balls ringing the housing, over the low-mid rumble of
     # the shaft and frame; each ball passing the load modulates it slightly.
@@ -444,14 +480,18 @@ def _port(x, a, b, ramp):
 
 @numba.njit(cache=True)
 def _pipe_engine_k(inc, offs, noise, pops, n_ex, n_in, n_pipe, n_muf, pf, igf, ign_t, bank, mode, ch_len, ch_r, ch_g,
-                   dj, t_in, t_ex, n_cyl, n_out, r_out, r_ie=-0.7576, r_xe=0.06):
+                   dj, t_in, t_ex, n_cyl, n_out, r_out, r_ie, r_xe, r_muf, t_muf, tab, t2, drt, peo, fnom, gate, blow):
     n, C, nb, S = len(inc), len(offs), len(n_pipe), len(ch_len)
+    M, ncy = tab.shape[1], gate.shape[1]
+    k_ex, r_b, k_sc, k_comb, k_in, f_low = t2[0], t2[1], t2[2], t2[3], t2[4], t2[5]
+    pxs, apv = np.zeros(C), np.zeros(C)
+    cx = 0.0
     m_dj = dj.shape[1]
     cylb = np.zeros((C, max(n_cyl, 1)))
     ob = np.zeros(max(n_out, 1))
     oret = 0.0
     exu, exl = np.zeros((C, n_ex.max())), np.zeros((C, n_ex.max()))
-    inu, inl = np.zeros((C, n_in)), np.zeros((C, n_in))
+    inu, inl = np.zeros((C, n_in.max())), np.zeros((C, n_in.max()))
     pu, pl = np.zeros((nb, n_pipe.max())), np.zeros((nb, n_pipe.max()))
     mu, ml = np.zeros((4, n_muf.max())), np.zeros((4, n_muf.max()))
     m_ch = max(ch_len.max(), 1) if S else 1
@@ -466,49 +506,70 @@ def _pipe_engine_k(inc, offs, noise, pops, n_ex, n_in, n_pipe, n_muf, pf, igf, i
     x = 0.0
     for t in range(n):
         x = (x + inc[t]) % 1.0
+        cx += inc[t]
         coll[:] = 0.0
         intake, vib = 0.0, 0.0
         it = ign_t[t]
         for c in range(C):
-            xc = (x + offs[c] + dj[c, t % m_dj]) % 1.0
+            dc = dj[c, t % m_dj]
+            xc = (x + offs[c] + dc) % 1.0
+            g = gate[c, min(max(int(math.floor(cx + offs[c] + dc)), 0), ncy - 1)]
+            ig = igf[t] * g
+            sxe = 1.0
+            cex, cin = 0.0, 0.0
+            if blow:                                         # the exhaust pulse follows the combustion: a cut leaves f_low of it
+                sxe = f_low + (1.0 - f_low) * (min(1.0, ig / fnom[t]) if fnom[t] > 1e-9 else 0.0)
             if mode == 0:                                    # 4 strokes, 720 degrees, ignition at the middle of the cycle
                 xi, xe = (xc + t_in) % 1.0, (xc + t_ex) % 1.0
                 iv = math.sin(4 * math.pi * xi) if xi < 0.25 else 0.0
                 ev = -math.sin(4 * math.pi * xe) if xe > 0.75 else 0.0
                 cyl = pf * math.cos(4 * math.pi * xc)
                 if 0.5 < xc < 0.5 + it / 2:
-                    cyl += igf[t] * math.sin(2 * math.pi * (xc - 0.5) / it)
-            elif mode == 1:                                  # 2 strokes, 360 degrees from TDC: exhaust ports 86, transfer 116
-                ev = math.sin(math.pi * (xc - 86.0 / 360.0) / (188.0 / 360.0)) if 86.0 / 360.0 < xc < 274.0 / 360.0 else 0.0
-                iv = math.sin(math.pi * (xc - 116.0 / 360.0) / (128.0 / 360.0)) if 116.0 / 360.0 < xc < 244.0 / 360.0 else 0.0
-                cyl = pf * math.cos(2 * math.pi * xc)
-                if xc < it:                                  # the same crank angle as the 4-stroke pulse: twice its share of a 360 degree cycle
-                    cyl += igf[t] * math.sin(math.pi * xc / it)
+                    cyl += ig * math.sin(2 * math.pi * (xc - 0.5) / it)
+            elif mode == 1:                                  # 2 strokes: ports from the piston geometry, blowdown, crankcase pump
+                th = min(int(xc * M), M - 1)
+                ev, atr, iv, pcc, din = tab[0, th], tab[1, th], tab[2, th], tab[3, th], tab[4, th]
+                cyl = pf * math.cos(2 * math.pi * xc)        # the block feels the compression and the combustion; the pipe does not
+                if xc < it:
+                    cyl += ig * math.sin(math.pi * xc / it)
+                cex = 0.0
+                if ev > 0.0:
+                    if apv[c] == 0.0:                        # exhaust port opens: the cylinder holds the motored pressure plus the combustion
+                        pxs[c] = peo[t] + k_comb * ig
+                    pxs[c] -= pxs[c] * min(1.0, r_b * ev)
+                    pxs[c] *= 1.0 - min(1.0, 0.02 * atr)
+                    cex = k_ex * pxs[c] * ev + k_sc * atr * math.sqrt(max(pcc - 1.0, 0.0)) * drt[t]
+                else:
+                    pxs[c] = 0.0
+                apv[c] = ev
+                cin = k_in * din * inc[t] * M
             else:                                            # Wankel chamber, 1080 degrees of shaft from firing TDC
                 ev = _port(xc, 195.0 / 1080.0, 588.0 / 1080.0, 28.0 / 1080.0)
                 iv = _port(xc, 572.0 / 1080.0, 860.0 / 1080.0, 28.0 / 1080.0)
                 cyl = pf * math.cos(4 * math.pi * xc)        # V = Vmin + Vd (1 - cos(2 psi / 3)) / 2, the same period as a 4-stroke's cos(4 pi x)
                 if xc < it / 3:
-                    cyl += igf[t] * math.sin(3 * math.pi * xc / it)
+                    cyl += ig * math.sin(3 * math.pi * xc / it)
             if n_cyl > 0:                                    # the cylinder as a guide: both closed ends reflect 0.75
                 kc = t % n_cyl
                 cyl += 0.5625 * (1.0 - 0.9 * max(iv, ev)) * cylb[c, kc]
                 cylb[c, kc] = cyl
+            if mode != 1:
+                cex, cin = cyl * sxe, cyl
             vib += cyl
             # exhaust guide: left end = valve, right end = collector
             i = t % n_ex[c]
             r = 0.01 * ev + 0.7145 * (1.0 - ev)              # an open valve reflects almost nothing
             u, lo = exu[c, i], exl[c, i]
             b = bank[c]
-            exu[c, i] = (1.0 - r) * cyl * 0.5 + r * lo
+            exu[c, i] = (1.0 - r) * cex * 0.5 + r * lo
             exl[c, i] = back[b] / count[b] + r_xe * u
             coll[b] += u * (1.0 - r_xe)
             # intake guide: left end = open air (inverting), right end = valve
-            i = t % n_in
+            i = t % n_in[c]
             r = 0.006 * iv + 1.0 * (1.0 - iv)
             u, lo = inu[c, i], inl[c, i]
             inu[c, i] = r_ie * lo
-            inl[c, i] = (1.0 - r) * cyl * 0.5 + noise[t] * iv + r * u
+            inl[c, i] = (1.0 - r) * cin * 0.5 + noise[t] * iv + r * u
             intake += lo * (1.0 - r_ie)
         u = 0.0
         for b in range(nb):
@@ -535,8 +596,8 @@ def _pipe_engine_k(inc, offs, noise, pops, n_ex, n_in, n_pipe, n_muf, pf, igf, i
             k = t % n_muf[j]
             a, b2 = mu[j, k], ml[j, k]
             mu[j, k] = u * 0.25
-            ml[j, k] = -0.142 * a
-            ex += a * 1.142
+            ml[j, k] = r_muf * a
+            ex += a * ((1.0 - r_muf) if t_muf < -1.0 else t_muf)
             ret += b2
         for b in range(nb):
             if S:
@@ -554,6 +615,208 @@ def _pipe_engine_k(inc, offs, noise, pops, n_ex, n_in, n_pipe, n_muf, pf, igf, i
 
 
 _CYCLES = {"4": (0, 120.0), "2": (1, 60.0), "rotary": (2, 180.0)}     # kernel mode, rpm per cycle per second: 720, 360, 1080 degrees
+
+# Two-stroke cycle. ``ports`` = (exhaust opens deg after TDC, transfer opens deg, exhaust port width mm, transfer width mm,
+# stroke mm, rod mm, bore mm): the port areas follow the piston, the crankcase compresses on the down stroke, the cylinder
+# blows down through the exhaust port, the transfer ports scavenge. Tuned pipe length L = a theta / (12 N).
+TWO_STROKE_PORTS = (86.0, 115.0, 45.0, 38.0, 72.0, 130.0, 66.4)
+TWO_STROKE = dict(corner=2.0, gamma=1.3, k_se=1.3, cd=0.7, a_gas=560.0, mf_lo=0.55, mf_span=0.25, mf_stick=0.3,
+                  port_half=75.0, reed_p=0.98, dr_ref=0.9, shock=0.25, comb=0.4, motored=(0.05, 0.25), dr=(0.2, 0.75), se_ref=1.0 - math.exp(-1.3 * 0.95))
+EX_GAIN, SCAV_GAIN, INTAKE_GAIN = 6.0, 0.15, 80.0
+CUT_DYN = dict(limiter=(8000.0, 6000.0, 150.0), soft=(5000.0, 3000.0, 150.0))      # rpm/s up, rpm/s down, rpm of hysteresis
+
+
+def piston_x(theta_deg, stroke, rod):
+    """Distance of the piston below TDC (same unit as the stroke)."""
+    th, r = np.radians(np.asarray(theta_deg, float)), 0.5 * float(stroke)
+    return r * (1.0 - np.cos(th)) + rod * (1.0 - np.sqrt(1.0 - (r / rod * np.sin(th)) ** 2))
+
+
+def port_area(theta_deg, open_deg, width, stroke, rod, corner=None):
+    """Open area of a port (mm2 for mm) whose top edge is where the piston is at ``open_deg``: width x height less the
+    rounded corners (4 - pi) rc^2 s(h), s = min(h / 2 rc, 1). Zero before it opens, symmetric about the bottom dead centre."""
+    rc = TWO_STROKE["corner"] if corner is None else corner
+    xp = float(piston_x(open_deg, stroke, rod))
+    h = np.clip(piston_x(theta_deg, stroke, rod) - xp, 0.0, float(stroke) - xp)
+    return np.maximum(width * h - (4.0 - math.pi) * rc * rc * np.minimum(h / (2.0 * rc), 1.0), 0.0)
+
+
+def _ports_tuple(ports):
+    p = TWO_STROKE_PORTS if ports is None else tuple(float(v) for v in (_floats(ports) if isinstance(ports, str) else ports))
+    if len(p) > 7 or len(p) < 6:
+        raise ValueError("pipe_engine ports: exhaust deg, transfer deg, exhaust mm, transfer mm, stroke mm, rod mm[, bore mm]")
+    return p + TWO_STROKE_PORTS[len(p):]
+
+
+def two_stroke_tables(ports=None, induct="reed", ccr=1.4, m=720):
+    """(table, info): rows exhaust area, transfer area (each over its maximum), intake opening, crankcase pressure ratio and
+    the intake suction (pressure the closed crankcase would have, minus 1), per 360 / m degrees after TDC; ``info`` the
+    maximum exhaust area (m2), swept volume (m3) and the exhaust duration (degrees)."""
+    eo, to, bex, btr, S, l, B = _ports_tuple(ports)
+    if induct not in ("reed", "port"):
+        raise ValueError("pipe_engine induct: reed or port")
+    th = (np.arange(m) + 0.5) * 360.0 / m
+    aex, atr = port_area(th, eo, bex, S, l), port_area(th, to, btr, S, l)
+    s = piston_x(th, S, l) / S
+    Vc = 1.0 / (max(float(ccr), 1.05) - 1.0)
+    V = Vc + (1.0 - s)
+    gam, half = TWO_STROKE["gamma"], TWO_STROKE["port_half"]
+    wrap = np.where(th > 180.0, th - 360.0, th)
+    ain, pcc, din = np.zeros(m), np.ones(m), np.zeros(m)
+    q, drain, ta = 1.0, 0.0, atr / atr.max()
+    for rep in range(8):
+        flow = 0.0
+        for i in range(m):
+            qp = q * V[i - 1] / V[i]
+            p = qp ** gam
+            if induct == "port":
+                if abs(wrap[i]) <= half:
+                    p, a = 1.0, math.cos(0.5 * math.pi * wrap[i] / half)
+                else:
+                    a = 0.0
+            else:
+                lim = TWO_STROKE["reed_p"]
+                a = min(max(lim - p, 0.0) / 0.05, 1.0)
+                p = max(p, lim)
+            q = p ** (1.0 / gam)
+            ain[i], pcc[i], din[i] = a, p, (q - qp) * V[i]
+            if ta[i] > 0.0 and p > 1.0:                      # the transfer ports drain the crankcase into the cylinder
+                fl = ta[i] * math.sqrt(p - 1.0)
+                flow += fl
+                q = max(q - drain * fl / V[i], 0.5)
+        drain = TWO_STROKE["dr_ref"] / max(flow, 1e-9)
+    if induct == "reed":
+        ain = uniform_filter1d((ain > 0.0).astype(float), 24, mode="wrap")
+    tab = np.stack([aex / aex.max(), atr / atr.max(), ain, pcc, din])
+    return np.ascontiguousarray(tab), dict(a_ex=float(aex.max()) * 1e-6, v_swept=0.25 * math.pi * B * B * S * 1e-9, exhaust_deg=360.0 - 2.0 * eo)
+
+
+def scavenge(load, rpm, tuned_rpm=None, band=0.3):
+    """(delivery ratio, scavenging efficiency) per sample: DR = 0.2 + 0.75 load, raised by ``band`` in a Gaussian of 15 % of
+    the tuned speed around it; SE = 1 - exp(-1.3 DR), the residual fraction 1 - SE."""
+    dr = TWO_STROKE["dr"][0] + TWO_STROKE["dr"][1] * np.clip(np.asarray(load, float), 0.0, 1.0) * np.ones_like(rpm)
+    if tuned_rpm:
+        dr = dr * (1.0 + float(band) * np.exp(-(((rpm - float(tuned_rpm)) / (0.15 * float(tuned_rpm))) ** 2)))
+    return dr, 1.0 - np.exp(-TWO_STROKE["k_se"] * dr)
+
+
+def misfire_probability(se):
+    """Chance that a cycle does not fire: residual gas above 0.55 of the cylinder, certain at 0.8."""
+    return np.clip((1.0 - se - TWO_STROKE["mf_lo"]) / TWO_STROKE["mf_span"], 0.0, 1.0)
+
+
+def tuned_length(tuned_rpm, exhaust_deg, egt=800.0):
+    """L = a theta / (12 N) in m: the reflection comes back as the port closes (theta degrees of exhaust, N rpm)."""
+    return math.sqrt(1.36 * 287.0 * 0.835 * float(egt)) * float(exhaust_deg) / (12.0 * float(tuned_rpm))
+
+
+def tuned_chamber(tuned_rpm, exhaust_deg, d1, egt=800.0, step=2, stinger=0.6):
+    """Stepped expansion chamber as (delays in samples, junction reflections, section gains): length to the middle of the
+    counter-cone L = a theta / (12 N) with a = sqrt(1.36 R T) at the mean of 1 and 0.67 egt; header 0.3 L at d1, diffuser 0.35 L to
+    2.5 d1 (area ratio 6.25), belly 0.12 L, counter-cone 0.2 L down to ``stinger`` d1, stinger 12 diameters. Cones are steps of ``step``
+    samples; the speed of sound follows the temperature from egt at the header to 0.67 egt at the stinger."""
+    T0, T1 = float(egt), 0.67 * float(egt)
+    cs = lambda T: math.sqrt(1.36 * 287.0 * T)
+    L = tuned_length(tuned_rpm, exhaust_deg, egt)
+    d1, db, ds = float(d1), 2.5 * float(d1), float(stinger) * float(d1)
+    parts = [(0.3 * L, d1, d1), (0.35 * L, d1, db), (0.12 * L, db, db), (0.2 * L, db, ds), (12.0 * ds, ds, ds)]
+    tot = sum(p[0] for p in parts)
+    x0, dl, dd, gg = 0.0, [], [], []
+    for ln, da, db_ in parts:
+        c0 = cs(T0 + (T1 - T0) * min(x0 / tot, 1.0))
+        m = 1 if da == db_ else max(int(round(ln / (c0 * step / SR))), 2)
+        for k in range(m):
+            xm = x0 + ln * (k + 0.5) / m
+            c = cs(T0 + (T1 - T0) * min(xm / tot, 1.0))
+            dx = ln / m
+            dl.append(max(int(round(dx / c * SR)), 1))
+            dd.append(da + (db_ - da) * (k + 0.5) / m)
+            gg.append(math.exp(-0.09 * 0.072 * dx / math.sqrt(dd[-1] / 0.05)))
+        x0 += ln
+    A = np.array(dd) ** 2
+    return np.array(dl, dtype=np.int64), (A[:-1] - A[1:]) / (A[:-1] + A[1:]), np.array(gg)
+
+
+def _limiter_run(n, rpm0, n_lim, acc, dec, hyst, soft):
+    """1 kHz speed and state of a limiter: 0 firing, 1 soft zone (a cylinder in four skipped), 2 cut. Free revving at ``acc`` rpm/s,
+    cut at ``n_lim``, firing again ``hyst`` rpm lower while the engine slows at ``dec`` rpm/s."""
+    m = int(n / SR * 1000.0) + 2
+    N, st, cut, v = np.zeros(m), np.zeros(m, dtype=np.int64), False, float(rpm0)
+    for i in range(m):
+        zone = soft and not cut and v >= n_lim - 200.0
+        if cut:
+            v -= dec * 1e-3
+            cut = v > n_lim - hyst
+        else:
+            v += acc * (0.75 if zone else 1.0) * 1e-3
+            cut = v >= n_lim
+        N[i], st[i] = v, 2 if cut else (1 if (soft and v >= n_lim - 200.0) else 0)
+    k = np.minimum((np.arange(n) * 1000) // SR, m - 1)
+    return np.interp(np.arange(n) / SR * 1000.0, np.arange(m), N), st[k]
+
+
+def limiter_skips(rpm, cut="limiter", cut_dyn=None, cylinders=1, cycle=2):
+    """(period s, cut fraction, ignitions skipped per hole) of a limiter at ``rpm``: the hole lasts hyst / dec, the rest of the period
+    hyst / acc; the ignitions it swallows are that time x the firing rate rpm / 60 x cylinders (x 1/2 in four strokes)."""
+    acc, dec, hyst = CUT_DYN[cut] if cut_dyn is None else cut_dyn
+    hole, rise = hyst / dec, hyst / acc
+    return hole + rise, hole / (hole + rise), hole * float(rpm) / 60.0 * cylinders * (1.0 if cycle == 2 else 0.5)
+
+
+def _dfco_gain(ramp, ld, delay, ramp_s=0.3, hi=1500.0, lo=1200.0):
+    """Per-sample injection gain of a deceleration fuel cut: off after ``delay`` s of closed throttle above ``hi`` rpm,
+    on again below ``lo`` rpm or when the throttle opens, then ramped up over ``ramp_s``."""
+    n = len(ramp)
+    g, off, since, back = np.ones(n), False, 0.0, -1.0
+    for i in range(0, n, 44):
+        t = i / SR
+        brake = ld[i] < 0.15 and ramp[i] > hi
+        since = since + 44 / SR if brake else 0.0
+        if not off and since >= delay:
+            off = True
+        if off and (ramp[i] < lo or ld[i] > 0.25):
+            off, back = False, t
+        if off:
+            g[i:i + 44] = 0.0
+        elif back >= 0.0:
+            g[i:i + 44] = min((t - back) / ramp_s, 1.0)
+    return g
+
+
+def firing_gates(mode, offs, cx, n, rng, state=None, skip=None, pmf=None, stick=0.3, gain=None):
+    """Per cylinder and cycle gain of the combustion, (C, cycles). ``state`` the limiter state per sample (2 cut, 1 one in four
+    skipped), ``gain`` a per-sample gain (deceleration cut), ``pmf`` per-sample chance of a natural misfire: a Markov chain that
+    fires again with 1 - stick x chance after a miss. Returns the gate and the samples where a cut ends (relight)."""
+    C, ph = len(offs), 0.5 if mode == 0 else 0.0
+    ncy = int(cx[-1]) + 3
+    gate, ev = np.ones((C, ncy)), []
+    for c in range(C):
+        ks = np.arange(0, max(int(cx[-1] + offs[c] - ph), 0) + 1)
+        idx = np.searchsorted(cx + offs[c], ks + ph)
+        ev += [(int(i), c, int(k)) for i, k in zip(idx, ks) if i < n]
+    ev.sort()
+    cnt, last, missed, relight = 0, 0, np.zeros(C, dtype=bool), []
+    for i, c, k in ev:
+        gv = 1.0
+        if state is not None:
+            if state[i] == 2:
+                gv = 0.0
+            elif state[i] == 1:
+                gv = 0.0 if cnt % 4 == 0 else 1.0
+                cnt += 1
+            if last == 2 and state[i] != 2:
+                relight.append(i)
+            last = state[i]
+        if gain is not None:
+            gv *= float(gain[i])
+        if pmf is not None and gv > 0.0:
+            p = float(pmf[i]) * (stick if missed[c] else 1.0)
+            if rng.random() < p:
+                gv, missed[c] = 0.0, True
+            else:
+                missed[c] = False
+        gate[c, min(k, ncy - 1)] = gv
+    return gate, relight
 
 
 def _along(v, n):
@@ -609,6 +872,9 @@ def firing_transients(inc, C, rng, amount):
      side=(None, "Hz of side-branch resonators on the pipe that cancel their frequency (quarter-wave tubes, Helmholtz bottles), e.g. '110,857'"),
      expansion=(0.0, "area ratio of an expansion chamber on the pipe (0 = none; 4-16 a silencer drum)"),
      expansion_ms=(1.0, "ms length of that chamber"),
+     branch=(None, "'h,wall,radius' mm of a closed side branch: it cancels c / (4 (h + wall + 0.85 radius)) at the gas temperature"),
+     bottle=(None, "'volume_L,neck_mm,area_cm2' of a side Helmholtz bottle (neck area 0.6 x the pipe's): it cancels its own resonance"),
+     expansion_ir=(0, "k reflections: the expansion chamber as its reflection series (area ratio `expansion`, round trip 2 x `expansion_ms`) instead of the waveguide sections"),
      outlet=(0.0, "ms of a tail outlet pipe after the muffler (0 = none)"),
      outlet_r=(0.3, "reflection the outlet's open end sends back into the muffler"),
      alternator=(0.0, "0..1 alternator whine: 36 ripples per alternator turn, pulley 2.8"),
@@ -618,21 +884,59 @@ def firing_transients(inc, C, rng, amount):
      norm4=(0, "1 = scale the collector by 4 / C above four cylinders"),
      intake_gain=(1.0, "gain of the intake bus"), outlet_gain=(1.0, "gain of the exhaust outlet bus"),
      ends=("engine", "free-end reflections: engine (intake -0.7576, collector 0.06) | paper (-0.5, 0.1)"),
-     transients=(0.0, "0..1 a short burst above 4 kHz on every firing (the phase transients of the combustion), heard while the firing rate stays under 80 Hz, gone by 160 Hz"))
+     transients=(0.0, "0..1 a short burst above 4 kHz on every firing (the phase transients of the combustion), heard while the firing rate stays under 80 Hz, gone by 160 Hz"),
+     muffler_r=(-0.142, "-0.9..0.9 reflection at the end of each muffler tube (a positive value is a closed, resonant muffler)"),
+     compression=(2.43, "0.5..6 compression term of the cylinder pressure (the cos 4 pi x part)"),
+     ignition=(1.0, "0..1.5 x on the combustion pulse (0 = no ignition, the engine is only turned over)"),
+     clutch=(0.0, "0..1 clutch release rattle: noise band-passed at 1.9 kHz (Q 0.6), heard between 300 and 2200 rpm"),
+     transmission=("wave", "wave | baldan: what leaves the muffler tubes, 1 - r (wave) or 1 - |r| (baldan: a muffler that reflects everything passes nothing, a perfect silencer)"),
+     ignition_time=(-1.0, "0.01..0.2 duration of the combustion pulse in fractions of a cycle; -1 = from the load (0.069 at idle, 0.016 at full throttle)"),
+     throttle=(None, "pedal 0..1, a number or a curve: the speed runs from `rpm` (idle) towards `redline` with a first-order lag, quicker up than down (the engine's own acceleration, not a ramp)"),
+     redline=(6000.0, "rpm at full pedal, with throttle"), lag_up=(1.4, "s time constant while speeding up (-1 = from the engine dynamics model, `throttle_lags`: about 0.6 s)"),
+     lag_down=(2.0, "s while slowing down (-1 = from that model: about 3.3 s, the engine coasts down at a steady rate)"),
+     intakes=(None, "ms intake runner length per firing slot (admission per cylinder); replaces the 9-sample runner of every cylinder"),
+     bend=(None, "'a,R0' mm: tube radius and centre-line radius of a bend in the pipe, '25,75': the low-frequency sound speed rises (+24 cents), the pipe sounds shorter"),
+     step_radius=(0.0, "mm radius of the pipe entering the expansion chamber: adds the end-correction mass of the area step (alpha <= 0.55) to the chamber length"),
+     twin=(0.0, "m spacing of a second identical tailpipe: radiated power 2 + 2 sin(kd)/kd, +6 dB at low frequency (0 = single outlet)"),
+     twin_phase=(0.0, "radians between the two tailpipes"),
+     ports=(None, "2-stroke port geometry 'exhaust deg, transfer deg, exhaust width mm, transfer width mm, stroke mm, rod mm, bore mm' (default '86,115,45,38,72,130,66.4'): the port areas follow the piston"),
+     tuned_rpm=(None, "2-stroke: rpm the pipe is tuned to: builds the expansion chamber of length a theta / (12 N) and raises the delivery ratio around that speed"),
+     band=(0.3, "0..0.6 gain of the power band: delivery ratio x (1 + band) at the tuned speed, a Gaussian of 15 % of it"),
+     induct=("reed", "2-stroke intake: reed (non-return valve on the crankcase) | port (piston-controlled, 75 degrees either side of TDC)"),
+     ccr=(1.4, "1.1..2 crankcase compression ratio (2-stroke)"),
+     egt=(800.0, "K exhaust gas temperature at the header, for the tuned chamber"),
+     cut=(None, "ignition cut sequence: limiter (hard cut at rev_limit, back 150 rpm lower: the 2-stroke 'brap') | soft (one cylinder in four skipped from 200 rpm under, then cut) | dfco (fuel cut after 1.5 s of closed throttle, back at 1200 rpm or on throttle, ramped over 0.3 s)"),
+     rev_limit=(None, "rpm of the limiter (cut = limiter or soft); the speed then runs from `rpm` up to it and saw-tooths around it"),
+     misfire=(1.0, "0..1 x on the natural misfires of a 2-stroke at low charge (the residual gas fraction: the four-stroking idle)"),
+     steepen=(1.0, "0..3 x on the shock steepening of the 2-stroke exhaust pulse, which grows with the exhaust port pressure"),
+     raw=(0, "1 = no peak normalisation: the level of the physical model, to compare two renders (a fuel cut)"))
 def pipe_engine(sr=DEFAULT_SR, dur=3.0, rpm=1800.0, rpm_end=-1.0, cylinders=4, load=0.5, header=1.6, pipe=6.0,
                 lope=0.0, unequal=0.15, mic=0.3, backfire=0.0, seed=0, offsets=None, banks=None, headers=None, cycle=4,
                 fire=None, pops=None, chamber=None, muffler=None, extractor=0.0, cylinder=0.0, timing=None, jitter=0.0,
                 warp=0.0, block=1.0, radiate=0, units="ms", gas_temp=600.0, side=None, expansion=0.0, expansion_ms=1.0,
                 outlet=0.0, outlet_r=0.3, alternator=0.0, roots=0.0, view="tail", crank=0.0, norm4=0, intake_gain=1.0,
-                outlet_gain=1.0, ends="engine", transients=0.0):
+                outlet_gain=1.0, ends="engine", transients=0.0, muffler_r=-0.142, compression=2.43, ignition=1.0, clutch=0.0, ignition_time=-1.0, transmission="wave",
+                throttle=None, redline=6000.0, lag_up=1.4, lag_down=2.0, intakes=None, bend=None, step_radius=0.0, twin=0.0, twin_phase=0.0,
+                ports=None, tuned_rpm=None, band=0.3, induct="reed", ccr=1.4, egt=800.0, cut=None, rev_limit=None, misfire=1.0, steepen=1.0, raw=0,
+                cut_dyn=None, relight=None, blowdown=None, gate=None, cut_at=0.0, branch=None, bottle=None, expansion_ir=0):
     """`lope` is a cycle asymmetry.
 
     Python callers also have ``fire`` (ignition gain, 0 = fuel cut, a number or a curve), ``pops`` (a signal
     added to the collector, ``_fin`` scale 2.5 = one backfire) and ``chamber`` ((delays in samples, junction
     reflections, section gains) of a stepped expansion chamber between the pipe and the muffler).
-    Ports: exhaust 86 and transfer 116 degrees from TDC, 360 degree cycle; Wankel exhaust 195-588, intake 572-860,
-    ramp 28 of 1080 degrees of shaft, three chambers per rotor.
-    Half-sine port areas on the 2-stroke; the second bank's pipe, 7 % longer: with two identical pipes the banks would sum back to one even train and the half
+    Wankel exhaust 195-588, intake 572-860, ramp 28 of 1080 degrees of shaft, three chambers per rotor.
+    Two-stroke: the port areas come from ``ports`` and the piston; the exhaust is the blowdown of the cylinder through the exhaust port
+    (motored pressure plus the combustion, decaying with the port area), plus the scavenging flow of the transfer ports; the intake
+    is the crankcase pump (``induct`` reed or port); delivery ratio, scavenging efficiency and natural misfires follow the
+    load and the tuned speed (``tuned_rpm``, ``band``); ``tuned_rpm`` also builds the chamber when none is given
+    (``tuned_chamber``). The block keeps the compression and combustion pulses. The shock steepening of the exhaust
+    (``steepen``) follows the port pressure.
+    Cuts: ``fire`` = 0 leaves the motored pressure only (a 2-stroke exhaust 20 dB lower); ``cut`` runs a limiter, a soft cut or a
+    deceleration fuel cut (``cut_dyn`` = (rpm/s up, rpm/s down, hysteresis rpm), ``relight`` = chance of a pop when the spark returns);
+    ``cut_at`` (s): the speed follows its curve until then and runs free into the limiter after it (0 = from the start);
+    ``gate`` = (cylinders, cycles) gain of each combustion; ``blowdown`` 1 makes a four-stroke exhaust follow the combustion too
+    (a cut leaves a fifth of it, a deceleration cut a fifth of it inverted); ``raw`` 1 skips the peak normalisation.
+    The second bank's pipe, 7 % longer: with two identical pipes the banks would sum back to one even train and the half
     orders of a cross-plane V8 would cancel, where in the real car the left and right paths always differ."""
     rng = _rng(seed, 75)
     n = _n(dur)
@@ -640,9 +944,11 @@ def pipe_engine(sr=DEFAULT_SR, dur=3.0, rpm=1800.0, rpm_end=-1.0, cylinders=4, l
         raise ValueError("pipe_engine units: ms or m")
     if view not in ("tail", "cabin"):
         raise ValueError("pipe_engine view: tail or cabin")
+    if transmission not in ("wave", "baldan"):
+        raise ValueError("pipe_engine transmission: wave or baldan")
     if units == "m":
         ms = lambda L: None if L is None else (np.asarray(L, float) if np.ndim(L) else float(L)) / gas_speed(gas_temp) * 1e3
-        header, pipe, headers, muffler = ms(header), ms(pipe), ms(headers), ms(muffler)
+        header, pipe, headers, muffler, intakes = ms(header), ms(pipe), ms(headers), ms(muffler), ms(intakes)
         extractor, cylinder, outlet, expansion_ms = ms(extractor), ms(cylinder), ms(outlet), ms(expansion_ms)
     key = str(cycle)
     if key not in _CYCLES:
@@ -656,7 +962,24 @@ def pipe_engine(sr=DEFAULT_SR, dur=3.0, rpm=1800.0, rpm_end=-1.0, cylinders=4, l
     else:
         C = 3 * int(np.clip(cylinders, 1, 5)) if mode == 2 else int(np.clip(cylinders, 1, 16))
         offs = (np.arange(C) / C - (np.arange(C) % 2) * 0.5 * float(np.clip(lope, 0, 1)) / C) % 1.0
-    ramp = _along(np.clip(rpm, 30.0, 20000.0), n) if np.ndim(rpm) else _ramp(float(np.clip(rpm, 200.0, 20000.0)), rpm_end, n)
+    if throttle is not None:
+        if lag_up < 0 or lag_down < 0:
+            mu_, md_ = throttle_lags()
+            lag_up, lag_down = mu_ if lag_up < 0 else lag_up, md_ if lag_down < 0 else lag_down
+        ramp = throttle_rpm(_along(np.clip(throttle, 0.0, 1.0), n), float(np.clip(rpm, 200.0, 20000.0)), float(np.clip(redline, 400.0, 20000.0)),
+                            float(lag_up), float(lag_down))
+    else:
+        ramp = _along(np.clip(rpm, 30.0, 20000.0), n) if np.ndim(rpm) else _ramp(float(np.clip(rpm, 200.0, 20000.0)), rpm_end, n)
+    if cut not in (None, "limiter", "soft", "dfco"):
+        raise ValueError("pipe_engine cut: limiter, soft or dfco")
+    state = None
+    if cut in ("limiter", "soft"):
+        if rev_limit is None:
+            raise ValueError("pipe_engine cut: limiter and soft need rev_limit")
+        acc, dec, hyst = CUT_DYN[cut] if cut_dyn is None else _floats(cut_dyn) if isinstance(cut_dyn, str) else cut_dyn
+        i0 = int(np.clip(float(cut_at), 0.0, 0.95 * n / SR) * SR)
+        r2, s2 = _limiter_run(n - i0, float(ramp[i0]), float(rev_limit), float(acc), float(dec), float(hyst), cut == "soft")
+        ramp, state = np.concatenate([ramp[:i0], r2]), np.concatenate([np.zeros(i0, dtype=s2.dtype), s2])
     inc = ramp / (per * SR) * (1.0 + 0.01 * _lfn(rng, n, 57.0))
     if isinstance(load, str):
         if load != "auto":
@@ -673,6 +996,12 @@ def pipe_engine(sr=DEFAULT_SR, dur=3.0, rpm=1800.0, rpm_end=-1.0, cylinders=4, l
         n_ex = np.maximum((float(np.clip(header, 0.3, 12.0)) * 1e-3 * SR * spread).astype(np.int64), 4)
     if extractor and extractor > 0:
         n_ex = n_ex + int(float(np.clip(extractor, 0.0, 12.0)) * 1e-3 * SR)
+    if intakes is not None:
+        if len(intakes) != C:
+            raise ValueError(f"pipe_engine intakes: one length per cylinder ({C})")
+        n_in = np.maximum((np.clip(np.asarray(intakes, float), 0.05, 12.0) * 1e-3 * SR).astype(np.int64), 4)
+    else:
+        n_in = np.full(C, 9, dtype=np.int64)
     n_muf = np.array([7, 9, 10, 12], dtype=np.int64)        # 0.146 / 0.1875 / 0.208 / 0.25 ms
     if muffler is not None:                                  # [10, 15, 20, 25] samples at 44.1 kHz is .23 .34 .45 .57 ms
         if len(muffler) != 4:
@@ -680,6 +1009,11 @@ def pipe_engine(sr=DEFAULT_SR, dur=3.0, rpm=1800.0, rpm_end=-1.0, cylinders=4, l
         n_muf = np.maximum((np.clip(np.asarray(muffler, float), 0.05, 5.0) * 1e-3 * SR).astype(np.int64), 2)
     noise = 0.181 * ld * _lp(rng.uniform(-1, 1, n), 10900.0)
     n_pipe = max(int(float(np.clip(pipe, 0.5, 40.0)) * 1e-3 * SR), 4)
+    if bend is not None:
+        ba = _floats(bend)
+        if len(ba) != 2 or min(ba) <= 0:
+            raise ValueError("pipe_engine bend: tube radius and centre-line radius in mm")
+        n_pipe = max(int(n_pipe * 2.0 ** (-bend_cents(ba[0] * 1e-3, ba[1] * 1e-3) / 1200.0)), 4)
     if banks is None:
         bank, pipes = np.zeros(C, dtype=np.int64), np.array([n_pipe], dtype=np.int64)
     else:
@@ -687,7 +1021,7 @@ def pipe_engine(sr=DEFAULT_SR, dur=3.0, rpm=1800.0, rpm_end=-1.0, cylinders=4, l
         if len(bank) != C or not set(bank.tolist()) == {0, 1}:
             raise ValueError(f"pipe_engine banks: one of two banks per cylinder ({C}), both in use")
         pipes = np.array([n_pipe, int(n_pipe * 1.07) + 1], dtype=np.int64)
-    ign_t = np.broadcast_to(0.069 - 0.053 * ld, (n,))
+    ign_t = np.broadcast_to(0.069 - 0.053 * ld if ignition_time < 0 else float(np.clip(ignition_time, 0.01, 0.2)), (n,))
     pop = np.zeros(n)
     prob = float(np.clip(backfire, 0.0, 0.99))
     falling = np.gradient(ramp) < 0 if np.ndim(rpm) else None
@@ -703,10 +1037,52 @@ def pipe_engine(sr=DEFAULT_SR, dur=3.0, rpm=1800.0, rpm_end=-1.0, cylinders=4, l
                 prob *= prob
     if pops is not None:
         pop = pop + _fit(pops, n)
-    igf = (2.0 + 6.0 * ld) * (1.0 if fire is None else _along(fire, n))
-    if chamber is None and expansion and expansion > 1:
+    ign_v = float(np.clip(ignition, 0.0, 1.5))
+    fire_v = 1.0 if fire is None else _along(fire, n)
+    fnom = np.array(np.broadcast_to((2.0 + 6.0 * ld) * ign_v, (n,)))
+    two = mode == 1
+    dr = np.zeros(n)
+    peo = np.zeros(n)
+    t2 = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.2 if cut != "dfco" else -0.2])
+    tab = np.zeros((5, 4))
+    if two:
+        tab, info = two_stroke_tables(ports, induct, ccr)
+        dr, se = scavenge(ld, ramp, tuned_rpm, band)
+        igf = 8.0 * se / TWO_STROKE["se_ref"] * ign_v * fire_v
+        peo = TWO_STROKE["motored"][0] + TWO_STROKE["motored"][1] * np.clip(dr, 0.0, 1.2)
+        v_eo = info["v_swept"] * (1.0 / 6.0 + float(piston_x(_ports_tuple(ports)[0], *_ports_tuple(ports)[4:6])) / _ports_tuple(ports)[4])
+        r_b = 1.0 / SR / (v_eo / (TWO_STROKE["cd"] * info["a_ex"] * TWO_STROKE["a_gas"]))
+        t2[:5] = (EX_GAIN, r_b, SCAV_GAIN, TWO_STROKE["comb"], INTAKE_GAIN)
+        if chamber is None and tuned_rpm:
+            chamber = tuned_chamber(tuned_rpm, info["exhaust_deg"], 1.08 * math.sqrt(4.0 * info["a_ex"] / math.pi), egt)
+    else:
+        igf = fnom * fire_v
+    if gate is not None:
+        gate = np.atleast_2d(np.asarray(gate, float))
+        relights = []
+    else:
+        gain = _dfco_gain(ramp, np.broadcast_to(ld, (n,)), 1.5) if cut == "dfco" else None
+        pmf = misfire_probability(se) * float(np.clip(misfire, 0.0, 1.0)) if two and misfire else None
+        if state is None and gain is None and pmf is None:
+            gate, relights = np.ones((C, 1)), []
+        else:
+            gate, relights = firing_gates(mode, offs, np.cumsum(inc), n, _rng(seed, 87), state, pmf=pmf, stick=TWO_STROKE["mf_stick"], gain=gain)
+    pr = 0.35 if two else 0.0
+    pr = float(pr if relight is None else relight)
+    r3 = _rng(seed, 89)
+    for i in relights:
+        if cut == "limiter" and r3.random() < pr:
+            m = max(int(0.5 * ign_t[i] / inc[i]), 4)
+            seg = 2.5 * np.sin(np.pi * np.arange(m) / m)
+            pop[i:i + m] += seg[:max(n - i, 0)]
+    blow = 1 if (blowdown if blowdown is not None else cut == "dfco") and not two else 0
+    ir_taps = int(expansion_ir) if expansion and expansion > 1 and chamber is None else 0
+    if chamber is None and expansion and expansion > 1 and ir_taps <= 0:
         r1 = (1.0 - float(expansion)) / (1.0 + float(expansion))
-        chamber = ([4, max(int(float(np.clip(expansion_ms, 0.05, 20.0)) * 1e-3 * SR), 2), 4], [r1, -r1], [1.0, 1.0, 1.0])
+        mid = float(np.clip(expansion_ms, 0.05, 20.0)) * 1e-3
+        if step_radius > 0:
+            mid += 2.0 * step_end_correction(1.0 / math.sqrt(float(expansion))) * float(step_radius) * 1e-3 / gas_speed(gas_temp)
+        chamber = ([4, max(int(round(mid * SR)) if step_radius > 0 else int(mid * SR), 2), 4], [r1, -r1], [1.0, 1.0, 1.0])
     if chamber is None:
         ch_len, ch_r, ch_g = np.zeros(0, dtype=np.int64), np.zeros(0), np.zeros(0)
     else:
@@ -721,28 +1097,54 @@ def pipe_engine(sr=DEFAULT_SR, dur=3.0, rpm=1800.0, rpm_end=-1.0, cylinders=4, l
     t_in, t_ex = (0.0, 0.0) if timing is None else _pair(timing)
     n_cyl = int(float(np.clip(cylinder, 0.0, 5.0)) * 1e-3 * SR) if cylinder else 0
     n_out = int(float(np.clip(outlet, 0.0, 40.0)) * 1e-3 * SR) if outlet else 0
-    o = _pipe_engine_k(np.ascontiguousarray(inc), offs, np.ascontiguousarray(noise), pop, n_ex, 9, pipes, n_muf, 2.43,
+    o = _pipe_engine_k(np.ascontiguousarray(inc), offs, np.ascontiguousarray(noise), pop, n_ex, n_in, pipes, n_muf, float(np.clip(compression, 0.5, 6.0)),
                        np.array(np.broadcast_to(igf, (n,))), np.array(ign_t), bank, mode, ch_len, ch_r, ch_g,
                        np.ascontiguousarray(dj), float(t_in), float(t_ex), n_cyl, n_out, float(np.clip(outlet_r, -0.99, 0.99)),
-                       *PIPE_ENDS[ends])
+                       *PIPE_ENDS[ends], float(np.clip(muffler_r, -0.9, 0.9)),
+                       -9.0 if transmission == "wave" else 1.0 - abs(float(np.clip(muffler_r, -0.9, 0.9))),
+                       tab, t2, np.ascontiguousarray(dr), np.ascontiguousarray(peo), fnom, gate, blow)
+    if two and steepen > 0:
+        from .tubes import steepen_through
+        pk = TWO_STROKE["shock"] * 1e5 * float(np.mean(peo + TWO_STROKE["comb"] * np.asarray(igf) * float(np.mean(gate))))
+        lt = tuned_length(tuned_rpm, info["exhaust_deg"], egt) if tuned_rpm else 0.75
+        o[1] = steepen_through(o[1], SR, 0.3 * lt / 510.0, float(np.clip(steepen, 0.0, 3.0)) * pk)
     m = float(np.clip(mic, 0.0, 1.0))
     ex = np.gradient(o[1]) * SR / (2 * np.pi * 500.0) if radiate else o[1]
     ex = ex * float(outlet_gain) * (4.0 / C if norm4 and C > 4 else 1.0)
     o = (o[0] * float(intake_gain),) + tuple(o[1:])
-    if side is not None:
-        for f in _floats(side):
-            ex = ex - _bp(ex, float(np.clip(f, 20.0, 0.45 * SR)), 5.0)
+    if twin > 0:
+        kd = 2 * np.pi * np.fft.rfftfreq(len(ex), 1.0 / SR) * float(twin) / 343.0
+        ex = np.fft.irfft(np.fft.rfft(ex) * np.sqrt(twin_power_gain(kd, float(twin_phase))), len(ex))
+    if ir_taps > 0:
+        hop = max(int(round(2.0 * float(np.clip(expansion_ms, 0.05, 20.0)) * 1e-3 * SR)), 1)
+        out = ex.copy()
+        for j, g in enumerate(expansion_chamber_ir(expansion, ir_taps)):
+            if (j + 1) * hop < len(ex):
+                out[(j + 1) * hop:] += g * ex[:len(ex) - (j + 1) * hop]
+        ex = out
+    c_gas = gas_speed(gas_temp)
+    sides = list(_floats(side)) if side is not None else []
+    if branch is not None:
+        b = (_floats(branch) + [0.0, 0.0])[:3]
+        sides.append(side_branch_freq(b[0] * 1e-3, b[1] * 1e-3, b[2] * 1e-3, c_gas))
+    if bottle is not None:
+        v, ln, ar = _floats(bottle)
+        sides.append(c_gas / (2 * math.pi) * math.sqrt(0.6 * ar * 1e-4 / (v * 1e-3 * ln * 1e-3)))
+    for f in sides:
+        ex = ex - _bp(ex, float(np.clip(f, 20.0, 0.45 * SR)), 5.0)
     if warp > 0:
         ex = warp_delay(ex, np.cumsum(inc) * C, float(np.clip(warp, 0, 1)))
     y = (1.0 - m) * 0.639 * ex + m * 0.325 * o[0] + 0.036 * float(np.clip(block, 0.0, 20.0)) * _lp(o[2], 92.0)
     if alternator > 0 or roots > 0:
         y = y + accessory_whine(ramp, ld, float(np.clip(alternator, 0, 1)), float(np.clip(roots, 0, 1))) * math.sqrt(float(np.mean(y * y)))
+    if clutch > 0:
+        y = y + clutch_rattle(ramp, ld, float(np.clip(clutch, 0, 1)), _rng(seed, 85)) * math.sqrt(float(np.mean(y * y)))
     if transients > 0:
         y = y + firing_transients(inc, C, _rng(seed, 83), float(np.clip(transients, 0, 1))) * math.sqrt(float(np.mean(y * y)))
     y = _hp(soft_limit(y), 25.0)
     if view == "cabin":
         y = car_cabin(y, SR)
-    return _fin(y, sr, 0.6, 0.01, 0.03)
+    return y if raw else _fin(y, sr, 0.6, 0.01, 0.03)
 
 
 CRANK_FLUTTER = 0.331
@@ -777,6 +1179,21 @@ def engine_rpm(throttle, rate=1000.0, rpm0=0.0):
             w = max(w + dt * (tq - d["friction"] * w) / d["inertia"], 0.0)
         out[i] = w * 60.0 / (2 * math.pi)
     return out
+
+
+@functools.lru_cache(maxsize=1)
+def throttle_lags(rate: float = 200.0) -> tuple[float, float]:
+    """(lag_up, lag_down) in seconds read off ``engine_rpm``: the time a full pedal takes to cover 63 % of idle to
+    ``redline`` (rising), and a lift from there to fall by 63 % of that span (falling, which is a steady coast)."""
+    lo, hi = ENGINE_DYN["idle"] + 50.0, 6000.0
+    up = engine_rpm(np.ones(int(12 * rate)), rate, lo)
+    i6 = int(np.argmax(up >= hi))
+    down = engine_rpm(np.concatenate((np.ones(i6), np.zeros(int(12 * rate)))), rate, lo)[i6:]
+    t_up = float(np.argmax(up >= lo + 0.632 * (hi - lo))) / rate
+    t_dn = float(np.argmax(down <= hi - 0.632 * (hi - lo))) / rate
+    return t_up, t_dn
+
+
 PIPE_ENDS = {"engine": (-0.7576, 0.06), "paper": (-0.5, 0.1)}
 
 
@@ -829,6 +1246,14 @@ def accessory_whine(rpm, load, alternator=0.0, roots=0.0):
     return 0.3 * out
 
 
+def clutch_rattle(rpm, load, amount, rng):
+    """Noise through a 1900 Hz band-pass of Q 0.6, level amount (0.35 + 0.65 min(1, 0.06 / load)), only between 300 and 2200 rpm."""
+    rpm = np.asarray(rpm, float)
+    gate = np.clip((rpm - 300.0) / 100.0, 0.0, 1.0) * np.clip((2200.0 - rpm) / 100.0, 0.0, 1.0)
+    k = amount * (0.35 + 0.65 * np.minimum(1.0, 0.06 / np.maximum(np.asarray(load, float), 0.06)))
+    return 0.3 * _bp(rng.uniform(-1, 1, len(rpm)), 1900.0, 0.6) * k * gate
+
+
 CABIN = (150.0, 85.0, 4.0, 0.8)   # Hz panel low-pass, Hz boom, its Q, its gain
 
 
@@ -841,7 +1266,7 @@ def car_cabin(x, sr=SR):
 
 @effect("car_cabin", "Heard from inside a car: body panels low-pass the outside sound and the cabin booms at 85 Hz.")
 def car_cabin_fx(x, sr=DEFAULT_SR):
-    return _per_channel(x, lambda c: car_cabin(c, sr))
+    return _per_channel(lambda c: car_cabin(c, sr), x)
 
 
 def expansion_chamber_ir(ratio, k=5):
@@ -1061,6 +1486,12 @@ def road_noise_levels(kmh: float) -> tuple[np.ndarray, np.ndarray]:
     return _HN_AR + _HN_BR * np.log10(v / 70.0), _HN_AP + _HN_BP * (v - 70.0) / 70.0
 
 
+def wet_road_db(kmh: float) -> np.ndarray:
+    """Rise of the rolling noise on a wet road (water film), per band of ``_HN_F``, cars:
+    max(15 lg f - 12 lg(v / 70) - 48, 0) dB; it starts near 1.6 kHz and falls with speed."""
+    return np.maximum(15.0 * np.log10(_HN_F) - 12.0 * np.log10(max(float(kmh), 1.0) / 70.0) - 48.0, 0.0)
+
+
 def _third_octave_noise(n: int, rng, levels_db: np.ndarray, freqs=None) -> np.ndarray:
     """Noise with the given third-octave band levels (at ``freqs``, default the Harmonoise bands 20 Hz .. 12.5 kHz):
     a band of constant level has a power density falling as 1 / f, so the spectrum is shaped by the interpolated
@@ -1071,11 +1502,29 @@ def _third_octave_noise(n: int, rng, levels_db: np.ndarray, freqs=None) -> np.nd
     return np.fft.irfft(np.fft.rfft(rng.standard_normal(n)) * 10 ** ((g - 10 * np.log10(f)) / 20.0), n)
 
 
+def erb_centres(bands: int = 32, f_lo: float = 50.0) -> np.ndarray:
+    """Centres (Hz) of ``bands`` equivalent-rectangular bands one ERB apart from ``f_lo`` (ERB-rate scale 21.4 lg(1 + 0.00437 f))."""
+    e0 = 21.4 * math.log10(1.0 + 0.00437 * float(f_lo))
+    return (10.0 ** ((e0 + np.arange(int(bands))) / 21.4) - 1.0) / 0.00437
+
+
+def equalized_noise(n: int, rng, levels_db, freqs=None, sr: int = SR) -> np.ndarray:
+    """Noise whose power in each ERB band (the 32 of ``erb_centres``, or those at ``freqs``) is ``levels_db``: the power density
+    is the level over the band's width 24.7 (0.00437 f + 1) Hz (the third-octave generator divides by f instead, a width that
+    grows in proportion to f), interpolated in log frequency. ``len(levels_db) == len(freqs)``. ``sr`` is the rate of the returned signal."""
+    lv = np.asarray(levels_db, float)
+    fr = erb_centres(lv.size) if freqs is None else np.asarray(freqs, float)
+    dens = lv - 10.0 * np.log10(24.7 * (0.00437 * fr + 1.0))
+    f = np.maximum(np.fft.rfftfreq(n, 1.0 / sr), 1.0)
+    g = np.interp(np.log(f), np.log(fr), dens, left=dens[0] - 30.0, right=dens[-1] - 30.0)
+    return np.fft.irfft(np.fft.rfft(rng.standard_normal(n)) * 10 ** (g / 20.0), n)
+
+
 @sfx("pass_by", "A car driving past: tyre roar that grows with speed, engine or electric drive, wind, the Doppler drop and the ground reflection.",
      dur=(5.0, "s"), speed=(60.0, "km/h, 10..250"), distance=(6.0, "m from the lane at the closest point"),
      power=("combustion", "combustion | electric | none (tyres and wind only)"), cylinders=(4, "combustion: cylinder count"),
      gear=(3.2, "combustion: engine rpm = gear x 26 x km/h (2.2 top gear .. 6 low gear)"),
-     wet=(0.0, "0 dry .. 1 wet road: spray hiss above 2 kHz"), direction=("lr", "lr | rl"),
+     wet=(0.0, "0 dry .. 1 wet road (water film): rolling bands raised by wet x the wet-road law, from 1.6 kHz up"), direction=("lr", "lr | rl"),
      pan=(1, "1 = stereo, panned across; 0 = mono (when the game positions it itself)"),
      sources=(1, "1 = one source at 0.3 m | 2 = rolling noise mostly at the tyre contact (0.01 m), engine mostly at 0.3 m, each with its own ground path"),
      seed=(0, "variation"))
@@ -1084,7 +1533,7 @@ def pass_by(sr=DEFAULT_SR, dur=5.0, speed=60.0, distance=6.0, power="combustion"
     """Source = Harmonoise rolling noise + a propulsion source scaled to the Harmonoise propulsion
     energy + aerodynamic noise (pink noise low-passed at 250 + 30 v Hz, level (v / 40)^2.5, v in m/s, faded in by a
     smoothstep from 15 to 26 m/s). Propagation = the ``doppler`` effect with its ground path.
-    Wet road: spray above 2 kHz. Electric drive: a 9:1 reduction gear, 0.33 m wheels and the ripple tone of a
+    Wet road: the rolling bands are raised by wet x `wet_road_db`. Electric drive: a 9:1 reduction gear, 0.33 m wheels and the ripple tone of a
     4-pole-pair motor on a six-step inverter, 12 dB under a combustion engine."""
     from .reverbs import doppler
     if power not in ("combustion", "electric", "none"):
@@ -1094,9 +1543,9 @@ def pass_by(sr=DEFAULT_SR, dur=5.0, speed=60.0, distance=6.0, power="combustion"
     v = kmh / 3.6
     n = _n(dur)
     lr, lp = road_noise_levels(kmh)
-    y = _unit(_third_octave_noise(n, rng, lr))
-    if wet > 0:
-        y = y + float(np.clip(wet, 0, 1)) * 0.8 * _unit(_hp(rng.standard_normal(n), 2000.0, 2))
+    w = float(np.clip(wet, 0, 1))
+    lw = lr + w * wet_road_db(kmh)
+    y = _unit(_third_octave_noise(n, rng, lw)) * math.sqrt(float(np.sum(10 ** (lw / 10)) / np.sum(10 ** (lr / 10))))
     if power == "combustion":
         eng = pipe_engine(sr=SR, dur=n / SR, rpm=float(np.clip(kmh * 26.0 * float(gear), 700.0, 9000.0)), cylinders=cylinders, seed=seed)
     elif power == "electric":
@@ -1164,14 +1613,19 @@ def traffic(sr=DEFAULT_SR, dur=20.0, rate=600.0, speed=70.0, distance=8.0, elect
 @sfx("induction_motor", "Induction motor on the mains (pump, fan, lathe): magnetic hum at twice the mains, the rotor-slot whine, shaft orders; "
      "faults: broken rotor bar, eccentric rotor, worn bearing.",
      dur=(3.0, "s"), mains=(50.0, "Hz supply"), poles=(4, "2 | 4 | 6 | 8"), load=(0.6, "0 idle .. 1 rated: the slip, 0.5 to 5 %"),
-     bars=(28, "rotor bars (slot whine at bars x shaft rate)"), fault=("none", "none | broken_bar | eccentric | bearing"),
-     severity=(0.5, "0..1 how bad the fault is"), seed=(0, "variation"))
-def induction_motor(sr=DEFAULT_SR, dur=3.0, mains=50.0, poles=4, load=0.6, bars=28, fault="none", severity=0.5, seed=0):
+     bars=(28, "rotor bars (slot whine at bars x shaft rate)"), fault=("none", "none | broken_bar | eccentric | bearing | shorted_turns"),
+     severity=(0.5, "0..1 how bad the fault is"), drive_hz=(0.0, "Hz: a gearbox or load oscillation: lines at mains +- drive_hz that mimic broken-bar sidebands (0 = none)"),
+     seed=(0, "variation"))
+def induction_motor(sr=DEFAULT_SR, dur=3.0, mains=50.0, poles=4, load=0.6, bars=28, fault="none", severity=0.5, drive_hz=0.0, seed=0):
     """Slip s = 0.005 + 0.045 load, shaft fr = 2 f (1 - s) / p. Lines: 2 f magnetostriction and its 4 f; slot passing
     bars fr and its +-2 f sidebands; shaft fr, 2 fr. Broken bar: sidebands f (1 +- 2 s) on the supply line and the hum beating
-    at 2 s f. Eccentric: slot line +- fr. Bearing: an outer-race ticking at 0.4 balls fr through ``bearing``."""
-    if fault not in ("none", "broken_bar", "eccentric", "bearing"):
-        raise ValueError("induction_motor fault: none, broken_bar, eccentric or bearing")
+    at 2 s f. Eccentric: slot line +- fr. Bearing: an outer-race ticking at 0.4 balls fr through ``bearing``.
+    Eccentric also adds the slot line +- fr +- f (the odd supply multiples of the eccentricity pattern). ``drive_hz`` > 0: current lines
+    f +- drive_hz from the drive train (the shaft orders of a gearbox or pulverizer, which a broken-bar search confuses with
+    the sidebands f (1 +- 2 s)).
+    Shorted turns: stator lines f (n (1 - s) / pole pairs +- 1), n = 3 and 5 (125 and 175 Hz at no load on a 4-pole 50 Hz motor)."""
+    if fault not in ("none", "broken_bar", "eccentric", "bearing", "shorted_turns"):
+        raise ValueError("induction_motor fault: none, broken_bar, eccentric, bearing or shorted_turns")
     rng = _rng(seed, 81)
     n = _n(dur)
     t = np.arange(n) / SR
@@ -1189,6 +1643,15 @@ def induction_motor(sr=DEFAULT_SR, dur=3.0, mains=50.0, poles=4, load=0.6, bars=
         y += tone(f * (1 - 2 * s), 0.4 * sv) + tone(f * (1 + 2 * s), 0.3 * sv)
     elif fault == "eccentric":
         y += tone(fs - fr, 0.5 * sv) + tone(fs + fr, 0.5 * sv) + tone(fr, 0.4 * sv)
+        for sg_d in (1.0, -1.0):
+            for sg_w in (1.0, -1.0):
+                y += tone(abs(fs + sg_d * fr + sg_w * f), 0.2 * sv)
+    elif fault == "shorted_turns":
+        for k_n, a_n in ((3, 0.5), (5, 0.35)):
+            for sg in (1.0, -1.0):
+                y += tone(abs(f * (k_n * (1.0 - s) / (p // 2) + sg)), a_n * sv)
+    if drive_hz > 0.0:
+        y += tone(f + float(drive_hz), 0.15) + tone(abs(f - float(drive_hz)), 0.15)
     y = _unit(y) + 0.15 * _unit(_bp(rng.standard_normal(n), 1800.0, 0.8))
     if fault == "bearing":
         y = y + 0.8 * sv * _unit(_fit(bearing(sr=SR, dur=n / SR, rpm=fr * 60.0, state="outer", severity=0.5 + 0.5 * sv, seed=seed), n))
@@ -1402,6 +1865,16 @@ def packet_loss(x, sr=DEFAULT_SR, loss=0.1, burst=2.0, packet_ms=20.0, conceal="
     return y
 
 
+@effect("gsm_call", "A mobile phone call: the voice goes through the 8 kHz GSM coder with its long-term predictor, then through a radio channel that erases frames and flips bits, after the coder and network delay.",
+        channel=("fair", "radio channel: good | fair | poor"), delay_ms=(24.0, "coder and network delay, 20..28 ms"),
+        quality=(0.5, "coder pulse resolution, 0..1 (0.5 = 3 bits, 13 kbit/s)"), seed=(0, "which frames are lost"))
+def gsm_call(x, sr=DEFAULT_SR, channel="fair", delay_ms=24.0, quality=0.5, seed=0):
+    y = FX["codec"]["fn"](x, sr, kind="gsm", quality=quality, ltp=True)
+    y = packet_loss(y, sr, packet_ms=20.0, channel=channel, seed=seed)
+    d = int(round(float(np.clip(delay_ms, 0.0, 200.0)) * 1e-3 * sr))
+    return np.concatenate([np.zeros((d,) + y.shape[1:]), y], axis=0)
+
+
 @effect("beat_repeat", "Buffer repeat: now and then a slice of the sound is caught and played again in place of what follows (stutter, roll, reverse), without changing the length.",
         grid=(0.125, "slice length in seconds (at 120 bpm: 0.125 = a 16th note)"), chance=(0.3, "probability that a slice is caught"),
         repeats=(3, "times the caught slice is played"), divide=(1, "play only the first 1/divide of the slice, that many times (2, 4, 8 = rolls)"),
@@ -1463,8 +1936,9 @@ _PS_RECIPES = {"subtle": ((0.7, 0.45, 0), (1, 0.75, 0), (1.4, 0.45, 0)), "standa
         seed=(0, "phase seed"), phase=(1.0, "1 random phases .. 0 the analysed ones, keeps transients"), continuity=(0.0, "0..1 each frame's phase stays near the last (about 0.3 smooths without pumping)"),
         scan=(0.0, "with hold: the frozen instant travels, by this fraction of the source over the output"), loop=(False, "the source wraps round: for loops, its end does not fade to silence"),
         recipe=(None, "subtle|standard|lush|shimmer|shimmer_deep: several window sizes stacked, some an octave up or down"),
-        drift=(0.0, "0..1 the read point wanders round its place (three golden-ratio sines, up to 30 % of the source): a slowly changing wash"))
-def paulstretch(x, sr=DEFAULT_SR, stretch=8.0, window=0.25, hold=-1.0, length=4.0, smear=0.0, seed=0, phase=1.0, continuity=0.0, scan=0.0, loop=False, recipe=None, drift=0.0):
+        drift=(0.0, "0..1 the read point wanders round its place (three golden-ratio sines, up to 30 % of the source): a slowly changing wash"),
+        edge_ms=(0.0, "ms: the first and last of the result cross-fade with the original's first and last samples (2.3 ms = 100 samples at 44.1 kHz, a click-free join; 0 = off)"))
+def paulstretch(x, sr=DEFAULT_SR, stretch=8.0, window=0.25, hold=-1.0, length=4.0, smear=0.0, seed=0, phase=1.0, continuity=0.0, scan=0.0, loop=False, recipe=None, drift=0.0, edge_ms=0.0):
     """Paulstretch: windows of the input taken every
     (W / 2) / stretch samples, each resynthesised with its magnitudes and uniformly random phases,
     overlap-added at W / 2, then the amplitude ripple of the overlap is divided out with
@@ -1475,12 +1949,12 @@ def paulstretch(x, sr=DEFAULT_SR, stretch=8.0, window=0.25, hold=-1.0, length=4.
     if recipe:
         if recipe not in _PS_RECIPES:
             raise ValueError(f"unknown paulstretch recipe {recipe!r}; use one of {sorted(_PS_RECIPES)}")
-        kw = dict(hold=hold, length=length, smear=smear, phase=phase, continuity=continuity, scan=scan, loop=loop, drift=drift)
+        kw = dict(hold=hold, length=length, smear=smear, phase=phase, continuity=continuity, scan=scan, loop=loop, drift=drift, edge_ms=0.0)
         ys = [g * paulstretch(ps_repitch(np.asarray(x, float), st), sr, window=float(window) * w, stretch=float(stretch) * 2.0 ** (st / 12.0),
                               seed=(int(seed) + i * 0x9E3779B97F4A7C15) % 2 ** 63, **kw) for i, (w, g, st) in enumerate(_PS_RECIPES[recipe])]
         m = min(len(y) for y in ys)
         y = sum(y[:m] for y in ys)
-        return y * float(np.max(np.abs(x))) / (float(np.max(np.abs(y))) + 1e-12)
+        return _ps_edge(y * float(np.max(np.abs(x))) / (float(np.max(np.abs(y))) + 1e-12), x, edge_ms, sr)
     rng = np.random.default_rng(int(seed))
     n = x.shape[0]
     W = max(64, int(float(window) * sr) // 2 * 2)
@@ -1518,7 +1992,19 @@ def paulstretch(x, sr=DEFAULT_SR, stretch=8.0, window=0.25, hold=-1.0, length=4.
 
     y = _per_channel(one, np.asarray(x, float))
     rms = lambda a: math.sqrt(float(np.mean(np.square(a)))) + 1e-12
-    return y * min(rms(x) / rms(y), float(np.max(np.abs(x))) / (float(np.max(np.abs(y))) + 1e-12))   # never louder than the input
+    return _ps_edge(y * min(rms(x) / rms(y), float(np.max(np.abs(x))) / (float(np.max(np.abs(y))) + 1e-12)), x, edge_ms, sr)   # never louder than the input
+
+
+def _ps_edge(y, x, edge_ms, sr):
+    """Linear crossfade over edge_ms between the original's first (last) samples and the start (end) of the result."""
+    k = min(int(float(edge_ms) * sr / 1000.0), len(y) // 2, len(x))
+    if k < 1:
+        return y
+    y = np.array(y, float)
+    r = (np.arange(k) / k).reshape((-1,) + (1,) * (y.ndim - 1))
+    y[:k] = x[:k] * (1.0 - r) + y[:k] * r
+    y[-k:] = y[-k:] * (1.0 - r) + x[-k:] * r
+    return y
 
 
 @effect("waveset", "Waveset repetition: each cycle between zero crossings is played several times and the next ones skipped. Buzzy, pitch drops by octaves, speech turns to insect chatter.",
@@ -1673,7 +2159,7 @@ def texture_synth(stats: dict, dur: float, seed: int = 0, iters: int = 12, targe
     Lc1 = [np.linalg.cholesky(c + eye) for c in stats["c1"]]
     c2 = stats["c2"]
     x = np.random.default_rng(int(seed)).standard_normal(n)
-    for _ in range(max(1, int(iters))):
+    for it in range(max(1, int(iters))):
         env, ph = _tex_envelopes(x, H, m)
         z = env - env.mean(axis=1, keepdims=True)
         z /= z.std(axis=1, keepdims=True) + 1e-12
@@ -1710,17 +2196,30 @@ def texture_synth(stats: dict, dur: float, seed: int = 0, iters: int = 12, targe
             e = np.maximum(resample(np.interp(rank, grid, q[b]), n), 0.0) ** (1.0 / TEX_POW)
             X += sfft.rfft(e * np.cos(ph[b])) * H[b]
         x = sfft.irfft(X, n)
-        if target_snr is not None and min(stats_snr(stats, texture_stats(x, sr)).values()) >= target_snr:
-            break
+        if target_snr is not None and (it % 4 == 3 or it == iters - 1):
+            worst = min(stats_snr(stats, texture_stats(x, sr)).values())
+            if worst >= target_snr:
+                break
+            if it == iters - 1 and worst < 20.0:
+                warnings.warn(f"texture_synth: worst statistic class at {worst:.1f} dB after {it + 1} passes (below 20 dB); raise iters", stacklevel=2)
     return x
 
 
 @effect("texturize", "Turn a recording of a steady texture (rain, a server room, a crowd, static) into a new, endless, seamlessly looping one of any length with the same character.",
-        length=(8.0, "seconds of output, up to 60"), iters=(12, "refinement passes (more = closer, slower)"), seed=(0, "a different rendition"))
-def texturize(x, sr=DEFAULT_SR, length=8.0, iters=12, seed=0):
+        length=(8.0, "seconds of output, up to 60"), iters=(12, "refinement passes (more = closer, slower)"), seed=(0, "a different rendition"),
+        mode=("stats", "stats = statistics imposed on noise | grain = 0.6-1.0 s grains of the recording itself (keeps every detail, loops)"),
+        target_snr=(0.0, "stats mode: stop early once every statistic class matches to this many dB (0 = run all passes; 30 is enough); warns under 20 dB"))
+def texturize(x, sr=DEFAULT_SR, length=8.0, iters=12, seed=0, mode="stats", target_snr=0.0):
     if x.shape[0] < sr // 2:
         return x
-    return texture_synth(texture_stats(x, sr), length, seed, iters)
+    if mode == "grain":
+        from .physical.analysis import cloud
+        src = to_mono(np.asarray(x, float))
+        n = int(float(np.clip(length, 0.5, 60.0)) * sr)
+        return cloud(src, n, np.random.default_rng(int(seed)), grain_s=(0.6, 1.0), overlap=3.0, loop=True)
+    if mode != "stats":
+        raise ValueError(f"texturize mode {mode!r}: use stats or grain")
+    return texture_synth(texture_stats(x, sr), length, seed, iters, float(target_snr) if target_snr > 0 else None)
 
 
 
@@ -1797,3 +2296,35 @@ def grain_delay(x, sr=DEFAULT_SR, delay=0.25, delay_spread=0.15, size=0.08, size
     out /= max(math.sqrt(float(np.clip(density, 0.5, 400.0)) * float(size)), 1.0)
     dry = np.column_stack([x, x]) if np.ndim(x) == 1 else np.asarray(x, float)[:, :2]
     return (1.0 - mix) * dry + mix * out
+
+
+RADIO_CHATTER = dict(syllables=4, pitch=95.0, pitch_step=10.0, band=1400.0, q=1.4, ring_hz=1150.0, ring_mix=0.6,
+                     dur_lo=0.055, dur_hi=0.100, gap=0.11, jitter=0.012, click=0.012)
+
+
+@sfx("radio_chatter", "Spacecraft radio chatter: a squelch click, then 4 to 8 voiced syllables (a buzz band-passed at 1.4 kHz, ring-modulated), a squelch click. Every number is a deterministic function of `variant`, so the same call is the same transmission.",
+     variant=(0, "integer: syllables 4 + |k| mod 5, pitch 95 + 10 (|k| mod 7) Hz, syllable timing from k"),
+     dur=(0.0, "s; 0 = the whole transmission"))
+def radio_chatter(sr=DEFAULT_SR, variant=0, dur=0.0):
+    c, k = RADIO_CHATTER, abs(int(variant))
+    syl, f0 = c["syllables"] + k % 5, c["pitch"] + c["pitch_step"] * (k % 7)
+    total = 2 * c["click"] + 0.04 + syl * c["gap"] + 0.06
+    n = _n(total if dur <= 0 else dur)
+    y = np.zeros(n)
+    for i in range(syl):
+        d = c["dur_lo"] + (c["dur_hi"] - c["dur_lo"]) * ((3 * i + k) % 5) / 4.0
+        a = int((c["click"] + 0.02 + i * c["gap"] + ((7 * i + 3 * k) % 5 - 2) * c["jitter"]) * SR)
+        m = min(int(d * SR), n - a)
+        if m <= 0:
+            break
+        tt = np.arange(m) / SR
+        y[a:a + m] += (2.0 * ((f0 * tt) % 1.0) - 1.0) * np.sin(np.pi * np.arange(m) / m) ** 0.5
+    v = _bp(y, c["band"], c["q"])
+    v = (1.0 - c["ring_mix"]) * v + c["ring_mix"] * v * np.sin(2 * np.pi * c["ring_hz"] * np.arange(n) / SR)
+    v = v / (np.max(np.abs(v)) + 1e-12)
+    rng = _rng(k, 61)
+    m = int(c["click"] * SR)
+    sq = rng.uniform(-1, 1, m) * np.exp(-np.arange(m) / (0.3 * m)) * 0.5
+    v[:m] += sq
+    v[n - m:] += sq[::-1]
+    return _fin(v, sr, 0.6, 0.0005, 0.002)

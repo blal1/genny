@@ -1,0 +1,103 @@
+schema = "genny.preset/1"
+family = "gun_legacy"
+# chirp, barrel, burst: ms. v: m/s. bscale: body formant scale. bgain: blast gain. blop: blast low-pass Hz (0 = none). rate: rounds/s.
+# proj: a cartridge key, or proj_dim = [diameter mm, length mm].
+
+[rifle]
+chirp = 38.97
+barrel = 6.1
+burst = 7.677
+v = 850.0
+bscale = 1.0
+bgain = 1.0
+blop = 0.0
+rate = 10.0
+proj = "762x51"
+
+[pistol]
+chirp = 30.0
+barrel = 4.0
+burst = 6.0
+v = 360.0
+bscale = 1.4
+bgain = 0.9
+blop = 0.0
+rate = 6.0
+proj = "9x19"
+
+[smg]
+chirp = 30.0
+barrel = 5.0
+burst = 6.0
+v = 400.0
+bscale = 1.25
+bgain = 0.9
+blop = 0.0
+rate = 13.3
+proj = "9x19"
+
+[smg_compact]
+chirp = 30.0
+barrel = 4.0
+burst = 6.0
+v = 374.9
+bscale = 1.4
+bgain = 0.9
+blop = 0.0
+rate = 15.0
+proj = "9x19"
+
+[smg_sd]
+chirp = 30.0
+barrel = 5.0
+burst = 6.0
+v = 299.9
+bscale = 1.25
+bgain = 0.058
+blop = 0.0
+rate = 11.67
+proj = "9x19_sub"
+
+[shotgun]
+chirp = 45.0
+barrel = 20.0
+burst = 30.0
+v = 400.0
+bscale = 0.75
+bgain = 1.0
+blop = 0.0
+rate = 1.5
+proj = "12_slug"
+
+[silenced]
+chirp = 30.0
+barrel = 4.0
+burst = 6.0
+v = 300.0
+bscale = 1.4
+bgain = 0.058
+blop = 0.0
+rate = 6.0
+proj = "9x19_sub"
+
+[silenced_rifle]
+chirp = 38.97
+barrel = 6.1
+burst = 7.677
+v = 850.0
+bscale = 1.0
+bgain = 0.067
+blop = 0.0
+rate = 10.0
+proj = "762x51"
+
+[cannon]
+chirp = 60.0
+barrel = 60.0
+burst = 200.0
+v = 450.0
+bscale = 0.3
+bgain = 1.0
+blop = 0.0
+rate = 0.5
+proj_dim = [117.0, 117.0]

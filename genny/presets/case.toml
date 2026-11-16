@@ -1,0 +1,54 @@
+schema = "genny.preset/1"
+family = "case"
+# L: length, db: base diameter, dn: neck outer diameter, h: wall, neck: neck length (0 = straight), all mm.
+# cap: water capacity cm3. mass: g. mat: brass | pe.
+
+[9x19]
+L = 19.15
+db = 9.93
+dn = 9.65
+h = 0.3
+cap = 0.86
+mass = 3.9
+mat = "brass"
+neck = 0.0
+
+[556]
+L = 44.7
+db = 9.58
+dn = 6.43
+h = 0.3
+cap = 1.85
+mass = 6.2
+mat = "brass"
+neck = 7.9
+
+[762x51]
+L = 51.18
+db = 11.94
+dn = 8.77
+h = 0.35
+cap = 3.6
+mass = 12.0
+mat = "brass"
+neck = 9.0
+
+[50bmg]
+L = 99.31
+db = 20.42
+dn = 14.2
+h = 0.6
+cap = 19.5
+mass = 56.0
+mat = "brass"
+neck = 17.0
+
+[12ga]
+L = 70.0
+db = 20.2
+dn = 20.2
+h = 0.6
+cap = 9.0
+mass = 6.0
+mat = "pe"
+neck = 0.0

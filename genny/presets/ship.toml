@@ -1,0 +1,19 @@
+schema = "genny.preset/1"
+family = "ship"
+# model: wales | sonic | ross | randi. vref: knots. rpm: shaft rpm. blades. tons: displacement. cb: block coefficient.
+
+[cargo]
+model = "wales"
+vref = 14.0
+rpm = 100.0
+blades = 5
+tons = 30000.0
+cb = 0.65
+
+[tanker]
+model = "ross"
+vref = 14.0
+rpm = 80.0
+blades = 4
+tons = 30000.0
+cb = 0.78

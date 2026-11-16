@@ -1,0 +1,117 @@
+schema = "genny.preset/1"
+family = "engine_layout"
+# offsets: firing times as fractions of the cycle, in firing order. banks: L or R by firing slot. cycle: rotary for a Wankel.
+# rpm: usual speed. header: ms, one number; headers: one per slot.
+
+[engine_single]
+offsets = [0.0]
+rpm = 3000.0
+header = 2.5
+
+[vtwin_45]
+offsets = [0.0, 0.4375]
+rpm = 950.0
+header = 2.5
+
+[vtwin_90]
+offsets = [0.0, 0.375]
+rpm = 1500.0
+header = 2.5
+
+[twin_180]
+offsets = [0.0, 0.25]
+rpm = 3000.0
+header = 2.0
+
+[twin_270]
+offsets = [0.0, 0.375]
+rpm = 3000.0
+header = 2.0
+
+[twin_360]
+offsets = [0.0, 0.5]
+rpm = 3000.0
+header = 2.0
+
+[boxer_4]
+offsets = [0.0, 0.25, 0.5, 0.75]
+rpm = 700.0
+headers = [1.6, 1.6, 2.08, 2.08]
+
+[boxer_6]
+offsets = [0.0, 0.16666666666666666, 0.3333333333333333, 0.5, 0.6666666666666666, 0.8333333333333334]
+banks = "RLRLRL"
+rpm = 3000.0
+header = 1.8
+
+[inline_4]
+offsets = [0.0, 0.25, 0.5, 0.75]
+rpm = 883.0
+headers = [0.958, 0.333, 0.708, 0.958]
+
+[inline_4_crossplane]
+offsets = [0.0, 0.125, 0.375, 0.75]
+rpm = 6000.0
+header = 1.4
+
+[inline_5]
+offsets = [0.0, 0.2, 0.4, 0.6, 0.8]
+rpm = 6000.0
+header = 1.6
+
+[inline_6]
+offsets = [0.0, 0.16666666666666666, 0.3333333333333333, 0.5, 0.6666666666666666, 0.8333333333333334]
+rpm = 3000.0
+header = 1.6
+
+[v6_60]
+offsets = [0.0, 0.16666666666666666, 0.3333333333333333, 0.5, 0.6666666666666666, 0.8333333333333334]
+banks = "RLRLRL"
+rpm = 3000.0
+header = 1.6
+
+[v6_90]
+offsets = [0.0, 0.125, 0.3333333333333333, 0.4583333333333333, 0.6666666666666666, 0.7916666666666666]
+banks = "RLRLLR"
+rpm = 3000.0
+header = 1.6
+
+[v8_crossplane]
+offsets = [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875]
+banks = "LRLLRLRR"
+rpm = 1500.0
+header = 2.0
+
+[v8_flatplane]
+offsets = [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875]
+banks = "LRLRLRLR"
+rpm = 9000.0
+header = 1.0
+
+[v10]
+offsets = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+banks = "RLRLRLRLRL"
+rpm = 9000.0
+header = 1.0
+
+[v12]
+offsets = [0.0, 0.08333333333333333, 0.16666666666666666, 0.25, 0.3333333333333333, 0.4166666666666667, 0.5, 0.5833333333333334, 0.6666666666666666, 0.75, 0.8333333333333334, 0.9166666666666666]
+banks = "LRLRLRLRLRLR"
+rpm = 8000.0
+header = 1.0
+
+[wankel]
+offsets = [0.0, 0.16666666666666666, 0.3333333333333333, 0.5, 0.6666666666666666, 0.8333333333333334]
+cycle = "rotary"
+rpm = 3000.0
+header = 1.2
+
+[diesel_i4]
+offsets = [0.0, 0.25, 0.5, 0.75]
+rpm = 1000.0
+header = 1.6
+
+[diesel_i6_truck]
+offsets = [0.0, 0.16666666666666666, 0.3333333333333333, 0.5, 0.6666666666666666, 0.8333333333333334]
+rpm = 750.0
+header = 3.5

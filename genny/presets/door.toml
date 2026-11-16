@@ -1,0 +1,38 @@
+schema = "genny.preset/1"
+family = "door"
+# band: Hz. quality: 0 tinny .. 1 solid. panel_m: panel size. body_hz: body resonance. length_s: duration.
+
+[car_door_close]
+band = [200.0, 2000.0]
+quality = 0.8
+panel_m = 0.9
+body_hz = 160.0
+length_s = 0.2
+
+[car_door_rear]
+band = [315.0, 2500.0]
+quality = 0.7
+panel_m = 0.75
+body_hz = 340.0
+length_s = 0.2
+
+[car_door_cheap]
+band = [500.0, 4000.0]
+quality = 0.15
+panel_m = 0.8
+body_hz = 300.0
+length_s = 0.15
+
+[trunk_slam]
+band = [80.0, 1200.0]
+quality = 0.85
+panel_m = 1.2
+body_hz = 110.0
+length_s = 0.3
+
+[hood_slam]
+band = [70.0, 1000.0]
+quality = 0.7
+panel_m = 1.4
+body_hz = 90.0
+length_s = 0.35

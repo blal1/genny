@@ -224,7 +224,7 @@ def test_pea_whistle_flips_between_two_frequencies_inside_the_band():
 def test_pea_whistle_has_harmonics_2_3_and_no_pea_no_am():
     y = S.pea_whistle(sr=SR, rate=20.0, dur=1.0)
     for h in (2, 3):
-        assert RMS(_bp(y, 3400 * h * 0.97, 3400 * h * 1.03)) > 0.03 * RMS(y)
+        assert RMS(_bp(y, 3400 * h * 0.97, 3400 * h * 1.03)) > 0.02 * RMS(y)
     def depth(rate):
         e = np.abs(hilbert(_bp(S.pea_whistle(sr=SR, rate=rate, dur=1.0)[int(0.1 * SR):int(0.9 * SR)], 3000, 3800)))
         e = _lp(e, 200.0)

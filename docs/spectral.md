@@ -318,3 +318,10 @@ t2, a2 = S.reduce_envelope(t, a, segments=8)                  # breakpoint envel
 | noise bands | Bark edges 0…15500 (+20500, 27000) Hz, or 1 ERB | g12 §14.1 |
 | vocoder bands | Voder edges | g12 §18 G.5 |
 | unsourced (justified in `research/SOURCES.md`) | transient detector constants, ±12 ms SOLA search, peak-curvature tolerance, 2-frame track gap, tonal test of `spectral_gate` (12 dB over a ±100 Hz median) | tuned on the test signals |
+## Newer options (1.3.0)
+
+- `resynth partial_wander=` (random walk of the partials, 15 / 30 Hz by thirds), also a layer key; `pitch mode="delay"`: a two-tap
+  shifter (Puckette), any ratio, f = (t - 1) R / s; `harmonizer series= draw= seed=`; `scramble(seed)`; `spectral.fit_min_phase_iir`.
+- `texturize mode="stats"|"grain"` and `target_snr`; `texture_synth` warns under 20 dB; `analysis.cycle_periods`,
+  `kurtosis_echo_density`, `estimate_f0`, `terhardt_pitch`, `mfcc_davis`, `lfcc_davis`, `goldstein_harmonicity`;
+  `wichern_features` follows the article (`legacy=True` keeps the old).

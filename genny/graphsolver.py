@@ -38,7 +38,7 @@ class FractionalDelay:
 
     def read(self, delay: float | None = None) -> float:
         d = float(self.delay if delay is None else delay)
-        d = min(max(d, 1.0), self.max_delay - 3.0)
+        d = min(max(d, 1.0 if self.method == "linear" else 2.0), self.max_delay - 3.0)  # lagrange3 reads up to 2 samples ahead
         pos = self.w - d
         i0 = math.floor(pos)
         mu = pos - i0
@@ -93,8 +93,8 @@ class ThiranDelay:
 
     def read(self, delay: float | None=None) -> float:
         d=float(self.delay if delay is None else delay)
-        d=min(max(d,1.0),self.max_delay-3.0)
-        integer=max(1,int(math.floor(d-THIRAN_MIN_FRAC)))
+        d=min(max(d,1.0+THIRAN_MIN_FRAC),self.max_delay-3.0)
+        integer=int(math.floor(d-THIRAN_MIN_FRAC))
         frac=d-integer
         x=float(self.buf[(self.w-integer)%len(self.buf)])
         if frac < 1e-8:
@@ -417,9 +417,28 @@ CommonPhysicalSolver.lip_bore = staticmethod(lip_bore)
 CommonPhysicalSolver.syrinx_trachea = staticmethod(syrinx_trachea)
 
 
+JET_GAIN_REGIONS = ((0.0705, 0.2871), (0.4964, 0.7690))
+
+
+def jet_gain_region(strouhal: float) -> int:
+    """1 or 2 when St = f W / U0 lies in the first or second region where the jet amplifies the bore, else 0."""
+    for k, (lo, hi) in enumerate(JET_GAIN_REGIONS, 1):
+        if lo <= float(strouhal) <= hi:
+            return k
+    return 0
+
+
 def jet_bore(f0: float, dur: float, jet_velocity=18.0, *, sr=48000,
-             bore_radius=.006, jet_length=.009, loss=.996) -> CommonSolveResult:
-    """Reduced flute/edge-tone loop using a hydrodynamic jet delay and bore."""
+             bore_radius=.006, jet_length=.009, loss=.996, pressure=None, bound=False) -> CommonSolveResult:
+    """Reduced flute/edge-tone loop using a hydrodynamic jet delay and bore. ``pressure`` (Pa, up to about 750) sets the
+    jet speed U0 = sqrt(2 p / rho) instead of ``jet_velocity``; ``bound`` keeps St = f0 W / U0 (W = ``jet_length``) inside
+    the first gain region by clamping U0. The result's info gives the Strouhal number and its region."""
+    if pressure is not None:
+        jet_velocity=math.sqrt(2.0*max(float(pressure),0.0)/1.2041)
+    if bound:
+        lo,hi=JET_GAIN_REGIONS[0]
+        jet_velocity=float(np.clip(jet_velocity,f0*jet_length/hi,f0*jet_length/lo))
+    strouhal=f0*jet_length/max(float(jet_velocity),1e-9)
     n=max(1,int(round(dur*sr))); bore_delay=max(2.0,sr/max(f0,1.0))
     bore=ThiranDelay(bore_delay,int(sr/20)+16)
     jet_model=JetDelay(jet_length,.4,.03,sr); jd=jet_model.samples(jet_velocity)
@@ -440,7 +459,8 @@ def jet_bore(f0: float, dur: float, jet_velocity=18.0, *, sr=48000,
         y[i]=inc+.45*brad; pdrive[i]=.5*rho*drive*drive; flow[i]=u; pbore[i]=inc
     return CommonSolveResult(_norm(y),PhysicalPort.acoustic(pdrive,flow,'jet'),
                              PhysicalPort.acoustic(pbore,-flow,'bore'),
-                             {'solver':'common-graph-v11','bore_delay_samples':bore_delay,'jet_delay_samples':jd})
+                             {'solver':'common-graph-v11','bore_delay_samples':bore_delay,'jet_delay_samples':jd,
+                              'strouhal':strouhal,'gain_region':jet_gain_region(strouhal),'jet_velocity':float(jet_velocity)})
 
 CommonPhysicalSolver.jet_bore = staticmethod(jet_bore)
 
@@ -498,3 +518,100 @@ class WaveguideNetwork:
             inc,out=self.step(ex)
             y[i]=inc[int(drive_branch)]
         return y
+
+
+
+@dataclass
+class PlectrumJunction:
+    """Spring plectrum on a string at the plucking point, as a displacement-wave scattering junction.
+
+    The plectrum is a spring k (N/m^p) with damping mu (N s/m) whose free end ``ye`` is driven by the jack. It touches the
+    string when ye passes the string's own position, pushes with the force k yd^p (yd = ye - y, so the stiffness
+    p k yd^(p-1) grows from zero with the contact: ``feather_p`` = 1 is a plain spring, 2 a feathered quill), and lets go for
+    good once the force exceeds ``f_max``. ``R`` is the string wave impedance sqrt(T mu_s). While in contact the junction
+    gives y = S + rho{ye - S}, S the sum of the two arriving displacement waves and
+    rho(z) = g (1 - zeta z^-1) / (1 - p z^-1), the bilinear force reflectance of the spring-damper seen from the string."""
+    k: float
+    mu: float
+    f_max: float
+    feather_p: float = 2.0
+    R: float = 0.22
+    sr: float = 48000.0
+
+    def __post_init__(self):
+        self.reset()
+
+    def reset(self):
+        self.state = 0                    # 0 not yet touched, 1 in contact, 2 released
+        self.y = 0.0
+        self.force = 0.0
+        self._u1 = 0.0
+        self._r = 0.0
+
+    def coeffs(self, ks: float):
+        c = ks / (2.0 * (self.mu + 2.0 * self.R) * self.sr)
+        p = (1.0 - c) / (1.0 + c)
+        z = -1.0 if self.mu <= 1e-12 else (1.0 - ks / (2.0 * self.mu * self.sr)) / (1.0 + ks / (2.0 * self.mu * self.sr))
+        return (1.0 - p) / (1.0 - z), z, p
+
+    def step(self, s: float, ye: float) -> float:
+        """Displacement y at the plucking point from the arriving waves' sum ``s`` and the free end ``ye``."""
+        yd = ye - self.y
+        if self.state == 0 and yd > 0.0:
+            self.state = 1
+        if self.state != 1:
+            self.y, self.force = s, 0.0
+            return s
+        ks = self.k * max(yd, 1e-12) ** (self.feather_p - 1.0)
+        g, z, p = self.coeffs(ks)
+        u = ye - s
+        self._r = g * (u - z * self._u1) + p * self._r
+        self._u1 = u
+        y = s + self._r
+        f = ks * (ye - y)
+        if f >= self.f_max or f < 0.0:
+            self.state, self.force, self.y = 2, 0.0, s
+            return s
+        self.force, self.y = f, y
+        return y
+
+    def pluck(self, freq: float, dur: float, vel: float = 1.0, beta: float = 0.2, t60: float = 3.0, damp: float = 0.12,
+              rise: float = 0.06):
+        """A lossless-ish two-rail string of pitch ``freq`` plucked at ``beta`` of its length by this junction, the jack
+        rising at ``rise`` * (0.3 + 0.7 vel) m/s from 0.2 mm under the string. Returns (bridge force signal, release time s,
+        peak contact force N)."""
+        sr = float(self.sr)
+        n = max(8, int(dur * sr))
+        P = sr / float(freq)
+        M1 = max(2, int(round(float(np.clip(beta, 0.03, 0.5)) * P)))
+        M2 = max(2.0, P - M1)
+        L = int(M2) + 4
+        b1, b2 = np.zeros(M1 + 2), np.zeros(L + 2)
+        g = 10.0 ** (-1.5 / (max(t60, 0.05) * float(freq)))
+        v = rise * (0.3 + 0.7 * float(np.clip(vel, 0.0, 1.0)))
+        out = np.zeros(n)
+        lp1 = lp2 = ob_prev = 0.0
+        self.reset()
+        t_rel, f_pk = float(dur), 0.0
+        for i in range(n):
+            x1 = b1[(i - M1) % len(b1)]
+            lp1 = (1.0 - damp) * x1 + damp * lp1
+            i0 = (i - int(M2)) % len(b2)
+            fr = M2 - int(M2)
+            x2 = (1.0 - fr) * b2[i0] + fr * b2[(i0 - 1) % len(b2)]
+            lp2 = (1.0 - damp) * x2 + damp * lp2
+            yp1, yp2 = -g * lp1, -g * lp2
+            y = self.step(yp1 + yp2, -2e-4 + v * i / sr)
+            if self.state == 1:
+                f_pk = max(f_pk, self.force)
+            elif self.state == 2 and t_rel == dur:
+                t_rel = i / sr
+            b1[i % len(b1)] = y - yp1
+            b2[i % len(b2)] = y - yp2
+            h = M2 / 2.0
+            j0 = (i - int(h)) % len(b2)
+            fh = h - int(h)
+            ob = (1.0 - fh) * b2[j0] + fh * b2[(j0 - 1) % len(b2)]
+            out[i] = ob - ob_prev
+            ob_prev = ob
+        return out, t_rel, f_pk

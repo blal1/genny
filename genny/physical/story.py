@@ -322,23 +322,35 @@ NASAL_LEN_CM, NOSTRILS_CM2, NASAL_PEAK_CM2 = 11.5, 1.2, 3.5
 SINUSES = ({"at": 17, "end": "helmholtz", "volume": 30.0, "neck_area": 0.2, "neck_len": 0.5},   # maxillary pair
            {"at": 12, "end": "helmholtz", "volume": 8.0, "neck_area": 0.08, "neck_len": 0.4},   # sphenoid
            {"at": 17, "end": "helmholtz", "volume": 6.0, "neck_area": 0.05, "neck_len": 1.0})   # frontal
+SINUSES_MRI = ({"at": 17, "end": "helmholtz", "volume": 17.3, "neck_area": 0.0745, "neck_len": 0.451},   # maxillary R
+               {"at": 17, "end": "helmholtz", "volume": 15.7, "neck_area": 0.0515, "neck_len": 0.375},   # maxillary L
+               {"at": 12, "end": "helmholtz", "volume": 9.0, "neck_area": 0.0302, "neck_len": 0.391},    # sphenoid R
+               {"at": 12, "end": "helmholtz", "volume": 8.9, "neck_area": 0.0531, "neck_len": 0.293},    # sphenoid L
+               {"at": 17, "end": "helmholtz", "volume": 2.6, "neck_area": 0.05, "neck_len": 1.0},        # frontal R
+               {"at": 17, "end": "helmholtz", "volume": 3.6, "neck_area": 0.05, "neck_len": 1.0})        # frontal L
+NASAL_VOLUME_MRI_CM3 = 25.5
 SUBLINGUAL = (13.1, 0.375, (1.5, 0.5))                           # cm from the glottis, section length, areas
 LATERAL = (22, 32, 0.04, 0.28)                                   # sections, lateral passage area range cm^2
 VOWEL_MIN_CM2, LATERAL_MIN_CM2, CONSTRICTION_MIN_CM2 = 0.25, 0.20, 0.15
 
 
-def nasal_area(port_cm2: float, dx: float = DX_CM) -> np.ndarray:
-    """Nasal tract from the velopharyngeal port (first section = ``port_cm2``) to the two nostrils, summed."""
+def nasal_area(port_cm2: float, dx: float = DX_CM, volume_cm3: float | None = None) -> np.ndarray:
+    """Nasal tract from the velopharyngeal port (first section = ``port_cm2``) to the two nostrils, summed.
+    ``volume_cm3`` rescales the sections after the port to that total volume (``NASAL_VOLUME_MRI_CM3``: measured mean)."""
     n = max(4, int(round(NASAL_LEN_CM / dx)))
     a = np.interp(np.linspace(0.0, 1.0, n), (0.0, 0.3, 0.75, 1.0), (0.6, NASAL_PEAK_CM2, NASAL_PEAK_CM2, NOSTRILS_CM2))
     a[0] = max(float(port_cm2), 1e-4)
+    if volume_cm3:
+        sec = NASAL_LEN_CM / n
+        a[1:] *= max(float(volume_cm3) - a[0] * sec, 0.0) / (a[1:].sum() * sec)
     return a
 
 
-def nasal_branch(port_cm2: float, sinuses: bool = True) -> dict:
-    """The nose as a radiating side branch at the velum (``tract_response(branches=...)``)."""
-    return {"at": VELUM_AT, "area": nasal_area(port_cm2), "end": "radiating",
-            "branches": SINUSES if sinuses else ()}
+def nasal_branch(port_cm2: float, sinuses: bool | str = True, volume_cm3: float | None = None) -> dict:
+    """The nose as a radiating side branch at the velum (``tract_response(branches=...)``). ``sinuses="mri"``: the
+    six measured left/right cavities (``SINUSES_MRI``) in place of the three lumped ones."""
+    sin = SINUSES_MRI if sinuses == "mri" else SINUSES if sinuses else ()
+    return {"at": VELUM_AT, "area": nasal_area(port_cm2, volume_cm3=volume_cm3), "end": "radiating", "branches": sin}
 
 
 def piriform_branch(volume_cm3: float = PIRIFORM_VOLUME) -> dict:
@@ -455,6 +467,27 @@ def sensitivity(A, F, dx: float = DX_CM) -> np.ndarray:
 
 DEFLECTION = {"b": (-1.0, -1.0, -1.0), "d": (-1.0, 1.0, 1.0), "g": (-1.0, 1.0, -1.0)}
 I_EPI, R_EPI = 5, 6
+
+DRM_LENGTHS = (1 / 10, 1 / 15, 2 / 15, 1 / 5, 1 / 5, 2 / 15, 1 / 15, 1 / 10)
+DRM_SIGNS = ((-1, -1, -1, -1, 1, 1, 1, 1), (-1, -1, 1, 1, -1, -1, 1, 1), (-1, 1, 1, -1, 1, -1, -1, 1))
+DRM_SIGNS_TM = ((-1, 1, 1, 1, 1, 1, 1, 1), (-1, 1, 1, 1, 1, 1, 1, 1), (-1, 1, 1, -1, 1, -1, 1, 1))
+DRM_STOP_TARGETS = ((565, 1695, 2825), (111, 613, 1832), (61, 728, 2180), (37, 1018, 3051), (29, 1696, 2034), (30, 1454, 2906), (29, 1222, 2442), (30, 1131, 2261))
+DRM_FRICATIVE_F1 = (526, 577, 652, 833, 1230, 2142, 3747, 10000)
+
+
+def drm_area(areas, length_cm: float = 17.0, dx_cm: float = DX_CM) -> np.ndarray:
+    """Area function (cm^2, glottis to lips) of eight uniform tubes, the distinctive regions of a tract of effective
+    length ``length_cm`` (geometric length plus the 0.6133 a end correction of the lips): lengths l/10, l/15, 2l/15,
+    l/5, l/5, 2l/15, l/15, l/10. ``DRM_SIGNS[j][n]`` is the sign of the change of formant j + 1 when region n + 1
+    (glottis side first) widens, in a tract with no tight constriction; ``DRM_SIGNS_TM`` the same for tight ones (transitional
+    and two-tract modes); ``DRM_STOP_TARGETS[n]`` the F1-F3 (Hz, lossless) of a tract closed in the middle of region n + 1, a 17.5 cm
+    neutral tube of 5 cm^2; ``DRM_FRICATIVE_F1[n]`` the first formant of the tract in front of a constriction in region n + 1."""
+    a = np.asarray(areas, float)
+    if a.shape != (8,):
+        raise ValueError("eight region areas, glottis to lips")
+    n = max(8, int(round((float(length_cm) - 0.6133 * math.sqrt(a[7] / math.pi)) / dx_cm)))
+    edges = np.cumsum((0.0,) + DRM_LENGTHS) * float(length_cm)
+    return a[np.minimum(np.searchsorted(edges, (np.arange(n) + 0.5) * dx_cm, side="right") - 1, 7)]
 
 
 def deflection_constriction(V, deltas, mu: float = 1.0, E: float = 1.0) -> np.ndarray:

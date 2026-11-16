@@ -7,6 +7,7 @@
 | Know which physical model is behind a sound, and its source | [`physics.md`](physics.md); every constant's source: [`../research/SOURCES.md`](../research/SOURCES.md) |
 | Call genny from Python | [`api.md`](api.md) (generated: every public class and function) |
 | Add an instrument, sound, effect or layer type | "Extending genny" below |
+| Add a weapon, engine, vehicle, scene or other table of values | [`presets.md`](presets.md): a TOML file, no code |
 
 ## Module pages
 
@@ -36,7 +37,9 @@ numbers its tests measure and the constants that have no source.
 | [`klang.md`](klang.md) | Ports of the Klang procedural library (vehicles), UI ticks, `sampler` and `articulate` layers, QA harness |
 | [`household.md`](household.md) | Locks, doors, windows, tools, appliances, alarms, plumbing, games, furniture (models of the less obvious entries) |
 | [`sports.md`](sports.md) | Balls, whistles, skates, swimming (models of the less obvious entries) |
-| [`arms.md`](arms.md) | Firearms and heavy weapons: `firearm`, `minigun`, `gun_mech`, impacts, ricochets, blasts, launchers, shells, underwater charges |
+| [`arms.md`](arms.md) | Firearms and heavy weapons: `firearm`, `minigun`, `gun_mech`, impacts, ricochets, blasts, launchers, shells, underwater charges; weapon and cartridge presets, recorder, cases |
+| [`presets.md`](presets.md) | TOML presets: format, user folder, `genny presets`, families (weapons, engines, vehicles, scenes...), patches |
+| [`world.md`](world.md) | Guzheng, oud, qanun, santur, erhu, morin khuur, shakuhachi, ney, bansuri, duduk, bonang, balafon |
 
 Modules without a page of their own (names and parameters in [`catalog.md`](catalog.md), "Index by module"):
 
@@ -120,6 +123,10 @@ Put the code in a module of `genny/` and add the module's name to the list at th
 `genny/__init__.py`. Every parameter is declared as `name=(default, "help")`; undeclared parameters are
 rejected at render time.
 
+An sfx also needs an entry in the level table `genny/_sfx_levels.py` (the gain behind `out_level="match"`): regenerate it with
+`uv run python examples/sfx_level_match.py` (`--part K/N --out f.json` for parallel batches, then `--from f1.json ...`;
+`--check` compares with the table). The complete-table test fails otherwise.
+
 What every entry must satisfy (the tests enforce it):
 
 1. Works at 22050, 44100 and 48000 Hz. Run a kernel at its own rate and resample at the boundary if the
@@ -134,7 +141,11 @@ What every entry must satisfy (the tests enforce it):
 6. A test checks a prediction of the model, not only that it runs: a mode frequency against its formula, a
    decay time against the request, an event rate, energy conservation of a lossless scheme.
 7. No source citation in the code (no paper, author, table or figure in comments or docstrings): the source of
-   each constant, or its UNSOURCED status, is a line of `research/SOURCES.md` under its module.
+   each constant, or its `connaissance` status, is a line of `research/SOURCES.md` under its module.
+
+8. A table of values (a weapon, cartridge, engine, vehicle, scene, door, horn, ship...) goes in a preset family, a TOML file in
+   `genny/presets/` (see [`presets.md`](presets.md)), not in a Python dict; `examples/preset_freeze.py` checks that a migrated
+   table renders bit for bit as before.
 
 After adding or changing entries:
 

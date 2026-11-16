@@ -397,3 +397,13 @@ More one-liners (all rendered while writing this page):
   abruptly the pitch drops at the pass, `speed` how far it drops.
 - **Mass law**: a wall twice as heavy (or a frequency twice as high) gets through 6 dB weaker; that is why only
   the bass of the neighbours' music arrives.
+## Newer options (1.3.0)
+
+- `room model="moorer79"` (Table 2-3 of Moorer 1979; `reverbs.moorer_early`, `moorer_noise_ir`, `moorer_loop_g1`), `src_beta`,
+  `transition`, preset `baroque`; `Room(absorbers=[...])`; `reflection kind="diffuser" depth=`; effect `curtain`; `directivity` for
+  `oboe`, `clarinet`, `bassoon`, `violin`, `tuba`, `membrane` (options `elevation`, `m`, `player`); `reverbs.t60_within_jnd`,
+  `free_field_level`, `audience_absorption`; `phaser barber=`; `feedback_guitar cabinet=`; `_two_tap_shift` (the delay-line
+  pitch shifter of `pitch mode="delay"`).
+- Recipes: cascade a short `room` into a long `fdn_reverb` (mix 0.3 each); a flat disc near a wall adds a delay of 2000 d / 343 ms;
+  `tube_mesh` level slopes 0.61 and 0.53; below 30-40 ms a delay on one channel widens without an echo (precedence effect),
+  beyond it is heard as an echo.

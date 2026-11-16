@@ -260,7 +260,7 @@ Give the layer `lead` and `tail` so breaths, first consonants and the release ha
 
 Baritone, mezzo and treble rows are blends or scalings of the five published rows, and the style
 table, the effort-to-Rd and effort-to-tilt slopes, the blend weights for English vowels and the
-level constants are mine: each is marked `# UNSOURCED` in the code with the reason.
+level constants are mine: each is listed as `connaissance` in `research/SOURCES.md` with the reason.
 
 Three things differ from the sibling project's choir, each because the measurement said so:
 
@@ -280,3 +280,16 @@ Three things differ from the sibling project's choir, each because the measureme
 - `satb` chord voicing is a nearest-tone search, not counterpoint: write the four lines yourself
   when the voice leading matters.
 - Cost: about 0.02 s per singer per second of sound.
+
+## Added in 1.3.0
+
+- `end_boost`: the vibrato speeds up along the measured tail at the end of a held note (Prame's curve). `satb`
+  voicing avoids parallel fifths and octaves.
+- Speech (`speech` layer, `genny say`): `diplophonia` and `effort` (F1 + 3.5 Hz per dB of effort, spectral slope 0.31
+  dB per dB, conversation spans about 9 dB; `EFFORT_F1`). Gesture time constants stay on Birkholz 2011.
+## Effort, Rd and the singing options (1.3.0)
+
+The Rd (and so the open quotient) falls by 0.0275 per dB of level (Rd 1.15 to 0.6 over 20 dB): the slope with the effort is
+0.917, was 1.5. At mf nothing changes, at pp Rd is 0.23 lower (less breath), at ff 0.15 higher (less pressed). This
+changes every sung voice (`vocal_choir`, `sing`, `satb`...). The jitter and shimmer ratios by effort are soft 3.1 and
+loud 0.32. New: `voice mech_rd`, style `cossack`, `formants` of `roar`.

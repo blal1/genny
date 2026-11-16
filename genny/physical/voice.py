@@ -1328,6 +1328,29 @@ def chitin_clicks(rate: float = 120.0, dur: float = 1.0, rng: np.random.Generato
     return _edge_fade(_bp(y, 6000.0 * rs, 5.0))
 
 
+def _syrinx_pulse(f, pw, n: int) -> np.ndarray:
+    """Pulse oscillator of the bird patch: 1 / (1 + (pw cos)^2) of a cosine at ``f`` Hz (number or per sample), pw 1 = a raised cosine
+    .. 3 a slightly narrowed pulse."""
+    ph = np.cumsum(np.broadcast_to(np.asarray(f, float), (n,))) / SR
+    return 1.0 / (1.0 + (np.broadcast_to(np.asarray(pw, float), (n,)) * np.cos(TWO_PI * ph)) ** 2)
+
+
+def farnell_syrinx(n: int, bp1=3.0, bp2=4.0, bw1=2.0, bw2=2.0, rm=0.5, mod=100.0, bf=400.0, pw=2.0, tf1=1500.0, tf2=2500.0,
+                   res=3.0, amp=0.5) -> np.ndarray:
+    """Farnell's 11-parameter birdcall patch (each argument a number or a curve of ``n`` samples): two bronchus pulses
+    at ``bp1`` / ``bp2`` Hz (0-10) and widths ``bw1`` / ``bw2`` (1-4) meet in a ring modulator (``rm`` 0 = their sum .. 1 = their
+    product), scaled by ``mod`` Hz (0-200) and added to the syrinx base ``bf`` Hz (80-1000); a pulse oscillator of width ``pw`` (0-4) at that
+    frequency is shaped by two trachea band-passes ``tf1`` / ``tf2`` Hz (50-3000, Q ``res`` 2-5) and ``amp``, then the beak's 100 Hz high-pass."""
+    a, b = _syrinx_pulse(bp1, bw1, n), _syrinx_pulse(bp2, bw2, n)
+    r = np.broadcast_to(np.asarray(rm, float), (n,))
+    f = np.maximum(np.broadcast_to(np.asarray(bf, float), (n,)) + np.broadcast_to(np.asarray(mod, float), (n,)) * (r * a * b + (1.0 - r) * (a + b)), 20.0)
+    s = _syrinx_pulse(f, pw, n)
+    s = s - float(np.mean(s))
+    out = _bp(s, float(np.mean(tf1)), float(res)) + _bp(s, float(np.mean(tf2)), float(res))
+    out = _pd_hip(out, 100.0, float(SR)) * np.broadcast_to(np.asarray(amp, float), (n,))
+    return _edge_fade(out)
+
+
 # ==========================================================================================
 # Pd "just say one word", PAF, FOF, octave divider
 # ==========================================================================================
@@ -1346,7 +1369,7 @@ def almost_speech(dur: float = 3.0, rng: np.random.Generator | None = None, *,
 
     The syllable phasor starts at a random phase (the patch starts at 0): voices that share a phase
     wrap together, and a crowd of them pulses at 4 Hz. Reference for the 4 syllables/s of the patch: reading
-    rate 149.2 +/- 31.2 words/min, about 2.5 words/s (75 speakers, Lim, Toutios et al. 2021, fig. 4)."""
+    rate 149.2 +/- 31.2 words/min, about 2.5 words/s."""
     rng = rng or np.random.default_rng(0)
     n = int(round(dur * SR))
     f0 = np.empty(n)
@@ -1712,8 +1735,48 @@ def cycle_jitter(f0, jitter: float, rng: np.random.Generator, sr: float = SR) ->
     return f * (1.0 + d[np.searchsorted(edges, ph, side="right") - 1])
 
 
+NLP_DUTY = {"healthy": 0.03, "rough": 0.18}     # share of the call time spent in subharmonic episodes
+NLP_CHAIN = dict(p_chaos=0.5, p_bp=0.35, w_sh=0.5, w_chaos=0.25, w_bp=0.25, chaos_amp=0.45, chaos_f0=0.05,
+                 bp_ratio=1.0 / 0.59, bp_depth=0.4, sh_depth=0.4, tail_s=0.1)
+
+
+def _episodes(n: int, rng: np.random.Generator, sub_rate: float, duty: float | None):
+    """(start, end) samples of the nonlinear episodes: exponential gaps at ``sub_rate`` per second, lengths
+    uniform in 0.08-0.4 s; with ``duty`` the gaps are then scaled so the episodes fill that share of the call."""
+    T = n / SR
+    gaps, lens, t = [rng.exponential(1.0 / sub_rate)], [], 0.0
+    t = gaps[0]
+    while t < (T if duty is None else 3.0 * T):
+        lens.append(rng.uniform(0.08, 0.4))
+        gaps.append(rng.exponential(1.0 / sub_rate))
+        t += lens[-1] + gaps[-1]
+    if not lens:
+        return []
+
+    def lay(s):
+        out, t = [], gaps[0] * s
+        for ln, g in zip(lens, gaps[1:]):
+            if t >= T:
+                break
+            out.append((t, min(t + ln, T)))
+            t += ln + g * s
+        return out
+
+    def share(s):
+        return sum(b - a for a, b in lay(s)) / T
+
+    if duty is not None:
+        lo, hi = 0.02, 50.0
+        for _ in range(30):
+            mid = math.sqrt(lo * hi)
+            lo, hi = (mid, hi) if share(mid) > duty else (lo, mid)
+        return lay(math.sqrt(lo * hi))
+    return lay(1.0)
+
+
 def roughness(f0, rng: np.random.Generator, *, jitter: float = 0.03, shimmer: float = 0.3,
-              subharmonic=0.0, sub_rate: float = 2.5) -> tuple[np.ndarray, np.ndarray]:
+              subharmonic=0.0, sub_rate: float = 2.5, duty=None, chain: bool = False, jump: float = 0.0,
+              bridge: float = 0.03, nlp=None) -> tuple[np.ndarray, np.ndarray]:
     """Per-cycle irregularity of a pulse source, returned as (f0 with cycle jitter, amplitude
     multiplier per sample):
 
@@ -1727,24 +1790,70 @@ def roughness(f0, rng: np.random.Generator, *, jitter: float = 0.03, shimmer: fl
       partials 1/2, 3/2 ... an octave down, spectral envelope roughly kept"). ``subharmonic`` is
       the depth d (scalar or per sample); it is gated on and off in random episodes at about
       ``sub_rate`` per second, so the doubling comes and goes
-      like a real vocal-fold bifurcation instead of a steady octave.
+      like a real vocal-fold bifurcation instead of a steady octave. ``duty`` (a share, or "healthy" / "rough" of
+      ``NLP_DUTY``) sets ``sub_rate`` so the episodes (mean 0.24 s) fill that share of the time.
+    ``chain`` sequences the nonlinear phenomena inside each episode as they follow one another in a real call:
+    harmonic, then subharmonics (SH), then optionally chaos (noise on the period and the amplitude), then
+    optionally biphonation (BP: a second, inharmonic source at ``nlp['bp_ratio']`` x f0 modulating the first),
+    then harmonic again; an episode never ends the call in chaos. ``jump`` (semitones) raises f0 over the first
+    episode, joined to the plain f0 by a ``bridge`` s glide each way (jump alone also turns the chain on).
+    ``nlp`` overrides entries of ``NLP_CHAIN``.
     Amplitude changes happen at cycle starts only, over 2 ms, so no clicks inside a pulse."""
     f = np.asarray(f0, float)
     n = len(f)
+    if duty is not None:
+        dty = float(np.clip(NLP_DUTY[duty] if isinstance(duty, str) else duty, 0.005, 0.95))
+        sub_rate = 1.0 / (0.24 * (1.0 / dty - 1.0))
+    else:
+        dty = None
+    d = np.broadcast_to(np.asarray(subharmonic, float), (n,))
+    if chain or jump:
+        P = {**NLP_CHAIN, **(nlp or {})}
+        T = n / SR
+        gs = {k: np.zeros(n) for k in ("sh", "ch", "bp")}
+        jf = np.ones(n)
+        pick = None
+        for a, b in _episodes(n, rng, sub_rate, dty):
+            parts = [("sh", P["w_sh"])]
+            if rng.random() < P["p_chaos"] and b < T - P["tail_s"]:
+                parts.append(("ch", P["w_chaos"]))
+            if rng.random() < P["p_bp"]:
+                parts.append(("bp", P["w_bp"]))
+            if pick is None:
+                pick = (a, b)
+            tot, pos = sum(w for _, w in parts), a
+            for name, w in parts:
+                end = pos + (b - a) * w / tot
+                gs[name][int(pos * SR):int(end * SR)] = 1.0
+                pos = end
+        gs ={k: _pd_lop(np.ascontiguousarray(v), 30.0, float(SR)) for k, v in gs.items()}
+        if jump and pick is not None:
+            jf[int(pick[0] * SR):int(pick[1] * SR)] = 2.0 ** (float(jump) / 12.0)
+            wb = max(1, int(float(np.clip(bridge, 0.001, 0.2)) * SR))
+            jf = uniform_filter1d(uniform_filter1d(jf, wb, mode="nearest"), wb, mode="nearest")
+        wn = uniform_filter1d(rng.standard_normal(n), max(1, int(SR / 200.0)), mode="nearest")
+        wn = wn / (float(np.std(wn)) + 1e-12)
+        f2 = cycle_jitter(f * jf * (1.0 + P["chaos_f0"] * gs["ch"] * wn), jitter, rng)
+        ph2 = np.cumsum(f2) / SR
+        c2 = np.floor(ph2).astype(np.int64)
+        nc2 = int(c2[-1]) + 2
+        amp = np.exp(rng.normal(0.0, shimmer * PRAAT_LOCAL, nc2))[c2]
+        dsh = np.where(d > 0, d, P["sh_depth"])
+        alt = np.where(c2 % 2 == 0, 1.0, -1.0)
+        amp = amp * (1.0 + dsh * gs["sh"] * alt)
+        amp = amp * np.exp(P["chaos_amp"] * gs["ch"] * rng.normal(0.0, 1.0, nc2)[c2])
+        amp = amp * (1.0 + P["bp_depth"] * gs["bp"] * np.cos(2.0 * np.pi * P["bp_ratio"] * ph2))
+        w = max(1, min(seconds(0.001), int(0.25 * SR / max(float(np.median(f)), 1.0))))
+        return f2, np.maximum(uniform_filter1d(uniform_filter1d(amp, w, mode="nearest"), w, mode="nearest"), 0.0)
     f2 = cycle_jitter(f, jitter, rng)
     ph2 = np.cumsum(f2) / SR
     c2 = np.floor(ph2).astype(np.int64)
     nc2 = int(c2[-1]) + 2
     amp = np.exp(rng.normal(0.0, shimmer * PRAAT_LOCAL, nc2))[c2]
-    d = np.broadcast_to(np.asarray(subharmonic, float), (n,))
     if np.any(d > 0):
         gate = np.zeros(n)
-        t = rng.exponential(1.0 / sub_rate)
-        while t < n / SR:
-            ln = rng.uniform(0.08, 0.4)
-            a, b = int(t * SR), min(n, int((t + ln) * SR))
-            gate[a:b] = 1.0
-            t += ln + rng.exponential(1.0 / sub_rate)
+        for a, b in _episodes(n, rng, sub_rate, dty):
+            gate[int(a * SR):min(n, int(b * SR))] = 1.0
         gate = _pd_lop(np.ascontiguousarray(gate), 30.0, float(SR))
         alt = np.where(c2 % 2 == 0, 1.0, -1.0)
         amp = amp * (1.0 + d * gate * alt)
@@ -1917,7 +2026,7 @@ def hybrid_voice(n: int, rng: np.random.Generator, *, family: str, queries, pick
                  gate_source: bool = True, alpha: float | None = None, target_f1: float | None = None,
                  morph=None, flatten: float = 0.0, env_follow: float = 1.0,
                  pitch_ratio: float | None = None, used: list | None = None, pred=None,
-                 min_warp: float = 0.0, warp_mod=None) -> np.ndarray:
+                 min_warp: float = 0.0, warp_mod=None, segment=None) -> np.ndarray:
     """Recorded vocal tract, new excitation (Cook ch.8 p.87-92 LPC resynthesis / cross-synthesis;
     Farnell ex. 52.2 "isolate excitation from resonance, then impose ... gestures").
 
@@ -1932,9 +2041,15 @@ def hybrid_voice(n: int, rng: np.random.Generator, *, family: str, queries, pick
       whisper: noise through the same formants).
     * amplitude: the recording's residual-gain contour raised to ``env_follow`` (1 = the recorded
       articulation, 0 = flat; the caller applies its own gesture envelope on top).
+    ``segment`` replaces the recordings bank: a mono signal at SR (analysed here) or an ``analysis.analyse`` result
+    (Track, residual); ``family``, ``queries`` and ``pick`` are then not read.
     Returns the voice normalised to peak 1. ``used`` collects the recording rows (provenance)."""
     from . import analysis
-    row, tr, e = recorded_segment(family, queries, pick, rng, pred=pred)
+    if segment is not None:
+        tr, e = segment if isinstance(segment, tuple) else analysis.analyse(np.asarray(segment, float))
+        row = {"file": "segment"}
+    else:
+        row, tr, e = recorded_segment(family, queries, pick, rng, pred=pred)
     if used is not None:
         used.append(row["file"])
     trn = tr.stretch(n)
@@ -2541,6 +2656,21 @@ def _main() -> None:  # pragma: no cover - self-test
                   f"(below the oscillation threshold)")
     print("\n".join(report))
     (out / "report.txt").write_text("\n".join(report), encoding="utf-8")
+
+
+def phonation_threshold_pressure(xi01, xi02=None, kt=1.1, thickness=0.3, bc=10.0):
+    """Threshold subglottal pressure (cmH2O) for fold oscillation; `xi01`, `xi02` prephonatory half-widths at the
+    lower and upper edge of the fold (cm), `thickness` T (cm), `kt` the transglottal pressure coefficient, `bc`
+    the product of the mucosal-wave constants B c (cmH2O). Rectangular glottis when `xi02` is None."""
+    x1 = float(xi01)
+    x2 = x1 if xi02 is None else float(xi02)
+    return float(2.0 * kt / thickness * bc * x1 * x1 / (x1 + x2))
+
+
+def fold_f0(stiffness=2.0e5, mass=0.476):
+    """Small-amplitude fundamental (Hz) of a fold of areal mass `mass` (g/cm2) on a restoring stiffness
+    `stiffness` (dyn/cm3), the tract load already subtracted."""
+    return float(math.sqrt(max(stiffness, 0.0) / mass) / (2.0 * math.pi))
 
 
 if __name__ == "__main__":

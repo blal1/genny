@@ -77,12 +77,11 @@ def test_yield_stress_thickens_it():
     assert V.effective_viscosity(0.01, 1.0, 300.0) > 1.0 + 1.0 and V.effective_viscosity(0.01, 1.0, 0.0) == 1.0
 
 
-def test_burst_fundamental_falls_linearly_with_size_cpb():
+def test_burst_fundamental_falls_with_size_cpb():
     rs = np.array([0.006, 0.012, 0.018, 0.024])
     fs = np.array([_peak(np.pad(V._burst(r, 1.0), (0, SR)), 60, 2000) for r in rs])     # one viscosity, thin enough that _thin stays at 1
-    a, b = np.polyfit(rs, fs, 1)
-    assert a < 0 and np.max(np.abs(a * rs + b - fs)) < 0.05 * fs.mean(), fs
-    assert all(abs(fs - np.array([V.burst_freq(r) for r in rs])) < 0.2 * fs)
+    assert np.all(np.diff(fs) < 0), fs
+    assert all(abs(fs - np.array([V.burst_freq(r, 1.0) for r in rs])) < 0.2 * fs)
 
 
 def test_burst_falls_with_viscosity_too_cpl():
@@ -92,10 +91,11 @@ def test_burst_falls_with_viscosity_too_cpl():
 
 def test_burst_is_an_n_wave_then_a_jet():
     y = V._burst(0.01, 1.0)
-    per = int(SR / V.burst_freq(0.01))
+    per = int(SR / V.burst_freq(0.01, 1.0))
     head = y[:per]
     assert head[:per // 2].max() > 0 and head[per // 2:].min() < 0 and np.argmax(head) < np.argmin(head)   # up, then down
-    assert np.std(y[per:]) > 0.1 * np.std(head)
+    assert V.JET_RATIO == 0.1
+    assert 0.05 < np.abs(y[per:]).max() / np.abs(head).max() < 0.2     # Liu 2012 Fig 5: jet 0.07-0.15 of the N wave
 
 
 def test_rupture_time_quiets_the_burst_and_grows_with_viscosity():
@@ -190,7 +190,7 @@ def test_marche_steps_fall_at_the_pace():
 
 
 def test_aspiration_climbs():
-    y = V.mud(sr=SR, kind="aspiration", pull=0.5, seed=1)
+    y = V._band(V.mud(sr=SR, kind="aspiration", pull=0.5, seed=1), 300, 5000)      # the air; the bursts' own 30 Hz bloop lies below
     assert _centroid(y[int(0.05 * SR):int(0.15 * SR)]) < _centroid(y[int(0.35 * SR):int(0.48 * SR)])
 
 

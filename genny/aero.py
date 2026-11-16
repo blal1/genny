@@ -390,18 +390,59 @@ def _tbl(u, delta, n, rng):
     return _rms1(Ma._tvbp(rng.standard_normal(n), np.full(n, min(airframe_peak(u, delta), 0.45 * SR)), 1.0))
 
 
+def flap_spectrum_db(x, triple=False):
+    """Normalised 1/3-octave flap-noise level G(f c_F / V) in dB (single/double slotted, or triple slotted)."""
+    x = np.maximum(np.asarray(x, float), 1e-9)
+    if triple:
+        return np.where(x < 2, 99.0 + 10 * np.log10(x), np.where(x < 75, 102.61 - 2 * np.log10(x), 155.11 - 30 * np.log10(x)))
+    return np.where(x < 2, 99.0 + 10 * np.log10(x), np.where(x < 20, 103.82 - 6 * np.log10(x), 135.04 - 30 * np.log10(x)))
+
+
+def gear_spectrum_db(x, h_over_d=1.0, phi=90.0, wheels=2):
+    """Landing-gear 1/3-octave level per Strouhal x = f D / V at V = 100 m/s and D / r = 1: sum of a broadband term and a strut side-force term in sin^2(phi)."""
+    x = np.maximum(np.asarray(x, float), 1e-9)
+    off = 0.3 if wheels == 1 else 0.0
+    g1 = 12.52 - off + np.log10(4.5 * x ** 2 / (12.5 - off + x ** 2) ** 2.25)
+    g2 = 12.79 + np.log10(2 * x ** 2 / (30.0 + x ** 8)) + np.log10(0.34 * float(h_over_d)) + 2 * np.log10(max(np.sin(np.radians(phi)), 1e-3))
+    return 10 * np.log10(10 ** g1 + 10 ** g2)
+
+
+def _gear_noise(u, diameter, n, rng, h_over_d, phi, wheels):
+    X = np.fft.rfft(rng.standard_normal(n))
+    f = np.fft.rfftfreq(n, 1.0 / SR)
+    g = gear_spectrum_db(f * diameter / u, h_over_d, phi, wheels) - 10 * np.log10(np.maximum(f, 1.0))
+    X *= 10 ** ((g - g.max()) / 20.0) * (f > 20)
+    return _rms1(np.fft.irfft(X, n))
+
+
+def _flap_noise(u, chord, n, rng, triple):
+    X = np.fft.rfft(rng.standard_normal(n))
+    f = np.fft.rfftfreq(n, 1.0 / SR)
+    X *= 10 ** ((flap_spectrum_db(f * chord / u, triple) - 99.0) / 20.0) * (f > 20)
+    return _rms1(np.fft.irfft(X, n))
+
+
 @sfx("airframe", "Airframe noise of a gliding aircraft: trailing-edge turbulence at U^5, plus flaps and landing gear.",
      speed=(70.0, "m/s"), delta=(0.005, "m boundary-layer displacement thickness"), flaps=(0.0, "0..1"), gear=(0, "1 = down"),
+     flap_angle=(0.0, "deg; > 0 = flap noise with the measured spectrum, amplitude as sin(angle)"),
+     flap_chord=(1.0, "m flap chord"), triple=(0, "1 = triple-slotted flaps"),
+     gear_diameter=(0.0, "m tyre diameter: > 0 gives the gear its measured spectrum (peak at f D / V of a few), 0 = old fixed band"),
+     gear_wheels=(2, "1 | 2 wheels per leg"), gear_strut=(1.0, "exposed strut length / tyre diameter"), gear_angle=(90.0, "deg from the flight path: 90 = sideline, 0 = overhead"),
      dur=(3.0, "s"), seed=(0, "variation"))
-def airframe(sr=DEFAULT_SR, speed=70.0, delta=0.005, flaps=0.0, gear=0, dur=3.0, seed=0):
-    """U^5 (BPM, FK). Gear and flaps dominate (FK); their bands and +dB are estimated, FAA-RD-77-29 not read."""
+def airframe(sr=DEFAULT_SR, speed=70.0, delta=0.005, flaps=0.0, gear=0, flap_angle=0.0, flap_chord=1.0, triple=0,
+             gear_diameter=0.0, gear_wheels=2, gear_strut=1.0, gear_angle=90.0, dur=3.0, seed=0):
+    """U^5 (BPM, FK). Gear and flaps dominate (FK); the gear +10 dB and the no-angle flap band are estimated."""
     rng = Ma._rng(seed, 908)
     n = Ma._n(dur)
     u = float(np.clip(speed, 5.0, 300.0))
     y = _tbl(u, delta, n, rng)
-    if flaps > 0:
+    if flaps > 0 and flap_angle > 0:
+        y = y + float(flaps) * 2.0 * np.sin(np.radians(min(float(flap_angle), 90.0))) * _flap_noise(u, max(float(flap_chord), 0.05), n, rng, bool(triple))
+    elif flaps > 0:
         y = y + float(flaps) * 10 ** (6.0 / 20.0) * _rms1(Ma._bp(rng.standard_normal(n), min(0.45 * SR, airframe_peak(u, delta) * 2.5), 0.8))
-    if gear:
+    if gear and gear_diameter > 0:
+        y = y + 10 ** (10.0 / 20.0) * _gear_noise(u, float(gear_diameter), n, rng, gear_strut, gear_angle, int(gear_wheels))
+    elif gear:
         y = y + 10 ** (10.0 / 20.0) * _rms1(Ma._bp(rng.standard_normal(n), Ma.STROUHAL * u / 0.2, 0.7))
     return _end(0.3 * y * (u / 100.0) ** 2.5, sr, peak=None)
 
@@ -447,6 +488,17 @@ def rocket_spectrum_noise(n, fp, rng):
     f = np.fft.rfftfreq(n, 1.0 / SR)
     g = 10.0 ** (rocket_spectrum_db(0.02 * np.maximum(f, 0.1) / float(fp)) / 20.0)
     return _rms1(np.fft.irfft(np.fft.rfft(rng.standard_normal(n)) * g, n))
+
+
+# Far-field directivity index of chemical rockets (curve St 0.04, next to the 0.02 peak): (degrees from the jet axis, dB).
+ROCKET_DI = ((20.0, -0.6), (30.0, 2.5), (40.0, 4.8), (47.0, 5.5), (60.0, 3.8), (80.0, -0.5), (100.0, -4.6), (112.0, -6.9),
+             (140.0, -10.7), (160.0, -13.3), (180.0, -15.5))
+
+
+def rocket_directivity_db(angle):
+    """``ROCKET_DI`` at ``angle`` degrees, relative to its value at 50 degrees; held below 20 degrees."""
+    a, d = [q[0] for q in ROCKET_DI], [q[1] for q in ROCKET_DI]
+    return float(np.interp(float(np.clip(angle, 0.0, 180.0)), a, d) - np.interp(50.0, a, d))
 
 
 TURB_SIGMA_MU2, TURB_L = 3e-6, 1.1
@@ -521,8 +573,7 @@ def space_rocket(sr=DEFAULT_SR, size="heavy", diameter=0.0, phase="steady", dist
     hf = _rms1(Ma._hp(rng.standard_normal(n), 500.0))                                      # KG: strong dispersion above 500 Hz
     y = low + 0.12 * hf + 0.3 * cr * crackle(n, rng, drive=cr)
     y = _distance(y, SR, metres=float(np.clip(distance, 1.0, 20000.0)))[:n] * float(np.clip(distance, 1.0, 20000.0))
-    # 50 degrees (SP:236); width estimated.
-    y = y * math.exp(-(((float(angle) - 50.0) / 60.0) ** 2))
+    y = y * 10.0 ** (rocket_directivity_db(angle) / 20.0)
     if str(phase) == "liftoff":
         # 3 s ramp estimated; max OASPL T+8..18 s for SLS (KG:190); no Doppler over the first 5 s (report); levels estimated.
         t = np.arange(n) / SR
@@ -635,13 +686,14 @@ def tip_mach_rotor(rpm, radius, forward=0.0, c=C):
 # rpm, blades, radius, drive ("t" turbine or "p" piston), engine rpm, cabin dB (TM:328, 0 = none measured), kind.
 # uh60: 258 (TM), 4 (WF), 8.18 (estimated), 20900 (TM), 115. oh58: 347.5 and 35350 (TM); blades, radius estimated. r44: 400 (POH); 2, radius, engine estimated.
 # ch47: 243 (TM), 3, 18.29 m (F), 118, tandem; engine rpm estimated. uh1b: 2 blades, 15 m (F); rpm, engine rpm estimated. s55: piston, 16.15 m (F); rest estimated.
-# ah1: 120 dB (TM), rest estimated. "": Farnell's 300 rpm, 2 blades.
+# ah1: 120 dB (TM), rest estimated. xv15: 3.81 m (F: 7.62 m propellers), 589 rpm in helicopter mode, rest estimated; fl282: 5.98 m (F: 11.96 m rotor), rest estimated. "": Farnell's 300 rpm, 2 blades.
 ROTORCRAFT = {"": (300.0, 2, 7.0, "t", 20000.0, 0.0, "single"), "uh60": (258.0, 4, 8.18, "t", 20900.0, 115.0, "single"),
               "oh58": (347.5, 2, 5.4, "t", 35350.0, 0.0, "single"), "r44": (400.0, 2, 5.0, "p", 2700.0, 0.0, "single"),
               "ch47": (243.0, 3, 9.145, "t", 15000.0, 118.0, "tandem"), "uh1b": (324.0, 2, 7.5, "t", 6600.0, 0.0, "single"),
-              "s55": (230.0, 3, 8.075, "p", 2400.0, 0.0, "single"), "ah1": (324.0, 2, 6.7, "t", 6600.0, 120.0, "single")}
+              "s55": (230.0, 3, 8.075, "p", 2400.0, 0.0, "single"), "ah1": (324.0, 2, 6.7, "t", 6600.0, 120.0, "single"),
+              "xv15": (589.0, 3, 3.81, "t", 15000.0, 0.0, "twin"), "fl282": (240.0, 2, 5.98, "p", 2400.0, 0.0, "single")}
 GEAR_RATIOS = ((1.45, 0.33), (2.81, 0.2), (9.41, 0.14))     # Farnell fig 19.61, content.txt:22818-22830 (his text: 1.5, 2, 10, "fairly arbitrary")
-TANDEM_DELAY = 18.0 / C                                     # F 18.29 m, report rounds to 18 m: 52 ms
+TANDEM_DELAY = 18.29 / C                                    # F 18.29 m: 53.3 ms
 _STATES = {"hover": (0.5, 0.3), "cruise": (0.5, 0.4), "bank": (0.25, 0.7), "descent": (0.12, 1.0), "fast": (0.25, 0.5)}
 
 
@@ -660,7 +712,7 @@ def _fuselage(y, n):
 
 @sfx("rotorcraft", "Helicopter built on Farnell's rotor pulse: main rotor with moving combs, tail rotor, turbine or piston, gear whine, slap by flight state and by where you stand.",
      craft=("", "'' (300 rpm) | " + " | ".join(k for k in ROTORCRAFT if k)), rpm=(0.0, "main rotor rpm (0 = from craft)"), blades=(0, "main blades (0 = from craft; 4 alone picks uh60)"),
-     radius=(0.0, "m (0 = from craft)"), kind=("", "single | tandem | coaxial ('' = from craft)"), tail_rpm=(0.0, "0 = rpm (4 + load), at most 2000"), tail_blades=(4, "2..16"),
+     radius=(0.0, "m (0 = from craft)"), kind=("", "single | tandem | coaxial | twin (two side-by-side rotors, no tail rotor) ('' = from craft)"), tail_rpm=(0.0, "0 = rpm (4 + load), at most 2000"), tail_blades=(4, "2..16"),
      engine=("", "turbine | piston ('' = from craft)"), gearbox=(0, "1 = three gear whines"), interior=(0, "1 = inside the fuselage"), state=("hover", "|".join(_STATES)),
      angle=(30.0, "0 ahead in the rotor plane, 30 slap peak, 90 under it, 180 behind"), symmetry=(-1.0, "pulse apex 0..1, -1 = from state and angle"), shift=(0.5, "0 swoosh .. 1 slap"),
      load=(0.55, "0..1"), far=(0.0, "0 near .. 1 far: Farnell's distance filter"), speed=(0.0, "m/s: > 0 passes the listener"), closest=(60.0, "m"), dur=(3.0, "s"), seed=(0, "variation"))
@@ -674,8 +726,8 @@ def rotorcraft(sr=DEFAULT_SR, craft="", rpm=0.0, blades=0, radius=0.0, kind="", 
         raise ValueError(f"unknown state {state!r}; choose from {sorted(_STATES)}")
     r0, b0, rad, drive, erpm, cabin_db, kind0 = ROTORCRAFT[craft]
     kind = str(kind) or kind0
-    if kind not in ("single", "tandem", "coaxial"):
-        raise ValueError(f"unknown kind {kind!r}; choose from single, tandem, coaxial")
+    if kind not in ("single", "tandem", "coaxial", "twin"):
+        raise ValueError(f"unknown kind {kind!r}; choose from single, tandem, coaxial, twin")
     rng = Ma._rng(seed, 911)
     n = Ma._n(dur)
     r = float(rpm) if rpm > 0 else r0
@@ -703,7 +755,7 @@ def rotorcraft(sr=DEFAULT_SR, craft="", rpm=0.0, blades=0, radius=0.0, kind="", 
         late = lambda a: np.interp(np.arange(n) - TANDEM_DELAY * SR, np.arange(n, dtype=float), a, left=0.0)
         chop, ring = _rms1(chop + late(c2)), _rms1(ring + late(r2))
         slap = _rms1(slap + late(Ma._hp(_slap_train(bpf, n, slap0, 0.5), 100.0)))
-    elif kind == "coaxial":
+    elif kind in ("coaxial", "twin"):
         c2, s2, r2 = _main_rotor(bpf, n, rng, sym, shift, phase=0.5)
         chop, ring = _rms1(chop + c2), _rms1(ring + r2)
         slap = _rms1(slap + Ma._hp(_slap_train(bpf, n, slap0, 0.5), 100.0))

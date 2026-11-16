@@ -46,7 +46,7 @@ from . import filters as F
 from . import instruments as I
 from . import osc as O
 from .core import DEFAULT_SR, mix, samples, silence
-from .acoustic import _blown
+from .acoustic import HORN_BODY, _blown
 from .instruments import _kt, _modes, instrument
 from .notes import parse_sequence
 from .physical import core as P
@@ -840,6 +840,46 @@ def ui_tick(sr=DEFAULT_SR, kind="focus", seed=0):
     return _fin(_ui(str(kind), np.random.default_rng(int(seed))), sr, src=P.SR, peak=0.6, fade=0.002)
 
 
+AUDITORY_OBJECTS = {"file": ("impact", {"material": "wood"}), "application": ("impact", {"material": "iron"}),
+                    "folder": ("paper", {"kind": "page"}), "disk": ("impact", {"material": "steel", "hollow": 1.0}),
+                    "trash": ("impact", {"material": "steel", "hollow": 1.0})}
+AUDITORY_EVENTS = ("select", "open", "drag", "drop", "copy", "scroll", "trash")
+
+
+@sfx("auditory_icon", "File-manager sound icon from material sounds: select = a strike on the object's material (bigger = lower), open = whoosh, drag = scrape, drop = fall, copy = pouring that rises, scroll = tick, trash = crash.",
+     event=("select", "|".join(AUDITORY_EVENTS)), object_type=("file", "|".join(AUDITORY_OBJECTS) + " (wood, iron, paper, hollow steel)"),
+     size=(0.5, "0..1 size of the object: pitch falls as it grows"), seed=(0, "variation"))
+def auditory_icon(sr=DEFAULT_SR, event="select", object_type="file", size=0.5, seed=0):
+    from .sfx import REGISTRY as R
+    if event not in AUDITORY_EVENTS or object_type not in AUDITORY_OBJECTS:
+        raise ValueError(f"auditory_icon event {event!r} / object_type {object_type!r}: {'|'.join(AUDITORY_EVENTS)} / {'|'.join(AUDITORY_OBJECTS)}")
+    z = float(np.clip(size, 0.0, 1.0))
+    s = int(seed)
+
+    def run(name, **kw):
+        return np.asarray(R[name]["fn"](sr, seed=s, **kw), float) if name != "whoosh" else np.asarray(R[name]["fn"](sr, **kw), float)
+
+    kind, kw = AUDITORY_OBJECTS[object_type]
+    if event == "select":
+        y = run(kind, **kw) if kind == "paper" else run("impact", size=0.08 + 0.5 * z, **kw)
+    elif event == "open":
+        y = run("whoosh", dur=0.35, low=300, high=3000, direction="up")
+    elif event == "drag":
+        y = run("scrape", dur=0.6, material=kw.get("material", "wood"), size=0.1 + 0.5 * z) if kind == "impact" else run("scrape", dur=0.6)
+    elif event == "drop":
+        y = run("drop", material=kw.get("material", "steel"), size=0.01 + 0.03 * z, height=0.1)
+    elif event == "copy":
+        y = run("pour", dur=1.2, fill_start=0.05, fill_end=0.9, height=0.1 + 0.1 * z)
+    elif event == "scroll":
+        y = run("ui_tick", kind="page")
+    else:
+        parts = [run("impact", material="steel", hollow=1.0, size=0.3 + 0.4 * z), run("scrape", dur=0.5, roughness=0.9)]
+        n = max(len(p) for p in parts)
+        y = sum(np.pad(p, (0, n - len(p))) / (np.max(np.abs(p)) + 1e-9) for p in parts)
+    y = y / (np.max(np.abs(y)) + 1e-9) * 0.7
+    return y
+
+
 @sfx("ui_chime", "Notification chimes from physical bells: Risset bell (discovery), a telephone bell pair (achievement), a low muted English bell (alert), a fingertip on a glass rim (spell).",
      kind=("discovery", "discovery | achievement | alert | spell"),
      pitch=(1.0, "pitch ratio applied to the cue (0.5 = an octave down)"), seed=(0, "seed"))
@@ -1268,14 +1308,17 @@ def viola(freq, dur, sr=DEFAULT_SR, vel=1.0, attack=0.08, vibrato=1.0):
             family="wind", span=("Bb1", "E5"),
             meyer=(0, "1 = measured attack time per register and dynamic, vibrato amplitude modulation per band "
                       "and high band that grows with the dynamic"),
-            precursor=(0.0, "0..1: the short level peak at the start of the attack"))
-def bassoon(freq, dur, sr=DEFAULT_SR, vel=1.0, meyer=0, precursor=0.0):
-    from .acoustic import _precursor, attack_ms, band_vibrato_am, dynamic_timbre
-    body = [(500, 140, 2.4), (1150, 300, 0.9)]
-    y = _blown(freq, dur, sr, vel, dict(tilt=1.2, formants=body, corner=1600.0, slope=3.5),
-               dict(tilt=0.8, formants=body, corner=2300.0, slope=3.5),
+            precursor=(0.0, "0..1: the short level peak at the start of the attack"),
+            lattice=(0, "1 = the tone-hole lattice cutoff (500 Hz soft, 1.5 x hard) sets the spectral corners"))
+def bassoon(freq, dur, sr=DEFAULT_SR, vel=1.0, meyer=0, precursor=0.0, lattice=0):
+    from .acoustic import SAX_LATTICE_HARD, _precursor, attack_ms, band_vibrato_am, dynamic_timbre
+    from .physical.winds import LATTICE_FC
+    body = [(500, 140, 2.4), (1150, 300, 0.9), (2000, 400, 0.5), (3500, 600, 0.3)]
+    c0, c1 = (LATTICE_FC["bassoon"], LATTICE_FC["bassoon"] * SAX_LATTICE_HARD) if lattice else (1600.0, 2300.0)
+    y = _blown(freq, dur, sr, vel, dict(tilt=1.2, formants=body, corner=c0, slope=3.5),
+               dict(tilt=0.8, formants=body, corner=c1, slope=3.5),
                attack=attack_ms("bassoon", freq, vel) / 1000.0 if meyer else 0.035,
-               release=0.09, bloom=0.05, vib=(5.2, 0.07, 0.3)) * 0.43
+               release=0.09, bloom=0.05, vib=(5.2, 0.07, 0.3), end_boost=2.0) * 0.43
     if meyer:
         y = dynamic_timbre(band_vibrato_am(y, sr, "bassoon", rate=5.2), sr, "bassoon", vel)
     return _precursor(y, sr, "bassoon", precursor) if precursor > 0 else y
@@ -1287,7 +1330,7 @@ def cor_anglais(freq, dur, sr=DEFAULT_SR, vel=1.0):
     body = [(980, 220, 2.4), (2300, 400, 0.6)]
     return _blown(freq, dur, sr, vel, dict(tilt=1.2, formants=body, corner=1900.0, slope=3.5),
                   dict(tilt=0.8, formants=body, corner=2600.0, slope=3.5),
-                  attack=0.035, release=0.09, bloom=0.05, vib=(5.3, 0.1, 0.25)) * 0.42
+                  attack=0.035, release=0.09, bloom=0.05, vib=(5.3, 0.1, 0.25), end_boost=2.0) * 0.42
 
 
 @instrument("bass_clarinet", "Bass clarinet: hollow, dark odd-harmonic reed an octave below the clarinet.",
@@ -1296,14 +1339,14 @@ def bass_clarinet(freq, dur, sr=DEFAULT_SR, vel=1.0):
     even = _kt(freq, 0.03, 0.45, f_lo=130.0, f_hi=1000.0)   # low register: even partials > 30 dB under the odd
     return _blown(freq, dur, sr, vel, dict(tilt=1.6, even=even, corner=1100.0, slope=3.0),
                   dict(tilt=1.15, even=even, formants=[(1100, 400, 0.5)], corner=1800.0, slope=3.0),
-                  attack=0.045, release=0.09, bloom=0.06, vib=(5.0, 0.03, 0.3)) * 0.44
+                  attack=0.045, release=0.09, bloom=0.06, vib=(5.0, 0.03, 0.3), end_boost=2.0) * 0.44
 
 
 def _clarinet_body(freq, dur, sr, vel, scale):
-    even = _kt(freq, 0.08, 0.5)
+    even = _kt(freq, 0.03, 0.5)                             # low register: even partials more than 30 dB under the odd
     return _blown(freq, dur, sr, vel, dict(tilt=1.7, even=even, corner=1500.0 * scale, slope=3.0),
                   dict(tilt=1.2, even=even, formants=[(1500 * scale, 500, 0.5)], corner=2300.0 * scale, slope=3.0),
-                  attack=0.04, release=0.08, bloom=0.05, vib=(5.0, 0.03, 0.3)) * 0.6
+                  attack=0.04, release=0.08, bloom=0.05, vib=(5.0, 0.03, 0.3), end_boost=2.0) * 0.6
 
 
 @instrument("a_clarinet", "Clarinet in A: the B-flat clarinet's tone a little darker, 5 dB less around 1 kHz.",
@@ -1321,10 +1364,10 @@ def eb_clarinet(freq, dur, sr=DEFAULT_SR, vel=1.0):
 @instrument("contrabassoon", "Contrabassoon: the bassoon an octave down, a buzzing, reedy floor under the orchestra.",
             family="wind", span=("Bb0", "F3"))
 def contrabassoon(freq, dur, sr=DEFAULT_SR, vel=1.0):
-    body = [(250, 90, 2.4), (600, 200, 0.9)]
+    body = [(250, 90, 2.4), (450, 150, 1.2), (800, 250, 0.8)]
     return _blown(freq, dur, sr, vel, dict(tilt=1.3, formants=body, corner=800.0, slope=3.5),
                   dict(tilt=0.9, formants=body, corner=1200.0, slope=3.5),
-                  attack=0.06, release=0.12, bloom=0.06, vib=(5.0, 0.04, 0.3)) * 0.45
+                  attack=0.06, release=0.12, bloom=0.06, vib=(5.0, 0.04, 0.3), end_boost=2.0) * 0.45
 
 
 @instrument("heckelphone", "Heckelphone: a baritone oboe an octave below the oboe, thick and reedy.",
@@ -1333,13 +1376,13 @@ def heckelphone(freq, dur, sr=DEFAULT_SR, vel=1.0):
     body = [(600, 150, 2.5), (1400, 300, 0.8)]
     return _blown(freq, dur, sr, vel, dict(tilt=1.1, formants=body, corner=1400.0, slope=3.5),
                   dict(tilt=0.75, formants=body, corner=2000.0, slope=3.5),
-                  attack=0.04, release=0.09, bloom=0.05, vib=(5.3, 0.08, 0.25)) * 0.5
+                  attack=0.04, release=0.09, bloom=0.05, vib=(5.3, 0.08, 0.25), end_boost=2.0) * 0.5
 
 
 @instrument("bass_trombone", "Bass trombone: a wider-bore trombone, darker and heavier in the low register.",
             family="brass", span=("Bb1", "Bb4"))
 def bass_trombone(freq, dur, sr=DEFAULT_SR, vel=1.0):
-    body = [(450, 180, 1.3), (1300, 400, 0.4)]
+    body = [(370, 150, 1.4), (1300, 400, 0.4)]
     return _blown(freq, dur, sr, vel, dict(tilt=2.4, formants=body, corner=1200.0, slope=3.0),
                   dict(tilt=1.3, formants=body, corner=2000.0, slope=3.0),
                   attack=0.06, release=0.12, bloom=0.08, vib=(5.0, 0.04, 0.35), top=4500.0) * 0.6
@@ -1348,7 +1391,7 @@ def bass_trombone(freq, dur, sr=DEFAULT_SR, vel=1.0):
 @instrument("natural_horn", "Natural (valveless) horn: the horn's round tone, a little rawer, as in baroque and hunting calls.",
             family="brass", span=("F2", "F5"))
 def natural_horn(freq, dur, sr=DEFAULT_SR, vel=1.0):
-    body = [(450, 150, 1.5)]
+    body = HORN_BODY
     return _blown(freq, dur, sr, vel, dict(tilt=2.4, formants=body, corner=1100.0, slope=3.0),
                   dict(tilt=1.5, formants=body, corner=1800.0, slope=3.0),
                   attack=0.07, release=0.15, bloom=0.08, vib=(5.0, 0.02, 0.4), top=4500.0) * 0.6
@@ -1366,7 +1409,7 @@ def clarino(freq, dur, sr=DEFAULT_SR, vel=1.0):
 
 def _fipple(freq, dur, sr, vel, breath, chiff, corner, seed, gain):
     y = _blown(freq, dur, sr, vel, dict(tilt=3.0, corner=corner, slope=3.0), dict(tilt=2.2, corner=corner * 1.3, slope=3.0),
-               attack=0.03, release=0.07, bloom=0.03, vib=(5.0, 0.05, 0.3))
+               attack=0.03, release=0.07, bloom=0.03, vib=(5.0, 0.05, 0.3), end_boost=2.0)
     n = y.shape[0]
     air = F.bandpass(O.white(n, seed=seed), float(np.clip(freq * 2, 900, 2600)), sr, 2.0)
     t = np.arange(n) / sr

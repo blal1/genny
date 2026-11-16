@@ -59,6 +59,20 @@ MYLAR_EH = 4.0e9 * 0.19e-3            # N/m: in-plane stiffness E h of a Mylar h
 HEAD_DENSITY = 0.26                  # kg/m^2: timpani head, 0.262 (Christian et al. 1984, sec. III)
 BRONZE = (8800.0, 1.24e11, 0.33)     # rho, E, nu: E and nu of cymbal bronze (Chadwick et al. 2009, Table 1); rho of bell bronze
                                      # C91300 (Cu 81 Sn 19), 0.318 lb/in3 (Wieland Concast C91300 datasheet, CDA physical data)
+WOOD_SPECIES = {"spruce": (390.0, 11.6e9, 0.9e9, 0.75e9, 0.37), "beech": (750.0, 13.7e9, 2.24e9, 1.61e9, 0.30)}   # rho, Ex, Ey, Gxy, nu_xy
+SOUNDBOARD_MM = 8.0
+
+
+def wood_ortho(species: str, h: float) -> tuple:
+    """(kx, ky, kxy) of a plate of unit area made of ``species`` at thickness h (m): kx = sqrt(Ex h^2 / (12 rho (1 - nu_xy nu_yx))),
+    kxy^2 = (2 nu_yx Ex / (1 - nu_xy nu_yx) + 4 Gxy) h^2 / (12 rho)."""
+    rho, ex, ey, gxy, nxy = WOOD_SPECIES[species]
+    nyx = nxy * ey / ex
+    d = 1.0 - nxy * nyx
+    c = h * h / (12.0 * rho)
+    return math.sqrt(ex * c / d), math.sqrt(ey * c / d), math.sqrt((2.0 * nyx * ex / d + 4.0 * gxy) * c)
+
+
 WOOD_K = (36.5, 8.41, 18.1, 1.248)   # kx, ky, kxy, aspect: wooden plate of Table 12.2 (g03 §4.6)
 SNARE_K, SNARE_ALPHA = 1.0e8, 1.3    # N/m^alpha, collision stiffness and exponent of the wires on the head
 SNARE_N, SNARE_MASS = 8, 1.5e-3      # contact points, kg of wire per point
@@ -109,15 +123,15 @@ def _operators(Nx, Ny, hx, hy, bc, cxx, cyy, cn, cc, nu, gamma2, circle=False):
         E = (cxx * Ax.T @ sp.diags(np.kron(np.ones(Nx - 1), edge(wy))) @ Ax
              + cyy * Ay.T @ sp.diags(np.kron(edge(wx), np.ones(Ny - 1))) @ Ay
              + cn * (Axi.T @ Ayi + Ayi.T @ Axi) + cc * Axy.T @ Axy)
-        clamp = np.zeros((Nx + 1, Ny + 1))            # clamped: u = dx- u = 0 (g03 §3.4), ghost value 0
+        clamp = np.zeros((Nx + 1, Ny + 1))            # clamped: u = 0 and mirror ghost u(-1) = u(1): curvature 2 u1 / h^2 on a half-weight edge node
         if bc[0] == "c":
-            clamp[1, :] += cxx * wy / hx ** 4
+            clamp[1, :] += 2.0 * cxx * wy / hx ** 4
         if bc[1] == "c":
-            clamp[Nx - 1, :] += cxx * wy / hx ** 4
+            clamp[Nx - 1, :] += 2.0 * cxx * wy / hx ** 4
         if bc[2] == "c":
-            clamp[:, 1] += cyy * wx / hy ** 4
+            clamp[:, 1] += 2.0 * cyy * wx / hy ** 4
         if bc[3] == "c":
-            clamp[:, Ny - 1] += cyy * wx / hy ** 4
+            clamp[:, Ny - 1] += 2.0 * cyy * wx / hy ** 4
         E = (E + sp.diags(clamp.ravel())) * cell
     Gx = sp.kron(_d1(Nx), iy) / hx
     Gy = sp.kron(ix, _d1(Ny)) / hy
@@ -443,6 +457,28 @@ def _fill(up, u, idx, free, Nx, Ny):
 
 
 @numba.njit(cache=True)
+def _rigid_out(a, idx, w, Nx, Ny):
+    """Remove the weighted projection of a free plate's field on 1, x and y (the three zero-energy modes)."""
+    s0 = s1 = s2 = c0 = c1 = c2 = 0.0
+    for l in range(Nx + 1):
+        for m in range(Ny + 1):
+            r = idx[l, m]
+            if r >= 0:
+                x, y = l - 0.5 * Nx, m - 0.5 * Ny
+                s0 += w[r]
+                s1 += w[r] * x * x
+                s2 += w[r] * y * y
+                c0 += w[r] * a[r]
+                c1 += w[r] * x * a[r]
+                c2 += w[r] * y * a[r]
+    for l in range(Nx + 1):
+        for m in range(Ny + 1):
+            r = idx[l, m]
+            if r >= 0:
+                a[r] -= c0 / s0 + c1 / s1 * (l - 0.5 * Nx) + c2 / s2 * (m - 0.5 * Ny)
+
+
+@numba.njit(cache=True)
 def _nl_force(pp, up, cc, hx, hy, nl, free, gg, idx, w):
     if free:
         _bracket_adj(up, pp, cc, hx, hy, gg)
@@ -584,11 +620,14 @@ def _run_nl(Bd, Bi, Bp, Cd, Ci, Cp, Ld, Li, Lp, u, u1, ji, jw, force, fgain, mod
                         break
                 for r in range(n):
                     t[r] = q[r]
+        if free:                                               # rigid motions (translation, two tilts): no restoring force, they only drift toward the limit
+            _rigid_out(t, idx, wq, Nx, Ny)
+            _rigid_out(u, idx, wq, Nx, Ny)
         mx = 0.0
         for r in range(n):
             mx = max(mx, abs(t[r]))
         g = 1.0
-        if not mx <= ulim:                                     # also catches NaN
+        if not mx <= ulim:                                   # also catches NaN
             g = ulim / mx if mx > ulim else 0.0
             hits += 1
         for r in range(n):
@@ -986,6 +1025,30 @@ def struck_plate(sr=DEFAULT_SR, kappa=12.0, eps=1.3, bc="ffff", nu=0.3, ortho=No
     return _finish(y, fs, sr, level * (0.55 + 0.45 * vel), 1500.0 * 8.0 ** float(np.clip(bright, 0.0, 1.0)))
 
 
+def stiffened_ortho(size, thickness, aspect, ribs, rib_height=0.0, material="steel"):
+    """(kx, ky, kxy) of a plate of side sqrt(area) = ``size`` m with ``ribs`` flat ribs along its long side, smeared: with b the rib
+    spacing, Dx = D + E I / b (I of the rib about the plate's mid-plane), mass per area rho (H + A / b), ky^2 = D / m, kxy^2 = 2 D / m."""
+    m = MATERIALS[material]
+    H = float(thickness) * 1e-3
+    hr = (float(rib_height) if rib_height and rib_height > 0 else 6.0 * float(thickness)) * 1e-3
+    wr = 2.0 * H
+    ar = wr * hr
+    zc = 0.5 * (H + hr)
+    ir = wr * hr ** 3 / 12.0 + ar * zc * zc
+    bs = size / math.sqrt(float(aspect)) / (int(ribs) + 1)
+    d = m.young_modulus * H ** 3 / (12.0 * (1.0 - m.poisson ** 2))
+    mass = m.density * (H + ar / bs)
+    c = 1.0 / (size * size)
+    return (math.sqrt((d + m.young_modulus * ir / bs) / mass) * c, math.sqrt(d / mass) * c, math.sqrt(2.0 * d / mass) * c)
+
+
+def _stiffened_plate(sr, size, thickness, decay, aspect, ribs, rib_height, pos, hardness, vel, bright, quality):
+    size = float(np.clip(size, 0.05, 3.0))
+    k = stiffened_ortho(size, float(np.clip(thickness, 0.1, 50.0)), float(np.clip(aspect, 1.0, 4.0)), min(int(ribs), 12), rib_height)
+    return struck_plate(sr, 0.0, float(np.clip(aspect, 1.0, 4.0)), "ssss", MATERIALS["steel"].poisson, k, decay, 0.45 * decay,
+                        (0.5 - 0.42 * pos, 0.5 - 0.3 * pos), hardness, vel, None, bright, quality)
+
+
 def _material_plate(sr, mat, size, thickness, eps, bc, t60, t60_high, pos, hardness, vel, bright, quality):
     m = MATERIALS[mat]
     size, H = float(np.clip(size, 0.05, 3.0)), float(np.clip(thickness, 0.1, 50.0)) * 1e-3
@@ -1004,10 +1067,21 @@ _PLATE_PARAMS = dict(
 @sfx("metal_plate", "Struck steel plate with free edges (Kirchhoff plate, finite differences): clang of a hung "
      "sheet, hatch or sign.", size=(0.5, "side length m (square root of the area)"),
      thickness=(2.0, "mm (thicker = higher and purer)"), decay=(3.0, "T60 at 200 Hz, s"),
-     aspect=(1.3, "side ratio 1..4"), edges=("free", "free | supported | clamped"), **_PLATE_PARAMS)
-def metal_plate(sr=DEFAULT_SR, size=0.5, thickness=2.0, decay=3.0, aspect=1.3, edges="free", pos=0.45,
-                hardness=0.6, vel=0.8, bright=0.5, quality=1.0):
+     aspect=(1.3, "side ratio 1..4"), edges=("free", "free | supported | clamped"),
+     ribs=(0, "number of stiffening ribs along the long side (a stiffened plate: smeared bending stiffness, edges supported)"),
+     rib_height=(0.0, "mm height of a rib, 0 = 6 plate thicknesses; its width is 2 plate thicknesses"),
+     dome=(0.0, "m radius of curvature, 0 = flat: a shallow shell (von Karman, nonlinear: the pitch rises, a hard hit crashes), square, edges supported"),
+     force=(150.0, "N peak strike force at vel 1, for dome > 0"), **_PLATE_PARAMS)
+def metal_plate(sr=DEFAULT_SR, size=0.5, thickness=2.0, decay=3.0, aspect=1.3, edges="free", ribs=0, rib_height=0.0, dome=0.0,
+                force=150.0, pos=0.45, hardness=0.6, vel=0.8, bright=0.5, quality=1.0):
     bc = {"free": "ffff", "supported": "ssss", "clamped": "cccc"}.get(str(edges), "ffff")
+    if dome > 0:
+        m = MATERIALS["steel"]
+        return nl_plate(sr, vel, float(np.clip(size, 0.05, 3.0)) / 0.886, thickness, force, 12.0 - 10.0 * float(np.clip(hardness, 0.0, 1.0)),
+                        (0.5 - 0.42 * pos, 0.5 - 0.3 * pos), decay, 0.005, "vk", 1.0, (m.density, m.young_modulus, m.poisson), bright,
+                        quality, float(np.clip(0.9 * decay + 0.1, 0.3, 6.0)), dome=float(dome), accel=False, hp=20.0)
+    if int(ribs) > 0:
+        return _stiffened_plate(sr, size, thickness, decay, aspect, int(ribs), rib_height, pos, hardness, vel, bright, quality)
     return _material_plate(sr, "steel", size, thickness, float(np.clip(aspect, 1.0, 4.0)), bc, decay,
                            0.45 * decay, pos, hardness, vel, bright, quality)
 
@@ -1024,10 +1098,19 @@ def glass_pane(sr=DEFAULT_SR, size=0.5, thickness=4.0, decay=0.9, aspect=1.4, po
 @sfx("wood_panel", "Knock on a wooden panel / soundboard (orthotropic plate, stiff along the grain).",
      size=(1.0, "relative size (1 = the soundboard of Bilbao Table 12.2, lowest mode 56 Hz; 0.5 = 4x higher)"),
      thickness=(1.0, "relative thickness (pitch scales with thickness/size^2)"),
-     decay=(0.35, "T60 at 200 Hz, s"), **_PLATE_PARAMS)
+     decay=(0.35, "T60 at 200 Hz, s"),
+     species=("table", "table (Bilbao's wooden plate) | spruce | beech: moduli computed, the plate is size x size m, 8 mm x `thickness` thick"),
+     **_PLATE_PARAMS)
 def wood_panel(sr=DEFAULT_SR, size=1.0, thickness=1.0, decay=0.35, pos=0.45, hardness=0.6, vel=0.8, bright=0.5,
-               quality=1.0):
-    sc = float(np.clip(thickness, 0.2, 5.0)) / float(np.clip(size, 0.2, 4.0)) ** 2
+               quality=1.0, species="table"):
+    th, sz = float(np.clip(thickness, 0.2, 5.0)), float(np.clip(size, 0.2, 4.0))
+    if species != "table":
+        if species not in WOOD_SPECIES:
+            raise ValueError(f"species must be table, {', '.join(WOOD_SPECIES)}")
+        k = tuple(v / sz ** 2 for v in wood_ortho(species, SOUNDBOARD_MM * 1e-3 * th))
+        return struck_plate(sr, 0.0, WOOD_K[3], "ssss", 0.3, k, decay, 0.3 * decay,
+                            (0.5 - 0.42 * pos, 0.5 - 0.3 * pos), hardness, vel, None, bright, quality)
+    sc = th / sz ** 2
     return struck_plate(sr, 0.0, WOOD_K[3], "ssss", 0.3, tuple(v * sc for v in WOOD_K[:3]), decay, 0.3 * decay,
                         (0.5 - 0.42 * pos, 0.5 - 0.3 * pos), hardness, vel, None, bright, quality)
 
@@ -1068,7 +1151,7 @@ def plate_bow(sr=DEFAULT_SR, dur=2.0, size=0.3, thickness=1.7, force=15.0, speed
 def nl_plate(sr=DEFAULT_SR, vel=1.0, size=0.4, thickness=1.0, force=80.0, contact_ms=16.0, pos=(0.2, 0.3),
              decay=10.0, damping=0.005, model="vk", eps=1.0, material=BRONZE, bright=0.6, quality=1.0,
              dur=2.0, points=900, drive=None, level=0.85, info=None, accel=True, hp=150.0, loss=None, scan=None, dome=0.0,
-             scan_order=1, edges="supported"):
+             scan_order=1, edges="supported", ulim=50.0):
     """Nonlinear plate (g03 §6): `model` = "vk" (von Karman simple scheme, Airy stress solve every step),
     `edges` "supported" | "free" (free rectangle, Phi clamped on its border; no dome),
     "berger" (tension modulation: glide only) or "linear". `size` is the diameter of the disc of equal
@@ -1110,7 +1193,7 @@ def nl_plate(sr=DEFAULT_SR, vel=1.0, size=0.4, thickness=1.0, force=80.0, contac
         th = 2.0 * math.pi * np.arange(48) / 48
         pts = tuple(zip(0.5 + 0.5 * scan[0] * np.cos(th), 0.5 + 0.5 * scan[0] * np.sin(th)))
     curv = L * L / (float(dome) * u0) if dome > 0 and model.startswith("vk") else 0.0
-    out, hits = simulate_nl(mdl, f / (rho * H * L * L * u0), model, (pos[0], pos[1], 0.0), pts, curv=curv)
+    out, hits = simulate_nl(mdl, f / (rho * H * L * L * u0), model, (pos[0], pos[1], 0.0), pts, ulim=float(ulim), curv=curv)
     if scan is not None:                                           # the moving pickup, interpolated along the ellipse
         ph = (np.arange(n) * scan[1] / fs % 1.0) * 48
         i0 = ph.astype(int) % 48
@@ -1145,6 +1228,7 @@ def _nl_params(size, thickness, force, decay, dur):
                       "wash of new partials building up after the hit)"),
         decay=(decay, "T60 of the low modes, s"), dur=(dur, "rendered length s"),
         bright=(0.6, "0..1 output lowpass 1.5 kHz .. 12 kHz"),
+        edges=("supported", "supported | free: free rim (the real cymbal or gong; Phi clamped on the border, no dome), costs about 2x"),
         model=("vk", "vk (von Karman: crash build-up) | vk_simple (the book's explicit scheme, can blow "
                      "up when hit hard) | berger (pitch glide only, cheap) | linear"),
         quality=(1.0, "0.25..3 internal sample rate / grid size (cost ~ quality^2.5)"))
@@ -1153,15 +1237,17 @@ def _nl_params(size, thickness, force, decay, dur):
 @drum("plate_crash", "Crash cymbal from a von Karman nonlinear plate: the high-frequency wash builds up after "
       "the hit, more with `force`.", **_nl_params(0.4, 1.0, 400.0, 6.9, 2.2))
 def plate_crash(sr=DEFAULT_SR, vel=1.0, size=0.4, thickness=1.0, force=400.0, decay=6.9, dur=2.2, bright=0.6,
-                model="vk", quality=1.0):
+                model="vk", quality=1.0, edges="supported"):
     return nl_plate(sr, vel, size, thickness, force, 12.0, (0.2, 0.3), decay, 0.005, model, 1.0, BRONZE, bright,
-                    quality, dur, loss=_law(float(np.clip(decay, 0.1, 30.0)), CYMBAL_LOSS))
+                    quality, dur, loss=_law(float(np.clip(decay, 0.1, 30.0)), CYMBAL_LOSS), edges=edges)
 
 
 @drum("shell_crash", "Crash cymbal as a shallow spherical shell: the curvature stiffens the low modes and strengthens the crash.",
       dome=(1.3, "m radius of curvature (default: 15 mm rise on 40 cm)"), **_nl_params(0.4, 1.0, 400.0, 6.9, 2.2))
 def shell_crash(sr=DEFAULT_SR, vel=1.0, dome=1.3, size=0.4, thickness=1.0, force=400.0, decay=6.9, dur=2.2, bright=0.6,
-                model="vk", quality=1.0):
+                model="vk", quality=1.0, edges="supported"):
+    if edges != "supported":
+        raise ValueError("shell_crash: a dome needs supported edges")
     return nl_plate(sr, vel, size, thickness, force, 12.0, (0.2, 0.3), decay, 0.005, model, 1.0, BRONZE, bright, quality, dur,
                     dome=float(dome), loss=_law(float(np.clip(decay, 0.1, 30.0)), CYMBAL_LOSS))
 
@@ -1169,34 +1255,34 @@ def shell_crash(sr=DEFAULT_SR, vel=1.0, dome=1.3, size=0.4, thickness=1.0, force
 @drum("plate_ride", "Ride cymbal: heavier nonlinear plate, short stick contact, clear ping over a light wash.",
       **_nl_params(0.5, 2.0, 600.0, 7.0, 2.2))
 def plate_ride(sr=DEFAULT_SR, vel=1.0, size=0.5, thickness=2.0, force=600.0, decay=7.0, dur=2.2, bright=0.6,
-               model="vk", quality=1.0):
+               model="vk", quality=1.0, edges="supported"):
     return nl_plate(sr, vel, size, thickness, force, 2.5, (0.33, 0.4), decay, 0.003, model, 1.0, BRONZE, bright,
-                    quality, dur, loss=_law(float(np.clip(decay, 0.1, 30.0)), CYMBAL_LOSS))
+                    quality, dur, loss=_law(float(np.clip(decay, 0.1, 30.0)), CYMBAL_LOSS), edges=edges)
 
 
 @drum("plate_china", "China cymbal: thin plate struck hard near the edge, trashy and short.",
       **_nl_params(0.45, 0.8, 400.0, 3.0, 1.6))
 def plate_china(sr=DEFAULT_SR, vel=1.0, size=0.45, thickness=0.8, force=400.0, decay=3.0, dur=1.6, bright=0.6,
-                model="vk", quality=1.0):
+                model="vk", quality=1.0, edges="supported"):
     return nl_plate(sr, vel, size, thickness, force, 6.0, (0.12, 0.2), decay, 0.006, model, 1.3, BRONZE, bright,
-                    quality, dur, loss=_law(float(np.clip(decay, 0.1, 30.0)), CYMBAL_LOSS))
+                    quality, dur, loss=_law(float(np.clip(decay, 0.1, 30.0)), CYMBAL_LOSS), edges=edges)
 
 
 @drum("plate_gong", "Gong from a nonlinear plate struck at the centre with a soft mallet: pitch glides down "
       "as it rings, hard strikes bloom.", **_nl_params(0.5, 4.0, 6000.0, 9.0, 4.0))
 def plate_gong(sr=DEFAULT_SR, vel=1.0, size=0.5, thickness=4.0, force=6000.0, decay=9.0, dur=4.0, bright=0.6,
-               model="vk", quality=1.0):
+               model="vk", quality=1.0, edges="supported"):
     return nl_plate(sr, vel, size, thickness, force, 3.0, (0.5, 0.5), decay, 0.001, model, 1.0, BRONZE, bright,
-                    quality, dur, accel=False, hp=30.0)
+                    quality, dur, accel=False, hp=30.0, edges=edges)
 
 
 @drum("tam_tam", "Tam-tam: large thin nonlinear plate, soft off-centre mallet; the shimmer swells for a second "
       "after the hit and the lows ring on for a minute (the file fades out at `dur`).",
       **_nl_params(1.0, 2.5, 2000.0, 75.0, 8.0))
 def tam_tam(sr=DEFAULT_SR, vel=1.0, size=1.0, thickness=2.5, force=2000.0, decay=75.0, dur=8.0, bright=0.6,
-            model="vk", quality=1.0):
+            model="vk", quality=1.0, edges="supported"):
     return nl_plate(sr, vel, size, thickness, force, 10.0, (0.38, 0.44), decay, 0.004, model, 1.0, BRONZE,
-                    bright, quality, dur, accel=False, hp=40.0, loss=_law(float(np.clip(decay, 0.1, 120.0)), TAMTAM_LOSS))
+                    bright, quality, dur, accel=False, hp=40.0, loss=_law(float(np.clip(decay, 0.1, 120.0)), TAMTAM_LOSS), edges=edges)
 
 
 # Bilbao, Webb, Wang & Ducceschi, "Real-time gong synthesis", DAFx-23: steel (E 2e11 Pa, rho 7850, nu 0.3), 0.5 mm,
@@ -1231,21 +1317,22 @@ def _dafx23_params(force, dur):
                 dur=(dur, "rendered length s"), bright=(0.6, "0..1 output lowpass 1.5 kHz .. 12 kHz"),
                 scan=(0.0, "Hz: the pickup circles an ellipse of R 0.4 at this rate (a gong swinging on its "
                             "rope; DAFx-23 use 1 Hz), 0 = fixed"),
+                edges=("supported", "supported | free: free rim (the real cymbal or gong; Phi clamped on the border, no dome), costs about 2x"),
                 quality=(1.0, "0.25..3 internal sample rate / grid size (cost ~ quality^2.5)"))
 
 
 @drum("steel_cymbal", "Small steel plate (DAFx-23 real-time gong model, 0.01 m^2): clear modes when tapped, "
       "uneven pitch glides harder, a crash of wideband noise at full force.", **_dafx23_params(80.0, 2.0))
-def steel_cymbal(sr=DEFAULT_SR, vel=1.0, force=80.0, dur=2.0, bright=0.6, scan=0.0, quality=1.0):
+def steel_cymbal(sr=DEFAULT_SR, vel=1.0, force=80.0, dur=2.0, bright=0.6, scan=0.0, quality=1.0, edges="supported"):
     return nl_plate(sr, vel, 0.113, 0.5, force, 2.0, (0.38, 0.45), 20.0, 0.0, "vk", quality=quality, dur=dur,
-                    bright=bright, scan=(0.4, scan) if scan > 0 else None, hp=60.0, **_DAFX23)
+                    bright=bright, scan=(0.4, scan) if scan > 0 else None, hp=60.0, edges=edges, **_DAFX23)
 
 
 @drum("steel_gong", "Large steel plate (DAFx-23 real-time gong model, 0.16 m^2): the gong swell, energy "
       "migrating upwards over the first few hundred ms.", **_dafx23_params(50.0, 5.0))
-def steel_gong(sr=DEFAULT_SR, vel=1.0, force=50.0, dur=5.0, bright=0.6, scan=1.0, quality=1.0):
+def steel_gong(sr=DEFAULT_SR, vel=1.0, force=50.0, dur=5.0, bright=0.6, scan=1.0, quality=1.0, edges="supported"):
     return nl_plate(sr, vel, 0.451, 0.5, force, 4.0, (0.38, 0.45), 20.0, 0.0, "vk", quality=quality, dur=dur,
-                    bright=bright, scan=(0.4, scan) if scan > 0 else None, accel=False, hp=30.0, **_DAFX23)
+                    bright=bright, scan=(0.4, scan) if scan > 0 else None, accel=False, hp=30.0, edges=edges, **_DAFX23)
 
 
 @drum("thunder_sheet", "Thunder sheet: a big thin steel sheet shaken by hand; the nonlinear plate turns the slow "
@@ -1289,7 +1376,7 @@ def vk_plate(sr=DEFAULT_SR, vel=1.0, size=0.4, thickness=1.0, profile="uniform",
     """Modal von Karman plate or shallow shell (`physical.vkmodal`): `profile` = thickness law (a name of
     vkmodal.PROFILES, a (hc mm, he mm, rb) tuple, or "uniform" = `thickness` mm), `dome` = rise of the spherical cap
     in m (0 = flat: hardening, the pitch glides down as it rings; curved: softening, it glides up), `edges` 4 letters
-    f/s/c, `law` = modal damping power law (vkmodal.DAMPING_LAWS), `scheme` sav | conservative | linear,
+    f/s/c, `law` = modal damping power law (vkmodal.DAMPING_LAWS), `scheme` sav | conservative | explicit | linear,
     `basis` grid | ritz (sine Rayleigh-Ritz basis, supported rectangle only). Force in N, vel^2 scaled like nl_plate.
     `radiation` adds the radiation loss of each mode (`radiation_damping`); `distance` (m, 0 = far) the dipole near field."""
     from .physical import vkmodal
@@ -1332,7 +1419,8 @@ _VK_COMMON = dict(force=(0.0, "peak strike force N at vel 1 (0 = the kind's own)
                   bright=(0.6, "0..1 output lowpass 1.5 kHz .. 12 kHz"),
                   modes=(48, "transverse modes kept (more = brighter wash, slower; cost ~ modes^2)"),
                   scheme=("sav", "sav (explicit, energy-stable) | conservative (energy-conserving, implicit in the "
-                                 "Airy amplitudes) | linear"))
+                                 "Airy amplitudes) | explicit (second order, nonlinear force at step n, no inversion, "
+                                 "not energy-conserving) | linear"))
 
 
 @drum("vk_cymbal", "Modal von Karman cymbal: measured thickness profile (thick bell, thin edge), shallow-shell dome, "

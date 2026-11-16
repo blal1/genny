@@ -38,6 +38,30 @@ def end_correction(a_over_b):
     return FLANGED + r * (UNFLANGED - FLANGED) + 0.057 * r * (1.0 - r ** 5)
 
 
+BEND_GAMMA10 = 1.8412         # first zero of J1', first cross mode of a circular duct
+BEND_BETA = 1.0 / (BEND_GAMMA10 ** 2 * math.sqrt(0.5 * (1.0 - 1.0 / BEND_GAMMA10 ** 2)))   # 0.497
+
+
+def bend_inertance(kappa):
+    """Inertance of a toroidal bend relative to a straight duct, alpha = (kappa^2 / 2) / (1 - sqrt(1 - kappa^2)) < 1,
+    kappa = a / R0 (bore radius over the radius of curvature of the axis)."""
+    k2 = float(np.clip(kappa, 0.0, 1.0)) ** 2
+    return 1.0 if k2 < 1e-12 else 0.5 * k2 / (1.0 - math.sqrt(1.0 - k2))
+
+
+def bend_length_correction(lb, kappa):
+    """Length correction (m, negative: resonances rise) at long wavelength of a bend whose axis is lb m long: the bend
+    propagates with k sqrt(alpha), so it counts lb sqrt(alpha) instead of lb."""
+    return float(lb) * (math.sqrt(bend_inertance(kappa)) - 1.0)
+
+
+def bend_sign_change_frequency(a, kappa, c=C_AIR):
+    """Hz above which a bend of radius-over-curvature kappa in a bore of radius a stops raising the resonances and lowers
+    them: f_c / 2 (1 - (beta kappa / 2)^2), f_c = gamma10 c / (2 pi a)."""
+    fc = BEND_GAMMA10 * c / (2.0 * math.pi * float(a))
+    return 0.5 * fc * (1.0 - (BEND_BETA * float(kappa) / 2.0) ** 2)
+
+
 def hole_rate(b, l_eff, f, c=343.0, eta=ETA, rho=RHO):
     """Decay rate (1/s) of the flow in an open side hole of radius b and effective length l_eff, at f Hz:
     viscous wall loss (2 / b) sqrt(pi f eta / rho) plus radiation c (k b)^2 / (4 l_eff), i.e. the series
@@ -87,8 +111,17 @@ WALL_SIGMA, WALL_OMEGA, WALL_EPS, WALL_S0 = 8125.0, 0.0, 2718.0, 2.5e-4
 
 # Clarinet-like reed
 REED = dict(Mr=3.37e-6, omega0=23250.0, sigma0=1500.0, H0=4e-4, omega1=316.0, alpha=3.0, Sr=1.46e-4)
+REED_WET_RATIO = 2060.0 / 2300.0
+REED_WET = dict(omega0=REED["omega0"] * REED_WET_RATIO)
 REED_S0 = 1.72e-4     # bore area at the reed, m^2 (same figure)
 REED_W = 0.01315      # reed channel width w (m): clarinet reed width 13.15 mm
+# Quasistatic oboe reed fitted on rising and falling mouth pressure: beating pressure pM (Pa), stiffness ks
+# (Pa/m^2, S = (pM - dp)/ks), staple recovery Cp, constriction area Sc (m^2). Typical opening at rest (m^2) and
+# beating pressure (Pa) of oboe and bassoon reeds.
+DOUBLE_REED = dict(oboe=dict(pM=35e3, ks=1.04e10, Cp=0.8, Sc=4e-6),
+                   oboe_falling=dict(pM=27e3, ks=8.86e9, Cp=0.8, Sc=4e-6))
+DOUBLE_REED_S0 = dict(oboe=2e-6, bassoon=7e-6)
+DOUBLE_REED_PM = dict(oboe=33e3, bassoon=17e3)
 
 # Vocal tract area functions, non-dimensional [x, S] pairs with S(0) = 1 (S0 = 2.5 cm^2, L = 0.17 m).
 # /a/ and /e/: measured Russian vowels.
@@ -557,6 +590,115 @@ def reed_params(S0=REED_S0, c=C_AIR, w=REED_W, volume=0.0, contact_damping=0.0, 
                      float(contact_damping)])
 
 
+def reed_characteristic(pM, ks, cp=0.0, sc=4e-6, n=256, rho=RHO):
+    """Quasistatic (dp, q) curve of a reed: opening S = (pM - dpc)/ks, q = S sqrt(2 dpc / rho) up to the
+    constriction, then a conical diffuser recovers cp rho/2 (q/sc)^2, so dp = dpc - cp rho/2 (q/sc)^2.
+    cp = 0 is the elementary model (maximum flow at pM/3); a double reed's staple moves it to pM/4..pM/5."""
+    dpc = np.linspace(0.0, float(pM), int(n))
+    q = (float(pM) - dpc) / float(ks) * np.sqrt(2.0 * dpc / rho)
+    return dpc - float(cp) * 0.5 * rho * (q / float(sc)) ** 2, q
+
+
+# Free reed: harmonica reed (blow, channel 4 of a G diatonic) and the upstream volume / pipe that lets it speak.
+FREE_REED = dict(Lr=12.95e-3, Wr=2.1e-3, er=110e-6, es=900e-6, dh00=528e-6, hmin=50e-6, fr=444.0, K=47.9, Q=95.0)
+FREE_REED_LOAD = dict(S0=30e-6, S1=800e-6, L2=20e-3, S2=25e-6, L1={"-+": 0.08, "+-": 0.015}, v0={"-+": 2.5, "+-": 3.0})
+FREE_REED_VENA = 0.61
+# Harmonium reed (B5) and its chamber; K = 3 E I / Lr^3 of the brass cantilever, Q from a measured accordion reed.
+FREE_REED_HARMONIUM = dict(Lr=16e-3, Wr=2e-3, er=0.4e-3, dh00=100e-6, fr=990.0, K=977.0, Q=167.0)
+FREE_REED_HARMONIUM_LOAD = dict(L2=50e-3, S2=6.4e-5, L1={"-+": 1.625, "+-": 1.625})
+
+
+def _cantilever(s):
+    b, sg = 1.8751040687, 0.7340955137
+    f = lambda x: np.cosh(b * x) - np.cos(b * x) - sg * (np.sinh(b * x) - np.sin(b * x))
+    d = lambda x: b * (np.sinh(b * x) + np.sin(b * x) - sg * (np.cosh(b * x) - np.cos(b * x)))
+    return f(s) / f(1.0), d(s) / f(1.0)
+
+
+def free_reed_section(hn, kind="+-", r=None, n=64):
+    """Useful section Su(hn) (m^2) of a free reed whose neutral-section tip sits at hn (m, origin on the outer face
+    of the plate): front trapezoid + both sides + the corner triangles, with the reed thickness turning the upstream
+    and downstream faces as the reed bends. kind "+-" blown open, "-+" blown closed."""
+    r = {**FREE_REED, **(r or {})}
+    Lr, Wr, er, es, hm = r["Lr"], r["Wr"], r["er"], r["es"], r["hmin"]
+    s = np.linspace(0.0, 1.0, int(n))
+    psi, dpsi = _cantilever(s)
+    h000 = er / 2.0 if kind == "+-" else -es - er / 2.0
+    sign = -1.0 if kind == "+-" else 1.0
+    hn = np.atleast_1d(np.asarray(hn, float))[:, None]
+    a = (hn - h000) * dpsi
+    nrm = np.sqrt(Lr * Lr + a * a)
+    face = h000 + (hn - h000) * psi + sign * er / 2.0 * Lr / nrm
+    heff = np.abs(face) if kind == "+-" else np.abs(face + es)
+    dx = -sign * er / 2.0 * a[:, -1] / nrm[:, -1]
+    he, g = heff[:, -1], hm - dx
+    side = np.sqrt(heff * heff + hm * hm)
+    sides = 2.0 * Lr * (np.sum(side, axis=1) - 0.5 * (side[:, 0] + side[:, -1])) / (s.size - 1)
+    return (Wr + hm) * np.sqrt(he * he + g * g) + he * g + sides
+
+
+@numba.njit(cache=True)
+def _free_reed_kernel(u0, dt, os, hn00, w0, Q, mu, Sr, alpha, hgrid, sgrid, kv, kl):
+    n = u0.size
+    out = np.zeros(n)
+    tip = np.zeros(n)
+    z = 0.0
+    zd = 0.0
+    u = 0.0
+    p1 = 0.0
+    for i in range(n):
+        acc = 0.0
+        for _ in range(os):
+            su = np.interp(hn00 + z, hgrid, sgrid)
+            vj = (u - Sr * zd) / (alpha * su)
+            p2 = 0.5 * RHO * vj * abs(vj)
+            zd += dt * (mu * p2 - w0 / Q * zd - w0 * w0 * z)
+            z += dt * zd
+            du = kl * (p1 - p2)
+            u += dt * du
+            p1 += dt * kv * (u0[i] - u)
+            acc += du
+        out[i] = acc / os
+        tip[i] = hn00 + z
+    return out, tip
+
+
+def free_reed(freq=0.0, dur=1.0, sr=DEFAULT_SR, kind="+-", v0=0.0, L1=0.0, attack=0.02, reed=None, os=16,
+              full=False):
+    """Self-oscillating free reed (harmonica, accordion, harmonium, sho): a clamped-free reed on its first mode,
+    driven by the pressure between a supplied volume V1 -> short pipe -> reed -> open air; flow under the reed
+    alpha Su(hn) vj with Bernoulli vj, plus the flow the reed pumps. The radiated sound is d(u)/dt. kind "+-"
+    (blow-open, plays above the reed's frequency) or "-+" (blow-closed, plays below); freq rescales the reed's
+    natural frequency (0 = the measured reed); v0 m/s of supply velocity, L1 m of upstream volume length (0 = the
+    defaults that let each kind speak). reed="harmonium" swaps in the harmonium reed and its chamber (play it
+    kind="-+"); a dict overrides FREE_REED keys. full=True returns (sound, tip opening hn in m) at the internal rate."""
+    ld = FREE_REED_LOAD
+    if isinstance(reed, str):
+        if reed != "harmonium":
+            raise ValueError(f"unknown free reed preset: {reed!r}")
+        reed, ld = FREE_REED_HARMONIUM, {**FREE_REED_LOAD, **FREE_REED_HARMONIUM_LOAD}
+    r = {**FREE_REED, **(reed or {})}
+    fr = float(freq) if freq > 0 else r["fr"]
+    w0 = 2.0 * math.pi * fr
+    s = np.linspace(0.0, 1.0, 129)
+    Sr = r["Wr"] * r["Lr"] * float(np.trapezoid(_cantilever(s)[0], s))
+    mu = Sr * w0 * w0 / (r["K"] * (fr / r["fr"]) ** 2)
+    hn00 = r["dh00"] + r["er"] / 2.0 if kind == "+-" else -r["dh00"] - r["er"] / 2.0 - r["es"]
+    span = 4.0 * r["dh00"] + r["es"]
+    hgrid = np.linspace(hn00 - span, hn00 + span, 1025)
+    sgrid = free_reed_section(hgrid, kind, r)
+    V1 = ld["S1"] * (float(L1) if L1 > 0 else ld["L1"][kind])
+    n = samples(dur, FS)
+    t = np.arange(n) / FS
+    u0 = ld["S0"] * (float(v0) if v0 > 0 else ld["v0"][kind]) * np.clip(t / max(float(attack), 1e-4), 0.0, 1.0)
+    os = int(os)
+    y, tip = _free_reed_kernel(u0, 1.0 / (FS * os), os, hn00, w0, r["Q"], mu, Sr, FREE_REED_VENA, hgrid, sgrid,
+                               RHO * C_AIR * C_AIR / V1, ld["S2"] / (RHO * ld["L2"]))
+    if full:
+        return y, tip
+    return _finish(y, sr, peak=0.8)
+
+
 def _reed_preset(name):
     from .physical import winds
     if name == "default":
@@ -565,7 +707,9 @@ def _reed_preset(name):
         return dict(winds.REED_PLAYED)
     if name == "sax":
         return dict(winds.SAX_REED)
-    raise ValueError(f"reed must be 'default', 'played' or 'sax', got {name!r}")
+    if name == "sax_alto":
+        return dict(winds.SAX_ALTO_REED)
+    raise ValueError(f"reed must be 'default', 'played', 'sax' or 'sax_alto', got {name!r}")
 
 
 def tune_length(make, freq, L0, mode=0, comp=0.0):
@@ -677,12 +821,31 @@ def _on_twelfth(y, freq):
     return h3 > 2.0 * h1
 
 
+def air(t_c: float = 20.0) -> dict:
+    """Air at ``t_c`` deg C (c, rho, eta, gamma, Pr): ``physical.winds.air``."""
+    from .physical import winds
+    return winds.air(t_c)
+
+
+def warm(x, t_c: float = 20.0):
+    """A bore tuned at 20 C played in air at ``t_c``: every resonance scales with c(T), so the sound is read faster by
+    c(T) / c(20 C) (30 C: +29 cents, 35 C: +43 cents), same length."""
+    r = air(t_c)["c"] / air(20.0)["c"]
+    if abs(r - 1.0) < 1e-9:
+        return x
+    i = np.arange(len(x))
+    return np.interp(i * r, i, x, right=0.0)
+
+
 def _reed_voice(freq, dur, sr, vel, cone, pressure, embouchure, breath, vibrato, attack, tongue, register,
-                hole, bright, seed, reed="default", contact=0.0, mouthpiece=0.0):
+                hole, bright, seed, reed="default", contact=0.0, mouthpiece=0.0, temperature=20.0, apex=0.0, bend=0.0, bend_share=0.2, rest=-1.0):
     freq = float(np.clip(freq, 30.0, 2500.0))
     vel = float(np.clip(vel, 0.0, 1.5))
     pm0 = float(np.clip((REED_PM[0] + REED_PM[1] * vel) * pressure, 0.0, 0.034))
     emb = float(np.clip(embouchure, 0.7, 1.6))       # below ~0.7 the mouth pressure holds the reed shut
+    if rest >= 0.0:
+        from .physical import winds
+        emb *= float(winds.reed_recovery(rest))
     cone = float(np.clip(cone, 0.0, 1.0))
     m = _midi(freq)
 
@@ -699,8 +862,15 @@ def _reed_voice(freq, dur, sr, vel, cone, pressure, embouchure, breath, vibrato,
     if mouthpiece > 0.0:                             # equivalent mouthpiece volume, a compliance: V / S0 of tube
         from .physical import winds
         vol = float(mouthpiece) * float(winds.sax_equivalent_volume(freq))
-    rp = reed_params(volume=vol, contact_damping=contact, **_reed_preset(reed))
-    tube = _reed_bore(round(freq * 2.0 ** (cents / 1200.0), 4), 1.0 + cone,
+    if apex > 0.0 and cone > 0.0:                    # mouthpiece cavity = the missing tip of the cone, k x1 = sqrt 3 at 670 Hz
+        from .physical import winds
+        kx, f_x = winds.CONE_KX1
+        vol += float(apex) * cone * REED_S0 * (kx * C_AIR / (2.0 * math.pi * f_x)) / 3.0
+    rp =reed_params(volume=vol, contact_damping=contact, **_reed_preset(reed))
+    f_bore = freq
+    if bend > 0.0:
+        f_bore = freq / (1.0 + float(np.clip(bend_share, 0.0, 1.0)) * (math.sqrt(bend_inertance(float(np.clip(bend, 0.0, 0.95)))) - 1.0))
+    tube = _reed_bore(round(f_bore * 2.0 ** (cents / 1200.0), 4), 1.0 + cone,
                       round((dl + vol / REED_S0) / C_AIR, 9))
     n = int((dur + 0.14) * FS)
     hold = int((dur + 0.05) * FS)
@@ -721,7 +891,7 @@ def _reed_voice(freq, dur, sr, vel, cone, pressure, embouchure, breath, vibrato,
         fast = np.zeros(n)
         fast[:hold] = _edge(hold, 0.005 * FS, 0.05 * FS)
         out = tube.run(pm=pm0 * fast * mod, reed=rp, emb=emb, hole_state=ph, n=n)["p_out"] * _edge(n, attack * FS, 0)
-    out = out * float(cal(2)) * (0.45 + 0.55 * min(vel, 1.0))
+    out = warm(out * float(cal(2)) * (0.45 + 0.55 * min(vel, 1.0)), float(np.clip(temperature, -30.0, 60.0)))
     return _finish(out, sr, tone=float(np.clip(freq * 9.0, 1800.0, 4200.0)) * float(np.clip(bright, 0.25, 4.0)))
 
 
@@ -735,34 +905,39 @@ _REED_HELP = dict(
     register=(0.0, "0..1 register hole openness (1 = overblown: the cylinder jumps a twelfth)"),
     hole=(0.0, "0..1 openness of a tonehole at 80 % of the bore: bends the note up (about a semitone at 0.5); fully open the cylinder may flip register. 0 keeps the note in tune"),
     bright=(1.0, "0.25..4 output lowpass scale"), seed=(0, "noise seed"),
-    reed=("default", "reed preset: default (textbook), played (clarinet reed measured in play), sax (tenor sax reed + lip)"),
+    reed=("default", "reed preset: default (textbook), played (clarinet reed measured in play), sax (tenor sax reed + lip), sax_alto (alto sax reed, 1500 Hz)"),
     contact=(0.0, "s, Hunt-Crossley damping of the reed on the lay (0 = elastic contact)"),
-    mouthpiece=(0.0, "0..1 share of the saxophone mouthpiece equivalent volume added at the reed (pitch kept)"))
+    mouthpiece=(0.0, "0..1 share of the saxophone mouthpiece equivalent volume added at the reed (pitch kept)"),
+    temperature=(20.0, "air temperature in C (-30..60) of a bore tuned at 20 C: the pitch follows the speed of sound, +29 cents at 30 C, +43 at 35 C"),
+    bend=(0.0, "0..0.95 bore radius over the radius of curvature of a bend in the bore: the bent part counts sqrt(inertance) of its length, so the same tube sounds sharp; 0 = straight"),
+    bend_share=(0.2, "0..1 share of the bore length that is bent (with bend > 0)"),
+    rest=(-1.0, "s since the reed was squeezed shut for a long time: it reopens to 93 % at once, 97 % after 8 s, fully after minutes; < 0 = fully recovered"))
 
 
 @instrument("reed_tube", "Clarinet-like cylinder blown by a dynamic beating reed (Webster tube + beating reed): hollow, odd harmonics.",
             family="wind", span=("D3", "G5"), **_REED_HELP)
 def reed_tube(freq, dur, sr=DEFAULT_SR, vel=1.0, pressure=1.0, embouchure=1.0, breath=0.04, vibrato=0.0,
               attack=0.005, tongue=0.5, register=0.0, hole=0.0, bright=1.0, seed=0, reed="default", contact=0.0,
-              mouthpiece=0.0):
+              mouthpiece=0.0, temperature=20.0, bend=0.0, bend_share=0.2, rest=-1.0):
     """Beating reed on a cylindrical Webster bore with the unflanged radiation end."""
     return _reed_voice(freq, dur, sr, vel, 0.0, pressure, embouchure, breath, vibrato, attack, tongue,
-                       register, hole, bright, seed, reed, contact, mouthpiece)
+                       register, hole, bright, seed, reed, contact, mouthpiece, temperature, 0.0, bend, bend_share, rest)
 
 
 @instrument("reed_cone", "Sax/oboe-like conical bore blown by the same dynamic reed: full harmonic series, reedy.",
             family="wind", span=("D3", "C6"),
             cone=(1.0, "0..1 taper: 0 = cylinder (odd harmonics), 1 = end radius twice the reed end (even harmonics appear)"),
+            apex=(0.0, "0..1 share of the cone's missing tip (k x1 = sqrt 3 at 670 Hz) added as a mouthpiece cavity at the reed"),
             **_REED_HELP)
 def reed_cone(freq, dur, sr=DEFAULT_SR, vel=1.0, cone=1.0, pressure=1.0, embouchure=1.0, breath=0.04, vibrato=0.0,
               attack=0.005, tongue=0.5, register=0.0, hole=0.0, bright=1.0, seed=0, reed="default", contact=0.0,
-              mouthpiece=0.0):
+              mouthpiece=0.0, temperature=20.0, apex=0.0, bend=0.0, bend_share=0.2, rest=-1.0):
     """Same reed on S(x) = (1 + cone x)^2. The taper stops at an
     end-radius ratio of 2: steeper truncated cones jump to the octave or stutter, as reported for this model
     (ratio 3 held its fundamental only with a mouthpiece cavity equal to the missing apex, `reed_params(volume=)`,
     and still broke in the low register with a tongued start)."""
     return _reed_voice(freq, dur, sr, vel, cone, pressure, embouchure, breath, vibrato, attack, tongue,
-                       register, hole, bright, seed, reed, contact, mouthpiece)
+                       register, hole, bright, seed, reed, contact, mouthpiece, temperature, apex, bend, bend_share, rest)
 
 
 # ------------------------------------------------------------------------------------------ vocal tract
@@ -834,18 +1009,22 @@ def glottal_pulses(f0, n, vibrato=0.0, vib_hz=5.0, duty=0.2, sr=FS, source="bilb
             seed=(0, "noise seed"),
             glide=("smooth", "vowel2 path: smooth (cubic) | minjerk (minimum-jerk, the speech-motor profile)"),
             model=("webster", "webster | kl: the Kelly-Lochbaum tract with subglottal system and nasal branch"),
-            nasal=(0.0, "velum opening cm^2 (0..2; > 0 uses model kl)"))
+            nasal=(0.0, "velum opening cm^2 (0..2; > 0 uses model kl)"),
+            sinuses=("", "with nasal: lumped | mri (the six measured paranasal cavities) adds their antiresonances; empty = off"),
+            wall=(1.0,"0..3 yielding-wall loss of the tract: 0 = rigid and lossless (narrow, ringing formants), 1 = measured soft tissue (formant bandwidths of a real voice), 2 = twice as damped"))
 def vowel_tube(freq, dur, sr=DEFAULT_SR, vel=1.0, vowel="a", vowel2="", morph=1.0, breath=0.08, vibrato=0.4,
-               size=1.0, tense=0.2, seed=0, consonant="", source="bilbao", glide="smooth", model="webster", nasal=0.0):
+               size=1.0, tense=0.2, seed=0, consonant="", source="bilbao", glide="smooth", model="webster", nasal=0.0, wall=1.0, sinuses=""):
     """Finite-difference Webster tract with a flanged radiation end and yielding walls, area functions of ``_tract``.
     Output is the radiated pressure. A consonant onset is one constriction event (`event`, `CONSONANT_EVENT`): held
     50 ms, released over 60 ms by a raised cosine; voiceless ones (p t k f th s sh) start voicing 40 ms after the
     release with aspiration in the gap."""
     if model == "kl" or float(nasal) > 0.0:
-        return _kl_vowel(freq, dur, sr, vel, vowel, vowel2, morph, vibrato, float(nasal), seed)
+        if sinuses not in ("", "lumped", "mri"):
+            raise ValueError("vowel_tube sinuses must be empty, lumped or mri")
+        return _kl_vowel(freq, dur, sr, vel, vowel, vowel2, morph, vibrato, float(nasal), seed, sinuses)
     if model != "webster":
         raise ValueError("vowel_tube model: webster or kl")
-    tr = _tract(vowel, vowel2, size, consonant=consonant)
+    tr = _tract(vowel, vowel2, size, wall=float(np.clip(wall, 0.0, 3.0)), consonant=consonant)
     n = int((dur + 0.10) * FS)
     hold = int((dur + 0.04) * FS)
     env = np.zeros(n)
@@ -870,12 +1049,49 @@ def vowel_tube(freq, dur, sr=DEFAULT_SR, vel=1.0, vowel="a", vowel2="", morph=1.
     return _finish(p, sr, tone=4500.0)
 
 
+SUBGLOTTAL_Q = 8.0
+
+
+def subglottal_pair(area_cm2: float = 0.0675, sub: float = 1350.0) -> tuple:
+    """(zero Hz, pole Hz, attenuation dB) added to a vowel's transfer function by the coupling with the second subglottal resonance
+    ``sub`` (men 1280-1370, women 1450-1620 Hz): the glottal area (0.03 to 0.2 cm2, the more open the more coupling) sets the pole
+    75 to 225 Hz above the zero and the dip of the second formant at 5 to 13 dB."""
+    k = (float(np.clip(area_cm2, 0.03, 0.2)) - 0.03) / 0.17
+    return float(sub), float(sub) + 75.0 + 150.0 * k, 5.0 + 8.0 * k
+
+
+def subglottal_filter(x, sr: int = DEFAULT_SR, sub: float = 1350.0, area_cm2: float = 0.0675, open_phase=None):
+    """Zero-pole pair of the subglottal coupling on a voiced signal, unity far from ``sub``: a dip at the zero and a bump of half its
+    depth at the pole (`subglottal_pair`). ``open_phase``: an optional 0..1 array the length of x, the glottal opening along the
+    cycle; the coupling is applied in proportion to it (the effects are stronger in the open phase)."""
+    x = np.asarray(x, float)
+    fz, fp, depth = subglottal_pair(area_cm2, sub)
+    y = F.peak(F.peak(x, fz, sr, SUBGLOTTAL_Q, -depth), fp, sr, SUBGLOTTAL_Q, 0.5 * depth)
+    if open_phase is None:
+        return y
+    g = np.clip(np.asarray(open_phase, float), 0.0, 1.0)
+    return x + g * (y - x)
+
+
 def _min_jerk(x):
     from .physical.story import min_jerk
     return min_jerk(x, 1.0)
 
 
-def _kl_vowel(freq, dur, sr, vel, vowel, vowel2, morph, vibrato, nasal, seed):
+def _sinus_filter(p, sr, vowel, port, kind):
+    """Spectral ratio the paranasal sinuses (`kind` lumped | mri) add to a nasalised vowel, applied to `p`."""
+    from .physical import story
+    A = story.vowel_area(vowel)
+    f = np.arange(50.0, min(5000.0, 0.45 * sr), 10.0)
+    with_s = story.tract_response(A, f, branches=[story.nasal_branch(port, "mri" if kind == "mri" else True)])
+    without = story.tract_response(A, f, branches=[story.nasal_branch(port, False)])
+    g = with_s / (without + 1e-12)
+    X = np.fft.rfft(p)
+    X *= np.interp(np.fft.rfftfreq(p.size, 1.0 / sr), f, g, left=1.0, right=1.0)
+    return np.fft.irfft(X, p.size)
+
+
+def _kl_vowel(freq, dur, sr, vel, vowel, vowel2, morph, vibrato, nasal, seed, sinuses=""):
     from .physical import story
     shapes, times = [vowel], None
     if vowel2 and float(morph) > 0.0:
@@ -884,6 +1100,8 @@ def _kl_vowel(freq, dur, sr, vel, vowel, vowel2, morph, vibrato, nasal, seed):
     t = np.arange(n) / sr
     f0 = float(freq) * (1.0 + 0.03 * float(vibrato) * np.sin(2 * np.pi * 5.0 * t) * np.clip((t - 0.3) / 0.3, 0.0, 1.0))
     p = story.kl_voice(shapes, f0, dur + 0.05, times=times, sr=sr, port=float(np.clip(nasal, 0.0, 2.0)), seed=seed)
+    if sinuses and nasal > 0.0:
+        p = _sinus_filter(p, sr, vowel, float(np.clip(nasal, 0.05, 2.0)), sinuses)
     body = p[:int(dur * sr)]
     return p * (0.23 * (0.35 + 0.65 * min(float(vel), 1.2)) / (math.sqrt(float(np.mean(body * body))) + 1e-12))
 
@@ -919,9 +1137,12 @@ def _through(x, sr, fn, mix):
         loss=(1.0, "wall loss 0..20: 1 = smooth rigid pipe, higher = rough / lined / leaky"),
         mix=(1.0, "0..1 wet/dry"),
         steepen=(0.0, "kPa peak pressure in the duct: loud pulses steepen into shocks on the way (0 = linear)"),
-        silencer=(0.0, "ms: absorptive silencer at the outlet, diffusive response peaking at this time (0 = none; 1-10)"))
+        silencer=(0.0, "ms: absorptive silencer at the outlet, diffusive response peaking at this time (0 = none; 1-10)"),
+        bend=(0.0, "0..0.95 radius over radius of curvature of a bend over `bend_m` of the duct: it counts sqrt(inertance) of its length (shorter, resonances rise)"),
+        bend_m=(0.0, "m of duct axis in the bend (with bend > 0)"),
+        model=("fd", "fd = Webster finite-difference tube | impedance = closed-open only: the input impedance of the pipe loaded by the unflanged radiation impedance (ka <= 1), pressure at the closed end for a flow source"))
 def tube(x, sr=DEFAULT_SR, length_m=1.0, radius_m=0.05, ends="closed-open", loss=1.0, mix=1.0, steepen=0.0,
-         silencer=0.0):
+         silencer=0.0, bend=0.0, bend_m=0.0, model="fd"):
     """WebsterTube as an effect: cylinder with the passive radiation end(s) and
     viscothermal loss. The distance is a virtual tube
     reduced to one dimension: axial resonances and delay only, no transverse reverberant field.
@@ -929,6 +1150,14 @@ def tube(x, sr=DEFAULT_SR, length_m=1.0, radius_m=0.05, ends="closed-open", loss
     `cyber.polack_ir`, D^2 = 1.5 x the peak time."""
     L = float(np.clip(length_m, 0.03, 30.0))
     a = float(np.clip(radius_m, 0.002, 1.0))
+    if bend > 0.0 and bend_m > 0.0:
+        L = max(L + bend_length_correction(min(float(bend_m), L), float(np.clip(bend, 0.0, 0.95))), 0.03)
+    if model not in ("fd", "impedance"):
+        raise ValueError("tube model: fd or impedance")
+    if model == "impedance":
+        if str(ends) != "closed-open":
+            raise ValueError("tube model impedance: ends closed-open")
+        return _through(x, sr, lambda u: _input_impedance_filter(u, L, a, float(np.clip(loss, 0.0, 20.0))), mix)
     left, right = {"closed-open": ("closed", "unflanged"), "open-open": ("unflanged", "unflanged"),
                    "closed-closed": ("closed", "closed")}[str(ends)]
     t = WebsterTube(L, 1.0, radius_m=a, left=left, right=right, loss=float(np.clip(loss, 0.0, 20.0)))
@@ -942,6 +1171,19 @@ def tube(x, sr=DEFAULT_SR, length_m=1.0, radius_m=0.05, ends="closed-open", loss
             y = silence_through(y, FS, 1e-3 * float(silencer))
         return y
     return _through(x, sr, run, mix)
+
+
+def _input_impedance_filter(u, L, a, loss):
+    """Pressure at the closed end of a pipe of length L and radius a for the flow ``u``: Z_in / Z_c = (Z_r + i tan kL) / (1 + i Z_r tan kL),
+    Z_r the unflanged radiation impedance (frozen above ka = 1), k carrying the wall loss."""
+    U = np.fft.rfft(u)
+    f = np.fft.rfftfreq(len(u), 1.0 / FS)[1:]
+    w = 2.0 * math.pi * f
+    zr = causse_zr(np.minimum(w * a / C_AIR, 1.0))
+    alpha = loss * 1.045 * np.sqrt(w * ETA / RHO) / (C_AIR * a)
+    t = np.tan((w / C_AIR - 1j * alpha) * L)
+    H = np.concatenate([[0.0], (zr + 1j * t) / (1.0 + 1j * zr * t)])
+    return np.fft.irfft(U * H, len(u))
 
 
 def steepen_through(y, fs, travel, peak_pa):
@@ -1070,9 +1312,9 @@ def tube_mesh(x, sr=DEFAULT_SR, distance=1.68, length_m=9.5, width_m=0.45, absor
 
 
 @lru_cache(maxsize=256)
-def _pipe(freq, radius, loss):
-    """Stopped (closed-open) cylinder whose first resonance, end correction included, is `freq`."""
-    return tune_length(lambda L: WebsterTube(L, 1.0, radius_m=radius, right="unflanged", loss=loss), freq, C_AIR / (4.0 * freq))
+def _pipe(freq, radius, loss, c=C_AIR):
+    """Stopped (closed-open) cylinder whose first resonance, end correction included, is `freq`, in a gas of sound speed `c`."""
+    return tune_length(lambda L: WebsterTube(L, 1.0, radius_m=radius, right="unflanged", loss=loss, c=c), freq, c / (4.0 * freq))
 
 
 @instrument("piston_pipe", "Baschet 'windless organ pipe': a membrane piston drives a quarter-wave pipe - deep, slow-speaking organ tone.",
@@ -1317,6 +1559,17 @@ def end_reflection(ka, end="unflanged"):
     return -(1.0 + n1 * x) / (1.0 + d1 * x + d2 * x * x)
 
 
+def end_reflection_levine(ka):
+    """Pressure reflection of an unflanged pipe end, R = -R(ka) exp(-2 j ka l/a), from the empirical fits to Levine &
+    Schwinger (0 < ka < 1.5; the end correction l/a runs to ka = 2): R = 1 + 0.01336 ka - 0.59079 ka^2 + 0.33576 ka^3
+    - 0.06432 ka^4, l/a = 0.6133 - 0.1168 ka^2 (ka < 0.5), 0.6393 - 0.1104 ka beyond. A mean flow below Mach 0.3 leaves
+    l/a unchanged and raises R."""
+    ka = np.asarray(ka, dtype=np.float64)
+    r = 1.0 + 0.01336 * ka - 0.59079 * ka ** 2 + 0.33576 * ka ** 3 - 0.06432 * ka ** 4
+    la = np.where(ka < 0.5, 0.6133 - 0.1168 * ka ** 2, 0.6393 - 0.1104 * ka)
+    return -r * np.exp(-2j * ka * la)
+
+
 def end_reflection_filter(radius_m, sr, end="unflanged"):
     """Digital biquad (b, a) of `end_reflection` for a waveguide termination (bilinear transform, x = s a / c)."""
     from scipy.signal import bilinear
@@ -1329,7 +1582,7 @@ def end_reflection_filter(radius_m, sr, end="unflanged"):
 # 2-D rectilinear waveguide mesh of the vocal tract
 # ---------------------------------------------------------------------------------------------------------
 MESH2D_DX = 0.004      # m: junction spacing; fs = c sqrt(2) / dx = 121 kHz
-MESH2D_WALL = 0.97     # pressure kept by a wall reflection per step (soft tissue loss)
+MESH2D_WALL = 0.7      # pressure kept by a wall reflection per step (soft tissue loss; damps the cross modes)
 
 
 def mesh2d_shape(area_cm2, length_m, dx=MESH2D_DX):
@@ -1387,6 +1640,7 @@ def mesh_vowel(freq, dur, sr=DEFAULT_SR, vel=1.0, vowel="a", vibrato=0.4):
     u = glottal_pulses(float(freq), n, vibrato=float(vibrato), sr=fs)
     y = np.diff(_mesh2d(u - u.mean(), mask, MESH2D_WALL), prepend=0.0)
     y = resample_poly(y, FS, int(round(fs)))
+    y = F.lowpass(y, float(np.clip(6.0 * freq, 2000.0, 3000.0)), FS, order=8)     # the mesh's grid alias carries far more above 4 kHz than a voice
     return _finish(y, sr, peak=0.6 * (0.5 + 0.5 * vel))
 
 

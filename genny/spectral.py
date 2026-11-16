@@ -45,8 +45,8 @@ def _win_len(ms: float, sr: int) -> int:
     return 1 << max(6, int(round(math.log2(max(ms * 1e-3 * sr, 2.0)))))
 
 
-def window(M: int, kind: str = "hann", root: bool = False) -> np.ndarray:
-    """*Periodic* window (denominator M): only this form overlap-adds to an exact constant.
+def window(M: int, kind: str = "hann", root: bool = False, beta: float = 2.8) -> np.ndarray:
+    """*Periodic* window (denominator M): only this form overlap-adds to an exact constant. `kaiser`: shape `beta`.
     `root=True` gives the square root (root-Hann = MLT sine window) for WOLA."""
     t = 2 * np.pi * np.arange(M) / M
     if kind == "hann":
@@ -57,8 +57,10 @@ def window(M: int, kind: str = "hann", root: bool = False) -> np.ndarray:
         w = 0.42 - 0.5 * np.cos(t) + 0.08 * np.cos(2 * t)
     elif kind == "rect":
         w = np.ones(M)
+    elif kind == "kaiser":
+        w = np.kaiser(M + 1, float(beta))[:M]
     else:
-        raise ValueError(f"unknown window {kind!r} (hann|hamming|blackman|rect)")
+        raise ValueError(f"unknown window {kind!r} (hann|hamming|blackman|rect|kaiser)")
     return np.sqrt(np.maximum(w, 0.0)) if root else w
 
 
@@ -150,9 +152,9 @@ TE_LAMBDA_MAX = 2.5
 def true_envelope(mag: np.ndarray, n_c: int, delta_db: float = 2.0, iters: int = 200, accel: bool = False) -> np.ndarray:
     """True envelope: A_0 = log|X|, A_i = max(A_{i-1}, V_{i-1}), V_i the cepstral smoothing of A_i, stop when no frame's
     log|X| rises above V_i by more than delta_db (2 dB there). It rides over the harmonics instead of through them, so a low order does not lose the peaks.
-    ``accel``: start from a max filter of log|X| over half the cepstral resolution (nfft / (4 n_c) bins each side) and
-    over-relax each step, V_i = V_{i-1} + lambda (V'_i - V_{i-1}) with lambda = (E_I + E_O) / E_I (E_I: squared excess of
-    log|X| over V_{i-1}, E_O: squared shortfall), at most 2.5. The number of steps taken is left in ``true_envelope.last_iters``."""
+    ``accel``: start from a max filter of log|X| over blocks of nfft / (8 n_c) bins (cepstrum of 8 n_c points) and
+    over-relax each step, V_i = V_{i-1} + lambda (V'_i - V_{i-1}) with lambda = (E_I + E_O) / E_I (E_I: energy of the
+    cepstral change inside the lifter band, E_O: outside it), at most 2.5. The number of steps taken is left in ``true_envelope.last_iters``."""
     if accel:
         return _true_envelope_accel(mag, n_c, delta_db, iters)
     nfft = 2 * (mag.shape[-1] - 1)
@@ -183,8 +185,9 @@ def _true_envelope_accel(mag, n_c, delta_db, iters):
     lif[nfft - n_c + 1:] = 1
     lif[nfft - n_c] = 0.5
     A0 = np.log(np.maximum(mag, 1e-5 * mag.max() + 1e-12))
-    M = max(1, nfft // (4 * n_c))
+    M = max(1, nfft // (16 * n_c))
     A = maximum_filter1d(A0, 2 * M + 1, axis=-1, mode="nearest")
+    inband = lif > 0
     lim = float(delta_db) * math.log(10.0) / 20.0
     V = np.fft.rfft(np.fft.irfft(A, nfft, axis=-1) * lif, nfft, axis=-1).real
     it = 1
@@ -194,8 +197,9 @@ def _true_envelope_accel(mag, n_c, delta_db, iters):
             break
         A = np.maximum(A0, V)
         Vn = np.fft.rfft(np.fft.irfft(A, nfft, axis=-1) * lif, nfft, axis=-1).real
-        ei = float(np.sum(np.maximum(d, 0.0) ** 2))
-        eo = float(np.sum(np.minimum(d, 0.0) ** 2))
+        c = np.fft.irfft(np.maximum(d, 0.0), nfft, axis=-1) ** 2
+        ei = float(np.sum(c[..., inband]))
+        eo = float(np.sum(c[..., ~inband]))
         lam = min((ei + eo) / max(ei, 1e-30), TE_LAMBDA_MAX)
         V = V + lam * (Vn - V)
     true_envelope.last_iters = it
@@ -292,17 +296,28 @@ def transfer_envelope(src: np.ndarray, dst: np.ndarray, sr: int = DEFAULT_SR, sh
 # Time-scale modification
 # ==========================================================================================
 
-def onsets(x: np.ndarray, sr: int = DEFAULT_SR, sensitivity: float = 1.0) -> np.ndarray:
+def onsets(x: np.ndarray, sr: int = DEFAULT_SR, sensitivity: float = 1.0, bands: int = 0) -> np.ndarray:
     """Sample positions of attack transients: positive spectral flux of a 12 ms STFT relative to the
-    level just before plus a quarter of the local maximum.
-    # ponytail: full-band flux; a hit under an equally loud sustained sound is missed and a 10 Hz
-    # beat is (correctly) not flagged. Per-band flux if drums buried in pads matter."""
+    level just before plus a quarter of the local maximum. ``bands`` > 0: the multiband detector instead, the energy E(s, i)
+    of `bands` log-spaced bands from 100 Hz and the relative change C(s, i) = (-2 E(s-2) - E(s-1) + E(s+1) + 2 E(s+2)) / E(s)
+    per band; an onset is a local maximum of the largest C above 3 / ``sensitivity`` (a band that doubles in energy gives 3),
+    which finds a hit under an equally loud sustained sound that the full-band flux misses."""
     M = _win_len(12.0, sr)
     R = M // 4
     mag = np.abs(stft(to_mono(x), M, R))
     tot = mag.sum(axis=1)
     if tot.max() <= 0:
         return np.zeros(0, int)
+    if int(bands) > 0:
+        edges = np.unique(np.round(np.geomspace(100.0, 0.45 * sr, int(bands) + 1) * M / sr).astype(int))
+        E = np.stack([(mag[:, a:max(b, a + 1)] ** 2).sum(axis=1) for a, b in zip(edges[:-1], edges[1:])], axis=1)
+        P = np.pad(E, ((2, 2), (0, 0)), mode="edge")
+        C = (-2.0 * P[:-4] - P[1:-3] + P[3:-1] + 2.0 * P[4:]) / (E + 1e-6 * E.max())
+        C[E < 1e-5 * E.max()] = 0.0
+        rel = C.max(axis=1)
+        rel[-8:] = 0.0
+        pk = (rel > 3.0 / max(float(sensitivity), 1e-3)) & (rel >= maximum_filter1d(rel, 9))
+        return np.clip((np.flatnonzero(pk) + 1) * R - M // 2, 0, len(x) - 1)
     loc = maximum_filter1d(tot, 2 * int(0.3 * sr / R) + 1)
     rel = np.maximum(mag[1:] - mag[:-1], 0.0).sum(axis=1) / (tot[:-1] + 0.25 * loc[1:] + 1e-12)
     thr = 0.5 / max(float(sensitivity), 1e-3)
@@ -462,7 +477,8 @@ def _parse_anchors(anchors, n, sr):
 def stretch(x: np.ndarray, sr: int = DEFAULT_SR, factor: float = 1.0, mode: str = "vocoder", window_ms: float = 0.0,
             lock: bool = True, transients=True, anchors=None) -> np.ndarray:
     """Time-stretch by `factor` (> 1 longer) at constant pitch; output length is round(n * factor). `anchors`: a time map instead of a factor,
-    "t_in:t_out, ..." to land moments of the sound on an animation. mode hps: vocoder on the harmonic part, short OLA (10 ms) on the percussive part. mode ola: overlap-add without the similarity search."""
+    "t_in:t_out, ..." to land moments of the sound on an animation. mode hps: vocoder on the harmonic part, short OLA (10 ms) on the percussive part. mode ola: overlap-add without the similarity search.
+    A stereo pair goes through the vocoder as mid and side, so the image stays put."""
     factor = float(np.clip(factor, 0.1, 10.0))
     if x.shape[0] < 16 or (abs(factor - 1.0) < 1e-9 and anchors is None):
         return x.copy()
@@ -494,7 +510,11 @@ def stretch(x: np.ndarray, sr: int = DEFAULT_SR, factor: float = 1.0, mode: str 
         i = int(np.searchsorted(pos, a))
         if 0 < i < F:
             reset[i] = True
-    return _per_channel(lambda s: _pv(s, pos, M, bool(lock), reset)[M:M + n_out], x)
+    run = lambda s: _pv(s, pos, M, bool(lock), reset)[M:M + n_out]
+    if x.ndim == 2 and x.shape[1] == 2:
+        mid, side = run(0.5 * (x[:, 0] + x[:, 1])), run(0.5 * (x[:, 0] - x[:, 1]))
+        return np.stack([mid + side, mid - side], axis=1)
+    return _per_channel(run, x)
 
 
 def shift_pitch(x: np.ndarray, sr: int = DEFAULT_SR, semitones: float = 0.0, formant: str = "shift", mode: str = "vocoder") -> np.ndarray:
@@ -519,14 +539,16 @@ def shift_pitch(x: np.ndarray, sr: int = DEFAULT_SR, semitones: float = 0.0, for
 # ==========================================================================================
 
 def band_edges(sr: int, kind: str = "bark") -> np.ndarray:
-    """Noise-band edges in Hz up to sr/2: the Bark table, or one band per ERB
-    (ERBS(f) = 21.4 log10(0.00437 f + 1))."""
+    """Noise-band edges in Hz up to sr/2: the Bark table, one band per ERB
+    (ERBS(f) = 21.4 log10(0.00437 f + 1)), or 32 equal bands (linear)."""
     if kind == "erb":
         f = (10 ** (np.arange(0, 21.4 * math.log10(0.00437 * sr / 2 + 1)) / 21.4) - 1) / 0.00437
     elif kind == "bark":
         f = np.array(BARK_EDGES, float)
+    elif kind == "linear":
+        f = np.linspace(0.0, sr / 2.0, 33)[:-1]
     else:
-        raise ValueError(f"unknown bands {kind!r} (bark|erb)")
+        raise ValueError(f"unknown bands {kind!r} (bark|erb|linear)")
     return np.append(f[f < 0.49 * sr], sr / 2.0)
 
 
@@ -589,7 +611,10 @@ def _tms_render(model: dict, stretch: float, sr: int) -> np.ndarray:
 
 
 def analyze(x: np.ndarray, sr: int = DEFAULT_SR, window_ms: float = 46.0, thresh_db: float = -50.0, max_peaks: int = 60,
-            max_tracks: int = 40, bands: str = "bark", min_frames: int = 4, transients: bool = False) -> dict:
+            max_tracks: int = 40, bands: str = "bark", min_frames: int = 4, transients: bool = False,
+            residual: str = "rect", noise_env: str = "mean", min_sep: float = 0.0, alpha: float = 1.0,
+            backward: bool = False, harmonic: bool = False, sleep: int = 2, max_dev: float = 0.0, f0_range=None,
+            general_db: float = 0.0, min_height: float = 0.0, kaiser_beta: float = 0.0) -> dict:
     """Sines + noise analysis (spectral modelling synthesis) of a mono signal.
 
     Returns a plain dict of numpy arrays / numbers (see `save_model`):
@@ -613,17 +638,37 @@ def analyze(x: np.ndarray, sr: int = DEFAULT_SR, window_ms: float = 46.0, thresh
     transients: sines + transients + noise. The sines' residual is cut in
     non-overlapping blocks, each block's DCT turns a click into a slowly varying sinusoid, and this same
     sinusoidal analysis tracks them (keys t_*); the noise is then measured on what both leave. Off, an
-    attack is spread over sines and noise and smears when stretched."""
+    attack is spread over sines and noise and smears when stretched.
+    residual: "rect" keeps max(|X| - |S|, 0); "abs" takes ||X| - |S|| (the magnitude residual of the model).
+    noise_env: "mean" = mean power per band; "max" = the largest bin of the band (the envelope as the maximum of
+    each section; reads higher than the mean). min_sep: Hz, a new guide starts only on a peak this far from every
+    existing guide (0 = off). alpha: how far a guide moves toward the peak it found, h = alpha (g - f) + f (1 = it
+    takes the peak's frequency; less keeps it near its old place and lets the trajectory wander round it).
+    backward: track from the last frame to the first (the steady end defines the partials before the noisy attack).
+    harmonic: one guide per harmonic number; each frame the fundamental is the highest peak of which the 3
+    strongest peaks are multiples (within 3 %) and the guides are reset to its series; with none, they keep their
+    values; no other guide is born. f0_range: (lo, hi) Hz, the fundamental is searched only inside it (None = any).
+    sleep: frames a guide may go without a peak before it is dropped (and, within that time, its gap is bridged);
+    0 = dropped at once. max_dev: Hz, largest frequency jump a guide follows from one frame to the next (0 = 2 sr / M).
+    general_db: a peak is also kept when it is within this many dB of the loudest bin of the whole sound, even if it
+    is lower than `thresh_db` under its own frame's maximum (0 = off; the widest of the two ranges is taken).
+    min_height: dB, a peak must stand this far above the mean of the two valleys beside it (0 = off).
+    kaiser_beta: > 0 swaps the Hamming window for a Kaiser window of that shape (2.6-3 is the usual choice; 1.75 is close to Hamming).
+    residual "time": the residual is cut in the time domain, e = max(x, s) - s where x >= 0 and min(x, s) - s where x < 0, so it is never
+    larger than the original and keeps the attack and its phase."""
     x = to_mono(np.asarray(x, float))
     n = len(x)
     M = _win_len(window_ms, sr)
     N, R = 2 * M, M // 4
-    w = window(M, "hamming")
+    w = window(M, "kaiser", beta=kaiser_beta) if kaiser_beta > 0.0 else window(M, "hamming")
     X = stft(x, M, R, N, w)
     F, K = X.shape
     db = 20 * np.log10(np.abs(X) + 1e-12)
     c = db[:, 1:-1]
-    mask = ((c > db[:, :-2]) & (c >= db[:, 2:]) & (c > db.max(axis=1, keepdims=True) + thresh_db)
+    rng_ok = c > db.max(axis=1, keepdims=True) + thresh_db
+    if general_db > 0.0:
+        rng_ok = rng_ok | (c > db.max() - general_db)
+    mask = ((c > db[:, :-2]) & (c >= db[:, 2:]) & rng_ok
             & (c > db.max() - 80.0)                                   # absolute floor so silent frames give no tracks
             & (np.arange(1, K - 1) * sr / N > sr / 1000.0)[None, :])  # lowest peak frequency Fs/1000
     fi, ki = np.nonzero(mask)
@@ -634,6 +679,15 @@ def analyze(x: np.ndarray, sr: int = DEFAULT_SR, window_ms: float = 46.0, thresh
     Wd = 20 * np.log10(np.abs(np.fft.rfft(w, N)[:2]))
     cw = Wd[1] - Wd[0]                                                # the window's own half-curvature (dB / bin^2, < 0)
     ok = (curv < 0.25 * cw) & (curv > 2.5 * cw)                       # tolerance on the curvature test
+    if min_height > 0.0:
+        for q in range(len(fi)):
+            row, k = db[fi[q]], ki[q]
+            lo, hi = k, k
+            while lo > 0 and row[lo - 1] <= row[lo]:
+                lo -= 1
+            while hi < K - 1 and row[hi + 1] <= row[hi]:
+                hi += 1
+            ok[q] &= b[q] - 0.5 * (row[lo] + row[hi]) >= min_height
 
     def par(v):
         return v[fi, ki] + 0.5 * (v[fi, ki + 1] - v[fi, ki - 1]) * p + 0.5 * (v[fi, ki - 1] - 2 * v[fi, ki] + v[fi, ki + 1]) * p * p
@@ -642,17 +696,30 @@ def analyze(x: np.ndarray, sr: int = DEFAULT_SR, window_ms: float = 46.0, thresh
     pa = (10 ** ((b - 0.25 * (a - g) * p) / 20) * 2.0 / w.sum())[ok]  # peak height = A sum(w)/2
     pp = np.arctan2(par(X.imag), par(X.real))[ok]
     bounds = np.searchsorted(fi[ok], np.arange(F + 1))
-    dfmax = 2.0 * sr / M
+    dfmax = float(max_dev) if max_dev > 0.0 else 2.0 * sr / M
     hopw = 2 * np.pi * R / sr
-    GAP = 2
-    cap = 64
+    GAP = int(sleep)
+    cap = max(64, max_tracks) if harmonic else 64
+    dirn = -1.0 if backward else 1.0
+    order = range(F - 1, -1, -1) if backward else range(F)
     fr, am, ph = np.zeros((F, cap)), np.zeros((F, cap)), np.zeros((F, cap))
-    last, dead = np.zeros(cap), np.full(cap, 10 ** 9)                 # last frequency; frames since last matched
-    for m in range(F):
+    last, dead = np.zeros(cap), np.full(cap, 10 ** 9)                 # guide frequency; frames since last matched
+    for mi, m in enumerate(order):
+        pm = order[mi - 1] if mi else 0
         f_m, a_m, p_m = pf[bounds[m]:bounds[m + 1]], pa[bounds[m]:bounds[m + 1]], pp[bounds[m]:bounds[m + 1]]
         if len(f_m) > max_peaks:
             top = np.sort(np.argsort(-a_m)[:max_peaks])
             f_m, a_m, p_m = f_m[top], a_m[top], p_m[top]
+        if harmonic and len(f_m):
+            tops = f_m[np.argsort(-a_m)[:3]]
+            for c in np.sort(f_m)[::-1]:                               # the highest peak that is a fundamental of the 3 strongest
+                r = np.round(tops / c)
+                if f0_range is not None and not f0_range[0] <= c <= f0_range[1]:
+                    continue
+                if c > sr / 1000.0 and np.all(r >= 1) and np.all(np.abs(tops / c - r) < 0.03 * r):
+                    nh = int(min(max_tracks, 0.48 * sr / c))
+                    last[:nh], dead[:nh], dead[nh:] = c * np.arange(1, nh + 1), 0, 10 ** 9
+                    break
         cand = np.flatnonzero(dead <= GAP)
         used = np.zeros(len(f_m), bool)
         hit = np.zeros(cap, bool)
@@ -664,20 +731,23 @@ def analyze(x: np.ndarray, sr: int = DEFAULT_SR, window_ms: float = 46.0, thresh
                 if hit[t] or used[j]:
                     continue
                 hit[t] = used[j] = True
-                if m and am[m - 1, t] == 0.0:                         # picked up again: no glide-in
-                    fr[m - 1, t], ph[m - 1, t] = f_m[j], p_m[j] - hopw * f_m[j]
-                fr[m, t], am[m, t], ph[m, t], last[t] = f_m[j], a_m[j], p_m[j], f_m[j]
+                if mi and am[pm, t] == 0.0:                           # picked up again: no glide-in
+                    fr[pm, t], ph[pm, t] = f_m[j], p_m[j] - dirn * hopw * f_m[j]
+                fr[m, t], am[m, t], ph[m, t] = f_m[j], a_m[j], p_m[j]
+                last[t] = f_m[j] if alpha >= 1.0 else alpha * (f_m[j] - last[t]) + last[t]
         lost = cand[~hit[cand]]
         fr[m, lost] = last[lost]                                       # amp stays 0: ramps down over this hop
-        if m:
-            ph[m, lost] = ph[m - 1, lost] + hopw * last[lost]
+        if mi:
+            ph[m, lost] = ph[pm, lost] + dirn * hopw * last[lost]
         dead[lost] += 1
         dead[hit] = 0
         live = int(hit.sum())
-        for j in np.argsort(-a_m, kind="stable"):
+        for j in (() if harmonic else np.argsort(-a_m, kind="stable")):
             if live >= max_tracks:
                 break
             if used[j]:
+                continue
+            if min_sep and np.any(np.abs(last[dead <= GAP] - f_m[j]) < min_sep):
                 continue
             free = np.flatnonzero(dead > GAP)
             if not len(free):
@@ -685,8 +755,8 @@ def analyze(x: np.ndarray, sr: int = DEFAULT_SR, window_ms: float = 46.0, thresh
                 last, dead, hit = np.concatenate([last, np.zeros(cap)]), np.concatenate([dead, np.full(cap, 10 ** 9)]), np.concatenate([hit, np.zeros(cap, bool)])
                 free, cap = np.array([cap]), 2 * cap
             t = free[0]
-            if m:
-                fr[m - 1, t], ph[m - 1, t] = f_m[j], p_m[j] - hopw * f_m[j]
+            if mi:
+                fr[pm, t], ph[pm, t] = f_m[j], p_m[j] - dirn * hopw * f_m[j]
             fr[m, t], am[m, t], ph[m, t], last[t], dead[t] = f_m[j], a_m[j], p_m[j], f_m[j], 0
             live += 1
     on = np.concatenate([np.zeros((1, cap), bool), am > 0, np.zeros((1, cap), bool)]).astype(np.int8)
@@ -709,18 +779,49 @@ def analyze(x: np.ndarray, sr: int = DEFAULT_SR, window_ms: float = 46.0, thresh
         model.update(t_block=Nb, t_blocks=nb, t_hop=t["hop"], t_win=t["win"], t_freq=t["freq"], t_amp=t["amp"], t_phase=t["phase"])
         s = s + _tms_render(model, 1.0, sr)[:n]
     S = stft(s, M, R, N, w)
-    res = np.maximum(np.abs(X) - np.abs(S), 0.0) ** 2
+    d = np.abs(X) - np.abs(S)
+    res = (np.abs(d) if residual == "abs" else np.maximum(d, 0.0)) ** 2
+    if residual == "time":
+        res = np.abs(stft(np.where(x >= 0, np.maximum(x, s), np.minimum(x, s)) - s, M, R, N, w)) ** 2
     edges = band_edges(sr, bands)
     kb = np.round(edges[:-1] * N / sr).astype(int)
     cnt = np.diff(np.append(kb, K))
-    noise = np.sqrt(np.add.reduceat(res, kb, axis=1) / cnt / np.sum(w * w))    # E|X|^2 = sigma^2 sum(w^2) for white noise
+    if noise_env == "max":
+        noise = np.sqrt(np.maximum.reduceat(res, kb, axis=1) / np.sum(w * w))
+    else:
+        noise = np.sqrt(np.add.reduceat(res, kb, axis=1) / cnt / np.sum(w * w))    # E|X|^2 = sigma^2 sum(w^2) for white noise
     return {**model, "noise": noise, "edges": edges}
+
+
+PARTIAL_WANDER_BOUND = 0.03          # of the track's frequency
+PARTIAL_WANDER_HOP = 256             # the hop the step is quoted for
+
+
+def _partial_walk(fr: np.ndarray, step: float, seed: int) -> np.ndarray:
+    """Frequency offsets (Hz) of the tracks of `fr` (frames x tracks): +-step per frame random walks, none on the lowest
+    third of the live tracks, `step` on the middle third, 2 `step` on the upper third; zero where a track is silent."""
+    live = fr > 0
+    cnt = live.sum(axis=0)
+    act = np.flatnonzero(cnt)
+    k = len(act)
+    scale = np.zeros(fr.shape[1])
+    order = act[np.argsort(np.sum(np.where(live, fr, 0.0), axis=0)[act] / cnt[act])]
+    scale[order[k // 3:(2 * k) // 3]] = 1.0
+    scale[order[(2 * k) // 3:]] = 2.0
+    rng = np.random.default_rng([abs(int(seed)), 72])
+    walk = np.cumsum(rng.choice([-1.0, 1.0], fr.shape), axis=0) * step * scale
+    return np.where(live, np.clip(walk, -PARTIAL_WANDER_BOUND * fr, PARTIAL_WANDER_BOUND * fr), 0.0)
 
 
 def resynth(model: dict, sr: int | None = None, stretch: float = 1.0, transpose: float = 0.0, formant: float = 0.0,
             sines_gain: float = 1.0, noise_gain: float = 1.0, seed: int = 0, phases: str = "auto",
-            transient_gain: float = 1.0) -> np.ndarray:
+            transient_gain: float = 1.0, partial_wander: float = 0.0) -> np.ndarray:
     """Render a model from `analyze` (mono), at any sample rate.
+
+    partial_wander: Hz of a random walk added to the partial frequencies, a step per analysis frame (scaled to a hop
+    of 256); the lowest third of the tracks (by mean frequency) stays put, the middle third steps by this much and the
+    upper third by twice as much, each walk bounded to 3 % of the track's frequency. Gives a resynthesised tone the
+    jitter of a real one. 0 = off.
 
     stretch: duration factor (the envelopes are resampled). transpose: semitones applied
     to the partial frequencies. formant: semitones the spectral envelope moves - 0 with a transpose
@@ -740,6 +841,8 @@ def resynth(model: dict, sr: int | None = None, stretch: float = 1.0, transpose:
     n_out = max(1, int(round(int(model["n"]) / msr * stretch * sr)))
     rho, phi = 2.0 ** (float(transpose) / 12.0), 2.0 ** (float(formant) / 12.0)
     y = np.zeros(n_out)
+    if partial_wander and fr.size:
+        fr = fr + _partial_walk(fr, float(partial_wander) * math.sqrt(R / 256.0), seed)
     if sines_gain and fr.size:
         if abs(rho - phi) > 1e-9:
             am = am.copy()
@@ -751,7 +854,7 @@ def resynth(model: dict, sr: int | None = None, stretch: float = 1.0, transpose:
         fr = fr * rho
         am = np.where(fr < 0.48 * sr, am, 0.0)
         pos = np.round((np.arange(F) * R - M // 2) / msr * stretch * sr).astype(np.int64)
-        cubic = phases == "cubic" or (phases == "auto" and stretch == 1.0 and rho == 1.0)
+        cubic = phases == "cubic" or (phases == "auto" and stretch == 1.0 and rho == 1.0 and not partial_wander)
         y += sines_gain * _osc_bank(fr, am, ph, pos, n_out, float(sr), cubic)
     nz, edges = np.array(model["noise"], float), np.array(model["edges"], float)
     if noise_gain and nz.size:
@@ -861,12 +964,57 @@ def pitch_shift(x, sr=DEFAULT_SR, semitones=0.0, formant="shift", fine=0.0, mode
 
 @effect("harmonizer", "Add pitch-shifted copies at musical intervals (formant-preserving).",
         intervals=("4 7", "semitone offsets, e.g. '4 7' (major triad), '-12', [3, 7]"), mix=(0.5, "0 = dry .. 1 = only the added voices"),
-        formant=("keep", "keep | shift (see pitch_shift)"))
-def harmonizer(x, sr=DEFAULT_SR, intervals="4 7", mix=0.5, formant="keep"):
-    iv = _floats(intervals)
-    if not iv:
+        formant=("keep", "keep | shift (see pitch_shift)"),
+        voices=("", "fixed voices in Hz or notes, e.g. 'C4 G4': each follows the input's pitch to land on that note"),
+        fallback=(True, "with voices: where the input is unvoiced the dry sound takes the voices' place"),
+        series=("", "harmonic numbers, e.g. '4 5 6': the voices sit at 12 log2(n / first) semitones, the virtual-fundamental chord (replaces intervals)"),
+        draw=(0, "with series: that many voices, each on a harmonic number drawn at random from the series after the first (0 = all of them)"),
+        seed=(0, "which harmonic numbers are drawn"))
+def harmonizer(x, sr=DEFAULT_SR, intervals="4 7", mix=0.5, formant="keep", voices="", fallback=True, series="", draw=0, seed=0):
+    iv = _floats(intervals) if not voices or str(intervals).strip() not in ("", "4 7") else []
+    if series:
+        ns = [v for v in _floats(series) if v > 0]
+        if len(ns) < 2:
+            raise ValueError("harmonizer series needs at least two harmonic numbers")
+        ns = ns[1:] if not int(draw) else list(np.random.default_rng(int(seed)).choice(ns[1:], int(draw)))
+        iv = [12.0 * math.log2(v / _floats(series)[0]) for v in ns]
+    vh = parse_pitch_list(voices) if voices else []
+    if not iv and not vh:
         return x
-    return x * (1 - mix) + sum(shift_pitch(x, sr, s, formant) for s in iv) * (mix / len(iv))
+    if not vh:
+        return x * (1 - mix) + sum(shift_pitch(x, sr, s, formant) for s in iv) * (mix / len(iv))
+    wet, v = _absolute_voices(x, sr, vh)
+    if iv:
+        wet = (wet * len(vh) + sum(shift_pitch(x, sr, s, formant) for s in iv)) / (len(vh) + len(iv))
+    vv = v if x.ndim == 1 else v[:, None]
+    dry = 1.0 - mix * (vv if fallback else 1.0)
+    return x * dry + wet * mix
+
+
+def _absolute_voices(x, sr, hz_list):
+    """Voices at fixed pitches: the sines model of the input, every frame's partials scaled by hz / f0(frame)
+    (YIN), silent where unvoiced. Returns (mean of the voices, voicing 0..1 per sample)."""
+    from .analysis import yin
+    m = to_mono(np.asarray(x, float))
+    n = len(m)
+    model = analyze(m, sr)
+    hop = int(model["hop"])
+    f0 = yin(m, sr, hop=hop / sr)
+    F = model["freq"].shape[0]
+    ctr = np.clip(np.arange(F) * hop - int(model["win"]) // 2, 0, n - 1)
+    fr = np.interp(ctr / hop, np.arange(len(f0)), f0) if len(f0) else np.zeros(F)
+    near = f0[np.clip(np.round(ctr / hop).astype(int), 0, max(len(f0) - 1, 0))] if len(f0) else np.zeros(F)
+    voiced = (near > 0).astype(float)
+    out = np.zeros(n)
+    for hz in hz_list:
+        mm = dict(model)
+        ratio = np.where(fr > 0, hz / np.maximum(fr, 1e-6), 1.0)
+        mm["freq"] = model["freq"] * ratio[:, None]
+        mm["amp"] = model["amp"] * voiced[:, None] * (mm["freq"] < 0.45 * sr)
+        out += pad_to(resynth(mm, sr, phases="free", noise_gain=0.0), n)[:n]
+    v = np.clip(np.interp(np.arange(n), ctr, voiced), 0.0, 1.0)
+    out /= len(hz_list)
+    return (out if x.ndim == 1 else np.stack([out, out], axis=1)), v
 
 
 def _voc_edges(bands: int, sr: int) -> np.ndarray:
@@ -931,8 +1079,9 @@ def vocoder(x, sr=DEFAULT_SR, carrier="saw", freq=110.0, notes="", bands=10, att
         flatten=(True, "remove the carrier's own envelope first"), smooth=(2.0, "envelope detail: cepstral cut-off in ms, below the pitch period of both sounds"),
         mix=(1.0, "wet amount"), seed=(0, "noise seed when no carrier file is given"),
         method=("envelope", "envelope (cepstral) | stamp (bin by bin: this sound's magnitudes on the carrier, finer and noisier)"),
-        squelch=(20.0, "stamp: how far a quiet carrier bin may be raised; low = its noise stays down"), amount=(1.0, "stamp: 0 = carrier only .. 1 = full stamp"))
-def cross_synth(x, sr=DEFAULT_SR, carrier=None, flatten=True, smooth=2.0, mix=1.0, seed=0, method="envelope", squelch=20.0, amount=1.0):
+        squelch=(20.0, "stamp: how far a quiet carrier bin may be raised; low = its noise stays down"), amount=(1.0, "stamp: 0 = carrier only .. 1 = full stamp"),
+        balance=(0.0, "envelope, flatten: 0 = the level follows this sound, 1 = the carrier, in between = the dB mix per frame"))
+def cross_synth(x, sr=DEFAULT_SR, carrier=None, flatten=True, smooth=2.0, mix=1.0, seed=0, method="envelope", squelch=20.0, amount=1.0, balance=0.0):
     """Y = Xc / env(Xc) * env(Xm), cepstral envelopes, carrier phase kept. stamp: g[k] = c[k] min(1 / f[k], squelch^2 / 100), exponent p."""
     n = x.shape[0]
     if n < 16:
@@ -961,9 +1110,18 @@ def cross_synth(x, sr=DEFAULT_SR, carrier=None, flatten=True, smooth=2.0, mix=1.
         wet = _per_channel(stamp, x)
         wet = wet * (_rms(x) / (_rms(wet) + 1e-12))
         return x * (1 - mix) + wet * mix
+    bal = float(np.clip(balance, 0.0, 1.0)) if flatten else 0.0
+    b_db = np.mean(20 * np.log10(np.abs(Xc) + 1e-12), axis=-1, keepdims=True)
     if flatten:
         Xc = Xc / np.maximum(cepstral_envelope(np.abs(Xc), n_c), 1e-4 * np.abs(Xc).max() + 1e-12)
-    wet = _per_channel(lambda s: istft(Xc * cepstral_envelope(np.abs(stft(s, M, N=2 * M)), n_c), n, M), x)
+
+    def put(s):
+        E = cepstral_envelope(np.abs(stft(s, M, N=2 * M)), n_c)
+        if bal > 0.0:                                     # level per frame: (1 - bal) mean dB of this envelope + bal mean dB of the carrier
+            E = E * 10 ** (bal * (b_db - np.mean(20 * np.log10(E + 1e-12), axis=-1, keepdims=True)) / 20)
+        return istft(Xc * E, n, M)
+
+    wet = _per_channel(put, x)
     if not flatten:
         wet = wet * (_rms(x) / (_rms(wet) + 1e-12))
     return x * (1 - mix) + wet * mix
@@ -1026,6 +1184,26 @@ def noise_only(x, sr=DEFAULT_SR, thresh=-50.0, seed=0):
     return _per_channel(lambda s: resynth(analyze(s, sr, thresh_db=float(thresh)), sines_gain=0.0, seed=int(seed)), x)
 
 
+@effect("scramble", "Keep every magnitude of the whole spectrum and give it random phases: a steady texture of the same colour that loops with no seam.",
+        seed=(0, "phase seed"))
+def scramble(x, sr=DEFAULT_SR, seed=0):
+    n = x.shape[0]
+    if n < 4:
+        return x
+    rng = np.random.default_rng(int(seed))
+
+    def one(s):
+        X = np.fft.rfft(s)
+        X = np.abs(X) * np.exp(1j * rng.uniform(-np.pi, np.pi, X.shape))
+        X[0] = 0.0
+        X[-1] = 0.0
+        y = np.fft.irfft(X, n)
+        m = float(np.max(np.abs(y)))
+        return y * (float(np.max(np.abs(s))) / m) if m > 1e-12 else y
+
+    return _per_channel(one, x)
+
+
 @effect("freeze", "Hold the sound at one instant for a while (spectral freeze), then let it continue.",
         at=(0.2, "time of the frozen instant, seconds"), length=(2.0, "seconds of frozen sound inserted"),
         jitter=(20.0, "ms of random read-position jitter around `at` (0 = static, glassy; more = alive)"), seed=(0, "jitter seed"))
@@ -1045,6 +1223,34 @@ def freeze(x, sr=DEFAULT_SR, at=0.2, length=2.0, jitter=20.0, seed=0):
     pos = np.where(t < a, t, np.where(t < a + L, np.clip(a + j, 0, n - 1), t - L))
     pos = np.round(pos).astype(int)
     return _per_channel(lambda s: _pv(s, pos, M)[M:M + n + L], x)
+
+
+@effect("fallaway", "Fall-away gesture: the sound is frozen at one instant, then its pitch falls and it fades out (a frozen tail dropping away).",
+        at=(0.2, "time of the frozen instant, seconds (the sound after it is replaced)"), length=(2.0, "seconds of the fall"),
+        fall=(12.0, "semitones the pitch has dropped at the end (rate 2^(-fall/12))"),
+        curve=(2.0, "shape of the drop in time: 1 linear in semitones, >1 slow at first and faster at the end"),
+        level=(-40.0, "dB reached at the end of the fall (the fade is linear in dB)"),
+        jitter=(20.0, "ms of read jitter of the freeze (as `freeze`)"), seed=(0, "jitter seed"))
+def fallaway(x, sr=DEFAULT_SR, at=0.2, length=2.0, fall=12.0, curve=2.0, level=-40.0, jitter=20.0, seed=0):
+    n = x.shape[0]
+    a = int(np.clip(float(at) * sr, 0, n - 1))
+    L = int(max(0.05, float(length)) * sr)
+    y = freeze(x, sr, at, length, jitter, seed)
+    u = np.arange(L) / L
+    rate = 2.0 ** (-float(fall) / 12.0 * u ** float(np.clip(curve, 0.1, 10.0)))
+    idx = np.minimum(np.concatenate(([0.0], np.cumsum(rate)[:-1])), L - 1.0)
+    g = 10.0 ** (float(level) / 20.0 * u)
+
+    def tail(s):
+        seg = s[a:a + L]
+        k = np.minimum(idx, len(seg) - 1.0)
+        return np.interp(k, np.arange(len(seg)), seg) * g[:len(seg)] if len(seg) > 1 else seg
+
+    def one(s):
+        t = tail(s)
+        return np.concatenate((s[:a], t))
+
+    return _per_channel(one, y)
 
 
 @effect("spectral_blur", "Smear the spectrum in time (and optionally frequency): washes attacks into a pad-like sustain.",
@@ -1152,13 +1358,14 @@ def spectral_tilt(x, sr=DEFAULT_SR, slope=-3.0, pivot=1000.0):
 def _layer_resynth(layer: dict, sr: int, q: float) -> np.ndarray:
     """{"type": "resynth", "path": "in.wav", "stretch": 1.0, "transpose": 0, "formant": 0, "sines": 1, "noise": 1}
     optional: "window_ms" (46; analysis window, at least 4 periods of the lowest pitch), "seed" (noise),
-    "transients" (false; a gain: true or 1 keeps attacks and clicks sharp and unstretched, 0.5 halves them)."""
+    "transients" (false; a gain: true or 1 keeps attacks and clicks sharp and unstretched, 0.5 halves them),
+    "partial_wander" (0; Hz step of a random walk on the partial frequencies, 15 for a flute)."""
     x, fsr = read_wav(layer["path"])
     wms = float(layer.get("window_ms", 46.0))
     tg = float(layer.get("transients", 0.0))
     kw = dict(stretch=float(layer.get("stretch", 1.0)), transpose=float(layer.get("transpose", 0.0)), formant=float(layer.get("formant", 0.0)),
               sines_gain=float(layer.get("sines", 1.0)), noise_gain=float(layer.get("noise", 1.0)), seed=int(layer.get("seed", 0)),
-              transient_gain=tg)
+              transient_gain=tg, partial_wander=float(layer.get("partial_wander", 0.0)))
     return _per_channel(lambda s: resynth(analyze(s, fsr, window_ms=wms, transients=bool(tg)), sr=sr, **kw), x)
 
 
@@ -1318,9 +1525,11 @@ def pitch_marks(x, sr=DEFAULT_SR, f0=None):
     return np.array(marks, np.int64), np.array(voiced, bool)
 
 
-def psola(x, sr=DEFAULT_SR, semitones=0.0, factor=1.0, f0=None):
+def psola(x, sr=DEFAULT_SR, semitones=0.0, factor=1.0, f0=None, reverse_repeats=False):
     """TD-PSOLA: two-period Hann grains cut at the pitch marks, re-spaced by period / pitch ratio
-    (voiced) and repeated or dropped to follow the time `factor`. Formants stay in place."""
+    (voiced) and repeated or dropped to follow the time `factor`. Formants stay in place. `reverse_repeats`: an
+    unvoiced grain used twice in a row is played time-reversed the second time (a slowed noise otherwise gets a
+    tonal buzz from the regular repetition)."""
     x = np.asarray(x, float)
     n = x.shape[0]
     alpha = 2.0 ** (float(semitones) / 12.0)
@@ -1337,6 +1546,7 @@ def psola(x, sr=DEFAULT_SR, semitones=0.0, factor=1.0, f0=None):
     pad = int(per.max()) + 1
     xp = np.concatenate([np.zeros((pad, x2.shape[1])), x2, np.zeros((pad, x2.shape[1]))])
     t = float(marks[0]) * factor
+    last = -1
     while t < n_out:
         k = int(np.clip(np.searchsorted(marks, t / factor), 0, len(marks) - 1))
         if k > 0 and abs(marks[k - 1] - t / factor) < abs(marks[k] - t / factor):
@@ -1345,8 +1555,12 @@ def psola(x, sr=DEFAULT_SR, semitones=0.0, factor=1.0, f0=None):
         w = np.hanning(2 * T + 1)
         c = int(marks[k]) + pad
         o = int(round(t)) - T + pad
+        g = xp[c - T:c + T + 1]
+        if reverse_repeats and k == last and not voiced[k]:
+            g = g[::-1]
+        last = k
         if o >= 0:
-            y[o:o + 2 * T + 1] += xp[c - T:c + T + 1] * w[:, None]
+            y[o:o + 2 * T + 1] += g * w[:, None]
             ws[o:o + 2 * T + 1] += w
         t += T / alpha if voiced[k] else T
     y = (y / np.maximum(ws, 1.0)[:, None])[pad:pad + n_out]
@@ -1414,6 +1628,7 @@ def _grain_run(x, n_out, cap, hop, L, back, ratio, gl, gr, fb, freeze_n, win, fa
     age = np.full(V, -1, np.int64)
     gid = np.zeros(V, np.int64)
     pos = np.zeros(V)
+    off = np.zeros(V)
     w = 0
     dx = 0.0
     dy = 0.0
@@ -1425,7 +1640,8 @@ def _grain_run(x, n_out, cap, hop, L, back, ratio, gl, gr, fb, freeze_n, win, fa
                 if age[s] < 0:
                     age[s] = 0
                     gid[s] = nxt
-                    pos[s] = w - back[nxt]
+                    off[s] = n - nxt * hop
+                    pos[s] = w - back[nxt] + off[s] * ratio
                     break
             nxt += 1
         sl = 0.0
@@ -1435,7 +1651,8 @@ def _grain_run(x, n_out, cap, hop, L, back, ratio, gl, gr, fb, freeze_n, win, fa
             if a < 0:
                 continue
             j = gid[s]
-            t = (a + 0.5) / L
+            ao = a + off[s]
+            t = min((ao + 0.5) / L, 1.0)
             if win == 0:
                 e = 0.5 - 0.5 * math.cos(2.0 * math.pi * t)
             elif win == 1:
@@ -1447,7 +1664,7 @@ def _grain_run(x, n_out, cap, hop, L, back, ratio, gl, gr, fb, freeze_n, win, fa
             elif win == 2:
                 e = math.exp(-5.0 * t) * (1.0 - t)
             else:
-                e = min(1.0, (a + 0.5) / fade, (L - a - 0.5) / fade)
+                e = max(0.0, min(1.0, (ao + 0.5) / fade, (L - ao - 0.5) / fade))
             p = pos[s]
             i1 = int(math.floor(p))
             f = p - i1
@@ -1473,7 +1690,8 @@ def _grain_run(x, n_out, cap, hop, L, back, ratio, gl, gr, fb, freeze_n, win, fa
 
 def grains(x, sr=DEFAULT_SR, density=20.0, size=0.08, spray=0.2, position=0.05, spread=0.5, pitch=0.0,
            feedback=0.0, freeze=None, window="hann", overlap="normal", tail=None, seed=0):
-    """Grain cloud read from a 6 s ring buffer the input is written into. Each grain starts
+    """Grain cloud read from a 6 s ring buffer the input is written into. Grains start every sr / density
+    samples (fractional: window and read pointer are offset by the sub-sample part). Each grain starts
     `back` = clip(0.9 position + 0.9 rnd spray, span / ring, 0.98) of the ring behind the write head
     (span = grain x max(ratio, 1) + 64), is read at `pitch` semitones (Catmull-Rom) and panned at
     theta = (pan / 2 + 1 / 2) pi / 2. `freeze` (s) stops recording; `feedback` (<= 0.95, DC-blocked)
@@ -1483,7 +1701,7 @@ def grains(x, sr=DEFAULT_SR, density=20.0, size=0.08, spray=0.2, position=0.05, 
     m = to_mono(np.asarray(x, float))
     n = len(m)
     density = float(np.clip(density, 0.5, 200.0))
-    hop = max(1, int(round(sr / density)))
+    hop = max(1.0, sr / density)
     L = max(16, int(float(np.clip(size, 0.005, 1.0)) * sr))
     ratio = 2.0 ** (float(np.clip(pitch, -36, 36)) / 12.0)
     cap = int(GRAIN_RING_S * sr)
@@ -1493,7 +1711,7 @@ def grains(x, sr=DEFAULT_SR, density=20.0, size=0.08, spray=0.2, position=0.05, 
     if tail is None:
         tail = (min(back_frac, 0.98) * cap + L) / sr
     n_out = n + int(max(float(tail), 0.0) * sr)
-    G = n_out // hop + 1
+    G = int(n_out / hop) + 1
     rng = np.random.default_rng(int(seed))
     fr = np.clip(0.9 * float(position) + 0.9 * rng.random(G) * float(np.clip(spray, 0, 1)), span / cap, hi)
     pan = float(np.clip(spread, 0, 1)) * rng.uniform(-1.0, 1.0, G)
@@ -1560,36 +1778,48 @@ def granulate(x, sr=DEFAULT_SR, grain=0.08, window=0.1, overlap=2.0, pitch_var=0
 FOG_DEFAULTS = dict(dens=80.0, trans=1.0, spd=0.0, band=50.0, ris=0.01, dec=0.07, dur=0.1)
 
 
-def fof_envelope(n: int, sr: int, band: float, ris: float, dec: float) -> np.ndarray:
-    """FOF grain envelope: half-cosine rise over ``ris`` s, exp(-pi band t) body, half-cosine fall over the last ``dec`` s."""
-    t = np.arange(n) / sr
-    e = np.exp(-math.pi * band * t)
+def fof_envelope(n: int, sr: int, band: float, ris: float, dec: float, offset: float = 0.0,
+                 preamp: bool = False) -> np.ndarray:
+    """FOF grain envelope: half-cosine rise over ``ris`` s, exp(-pi band t) body, half-cosine fall over the last ``dec`` s.
+    ``offset``: the grain started that fraction of a sample earlier; ``preamp`` scales by exp(pi band ris) so the
+    peak at the end of the rise is 1 whatever band x ris."""
+    k = np.arange(n) + float(offset)
+    e = np.exp(-math.pi * band * k / sr)
     r = min(int(ris * sr), n)
     if r > 0:
-        e[:r] *= 0.5 * (1.0 - np.cos(np.pi * np.arange(r) / r))
+        e[:r] *= 0.5 * (1.0 - np.cos(np.pi * np.minimum(k[:r] / r, 1.0)))
+        if preamp:
+            e *= math.exp(math.pi * band * r / sr)
     d = min(int(dec * sr), n)
     if d > 0:
-        e[n - d:] *= 0.5 * (1.0 + np.cos(np.pi * np.arange(d) / d))
+        e[n - d:] *= 0.5 * (1.0 + np.cos(np.pi * np.minimum((np.arange(d) + float(offset)) / d, 1.0)))
     return e
 
 
-def fog(x, sr=DEFAULT_SR, dens=80.0, trans=1.0, spd=0.0, band=50.0, ris=0.01, dec=0.07, dur=0.1):
+def fog(x, sr=DEFAULT_SR, dens=80.0, trans=1.0, spd=0.0, band=50.0, ris=0.01, dec=0.07, dur=0.1, pos=None,
+        preamp=True):
     """FOF granulation of a sample table: ``dens`` grains per second, each reading the table from the pointer
-    (``spd`` table passes per second) at speed ``trans`` under a FOF envelope ``dur`` s long."""
+    (``spd`` table passes per second, or the absolute position ``pos`` 0..1, scalar or per output sample) at speed
+    ``trans`` under a FOF envelope ``dur`` s long, peak 1 with ``preamp``. Grains start at their exact fractional
+    instant: envelope and read pointer carry the sub-sample offset (4-point Lagrange read)."""
     tab = to_mono(np.asarray(x, float))
     L = len(tab)
     if L < 2:
         return tab.copy()
     g = max(2, int(float(dur) * sr))
-    env = fof_envelope(g, sr, float(band), float(ris), float(dec))
     idx = np.arange(g) * float(trans)
     y = np.zeros(L + g)
     step = sr / float(np.clip(dens, 1.0, 2000.0))
+    pa = None if pos is None else O._freq_array(pos, L)
     t = 0.0
     while t < L:
-        s = int(t)
-        p0 = (float(spd) * s / sr) % 1.0 * L
-        y[s:s + g] += np.interp((p0 + idx) % L, np.arange(L), tab) * env
+        s = int(math.ceil(t))
+        if s >= L:
+            break
+        off = s - t
+        env = fof_envelope(g, sr, float(band), float(ris), float(dec), off, bool(preamp))
+        p0 = ((float(spd) * t / sr) % 1.0 if pa is None else float(pa[s]) % 1.0) * L
+        y[s:s + g] += O.table_read(tab, p0 + idx + off * float(trans)) * env
         t += step
     return y[:L] / math.sqrt(max(float(dens) * float(dur), 1.0))
 
@@ -1598,9 +1828,10 @@ def fog(x, sr=DEFAULT_SR, dens=80.0, trans=1.0, spd=0.0, band=50.0, ris=0.01, de
         dens=(80.0, "grains per second"), trans=(1.0, "read speed inside each grain (2 = an octave up)"),
         spd=(0.0, "table passes per second of the grain start pointer (0 = every grain starts at the beginning)"),
         band=(50.0, "Hz: grain decay exp(-pi band t)"), ris=(0.01, "s grain rise"), dec=(0.07, "s grain fall at its end"),
-        dur=(0.1, "s grain length"))
-def fog_fx(x, sr=DEFAULT_SR, dens=80.0, trans=1.0, spd=0.0, band=50.0, ris=0.01, dec=0.07, dur=0.1):
-    y = fog(x, sr, dens, trans, spd, band, ris, dec, dur)
+        dur=(0.1, "s grain length"), pos=(None, "absolute read position 0..1 for every grain (replaces spd; freeze or scrub)"),
+        preamp=(True, "grain peak = 1 whatever band x ris (false: the decay during the rise lowers it)"))
+def fog_fx(x, sr=DEFAULT_SR, dens=80.0, trans=1.0, spd=0.0, band=50.0, ris=0.01, dec=0.07, dur=0.1, pos=None, preamp=True):
+    y = fog(x, sr, dens, trans, spd, band, ris, dec, dur, pos, preamp)
     return np.stack([y, y], axis=1) if np.asarray(x).ndim == 2 else y
 
 
@@ -1643,3 +1874,359 @@ def tf_pad(x, sr=DEFAULT_SR, curve="0:0,1:0", density=40.0, size=0.08, seed=0):
 def tf_pad_fx(x, sr=DEFAULT_SR, curve="0:0,1:0", density=40.0, size=0.08, seed=0):
     y = tf_pad(x, sr, curve, density, size, seed)
     return np.stack([y, y], axis=1) if np.asarray(x).ndim == 2 else y
+
+
+# ==========================================================================================
+# Amplitude-frequency frames, partial-track operations, coherent spectral recipes
+# ==========================================================================================
+
+def _other(path, n, sr):
+    o, osr = read_wav(path)
+    o = to_mono(o)
+    if osr != sr:
+        r = Fraction(sr, osr)
+        o = resample_poly(o, r.numerator, r.denominator)
+    return np.resize(o, n)
+
+
+def pv_analyze(x, sr=DEFAULT_SR, M=2048, R=None):
+    """Mono x -> (amp, freq, phase), each (frames, M/2 + 1): magnitude, instantaneous frequency in Hz from the phase
+    advance between frames (principal value around the bin's own advance), phase at the frame centre."""
+    R = R or M // 4
+    X = stft(np.asarray(x, float), M, R)
+    ph = np.angle(X)
+    k = np.arange(X.shape[1])
+    adv = 2 * np.pi * k * R / M
+    d = np.diff(ph, axis=0, prepend=ph[:1] - adv[None, :]) - adv
+    d = (d + np.pi) % (2 * np.pi) - np.pi
+    return np.abs(X), (k + d * M / (2 * np.pi * R)) * sr / M, ph
+
+
+def pv_synth(amp, freq, n, sr=DEFAULT_SR, M=2048, R=None, phase0=None):
+    """Inverse of `pv_analyze`: each bin's phase integrates its frequency from ``phase0`` (default 0), then WOLA."""
+    R = R or M // 4
+    inc = 2 * np.pi * np.asarray(freq) * R / sr
+    ph = np.cumsum(inc, axis=0) - inc[:1] + (0.0 if phase0 is None else phase0)
+    return istft(np.asarray(amp) * np.exp(1j * ph), n, M, R)
+
+
+def pv_mix(x, y, sr=DEFAULT_SR, M=2048):
+    """Bin by bin, the louder (amplitude, frequency) pair of the two sounds."""
+    n = len(x)
+    a1, f1, p1 = pv_analyze(x, sr, M)
+    a2, f2, _ = pv_analyze(pad_to(np.asarray(y, float), n)[:n], sr, M)
+    w = a2 > a1
+    return pv_synth(np.where(w, a2, a1), np.where(w, f2, f1), n, sr, M, phase0=p1[0])
+
+
+def pv_freeze(x, sr=DEFAULT_SR, at=0.2, length=1.0, amp=True, freq=True, M=2048):
+    """Holds the amplitudes and / or the frequencies of the frame at ``at`` s for ``length`` s; what is not held keeps
+    moving (amp only: the levels stop, the pitches drift on; freq only: the pitches stop, the levels follow)."""
+    n = len(x)
+    A, Fq, P = pv_analyze(x, sr, M)
+    R = M // 4
+    i0 = int(np.clip((float(at) * sr + M / 2) / R, 0, len(A) - 1))
+    i1 = int(np.clip((float(at + length) * sr + M / 2) / R, i0, len(A)))
+    if amp:
+        A[i0:i1] = A[i0]
+    if freq:
+        Fq[i0:i1] = Fq[i0]
+    return pv_synth(A, Fq, n, sr, M, phase0=P[0])
+
+
+def pv_osc(freq, n, sr=DEFAULT_SR, wave="saw", M=2048):
+    """Oscillator built in the frequency domain: each harmonic of ``wave`` (sine, saw, square, triangle) under 0.45 sr
+    is the nearest bin turning at h times the fundamental's integrated phase (sine series; cosine for the triangle),
+    resynthesised by WOLA."""
+    R = M // 4
+    F = -(-(n + M - 1) // R) + 1
+    f = np.interp(np.arange(F) * R - M / 2, np.arange(n), O._freq_array(freq, n))
+    th = np.cumsum(2 * np.pi * f * R / sr)
+    th -= th[0]
+    X = np.zeros((F, M // 2 + 1), complex)
+    rows = np.arange(F)
+    q = 0.0 if wave == "triangle" else -np.pi / 2
+    for h in range(1, int(0.45 * sr / max(float(np.min(f)), 1.0)) + 1):
+        if wave == "sine" and h > 1:
+            break
+        a = {"sine": 1.0, "saw": 2.0 / (np.pi * h), "square": 4.0 / (np.pi * h) * (h % 2),
+             "triangle": 8.0 / (np.pi * h) ** 2 * (h % 2)}[wave]
+        live = h * f < 0.45 * sr
+        b = np.clip(np.round(h * f * M / sr).astype(int), 1, M // 2)
+        X[rows[live], b[live]] += a * np.pi * M / 8.0 * np.exp(1j * (h * th[live] + q))
+    return istft(X, n, M, R)
+
+
+def track_filter(model: dict, curve) -> dict:
+    """Partial tracks of an `analyze` model through a gain curve 'Hz:dB, ...' read at each partial's frequency."""
+    xs, ys = _curve_points(curve)
+    m = dict(model)
+    m["amp"] = model["amp"] * 10.0 ** (np.interp(model["freq"], xs, ys) / 20.0)
+    return m
+
+
+def track_cross(a: dict, b: dict, band: float = 0.03, mode: str = "replace") -> dict:
+    """Cross-synthesis of two `analyze` models: a partial of ``a`` with a partial of ``b`` within ``band`` (ratio) in the
+    same instant takes its amplitude (``replace``) or is scaled by its level relative to the loudest (``multiply``);
+    partials of ``a`` with no partner fall silent."""
+    Fa, Fb = a["freq"].shape[0], b["freq"].shape[0]
+    t = np.arange(Fa) * float(a["hop"]) / float(a["sr"])
+    jb = np.minimum((t * float(b["sr"]) / float(b["hop"])).astype(int), Fb - 1)
+    fa, fb = a["freq"], b["freq"][jb]
+    ab = b["amp"][jb]
+    d = np.abs(np.log(np.maximum(fa[:, :, None], 1e-6) / np.maximum(fb[:, None, :], 1e-6)))
+    d = np.where(ab[:, None, :] > 0, d, np.inf)
+    j = np.argmin(d, axis=2)
+    hit = np.take_along_axis(d, j[:, :, None], 2)[:, :, 0] < math.log1p(float(band))
+    pa = np.take_along_axis(ab, j, 1)
+    m = dict(a)
+    if mode == "multiply":
+        m["amp"] = a["amp"] * hit * pa / max(float(ab.max()), 1e-12)
+    else:
+        m["amp"] = np.where(hit & (a["amp"] > 0), pa, 0.0)
+    return m
+
+
+def heterodyne(x, sr=DEFAULT_SR, freq=440.0, cutoff=20.0):
+    """One partial by heterodyning: x e^(-i 2 pi f t) through a 2-pole lowpass at ``cutoff`` Hz on its real and
+    imaginary parts. Returns (amplitude, phase) per sample (amplitude 2 |z|)."""
+    from scipy.signal import butter, sosfilt
+    x = to_mono(np.asarray(x, float))
+    z = x * np.exp(-2j * np.pi * O.phase(freq, len(x), sr))
+    sos = butter(2, float(cutoff), fs=sr, output="sos")
+    z = sosfilt(sos, z.real) + 1j * sosfilt(sos, z.imag)
+    return 2.0 * np.abs(z), np.angle(z)
+
+
+def _mono_model(x, sr):
+    m = to_mono(np.asarray(x, float))
+    return m, analyze(m, sr)
+
+
+def _as_input(y, x):
+    return np.stack([y, y], axis=1) if np.asarray(x).ndim == 2 else y
+
+
+@effect("pv_mix", "Spectral mix of two sounds: in every bin the louder (amplitude, frequency) pair wins.",
+        other=("", "WAV file, looped to length"), mix=(1.0, "0 = dry .. 1 = mixed"))
+def pv_mix_fx(x, sr=DEFAULT_SR, other="", mix=1.0):
+    n = x.shape[0]
+    o = _other(other, n, sr)
+    M = _win_len(46.0, sr)
+    return _per_channel(lambda s: (1 - mix) * s + mix * pv_mix(s, o, sr, M), np.asarray(x, float))
+
+
+@effect("pv_freeze", "Hold the levels and / or the pitches of one moment while the rest moves on.",
+        at=(0.2, "s: the frame held"), length=(1.0, "s held"), amp=(True, "hold the levels"), freq=(True, "hold the frequencies"))
+def pv_freeze_fx(x, sr=DEFAULT_SR, at=0.2, length=1.0, amp=True, freq=True):
+    M = _win_len(46.0, sr)
+    return _per_channel(lambda s: pv_freeze(s, sr, at, length, bool(amp), bool(freq), M), np.asarray(x, float))
+
+
+@effect("partial_filter", "Filter the partials themselves: sines + noise analysis, each partial scaled by a drawn curve, resynthesised.",
+        curve=("0:0,2000:0,4000:-30", "points 'Hz:dB'"), noise=(1.0, "noise residual kept 0..1"))
+def partial_filter(x, sr=DEFAULT_SR, curve="0:0,2000:0,4000:-30", noise=1.0):
+    m, model = _mono_model(x, sr)
+    y = pad_to(resynth(track_filter(model, curve), sr, noise_gain=float(noise)), len(m))[:len(m)]
+    return _as_input(y, x)
+
+
+@effect("partial_cross", "Partial cross-synthesis: the partials of this sound keep only where the other sound has a partial near them, with its level.",
+        other=("", "WAV file, looped to length"), band=(0.03, "match tolerance (ratio, 0.03 = half a semitone)"),
+        mode=("replace", "replace (the other's levels) | multiply (scaled by them)"))
+def partial_cross(x, sr=DEFAULT_SR, other="", band=0.03, mode="replace"):
+    m, a = _mono_model(x, sr)
+    _, b = _mono_model(_other(other, len(m), sr), sr)
+    y = pad_to(resynth(track_cross(a, b, float(band), str(mode)), sr, noise_gain=0.0), len(m))[:len(m)]
+    return _as_input(y * (_rms(m) / (_rms(y) + 1e-12)), x)
+
+
+def pvoc_reverb(x, sr=DEFAULT_SR, t60=3.0, mix=0.4, window_ms=93.0):
+    """Coherent phase-vocoder reverb: each bin holds an amplitude that decays at ``t60`` and turns at the phase
+    increment it was measured with; a new (amplitude, phase, increment) is punched in only where the input bin is a
+    peak (above both neighbours) and louder than what the bin holds. The tail keeps the input's partials."""
+    x = np.asarray(x, float)
+    M = _win_len(window_ms, sr)
+    R = M // 4
+    tail = int(min(1.2 * float(t60) + 0.1, 10.0) * sr)
+    g = 10.0 ** (-3.0 * R / (sr * max(float(t60), 0.05)))
+
+    def one(s):
+        n = len(s) + tail
+        X = stft(pad_to(s, n), M, R)
+        A, ph = np.abs(X), np.angle(X)
+        adv = 2 * np.pi * np.arange(X.shape[1]) * R / M
+        inc = adv + ((np.diff(ph, axis=0, prepend=ph[:1] - adv) - adv + np.pi) % (2 * np.pi) - np.pi)
+        As, ps, Is = np.zeros(X.shape[1]), np.zeros(X.shape[1]), adv.copy()
+        Y = np.zeros_like(X)
+        for m in range(X.shape[0]):
+            As *= g
+            ps += Is
+            a = A[m]
+            hit = (a > As) & (a > np.roll(a, 1)) & (a > np.roll(a, -1))
+            As[hit], ps[hit], Is[hit] = a[hit], ph[m][hit], inc[m][hit]
+            Y[m] = As * np.exp(1j * ps)
+        return istft(Y, n, M, R)
+
+    wet = _per_channel(one, x)
+    return (1.0 - mix) * pad_to(x, wet.shape[0]) + mix * wet
+
+
+@effect("pvoc_reverb", "Coherent spectral reverb: partials ring on with their own measured phase advance, new ones punched in at louder peaks (piano-like tails).",
+        t60=(3.0, "s decay"), mix=(0.4, "wet 0..1"), window_ms=(93.0, "analysis window (longer = finer partials)"))
+def pvoc_reverb_fx(x, sr=DEFAULT_SR, t60=3.0, mix=0.4, window_ms=93.0):
+    return pvoc_reverb(x, sr, t60, mix, window_ms)
+
+
+def tonal_mask(s, sr=DEFAULT_SR, M=2048, threshold=0.7):
+    """Per (frame, bin): True where the bin and both neighbours are phase-coherent (cos of the phase difference
+    above ``threshold``, zero-phase Hann frames): a sinusoid's main lobe; noise has random neighbour phases."""
+    Xh = stft(np.asarray(s, float), M, w=window(M))
+    c = np.cos(np.angle(Xh[:, :-1]) - np.angle(Xh[:, 1:])) > float(threshold)
+    mask = np.zeros(Xh.shape, bool)
+    mask[:, 1:-1] = c[:, :-1] & c[:, 1:]
+    return mask
+
+
+@effect("tonal_split", "Split tones from noise by phase coherence between neighbouring bins (keeps or removes the sinusoids).",
+        keep=("tonal", "tonal | noise"), threshold=(0.7, "coherence threshold 0..1 (higher = stricter tones)"))
+def tonal_split(x, sr=DEFAULT_SR, keep="tonal", threshold=0.7):
+    M = _win_len(46.0, sr)
+
+    def one(s):
+        mk = tonal_mask(s, sr, M, threshold)
+        return istft(stft(s, M) * (mk if keep == "tonal" else ~mk), len(s), M)
+
+    return _per_channel(one, np.asarray(x, float))
+
+
+@effect("whiten", "Bounded spectral whitening: every bin pulled to the frame's mean level, boosted by at most `squelch` dB.",
+        squelch=(20.0, "dB: largest boost of a quiet bin"), amount=(1.0, "0 = untouched .. 1 = flat"))
+def whiten(x, sr=DEFAULT_SR, squelch=20.0, amount=1.0):
+    M = _win_len(46.0, sr)
+    top = 10.0 ** (float(squelch) / 20.0)
+
+    def one(s):
+        X = stft(s, M)
+        A = np.abs(X)
+        g = np.minimum(A.mean(axis=1, keepdims=True) / (A + 1e-20), top) ** float(amount)
+        y = istft(X * g, len(s), M)
+        return y * (_rms(s) / (_rms(y) + 1e-12))
+
+    return _per_channel(one, np.asarray(x, float))
+
+
+@effect("talkbox", "LPC cross-synthesis (talk box): the sound's vocal-tract filter, frame by frame, on a flattened carrier.",
+        carrier=("saw", "saw | pulse | noise | chord, or a WAV file"), freq=(110.0, "carrier pitch: Hz or note"),
+        notes=("", "carrier chord, e.g. 'C3 G3 C4' (replaces freq)"), order=(0, "LPC order (0 = sr / 1000 + 4)"),
+        mix=(1.0, "0 = dry .. 1 = talk box"), seed=(0, "noise seed"))
+def talkbox(x, sr=DEFAULT_SR, carrier="saw", freq=110.0, notes="", order=0, mix=1.0, seed=0):
+    from .core import resample
+    from .physical import analysis as PA
+    m = to_mono(np.asarray(x, float))
+    n = len(m)
+    if carrier in ("saw", "pulse", "noise", "chord"):
+        car = _carrier(carrier, n, sr, freq, notes, int(seed))
+    else:
+        car = _other(carrier, n, sr)
+    m48, c48 = resample(m, sr, PA.SR), resample(car, sr, PA.SR)
+    p = int(order) or None
+    tr, _ = PA.analyse(m48, order=p, want_pitch=False)
+    _, ex = PA.analyse(c48, order=p, want_pitch=False)
+    y = pad_to(resample(PA.resynth(pad_to(ex, len(m48))[:len(m48)], tr), PA.SR, sr), n)[:n]
+    y *= min(_rms(m) / (_rms(y) + 1e-12), float(np.max(np.abs(m))) / (float(np.max(np.abs(y))) + 1e-12))
+    return (1.0 - mix) * np.asarray(x, float) + mix * _as_input(y, x)
+
+
+def _per_grain(v, G, rng, log=False):
+    if np.isscalar(v):
+        return np.full(G, float(v))
+    v = np.asarray(v, float)
+    if v.size == 2:
+        lo, hi = float(v[0]), float(v[1])
+        if log and lo > 0 and hi > 0:
+            return np.exp(rng.uniform(math.log(lo), math.log(hi), G))
+        return rng.uniform(lo, hi, G)
+    return np.resize(v, G)
+
+
+def grain_cloud(n, sr=DEFAULT_SR, density=30.0, dur=(0.02, 0.08), freq=(300.0, 3000.0), amp=(0.25, 0.5), pan=0.0,
+                kind="sine", ratio=2.0, index=(0.0, 3.0), buf=None, rate=1.0, position=(0.0, 1.0), poisson=True,
+                times=None, seed=0):
+    """Cloud of grains with parameters per grain: every one of ``dur`` (s), ``freq`` (Hz), ``amp``, ``pan`` (-1..1),
+    ``index``, ``rate``, ``position`` (0..1 in ``buf``) is a scalar, a (lo, hi) range drawn per grain (freq and rate
+    log-uniform) or a longer list of per-grain values. Grains: ``kind`` sine, fm (modulator at ``ratio``) or buf
+    (reads ``buf`` from ``position`` at ``rate``), Hann windowed, starting at fractional instants (Poisson arrivals at
+    ``density`` per second, or regular, or the given ``times`` in s). Stereo (equal power) when a pan is non-zero."""
+    rng = np.random.default_rng(int(seed))
+    if times is None:
+        gaps = rng.exponential(1.0 / density, int(n / sr * density * 2) + 8) if poisson else np.full(int(n / sr * density) + 2, 1.0 / density)
+        t0 = np.cumsum(gaps) - (gaps[0] if not poisson else 0.0)
+        t0 = t0[t0 * sr < n]
+    else:
+        t0 = np.asarray(times, float)
+    G = len(t0)
+    D, Fq, A, P = (_per_grain(dur, G, rng), _per_grain(freq, G, rng, True), _per_grain(amp, G, rng),
+                   np.clip(_per_grain(pan, G, rng), -1.0, 1.0))
+    I, Rt, Ps = _per_grain(index, G, rng), _per_grain(rate, G, rng, True), _per_grain(position, G, rng)
+    stereo = bool(np.any(P != 0))
+    out = np.zeros((n, 2)) if stereo else np.zeros(n)
+    from .reverbs import read_frac
+    b = None if buf is None else to_mono(np.asarray(buf, float))
+    for g in range(G):
+        s0 = int(math.ceil(t0[g] * sr))
+        off = s0 - t0[g] * sr
+        L = max(4, int(D[g] * sr))
+        k = np.arange(min(L, n - s0)) + off
+        if k.size == 0:
+            continue
+        w = 0.5 - 0.5 * np.cos(2 * np.pi * np.clip(k / L, 0.0, 1.0))
+        if kind == "buf" and b is not None:
+            v = read_frac(b, Ps[g] * (len(b) - 1) + k * Rt[g])
+        elif kind == "fm":
+            th = 2 * np.pi * Fq[g] * k / sr
+            v = np.sin(th + I[g] * np.sin(ratio * th) + 2 * np.pi * rng.random())
+        else:
+            v = np.sin(2 * np.pi * Fq[g] * k / sr + 2 * np.pi * rng.random())
+        v = A[g] * w * v
+        if stereo:
+            th = (P[g] + 1.0) * math.pi / 4.0
+            out[s0:s0 + k.size, 0] += math.cos(th) * v
+            out[s0:s0 + k.size, 1] += math.sin(th) * v
+        else:
+            out[s0:s0 + k.size] += v
+    return out / math.sqrt(max(density * float(np.mean(D)) if G else 1.0, 1.0))
+
+
+def fit_min_phase_iir(freqs, gains_db, sr=DEFAULT_SR, order=8, iters=8):
+    """``(b, a)`` of an order-``order`` IIR whose magnitude follows a target curve: the curve (dB at ``freqs`` Hz, held flat
+    beyond its ends, interpolated in dB over linear frequency) becomes a minimum-phase impulse response by cepstral folding, and
+    Steiglitz-McBride iterations fit the filter to it (no 1 / (f + 1) weighting). Poles outside the unit circle
+    are reflected in."""
+    from scipy.signal import lfilter, tf2zpk, zpk2tf
+    from .dsp import min_phase_from_mag
+    f = np.asarray(freqs, float)
+    g = np.asarray(gains_db, float)
+    o = np.argsort(f)
+    n = 1 << 14
+    grid = np.fft.rfftfreq(n, 1.0 / sr)
+    h = min_phase_from_mag(10 ** (np.interp(grid, f[o], g[o]) / 20.0))[: 4096]
+    h = h * np.hanning(2 * len(h))[len(h):]
+    x = np.zeros(len(h))
+    x[0] = 1.0
+    a = np.r_[1.0, np.zeros(order)]
+    b = np.r_[1.0, np.zeros(order)]
+    for _ in range(max(int(iters), 1)):
+        xf, hf = lfilter([1.0], a, x), lfilter([1.0], a, h)
+        rows = len(h)
+        A = np.zeros((rows, order + 1 + order))
+        for k in range(order + 1):
+            A[k:, k] = xf[: rows - k]
+        for k in range(1, order + 1):
+            A[k:, order + k] = -hf[: rows - k]
+        sol = np.linalg.lstsq(A, hf, rcond=None)[0]
+        b, a = sol[: order + 1], np.r_[1.0, sol[order + 1:]]
+    z, p, k = tf2zpk(b, a)
+    p = np.where(np.abs(p) > 0.999, 0.999 * p / np.abs(p), p)
+    b, a = zpk2tf(z, p, k)
+    return np.real(b), np.real(a)

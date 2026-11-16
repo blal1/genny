@@ -1152,4 +1152,20 @@ One tube of a metal wind chime: a struck free-hanging bar with its inharmonic ov
 - **`glass_harmonica` and `bowed_bowl` swell slowly**, like the real things: for short notes use `mode: "strike"`. Their fundamental cannot go above 1568 Hz (G6).
 - **`hurdy_gurdy`** needs about 0.1 s to speak; notes shorter than that are held for 0.12 s.
 - **Gunshots are loud by nature and are already saturated** (the model includes the clipping of the recording chain). Do not add `distortion`; use `distance` and `echo` for placement and a `reverb` for rooms.
-- **Not sourced from measurements** (built from the nearest physical model and marked `UNSOURCED` in the code): cloth, paper, velcro, zipper, steam and pistons, the siren oscillators, car horn, and all of the sci-fi set except `shepard` and `dark_drone`. Phone tones and DTMF use the published telephone standards.
+- **Not sourced from measurements** (built from the nearest physical model and listed as `connaissance` in `research/SOURCES.md`): cloth, paper, velcro, zipper, steam and pistons, the siren oscillators, car horn, and all of the sci-fi set except `shepard` and `dark_drone`. Phone tones and DTMF use the published telephone standards.
+
+## Added in 1.3.0
+
+- `cloth fabric=none|polyester|corduroy|cotton`: adds the friction of the weave to the rustle, its pitch tied to the
+  speed (polyester about 2 kHz per m/s with harmonics, corduroy about 0.57 kHz per m/s, cotton a 2-6 kHz breath).
+## Newer options (1.3.0)
+
+- `switch bistable=1`: a latching relay, bounce 15 ms on release. `hit_marker`: the game's hit confirmation tick.
+- `red_alert model="patch"`: Farnell's chain (chapter 58); `whoop` stays the default. `robot_babble style="pd"` (and `talk`):
+  R2-D2 style phase-modulation babble with deliberate aliasing. `dark_drone valence tension`.
+- `laser model="farnell"`: six folded sub-Nyquist sweeps plus snaps. `telephone voicing="farnell"|"line"`; `phone_click`.
+  `sword_swing arc="haversine"`, `sword arc="short"`, `creak slam`, `wind_chimes pattern`, `wood_panel species`.
+- Quieter `silenced` and `silenced_rifle` kinds (gain 0.058 and 0.067 from 0.08).
+- Sound-design sfx of `designed`: `ui_gesture` (`kind` haptic|liquid, `pitch`, `size`, `seed`), `suikinkutsu` (the
+  Japanese water chime), `rod_cage` (`driver` pendulum..., `order`), `crossing_beeper` (pedestrian crossing: 2.5 kHz,
+  100 ms on and off, harmonics at 5 and 7.5 kHz), `auditory_icon`, `radio_chatter` (`cyber`).

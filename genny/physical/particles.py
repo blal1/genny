@@ -620,9 +620,9 @@ def granular_footstep_texture(force: np.ndarray, ground: str, rng: np.random.Gen
 MINNAERT_FR = 3.29        # f0 * r0 for air in water, m/s (Moss eq. 1, derived in research 06 3.1): sqrt(3*1.4*101325/998)/2pi.
                           # Langlois et al. 2016 quote 6.52/d_mm kHz (3.26, denser water): 0.9 % apart, kept.
 DELTA_RAD = 0.0139        # radiative damping, water (derived in research 06 3.1)
-DELTA_TH = 0.02           # thermal damping: Zheng & James 2009 (Harmonic Fluids) eq. 38 + Table 3 give
-                          # 0.030-0.0096 for r 0.5-5 mm (0.021 at 1 mm); 0.02 picked inside
-MOSS_XI = 0.1             # rising-chirp constant (Moss, after van den Doel 2005)
+DELTA_TH = 0.026          # thermal damping of a 1 mm bubble; the radius law is bubble_params (0.037 at 0.5 mm, 0.012 at 5 mm)
+DELTA_TH_FROZEN = 0.02    # DELTA_TH before the radius law: kept for the frozen `arms.ricochet` water take
+MOSS_XI = 0.1            # rising-chirp constant (Moss, after van den Doel 2005)
 
 
 @numba.njit(cache=True)
@@ -744,7 +744,7 @@ def _onepole_lp_hz(x: np.ndarray, hz: float) -> np.ndarray:
 
 def surfacing_bubble(rng: np.random.Generator, dim: float = 0.5, dur: float = 0.09,
                      fmin: float = 60.0, fmax: float = 300.0, sweep: float = 2000.0, vol: float = 1.0,
-                     mydim: float = 1.0, mydur: float = 1.0) -> np.ndarray:
+                     mydim: float = 1.0, mydur: float = 1.0, film: float = 0.0) -> np.ndarray:
     """Farnell surfacing bubble, decoded ``generatore_di_bolle/single-bubble.pd`` (research 02 section 7).
 
     D = dim (1 - mydim U[0,1)); dur' = dur (1 + mydur U[-.5,.5)); T = D dur'
@@ -752,6 +752,8 @@ def surfacing_bubble(rng: np.random.Generator, dim: float = 0.5, dur: float = 0.
     a(t) = lop~12((1 - t/T)**8) (D + 0.1) vol
     Defaults are the patch defaults (dur 90 ms, range 2000 Hz, fmin 60, fmax 300, dim 0.5).
     The lop~ tail runs to 60 dB under the peak, then a 10 ms raised-cosine close.
+    ``film`` > 0: the bubble's cap then bursts (``cap_burst`` of the bubble whose Minnaert pitch is where the sweep ends,
+    at ``film`` times the peak of the surfacing bubble).
     """
     D = dim * (1.0 - mydim * rng.random())
     D = max(D, 1e-3)
@@ -769,7 +771,12 @@ def surfacing_bubble(rng: np.random.Generator, dim: float = 0.5, dur: float = 0.
     a = a[:max(end, 8)]
     c = min(int(0.01 * SR), len(a) // 2)
     a[-c:] *= np.cos(0.5 * np.pi * (np.arange(c) + 1) / c) ** 2
-    return a * np.sin(2 * np.pi * np.cumsum(f[:len(a)]) / SR)
+    y = a * np.sin(2 * np.pi * np.cumsum(f[:len(a)]) / SR)
+    if film > 0:
+        cap = cap_burst(MINNAERT_FR / min(float(f[len(a) - 1]), 20000.0))
+        y = np.concatenate([y, np.zeros(len(cap))])
+        y[len(a) - c:len(a) - c + len(cap)] += film * float(np.max(np.abs(y))) * cap
+    return y
 
 
 CAP_K, CAP_R_RATIO = 1.0 / 3.0, 3.82 / 2.49        # drainage constant; cap curvature radius / bubble radius

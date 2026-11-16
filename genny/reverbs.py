@@ -168,6 +168,12 @@ def _read_l4(x, pos):
     return y
 
 
+def read_frac(x, pos) -> np.ndarray:
+    """Band-preserving fractional read shared by delays, samplers and tables: x at the fractional indices ``pos``
+    (4th-order Lagrange, linear within two samples of the edges, zero outside)."""
+    return _read_l4(np.ascontiguousarray(x, dtype=np.float64), np.ascontiguousarray(pos, dtype=np.float64))
+
+
 @numba.njit(cache=True)
 def _ring_l4(buf, L, wpos, d, w):
     """Read a circular buffer ``d`` samples (>= 3.5) behind the write index ``wpos``."""
@@ -215,19 +221,65 @@ def _stk_len(lengths, sr, base, always=False):
     return np.array(out, np.int64)
 
 
+LOG001 = math.log(0.001)
+
+
+@numba.njit(cache=True)
+def _nreverb_core(x, cl, cg, h, al, ag):
+    n = x.shape[0]
+    y = np.zeros(n)
+    for i in range(cl.shape[0]):
+        buf = np.zeros(cl[i])
+        p = 0
+        z = 0.0
+        for k in range(n):
+            v = buf[p]
+            y[k] += v
+            v = v + h * z
+            z = v
+            buf[p] = cg[i] * v + x[k]
+            p += 1
+            if p >= cl[i]:
+                p = 0
+    for i in range(al.shape[0]):
+        buf = np.zeros(al[i])
+        p = 0
+        for k in range(n):
+            z = buf[p]
+            buf[p] = ag[i] * z + y[k]
+            y[k] = z - ag[i] * buf[p]
+            p += 1
+            if p >= al[i]:
+                p = 0
+    return y
+
+
 def _stk_comb(x, lengths, sr, t60, damp=0.0):
     g = 10.0 ** (-3.0 * lengths / (float(t60) * sr))            # g = 10^(-3 L / (T60 fs))
     return _fbcf_bank(np.ascontiguousarray(x, dtype=np.float64), lengths, g, float(damp)), g
 
 
 @effect("nrev", "Perry Cook's NRev (STK, after CCRMA): 6 parallel combs into 6 allpasses and a low-pass. Dense and a little gritty. Stereo output.",
-        mix=(0.3, "wet amount 0..1"), t60=(1.0, "decay time, seconds"), tail=(None, "seconds of tail appended (auto = t60)"))
-def nrev(x, sr=DEFAULT_SR, mix=0.3, t60=1.0, tail=None):
+        mix=(0.3, "wet amount 0..1"), t60=(1.0, "decay time, seconds"), tail=(None, "seconds of tail appended (auto = t60)"),
+        variant=("stk", "stk | csound (nreverb: each comb has its own time factor and a damped loop, the allpass gains follow t60; mono wet)"),
+        hdif=(0.5, "csound: 0..1 high-frequency damping in the combs (the low end keeps t60)"))
+def nrev(x, sr=DEFAULT_SR, mix=0.3, t60=1.0, tail=None, variant="stk", hdif=0.5):
     """STK NRev: lengths at 25641 Hz, always rescaled to primes; 3 allpasses in series, then 0.7 s + 0.3 x low-pass, a
-    fourth allpass, and the fifth to L and the sixth to R; all allpass g = 0.7."""
+    fourth allpass, and the fifth to L and the sixth to R; all allpass g = 0.7.
+    csound: comb gain (1 - h) exp(ln 0.001 L / (k_i fs t60)), k = 0.822, 0.802, 0.773, 0.753 x 3, loop low-pass
+    v + h z; five allpasses 347, 113, 37, 59, 43 with g = exp(ln 0.001 L / (0.7 fs t60))."""
     t = float(np.clip(t60, 0.05, 30.0))
     x = np.asarray(x, float)
     dry = _pad(x, samples(t if tail is None else tail, sr))
+    if variant == "csound":
+        L = _stk_len((1433, 1601, 1867, 2053, 2251, 2399, 347, 113, 37, 59, 43), sr, 25641.0, always=True)
+        h = float(np.clip(hdif, 0.0, 1.0))
+        k = np.array([0.822, 0.802, 0.773, 0.753, 0.753, 0.753])
+        cg = np.exp(LOG001 * L[:6] / (k * sr * t)) * (1.0 - h)
+        ag = np.exp(LOG001 * L[6:] / (0.7 * sr * t))
+        w = _nreverb_core(np.ascontiguousarray(to_mono(dry), dtype=np.float64), L[:6], cg, h, L[6:], ag)
+        w *= math.sqrt(1.0 / float(np.sum(1.0 / (1.0 - (cg / max(1.0 - h, 1e-9)) ** 2))))
+        return _fade_end(_wetdry(dry, np.stack([w, w], axis=1), mix), sr)
     L = _stk_len((1433, 1601, 1867, 2053, 2251, 2399, 347, 113, 37, 59, 53, 43), sr, 25641.0, always=True)
     c, g = _stk_comb(to_mono(dry), L[:6], sr, t)
     w = _ap_series(c.sum(axis=0) * math.sqrt(1.0 / float(np.sum(1.0 / (1.0 - g ** 2)))), L[6:9], np.full(3, 0.7))
@@ -939,6 +991,8 @@ ROOM_PRESETS = {
     "opera": dict(dims=(20.0, 25.0, 20.0), surf=("plaster",) * 4 + ("wood", "plaster"), extra={"audience_seated": 1289.0}, dist=12.0),
     # concert_hall: Musikverein, Meyer Table 6.1: 14600 m3, 2.05 s mid, 2.4 s low; 20 x 39.5 x 18.5 m (39.5 deduced from the volume, chunk_01)
     "concert_hall": dict(dims=(20.0, 39.5, 18.5), surf=("plaster",) * 4 + ("wood", "plaster"), extra={"audience_seated": 1007.0, "wood": 354.0}, dist=15.0),
+    # baroque: a palace music room of 2100 m3 with a small seated audience; `extra` is fitted to about 1.5 s mid (no measurement)
+    "baroque": dict(dims=(11.0, 21.0, 9.0), surf=("plaster",) * 4 + ("wood", "plaster"), extra={"audience_seated": 190.0, "wood": 60.0}, dist=8.0),
     # arena: Verona, Meyer l.11198: 0.85 s mid (1.25 s low is out of reach with an open sky under Sabine). geometry
     "arena": dict(dims=(60.0, 75.0, 12.0), surf=("rock",) * 4 + ("audience_seated", "open"), extra={"audience_seated": 1500.0}, dist=30.0),
     # amphitheater: Epidaurus, Meyer l.11167: all reflections within 30 ms, no diffuse field outdoors. geometry
@@ -995,7 +1049,8 @@ def room_info(preset: str = "hall", lx=None, ly=None, lz=None, walls=None, floor
     return {"preset": preset, "dims": tuple(dims), "surfaces": tuple(surf), "volume": V, "area": S,
             "t60": t60, "mfp": 4.0 * V / S, "critical_distance": math.sqrt(a_mid / (16.0 * math.pi)),
             "dist": float(pr["dist"]), "reflections_per_s": C_AIR * S / (4.0 * V), "late": bool(pr.get("late", True)),
-            "schroeder_hz": _space.schroeder_frequency(float(np.mean(t60[2:4])), V)}
+            "schroeder_hz": _space.schroeder_frequency(float(np.mean(t60[2:4])), V),
+            "modes_per_hz_schroeder": float(_space.modal_density(V, _space.schroeder_frequency(float(np.mean(t60[2:4])), V), S, 4.0 * sum(dims)))}
 
 
 def image_source_taps(dims, src, lis, surfaces, order: int = 3, tmax: float = 0.1, full: bool = False):
@@ -1063,7 +1118,13 @@ def _scatter_bands(scattering):
     return np.full(len(BANDS), float(np.clip(scattering, 0.0, 1.0)))
 
 
-def early_ir(info: dict, sr: int, distance=None, order: int = 3, stereo: bool = True, scattering=None, mic: float = 1.0):
+def transition_time(volume: float, density: float) -> float:
+    """Time (s) at which the image sources arrive ``density`` per second: dN/dt = 4 pi c^3 t^2 / V."""
+    return math.sqrt(float(density) * float(volume) / (4.0 * math.pi * C_AIR ** 3))
+
+
+def early_ir(info: dict, sr: int, distance=None, order: int = 3, stereo: bool = True, scattering=None, mic: float = 1.0,
+             density=None):
     """Early-reflection impulse response (without the direct sound) and its mid-band energy.
     Per-band tap gains are merged with zero-phase weights that interpolate linearly in log-frequency
     between the six band centres. Stereo: two opposite cardioids, L = 1 - sin(az), R = 1 + sin(az)
@@ -1073,6 +1134,9 @@ def early_ir(info: dict, sr: int, distance=None, order: int = 3, stereo: bool = 
     a + (1 - a) cos(angle from the source direction) (1 omni, 0.5 cardioid, 0 figure of eight)."""
     src, lis = _room_positions(info, distance)
     tmax = float(np.clip(2.5 * info["mfp"] / C_AIR, 0.1, 0.6))           # at least PASP's "first ~100 ms"
+    if density is not None:                                              # hand over to the late reverb where dN/dt reaches ``density``
+        tmax = float(np.clip(transition_time(info["volume"], np.clip(density, 2000.0, 10000.0)), 0.02, 0.6))
+        order = int(np.clip(math.ceil(C_AIR * tmax / min(info["dims"])), order, 6))
     delays, gains, sx, d0, ords, sy = image_source_taps(info["dims"], src, lis, info["surfaces"], order, tmax, full=True)
     a_mic = float(np.clip(mic, 0.0, 1.0))
     if a_mic < 1.0 and len(delays):
@@ -1199,6 +1263,20 @@ def room_metrics(ir, sr: int = DEFAULT_SR) -> dict:
     return {"t20": float(-60.0 / np.polyfit(np.arange(i0, i1) / sr, db[i0:i1], 1)[0]), "c50": cl(50), "c80": cl(80)}
 
 
+JND_T_REL, JND_T_ABS = 0.035, 0.02        # Meyer ch. 5: a change of reverberation time is heard above 3.5 % (or 0.02 s)
+ECHO_DELAYS_MS = (7.0, 12.0)               # delays the book cites for the early-reflection tolerance tests
+
+
+def t60_within_jnd(t_a: float, t_b: float) -> bool:
+    """True when two reverberation times differ by less than the just-noticeable difference (3.5 % or 0.02 s, the larger)."""
+    return abs(float(t_a) - float(t_b)) <= max(JND_T_REL * max(float(t_a), float(t_b)), JND_T_ABS)
+
+
+def free_field_level(lw: float, r: float) -> float:
+    """Lf = Lw - DA, DA = 10 log10(4 pi r^2) (point source in the open, r in metres)."""
+    return float(lw) - 10.0 * math.log10(4.0 * math.pi * max(float(r), 1e-3) ** 2)
+
+
 def _modal_low_end(xd, wl, wr, info, sr, distance):
     """Late field below the Schroeder frequency as the box's modes (Kuttruff 3.15, damping delta = 6.91/T per band), above it the
     network. Each mode is scaled by its mode shape at source and listener. ponytail: 2nd-order crossover; the level is set so the
@@ -1226,7 +1304,7 @@ def _modal_low_end(xd, wl, wr, info, sr, distance):
 
 @effect("room", "A physical room: early reflections from its shape, decay per frequency band from its volume and wall materials (Sabine), direct-to-reverb balance from the listening distance. Presets from a closet to a canyon, or your own dimensions and materials. Stereo output.",
         mix=(0.5, "0 = dry, 1 = what a listener at `distance` hears (direct + reflections + reverberation)"),
-        model=("fdn", "late reverb engine: fdn (16-line Jot network) | zita (zita-rev1) | puckette (Puckette G08, one decay time) | farnell (Farnell's tight prime-delay room, fixed about 0.5 s) | moorer (6 low-passed combs and an allpass) | sdn (scattering delay network: one node per wall, exact first echoes) | raytrace (rays with diffuse walls, energy histogram turned into noise; slow)"),
+        model=("fdn", "late reverb engine: fdn (16-line Jot network) | zita (zita-rev1) | puckette (Puckette G08, one decay time) | farnell (Farnell's tight prime-delay room, fixed about 0.5 s) | moorer (6 low-passed combs and an allpass) | moorer79 (the same with Moorer's own loop settings) | sdn (scattering delay network: one node per wall, exact first echoes) | raytrace (rays with diffuse walls, energy histogram turned into noise; slow)"),
         width=(1.0, "stereo width of the reverberation 0..1"),
         predelay=(0.0, "extra seconds before the late reverb (the room adds its own: mean free path / c)"),
         humidity=(50, "relative humidity % (40..70) for air absorption"),
@@ -1234,6 +1312,8 @@ def _modal_low_end(xd, wl, wr, info, sr, distance):
         formula=("sabine", "decay formula: sabine | eyring | millington | kuttruff (the last three give shorter, truer decays in dead rooms)"),
         source_gain=(1.0, "directivity g of the source aimed at the listener: the critical distance grows by sqrt(g), so less room (voice about 2.5 at 1 kHz)"),
         source_radius=(None, "or: radius in metres of a piston source (loudspeaker, horn mouth); g comes from its size at 1 kHz"),
+        src_beta=(None, "or: first-order source pattern 0..1 aimed at the listener (1 omni, 0.5 cardioid, 0 figure of eight): g = 1 / (b^2 + (1 - b)^2 / 3)"),
+        transition=(None, "reflections per second (2000..10000) at which the image-source early part ends and the late reverb takes over: dN/dt = 4 pi c^3 t^2 / V; None = 2.5 mean free paths"),
         modal=(False, "true = low end from the room's own resonances below the Schroeder frequency (small rooms boom at their modes)"),
         audience=(False, "true = rows of seats between source and listener: a dip around 150 Hz in the direct sound, deeper with distance"),
         scattering=(None, "diffusing walls: 0..1, or rpg_skyline | rpg_qrd | theatre_audience | flat: early echoes smeared into a diffuse wash"),
@@ -1242,7 +1322,8 @@ def _modal_low_end(xd, wl, wr, info, sr, distance):
         **_ROOM_PARAMS)
 def room(x, sr=DEFAULT_SR, mix=0.5, model="fdn", width=1.0, predelay=0.0, humidity=50, tail=None, preset="hall",
          lx=None, ly=None, lz=None, walls=None, floor=None, ceiling=None, distance=None, furnish=None, formula="sabine",
-         source_gain=1.0, source_radius=None, modal=False, audience=False, scattering=None, mic=1.0, rays=20000):
+         source_gain=1.0, source_radius=None, modal=False, audience=False, scattering=None, mic=1.0, rays=20000, src_beta=None,
+         transition=None):
     """Direct + image-source early reflections + late reverberation.
 
     Late level: reverberant / direct energy = (r / r_c)^2 with the critical distance
@@ -1256,7 +1337,7 @@ def room(x, sr=DEFAULT_SR, mix=0.5, model="fdn", width=1.0, predelay=0.0, humidi
     t_long = float(np.max(t60))
     if tail is None:
         tail = min(1.2 * t_long + 0.2, 10.0)
-    ir, pad, e_er, d0 = early_ir(info, sr, distance, 3, True, scattering, mic)
+    ir, pad, e_er, d0 = early_ir(info, sr, distance, 3, True, scattering, mic, transition)
     xp = _pad(x, samples(tail, sr) + ir.shape[0])
     er = _apply_er(xp, ir, pad)
     a_mic = float(np.clip(mic, 0.0, 1.0))
@@ -1288,6 +1369,12 @@ def room(x, sr=DEFAULT_SR, mix=0.5, model="fdn", width=1.0, predelay=0.0, humidi
         hh = moorer_late(_pad(np.array([1.0]), samples(min(t_long, 4.0), sr)), sr, float(t60[1]), float(t60[5]))[0]
         e = math.sqrt(float(np.sum(hh ** 2)) + 1e-20)
         wl, wr = wl / e, wr / e
+    elif model == "moorer79":
+        xl, xr = _lr(xd)
+        wl, wr = moorer_late(0.5 * (xl + xr), sr, float(t60[1]), float(t60[5]), table=True)
+        hh = moorer_late(_pad(np.array([1.0]), samples(min(t_long, 4.0), sr)), sr, float(t60[1]), float(t60[5]), table=True)[0]
+        e = math.sqrt(float(np.sum(hh ** 2)) + 1e-20)
+        wl, wr = wl / e, wr / e
     elif model in ("sdn", "raytrace"):
         mono = to_mono(xp)
         if model == "sdn":
@@ -1305,10 +1392,16 @@ def room(x, sr=DEFAULT_SR, mix=0.5, model="fdn", width=1.0, predelay=0.0, humidi
         er = np.zeros_like(er)
         e_er = 0.0
     else:
-        raise ValueError(f"unknown room model {model!r}; choose fdn, zita, puckette, farnell, moorer, sdn or raytrace")
+        raise ValueError(f"unknown room model {model!r}; choose fdn, zita, puckette, farnell, moorer, moorer79, sdn or raytrace")
     if modal:
         wl, wr = _modal_low_end(xd, wl, wr, info, sr, distance)
-    g = _space.piston_gain(2.0 * math.pi * 1000.0 * float(source_radius) / C_AIR) if source_radius is not None else max(float(source_gain), 1e-3)
+    if source_radius is not None:
+        g = _space.piston_gain(2.0 * math.pi * 1000.0 * float(source_radius) / C_AIR)
+    elif src_beta is not None:
+        b = float(np.clip(src_beta, 0.0, 1.0))
+        g = 1.0 / (b * b + (1.0 - b) ** 2 / 3.0)
+    else:
+        g = max(float(source_gain), 1e-3)
     e_late = (phys_e / g if phys_e is not None else float(min((d0 / info["critical_distance"]) ** 2 / g, 10.0)) * 10.0 ** (-0.085 * d0 / 10.0) * float(info["late"])) * diffuse_pick
     late = _ms_width(wl, wr, width) * math.sqrt(e_late)
     direct = to_stereo(xp)
@@ -1455,11 +1548,14 @@ def _ground_sigma(ground) -> float:
         gradient=(0.0, "temperature gradient C/km: negative (day, -6 normal) bends sound up and opens a shadow zone far away, positive (night inversion) bends it down and carries it further"),
         rolling=(False, "true = rolling terrain: the ground dip is averaged over source heights +-2 m (softer, no deep notch)"),
         across_water=(False, "true = the source is under water (or the listener is): -29.5 dB through the surface"),
+        curve=("inverse", "inverse (ref / r) | linear_squared | linear: level `ref` at ref m, silent at `max_dist` | inverse_tapered: ref / r times a linear fade to silence at `max_dist`; with `flat_height` inverse_tapered fades the flat-room spreading, the others replace it"),
+        max_dist=(0.0, "metres where the curve reaches silence (linear, linear_squared, inverse_tapered; 0 = never: inverse only)"),
+        size=(0.0, "metres: a source this big envelops the listener, level stays that of its edge inside it (Sound Size)"),
         seed=(0, "variation of the turbulence"))
 def distance(x, sr=DEFAULT_SR, metres=10.0, air=True, humidity=50, reverb=0.0, reverb_time=1.5, ref=1.0,
              line_source=False, delay=False, temperature=20.0, ground="none", source_height=1.5, listener_height=1.5,
              source_radius=None, angle=0.0, wall_distance=None, scatter_mfp=None, flat_height=None, flat_alpha=0.2,
-             turbulence=0.0, seed=0, gradient=0.0, rolling=False, across_water=False, pipe=False):
+             turbulence=0.0, seed=0, gradient=0.0, rolling=False, across_water=False, pipe=False, curve="inverse", max_dist=0.0, size=0.0):
     """Spreading ref/r (point source, -6 dB per doubling) or sqrt(ref/r); air absorption over (r - ref)
     metres; c = 343.2 sqrt(T/293.15) m/s. Piston 2 J1(u)/u; open pipe end D F (``physical.space.pipe_directivity``).
     Wall: power factor 1 + sin(2kd)/(2kd). Obstacles: w = P/(4 pi c r^2) exp(-r/rs). Flat room: energy density
@@ -1467,12 +1563,18 @@ def distance(x, sr=DEFAULT_SR, metres=10.0, air=True, humidity=50, reverb=0.0, r
     x = np.asarray(x, float)
     r = float(np.clip(metres, 0.01, 1e5))
     ref = float(max(ref, 0.01))
+    rg = max(r, float(size))
     if flat_height is not None:
         al = float(np.clip(flat_alpha, 0.05, 0.95))
         fh = float(max(flat_height, 0.1))
-        g = min(math.sqrt(float(_space.flat_room_energy(r, fh, al) / _space.flat_room_energy(ref, fh, al))), 2.0)
+        g = min(math.sqrt(float(_space.flat_room_energy(rg, fh, al) / _space.flat_room_energy(ref, fh, al))), 2.0)
     else:
-        g = min(math.sqrt(ref / r) if line_source else ref / r, 2.0)  # closer than `ref`: at most +6 dB
+        g = min(math.sqrt(ref / rg) if line_source else ref / rg, 2.0)  # closer than `ref`: at most +6 dB
+    if curve != "inverse":
+        if curve not in ("linear", "linear_squared", "inverse_tapered") or max_dist <= ref:
+            raise ValueError("distance curve: linear | linear_squared | inverse_tapered with max_dist > ref")
+        u = float(np.clip((rg - ref) / (float(max_dist) - ref), 0.0, 1.0))
+        g = {"linear": 1.0 - u, "linear_squared": (1.0 - u) ** 2, "inverse_tapered": g * (1.0 - u)}[curve]
     if scatter_mfp is not None:
         g *= math.exp(-0.5 * max(r - ref, 0.0) / max(float(scatter_mfp), 0.01))
     extra = max(r - ref, 0.0)
@@ -1740,6 +1842,7 @@ _BELL_REAR = {"french_horn": ((300.0, 0.0), (1700.0, -20.0), (5000.0, -20.0)),
               "trombone": ((500.0, 0.0), (1500.0, -10.0), (4000.0, -18.0), (8000.0, -25.0))}
 
 
+_REAR_GENERIC = ("oboe", "clarinet", "bassoon", "violin", "tuba")      # omni below OMNI_BELOW, then -6 dB per 2 octaves to -12 dB (connaissance)
 _WALL_GAIN = {"french_horn": ((60.0, 6.0), (300.0, 6.0), (1500.0, 15.0), (2000.0, 15.0), (6000.0, 10.0)),
               "other": ((60.0, 6.0), (100.0, 6.0), (150.0, -3.0), (300.0, 1.0), (1000.0, 0.0))}
 
@@ -1750,8 +1853,12 @@ _WALL_GAIN = {"french_horn": ((60.0, 6.0), (300.0, 6.0), (1500.0, 15.0), (2000.0
         f0=(440.0, "flute only: the note in Hz"),
         wall=(False, "true = a wall right behind the player: +6 dB in the bass, up to +15 dB at 1.5-2 kHz for a horn whose bell faces it"),
         podium=(False, "true = the player stands on a wooden podium: +3 dB around 50 Hz"),
-        split=(False, "true = the noisy part of the sound (breath, attack) has a lobe twice as wide as the tones, never more than 10 dB down"))
-def directivity(x, sr=DEFAULT_SR, instrument="trumpet", angle=180.0, f0=440.0, wall=False, podium=False, split=False):
+        split=(False, "true = the noisy part of the sound (breath, attack) has a lobe twice as wide as the tones, never more than 10 dB down"),
+        elevation=(0.0, "membrane only: degrees above the head's plane-normal axis (angle is the azimuth)"),
+        m=(1, "membrane only: nodal diameters of the mode, level cos^m(elevation) cos(m azimuth)"),
+        player=(False, "true = the player's body shadows what leaves behind the player: -3 dB at 2 kHz, 6 dB per octave up to -12 dB, scaled by (1 - cos angle) / 2 (non-brass)"))
+def directivity(x, sr=DEFAULT_SR, instrument="trumpet", angle=180.0, f0=440.0, wall=False, podium=False, split=False,
+                elevation=0.0, m=1, player=False):
     """Zero-phase filter. Flute: D_n = |1 + (-1)^(n+1) exp(i n pi sin phi)| / 2, n = f / f0 (Meyer 4.2, chunk_01 l.6380)."""
     x = np.asarray(x, float)
     nf = 1 << int(np.ceil(np.log2(x.shape[0] + int(0.02 * sr))))
@@ -1766,9 +1873,19 @@ def directivity(x, sr=DEFAULT_SR, instrument="trumpet", angle=180.0, f0=440.0, w
         from .physical.winds import OMNI_BELOW
         if instrument in OMNI_BELOW:
             mag = np.where(f < OMNI_BELOW[instrument], 1.0, mag)
+    elif instrument in _REAR_GENERIC:
+        from .physical.winds import OMNI_BELOW
+        lim = OMNI_BELOW[instrument]
+        pts = np.array([(lim, 0.0), (4.0 * lim, -6.0), (16.0 * lim, -12.0)])
+        mag = 10.0 ** (np.interp(np.log(np.maximum(f, 1.0)), np.log(pts[:, 0]), pts[:, 1]) * 0.5 * (1.0 - math.cos(a)) / 20.0)
+    elif instrument == "membrane":
+        mag = np.full_like(f, _space.membrane_directivity(int(m), math.radians(float(elevation)), a))
     else:
-        raise ValueError("instrument must be trumpet, trombone, french_horn or flute")
+        raise ValueError("instrument must be trumpet, trombone, french_horn, flute, membrane or " + ", ".join(_REAR_GENERIC))
     lf = np.log(np.maximum(f, 1.0))
+    if player:
+        sh = np.interp(lf, np.log([500.0, 2000.0, 8000.0]), [-0.5, -3.0, -12.0])
+        mag = mag * 10.0 ** (sh * 0.5 * (1.0 - math.cos(a)) / 20.0)
     if wall:
         pts = np.array(_WALL_GAIN["french_horn" if instrument == "french_horn" else "other"])
         mag = mag * 10.0 ** (np.interp(lf, np.log(pts[:, 0]), pts[:, 1]) / 20.0)
@@ -1777,12 +1894,13 @@ def directivity(x, sr=DEFAULT_SR, instrument="trumpet", angle=180.0, f0=440.0, w
     if not split:
         return np.fft.irfft(np.fft.rfft(x, nf, axis=0) * (mag if x.ndim == 1 else mag[:, None]), nf, axis=0)[: x.shape[0]]
     tonal, noisy = _hpss(x, sr)
-    wide = directivity(noisy, sr, instrument, float(angle) / 2.0, f0, wall, podium, False)
+    kw = dict(elevation=elevation, m=m, player=player)
+    wide = directivity(noisy, sr, instrument, float(angle) / 2.0, f0, wall, podium, False, **kw)
     floor = 10.0 ** (-10.0 / 20.0) * math.sqrt(float(np.sum(noisy ** 2)))
     e_w = math.sqrt(float(np.sum(wide ** 2)))
     if 0.0 < e_w < floor:
         wide = wide * floor / e_w
-    return directivity(tonal, sr, instrument, angle, f0, wall, podium, False) + wide
+    return directivity(tonal, sr, instrument, angle, f0, wall, podium, False, **kw) + wide
 
 
 def _hpss(x, sr):
@@ -2070,9 +2188,10 @@ def _phaser2_core(x, fbase, ratios, R, sr, fb):
         invert=(False, "subtract the allpass chain: notches and peaks swap"),
         mode=("allpass1", "allpass1 | notch (second-order sections: one notch per stage, independent width)"),
         notch_q=(4.0, "mode notch: the higher, the narrower"),
-        style=("", "pd = Puckette's law for the first-order coefficient, c = 0.97 - 0.6 v^2, v = |phasor - 0.5| (his rate: 0.3 Hz); no depth, freq, spacing"))
+        style=("", "pd = Puckette's law for the first-order coefficient, c = 0.97 - 0.6 v^2, v = |phasor - 0.5| (his rate: 0.3 Hz); no depth, freq, spacing"),
+        barber=(False, "barber-pole: the notches climb for ever (`rate` negative = descend); two sweeps a half cycle apart, each faded in and out at the ends of its sawtooth"))
 def phaser(x, sr=DEFAULT_SR, rate=0.5, depth=0.7, stages=4, mix=0.5, feedback=0.0, freq=100.0, spacing=2.0,
-           sweep=3.0, phase=0.0, stereo=0.0, invert=False, mode="allpass1", notch_q=4.0, style=""):
+           sweep=3.0, phase=0.0, stereo=0.0, invert=False, mode="allpass1", notch_q=4.0, style="", barber=False):
     """PASP ch. 8.9 classic first-order chain (g13 §4.1): y = (x + g AP_S(...AP_1(x))) / 2, break
     frequencies 100, 200, 400, 800 Hz (octave spaced), bilinear allpass with the break mapped
     exactly, swept together per sample; S sections give S/2 notches (chain phase = odd pi)."""
@@ -2096,10 +2215,22 @@ def phaser(x, sr=DEFAULT_SR, rate=0.5, depth=0.7, stages=4, mix=0.5, feedback=0.
             v = np.abs(((np.arange(n) / sr * rate + ph) % 1.0) - 0.5)
             p = 0.97 - 0.6 * v * v
             fbase = np.arctan((1.0 - p) / (1.0 + p)) * sr / np.pi
+        elif barber:
+            fbase = None
         else:
             fbase = f0 * 2.0 ** (octs * (0.5 + 0.5 * _lfo(n, sr, rate, "sine", ph)))
-        sig_c, fb_c = np.ascontiguousarray(sig, dtype=np.float64), np.ascontiguousarray(fbase)
-        wet = _phaser2_core(sig_c, fb_c, ratios, R, float(sr), fb) if mode == "notch" else _phaser_core(sig_c, fb_c, ratios, float(sr), fb)
+        sig_c = np.ascontiguousarray(sig, dtype=np.float64)
+
+        def run(fb_curve):
+            fb_c = np.ascontiguousarray(fb_curve)
+            return _phaser2_core(sig_c, fb_c, ratios, R, float(sr), fb) if mode == "notch" else _phaser_core(sig_c, fb_c, ratios, float(sr), fb)
+
+        if barber:                                            # Shepard-like: sin^2 and cos^2 fades sum to one
+            u = (np.arange(n) / sr * rate + ph) % 1.0
+            u2 = (u + 0.5) % 1.0
+            wet = (np.sin(np.pi * u) ** 2) * run(f0 * 2.0 ** (octs * u)) + (np.sin(np.pi * u2) ** 2) * run(f0 * 2.0 ** (octs * u2))
+        else:
+            wet = run(fbase)
         return sig * (1.0 - mix) + sign * wet * mix
 
     if x.ndim == 1 and not stereo:
@@ -2307,20 +2438,28 @@ def tape_delay(x, sr=DEFAULT_SR, time=0.3, feedback=0.45, mix=0.35, pingpong=Tru
 # Shimmer, gated and reverse reverbs (built on the FDN)
 # ==========================================================================================
 
-def _octave_up(x, sr, window=0.06):
-    """Puckette's two-tap delay pitch shifter (TTEM p.202-208; findings 10 §10): sawtooth delays
-    d0..d0 + s half a cycle apart, each enveloped by half a sine (powers sum to 1), f = (t - 1) R / s;
-    t = 2 -> the delay shrinks one sample per sample. Window s = 60 ms (source: 30-100 ms)."""
+def _two_tap_shift(x, sr, t=2.0, window=0.06):
+    """Puckette's two-tap delay pitch shifter: sawtooth delays over a window s, half a cycle apart, each enveloped
+    by half a sine (powers sum to 1), at frequency f = |t - 1| R / s for a ratio t; t > 1 -> the delay shrinks
+    (s (1 - p)), t < 1 -> it grows (s p). Window s = 60 ms (30-100 ms)."""
+    t = float(t)
+    if abs(t - 1.0) < 1e-9:
+        return np.array(x, dtype=np.float64, copy=True)
     n = x.shape[0]
     s = window * sr
-    ph = (np.arange(n) / s) % 1.0
+    ph = (np.arange(n) / (s / abs(t - 1.0))) % 1.0
     idx = np.arange(n, dtype=np.float64)
     out = np.zeros(n)
     x = np.ascontiguousarray(x, dtype=np.float64)
     for off in (0.0, 0.5):
         p = (ph + off) % 1.0
-        out += np.sin(np.pi * p) * _read_l4(x, idx - s * (1.0 - p) - 3.0)
+        d = s * (1.0 - p) if t > 1.0 else s * p
+        out += np.sin(np.pi * p) * _read_l4(x, idx - d - 3.0)
     return out
+
+
+def _octave_up(x, sr, window=0.06):
+    return _two_tap_shift(x, sr, 2.0, window)
 
 
 @effect("shimmer", "Shimmer reverb: the reverb tail is fed back through an octave-up pitch shifter, so it blooms into a rising halo. Stereo output.",
@@ -2475,9 +2614,10 @@ def _fbg_core(exc, n, N, eta, rho, rho_rel, n_off, Mp, r, gpre, drive, asym, fbg
             tone=(2400.0, "speaker cabinet low-pass in Hz"),
             asym=(0.15, "clipper asymmetry 0..0.6 (even harmonics, tube-like)"),
             seed=(0, "pluck noise seed (int)"),
-            aperture=(0.0, "pickup sensing width in m or single|humbucker (0.015, 0.04), 0 = a point pickup: softens the highest harmonics"))
+            aperture=(0.0, "pickup sensing width in m or single|humbucker (0.015, 0.04), 0 = a point pickup: softens the highest harmonics"),
+            cabinet=("", "cabinet | phone-speaker: the speaker's measured-style response curve (dsp.make_ir) replaces the plain `tone` low-pass; empty = low-pass"))
 def feedback_guitar(freq, dur, sr=DEFAULT_SR, vel=1.0, drive=6.0, feedback=0.5, pickup=0.18, distance=1.2,
-                    tone=2400.0, asym=0.15, seed=0, aperture=0.0):
+                    tone=2400.0, asym=0.15, seed=0, aperture=0.0, cabinet=""):
     """Sullivan's electric guitar (PASP Fig. 9.4): string -> [pre gain] -> soft clip f(x) = x - x^3/3
     -> [post gain] -> out, and clip -> [feedback gain] -> [feedback delay = distance / c] -> string.
     Pre = integrator g/(1 - r z^-1), post = differentiator 1 - r z^-1 (bass-heavy drive, flat net
@@ -2537,8 +2677,12 @@ def feedback_guitar(freq, dur, sr=DEFAULT_SR, vel=1.0, drive=6.0, feedback=0.5, 
     y = y / gpre
     if isinstance(aperture, str) or aperture > 0.0:
         y = np.convolve(y, pickup_window(P, aperture), mode="same")
-    fc = float(np.clip(tone, 500.0, 8000.0))
-    y = sosfilt(butter(4, fc, "low", fs=fs, output="sos"), y)
+    if cabinet:
+        from .dsp import make_ir
+        y = fftconvolve(y, make_ir(cabinet, fs), mode="full")[: y.shape[0]]
+    else:
+        fc = float(np.clip(tone, 500.0, 8000.0))
+        y = sosfilt(butter(4, fc, "low", fs=fs, output="sos"), y)
     y = sosfilt(butter(2, 70.0, "high", fs=fs, output="sos"), y)
     y = _resample(y, fs, sr)
     k = min(len(y) // 2, int(0.02 * sr))
@@ -2696,16 +2840,102 @@ def _gverb_kernel(x, L, g, damp, tap_d, tap_g, dif, dif_c):
     return out
 
 
+@numba.njit(cache=True)
+def _gverb_sc_kernel(x, L, g, damp, din, taps, tapg, ldif, rdif, dc, early, tail):
+    n = x.shape[0]
+    fdn = np.zeros((4, int(L.max()) + 1))
+    fw = 0
+    lp = np.zeros(4)
+    tl = np.zeros(int(taps.max()) + 2)
+    tw = 0
+    dmax = int(max(ldif.max(), rdif.max())) + 1
+    db = np.zeros((2, 4, dmax))
+    dw = np.zeros((2, 4), dtype=np.int64)
+    lens = np.zeros((2, 4), dtype=np.int64)
+    lens[0, :] = ldif
+    lens[1, :] = rdif
+    out = np.zeros((n, 2))
+    u = np.zeros(4)
+    d = np.zeros(4)
+    zin = 0.0
+    for i in range(n):
+        xi = x[i]
+        zin = xi * (1.0 - din) + zin * din
+        z = zin
+        bz = db[0, 0, dw[0, 0]]
+        w = z - dc[0] * bz
+        z = bz + dc[0] * w
+        db[0, 0, dw[0, 0]] = w
+        dw[0, 0] = (dw[0, 0] + 1) % lens[0, 0]
+        m = tl.shape[0]
+        for j in range(4):
+            u[j] = tapg[j] * tl[(tw - taps[j]) % m]
+        tl[tw] = z
+        tw = (tw + 1) % m
+        mf = fdn.shape[1]
+        s = 0.0
+        sign = 1.0
+        for j in range(4):
+            v = g[j] * fdn[j, (fw - L[j]) % mf]
+            lp[j] = v * (1.0 - damp) + lp[j] * damp
+            d[j] = lp[j]
+            s += sign * (tail * d[j] + early * u[j])
+            sign = -sign
+        s += xi * early
+        f0 = 0.5 * (d[0] + d[1] - d[2] - d[3])
+        f1 = 0.5 * (d[0] - d[1] - d[2] + d[3])
+        f2 = 0.5 * (-d[0] + d[1] - d[2] + d[3])
+        f3 = 0.5 * (d[0] + d[1] + d[2] + d[3])
+        fdn[0, fw] = u[0] + f0
+        fdn[1, fw] = u[1] + f1
+        fdn[2, fw] = u[2] + f2
+        fdn[3, fw] = u[3] + f3
+        for j in range(4):
+            if not abs(fdn[j, fw]) < 1e30:
+                fdn[j, fw] = 0.0
+        fw = (fw + 1) % mf
+        for c in range(2):
+            v = s
+            for k in range(1, 4):
+                bz = db[c, k, dw[c, k]]
+                w = v - dc[k] * bz
+                v = bz + dc[k] * w
+                db[c, k, dw[c, k]] = w
+                dw[c, k] = (dw[c, k] + 1) % lens[c, k]
+            out[i, c] = v
+    return out
+
+
+def _gverb_dif(scale, spread, r1, r2):
+    a = int(spread * r1)
+    c = 210 + 159 + a
+    d = 210 + 159 + 562 + int(3.0 * spread * r2)
+    return np.array([max(1, int(round(scale * v))) for v in (210, c - 210, d - c, 1341 - d)], dtype=np.int64)
+
+
 @effect("gverb", "GVerb (Griesinger-style FDN by Juhana Sadeharju): big natural halls, a room size in metres and a decay in seconds.",
-        roomsize=(30.0, "m"), revtime=(5.0, "s"), damping=(0.8, "0..1 high-frequency loss"), spread=(15.0, "stereo spread of the diffusers, samples"),
-        bandwidth=(0.5, "0..1 input brightness"), dry=(0.6, "linear"), early=(0.4, "linear"), tail_level=(0.5, "linear"))
-def gverb(x, sr=DEFAULT_SR, roomsize=30.0, revtime=5.0, damping=0.8, spread=15.0, bandwidth=0.5, dry=0.6, early=0.4, tail_level=0.5):
-    """Defaults, line ratios, taps, diffuser bases and coefficients from ChucK's GVerb (chugins). this port has not
-    been compared with GVerb.cpp, whose source is not in the research folder: how the spread enters is a reading of its constants."""
+        roomsize=(10.0, "m"), revtime=(3.0, "s"), damping=(0.5, "0..1 high-frequency loss"), spread=(15.0, "stereo spread of the diffusers, samples"),
+        bandwidth=(0.5, "0..1 input brightness"), dry=(1.0, "linear"), early=(0.7, "linear"), tail_level=(0.5, "linear"),
+        variant=("sc", "sc (the early taps feed the network, one input diffuser, alternating sum) | chuck (the earlier port: input into every line, Householder matrix)"))
+def gverb(x, sr=DEFAULT_SR, roomsize=10.0, revtime=3.0, damping=0.5, spread=15.0, bandwidth=0.5, dry=1.0, early=0.7, tail_level=0.5, variant="sc"):
+    """Line lengths sr room / 340 x (1, 0.81649, 0.7071, 0.63245), the first moved to the nearest prime; gains
+    -alpha^L, alpha = 0.001^(1 / (sr revtime)); taps 5 + (0.41, 0.3, 0.155, 0) x largest; diffusers 210, 159, 562,
+    410 x L3 / 1341 with the spread moving the two middle splits."""
     x = np.asarray(x, float)
     room = float(np.clip(roomsize, 1.0, 300.0))
     rt = float(np.clip(revtime, 0.1, 60.0))
     largest = sr * room / 340.0
+    if variant == "sc":
+        L = np.array([_nearest_prime(int(round(largest)))] + [max(2, int(largest * r)) for r in (0.81649, 0.7071, 0.63245)], dtype=np.int64)
+        alpha = 0.001 ** (1.0 / (sr * rt))
+        taps = np.array([5 + int(r * largest) for r in (0.41, 0.3, 0.155, 0.0)], dtype=np.int64)
+        scale = L[3] / 1341.0
+        sp = float(spread)
+        wet = _gverb_sc_kernel(np.ascontiguousarray(_pad(to_mono(x), samples(rt, sr))), L, -(alpha ** L.astype(float)),
+                               float(np.clip(damping, 0.0, 0.95)), 1.0 - float(np.clip(bandwidth, 0.0, 1.0)), taps, alpha ** taps.astype(float),
+                               _gverb_dif(scale, sp, 0.125541, 0.854046), _gverb_dif(scale, sp, -0.568366, -0.126815),
+                               np.array([0.75, 0.75, 0.625, 0.625]), float(early), float(tail_level))
+        return _fade_end(float(dry) * to_stereo(_pad(x, samples(rt, sr))) + wet, sr)
     L = np.maximum(np.round(largest * np.array([1.0, 0.81649, 0.7071, 0.63245])).astype(np.int64), 2)
     alpha = 0.001 ** (1.0 / (sr * rt))
     tap_d = 5.0 + np.array([0.41, 0.3, 0.155, 0.0]) * largest
@@ -3068,10 +3298,6 @@ def greyhole(x, sr=DEFAULT_SR, delay=0.2, feedback=0.9, damping=0.0, diffusion=0
 # Acoustic feedback (Larsen) through a room
 # ==========================================================================================
 
-_HILBERT_A = (0.6923878, 0.9360654322959, 0.9882295226860, 0.9987488452737)
-_HILBERT_B = (0.4021921162426, 0.8561710882420, 0.9722909545651, 0.9952884791278)
-
-
 @numba.njit(cache=True)
 def _larsen_core(x, td, tg, amp, shift, sr, pipe_d, pipe_g, ha, hb, lim):
     n = x.shape[0]
@@ -3080,34 +3306,25 @@ def _larsen_core(x, td, tg, amp, shift, sr, pipe_d, pipe_g, ha, hb, lim):
     buf = np.zeros(nb)
     pd = max(pipe_d, 1)
     pbuf = np.zeros(pd)
-    sa = np.zeros((4, 2, 2))
-    sb = np.zeros((4, 2, 2))
-    prev_b = 0.0
+    s = np.zeros((2, 6, 2))
     for i in range(n):
         m = x[i]
         for k in range(td.shape[0]):
             m += tg[k] * buf[(i - td[k]) % nb]
         if shift != 0.0:
-            ra = m
-            rb = m
-            for k in range(4):
-                a2 = ha[k] * ha[k]
-                o = a2 * (ra + sa[k, 1, 0]) - sa[k, 0, 1]
-                sa[k, 0, 1] = sa[k, 0, 0]
-                sa[k, 0, 0] = ra
-                sa[k, 1, 0] = sa[k, 1, 1]
-                sa[k, 1, 1] = o
-                ra = o
-                b2 = hb[k] * hb[k]
-                o = b2 * (rb + sb[k, 1, 0]) - sb[k, 0, 1]
-                sb[k, 0, 1] = sb[k, 0, 0]
-                sb[k, 0, 0] = rb
-                sb[k, 1, 0] = sb[k, 1, 1]
-                sb[k, 1, 1] = o
-                rb = o
+            re = m
+            im = m
+            for k in range(6):
+                o = ha[k] * (re - s[0, k, 1]) + s[0, k, 0]
+                s[0, k, 0] = re
+                s[0, k, 1] = o
+                re = o
+                o = hb[k] * (im - s[1, k, 1]) + s[1, k, 0]
+                s[1, k, 0] = im
+                s[1, k, 1] = o
+                im = o
             ph = 2.0 * math.pi * shift * i / sr
-            m = ra * math.cos(ph) - prev_b * math.sin(ph)
-            prev_b = rb
+            m = re * math.cos(ph) - im * math.sin(ph)
         if pipe_g > 0.0:
             v = pbuf[i % pd]
             m = m + pipe_g * v
@@ -3145,7 +3362,7 @@ def room_feedback(x, sr=DEFAULT_SR, gain=0.9, swell=0.0, swell_rate=0.5, pipe=No
     pd, pg = (max(2, int(round(sr / float(np.clip(pipe, 30.0, 400.0))))), 0.9) if pipe else (1, 0.0)
     xp = _pad(x, samples(2.0, sr))
     y = _larsen_core(np.ascontiguousarray(xp), td, tg, np.ascontiguousarray(amp), float(shift), float(sr), pd, pg,
-                     np.array(_HILBERT_A), np.array(_HILBERT_B), max(float(np.max(np.abs(x))), 1e-3))
+                     _hilbert_coefs(sr, HILBERT_POLES_RE), _hilbert_coefs(sr, HILBERT_POLES_IM), max(float(np.max(np.abs(x))), 1e-3))
     return _fade_end(_wetdry(xp, y, mix), sr)
 
 
@@ -3159,15 +3376,16 @@ def reflector_cutoff(b: float, a1: float, a2: float, theta: float = 0.0, c: floa
 
 
 @effect("reflection", "One reflecting structure heard with the direct sound: flutter between two parallel walls, a picket fence or a staircase (a chirped echo, the 'singing' stairs), or a finite panel (only its highs come back).",
-        kind=("flutter", "flutter | fence | stairs | panel"),
+        kind=("flutter", "flutter | fence | stairs | panel | diffuser"),
         width=(10.0, "flutter: metres between the walls (a buzz above c/2w, a rattle below 20 Hz when wider than 8.6 m)"),
         absorption=(0.05, "flutter: wall absorption 0..0.99"),
         spacing=(0.3, "fence/stairs: metres between elements (pitch c/2d: 572 Hz at 0.3 m)"),
         count=(30, "fence/stairs: number of elements"), distance=(5.0, "metres to the structure (first element, panel)"),
-        size=(2.0, "panel: width in metres"), angle=(0.0, "panel: incidence in degrees"),
+        size=(2.0, "panel: width in metres"), angle=(0.0, "panel/diffuser: incidence in degrees"),
+        depth=(0.1, "diffuser: metres of relief of the surface: the echo cancels at depth = wavelength / 4 and is full at wavelength / 2"),
         level=(0.5, "reflection level relative to its geometric value 0..1"), mix=(1.0, "wet 0..1"))
 def reflection(x, sr=DEFAULT_SR, kind="flutter", width=10.0, absorption=0.05, spacing=0.3, count=30, distance=5.0,
-               size=2.0, angle=0.0, level=0.5, mix=1.0):
+               size=2.0, angle=0.0, level=0.5, mix=1.0, depth=0.1):
     """Source and listener together. Flutter: echoes every 2w/c, pressure x (1 - a) per round trip and 1/r.
     Fence/stairs: element k at sqrt(D^2 + (k d)^2) (stairs: D + k d), echo 2 r_k / c, gain D / r_k.
     Panel: one echo 2D/c, first-order high-pass at reflector_cutoff(size, D, D, angle)."""
@@ -3186,10 +3404,10 @@ def reflection(x, sr=DEFAULT_SR, kind="flutter", width=10.0, absorption=0.05, sp
         k = np.arange(int(np.clip(count, 1, 400)))
         r = np.sqrt(D * D + (k * d) ** 2) if kind == "fence" else D + k * d
         taps = list(zip(2.0 * r / C_AIR, D / r))
-    elif kind == "panel":
+    elif kind in ("panel", "diffuser"):
         taps = [(2.0 * D / C_AIR, 0.5)]
     else:
-        raise ValueError("reflection kind must be flutter, fence, stairs or panel")
+        raise ValueError("reflection kind must be flutter, fence, stairs, panel or diffuser")
     n_add = int(max(t for t, _ in taps) * sr) + 2 if taps else 0
     h = np.zeros(n_add + 1)
     for t, gg in taps:
@@ -3205,8 +3423,52 @@ def reflection(x, sr=DEFAULT_SR, kind="flutter", width=10.0, absorption=0.05, sp
     if kind == "panel":
         fu = float(np.clip(reflector_cutoff(max(float(size), 0.05), D, D, math.radians(float(angle))), 5.0, 0.45 * sr))
         e = sosfilt(butter(1, fu, "high", fs=sr, output="sos"), e, axis=0)
+    if kind == "diffuser":
+        nf = 1 << int(np.ceil(np.log2(e.shape[0])))
+        kd = 2.0 * math.pi * np.fft.rfftfreq(nf, 1.0 / sr) / C_AIR * max(float(depth), 0.0) * math.cos(math.radians(float(angle)))
+        g = np.abs(np.cos(kd))                                 # two half-surfaces `depth` apart: |1 + e^(2ikd)| / 2
+        e = np.fft.irfft(np.fft.rfft(e, nf, axis=0) * (g if e.ndim == 1 else g[:, None]), nf, axis=0)[:e.shape[0]]
     full = xp + float(np.clip(level, 0.0, 1.0)) * e
     return _fade_end(_wetdry(xp, full, mix), sr)
+
+
+AUDIENCE_AREA_M2 = ((100.0, 95.0), (200.0, 140.0), (300.0, 165.0))     # seated area, equivalent absorption area at 1 kHz (m2): 0.95, 0.70, 0.55 per m2
+AUDIENCE_LOW_HZ = 500.0                   # below it the audience absorbs little
+
+
+def audience_absorption(area_m2: float, f: float = 1000.0) -> float:
+    """Equivalent absorption area (m2) of an audience seated on `area_m2` of floor, at `f` Hz: the surface counts, not
+    the head count, so alpha per m2 falls from 0.95 on 100 m2 to 0.55 on 300 m2. Interpolated between the three measured
+    areas, held at the end values' alpha per m2 beyond; below 500 Hz it falls in proportion to the frequency."""
+    a = max(float(area_m2), 0.0)
+    xs, ys = zip(*AUDIENCE_AREA_M2)
+    if a <= xs[0]:
+        A = ys[0] / xs[0] * a
+    elif a >= xs[-1]:
+        A = ys[-1] / xs[-1] * a
+    else:
+        A = float(np.interp(a, xs, ys))
+    return A * min(1.0, float(f) / AUDIENCE_LOW_HZ)
+
+
+CURTAIN_FU_CM_HZ = 8500.0                 # a curtain d cm from its wall absorbs above 8500 / d Hz (quarter-wave: c / 4d)
+
+
+def curtain_cutoff(d_cm: float) -> float:
+    """Lowest frequency a curtain hung `d_cm` centimetres from the wall absorbs: 8500 / d."""
+    return CURTAIN_FU_CM_HZ / max(float(d_cm), 0.1)
+
+
+@effect("curtain", "A curtain hung in front of a wall: it soaks up everything above its quarter-wave frequency 8500 / d Hz (d = gap in cm), more with a deeper drape.",
+        gap=(10.0, "cm between the curtain and the wall"), absorption=(0.6, "0..1 of the sound energy it absorbs above the cutoff"))
+def curtain(x, sr=DEFAULT_SR, gap=10.0, absorption=0.6):
+    """Shelf: pressure x sqrt(1 - absorption) above fu = 8500 / gap (one-pole high-shelf, connaissance for the shape)."""
+    x = np.asarray(x, float)
+    fu = float(np.clip(curtain_cutoff(gap), 20.0, 0.45 * sr))
+    g = math.sqrt(1.0 - float(np.clip(absorption, 0.0, 0.99)))
+    a = math.exp(-2 * math.pi * fu / sr)
+    low = lfilter([1.0 - a], [1.0, -a], x, axis=0)
+    return _fade_end(low + g * (x - low), sr)
 
 
 @effect("huggins", "Dichotic pitch: a pitch that exists only in the head. Over headphones, noise whose phase turns once round a narrow band in one ear (Huggins pitch), or a copy delayed by T in the other ear (a faint pitch at 1/T). Stereo output.",
@@ -3278,14 +3540,20 @@ def orchestra_seat(x, sr=DEFAULT_SR, desk=1, pit=False):
 
 @effect("pv_reverb", "Spectral reverb: every frequency bin of the sound decays at its own rate, steady partials ringing longer than noise (a frozen, singing tail). Stereo output.",
         t60=(3.0, "decay of the tonal part, seconds"), noise_t60=(1.0, "decay of the noisy part, seconds"),
-        mix=(0.4, "wet 0..1"), seed=(0, "phase randomisation"))
-def pv_reverb(x, sr=DEFAULT_SR, t60=3.0, noise_t60=1.0, mix=0.4, seed=0):
+        mix=(0.4, "wet 0..1"), seed=(0, "phase randomisation"),
+        mode=("split", "split (tonal / noise bins, stereo) | coherent (partials ring on with their own phase advance, new peaks punched in; ignores noise_t60 and seed)"))
+def pv_reverb(x, sr=DEFAULT_SR, t60=3.0, noise_t60=1.0, mix=0.4, seed=0, mode="split"):
     """STFT 2048 / hop 512. Tonal vs noise per bin by median filtering across time (harmonic) and frequency
     (noise); each bin's magnitude is a leaky maximum decaying at its own T60, phases advance at the bin frequency
     plus a random walk (decorrelated left and right)."""
     from scipy.ndimage import median_filter
     from scipy.signal import istft, stft
     x = np.asarray(x, float)
+    if mode == "coherent":
+        from .spectral import pvoc_reverb
+        return _fade_end(pvoc_reverb(x, sr, float(np.clip(t60, 0.1, 30.0)), mix), sr)
+    if mode != "split":
+        raise ValueError("pv_reverb mode: split | coherent")
     m = to_mono(x)
     t60 = float(np.clip(t60, 0.1, 30.0))
     tail = min(1.2 * max(t60, noise_t60) + 0.1, 10.0)
@@ -3315,7 +3583,7 @@ def pv_reverb(x, sr=DEFAULT_SR, t60=3.0, noise_t60=1.0, mix=0.4, seed=0):
     return _fade_end(_wetdry(_pad(x, xp.shape[0] - x.shape[0]), wet, mix), sr)
 
 
-def soundboard_fdn(x, sr=DEFAULT_SR, t60_dc=3.84, t60_nyq=0.78, lines=8, size=1.5, seed=0):
+def soundboard_fdn(x, sr=DEFAULT_SR, t60_dc=6.0, t60_nyq=0.78, lines=8, size=1.5, seed=0):
     """Soundboard as a reverberator: a Householder FDN whose one-pole loop filters give T60 t60_dc at 0 Hz and
     t60_nyq at Nyquist (a wooden plate rings long in the bass, short in the treble); mono in, mono out."""
     x = to_mono(np.asarray(x, float))
@@ -3367,14 +3635,64 @@ def _moorer_core(x, D, g, p):
     return y
 
 
-def moorer_late(x, sr, t60_low, t60_high):
+MOORER_LOOP_G1 = {25000.0: (0.24, 0.26, 0.28, 0.29, 0.30, 0.32), 50000.0: (0.46, 0.48, 0.50, 0.52, 0.53, 0.55)}
+MOORER_T60_CONST = 0.366
+MOORER_EARLY_7 = ((0.0, 1.0), (0.0199, 1.02), (0.0354, 0.818), (0.0389, 0.635), (0.0414, 0.719), (0.0699, 0.267),
+                  (0.0796, 0.242))
+MOORER_EARLY_19 = ((0.0, 1.0), (0.0043, 0.841), (0.0215, 0.504), (0.0225, 0.491), (0.0268, 0.379), (0.0270, 0.380),
+                   (0.0298, 0.346), (0.0458, 0.289), (0.0485, 0.272), (0.0572, 0.192), (0.0587, 0.193), (0.0595, 0.217),
+                   (0.0612, 0.181), (0.0707, 0.180), (0.0708, 0.181), (0.0726, 0.176), (0.0741, 0.142), (0.0753, 0.167),
+                   (0.0797, 0.134))
+MOORER_NOISE_DIRECT = 12.0
+
+
+def moorer_loop_g1(sr):
+    """Pole g1 of the loop low-pass of each of the six combs: the values given at 25 and 50 kHz, interpolated in the
+    sampling rate and held outside."""
+    (r0, a), (r1, b) = sorted(MOORER_LOOP_G1.items())
+    w = float(np.clip((float(sr) - r0) / (r1 - r0), 0.0, 1.0))
+    return (1.0 - w) * np.array(a) + w * np.array(b)
+
+
+def moorer_g_for_t60(t60):
+    return float(np.clip(1.0 - MOORER_T60_CONST / max(float(t60), 1e-3), 0.0, 0.999))
+
+
+def moorer_early(x, sr, taps=19):
+    """The sparse early-echo FIR of the seven- or nineteen-tap table (the first tap is the direct sound)."""
+    tab = {0: ((0.0, 1.0),), 7: MOORER_EARLY_7, 19: MOORER_EARLY_19}[int(taps)]
+    x = np.asarray(x, float)
+    y = np.zeros(x.shape[0])
+    for t, g in tab:
+        d = int(round(t * sr))
+        if d < x.shape[0]:
+            y[d:] += g * x[: x.shape[0] - d]
+    return y
+
+
+def moorer_noise_ir(sr, t60, seed=0, direct_ratio=MOORER_NOISE_DIRECT, length=None):
+    """Impulse response of a good hall as Moorer found it: a unit impulse (the direct sound) followed by Gaussian
+    noise under an exponential envelope, `direct_ratio` : 1 between the impulse and the start of the decay."""
+    n = int(length * sr) if length else int(1.2 * float(t60) * sr)
+    t = np.arange(n) / sr
+    h = np.random.default_rng(seed).standard_normal(n) * 10.0 ** (-3.0 * t / float(t60)) / float(direct_ratio)
+    h[0] += 1.0
+    return h
+
+
+def moorer_late(x, sr, t60_low, t60_high, table=False):
     """Moorer's reverberator: six parallel combs (50-78 ms) each with a one-pole low-pass in its loop, set so the
     loop gives t60_low at low frequency and t60_high at 4 kHz, into an allpass of 6 ms, g 0.7 (two decorrelated
-    allpasses for left and right)."""
+    allpasses for left and right). `table`: Moorer's own settings, the pole of each loop from his table and the loop
+    gain g = 1 - 0.366 / t60_low."""
     D = np.array([int(round(m * sr / 1000.0)) for m in MOORER_COMBS_MS], np.int64)
-    glo = 10.0 ** (-3.0 * D / (sr * float(t60_low)))
-    ghi = 10.0 ** (-3.0 * D / (sr * float(min(t60_high, t60_low))))
-    g, p = _onepole_for(glo, ghi, 0.0, 4000.0, sr)
+    if table:
+        p = moorer_loop_g1(sr)
+        g = np.full(D.shape[0], moorer_g_for_t60(t60_low))
+    else:
+        glo = 10.0 ** (-3.0 * D / (sr * float(t60_low)))
+        ghi = 10.0 ** (-3.0 * D / (sr * float(min(t60_high, t60_low))))
+        g, p = _onepole_for(glo, ghi, 0.0, 4000.0, sr)
     y = _moorer_core(np.ascontiguousarray(x, dtype=np.float64), D, g, p) / math.sqrt(len(D))
     out = []
     for ms in (MOORER_AP_MS, MOORER_AP_MS * 1.13):
@@ -3487,3 +3805,181 @@ def room_params(volume: float, t60: float, surface: float | None = None) -> dict
     s = float(surface) if surface else 6.0 * v ** (2.0 / 3.0)
     mfp = 4.0 * v / s
     return {"size": mfp, "predelay": mfp / C_AIR, "t60": float(t60)}
+
+
+# ==========================================================================================
+# Fractional delay lines with a decay time, causal 4-head pitch shifter, Hilbert frequency shifter
+# ==========================================================================================
+
+def t60_gain(delay, t60):
+    """Feedback gain that makes a line of ``delay`` s lose 60 dB in ``t60`` s; the sign of ``t60`` is kept (negative =
+    negative feedback: odd harmonics, an octave lower); 0 gives 0."""
+    d, t = np.asarray(delay, float), np.asarray(t60, float)
+    return np.where(t == 0.0, 0.0, np.sign(t) * np.exp(LOG001 * d / np.maximum(np.abs(t), 1e-9)))
+
+
+@numba.njit(cache=True)
+def _dline_core(x, d, g, kind):
+    n = x.shape[0]
+    L = int(np.max(d)) + 8
+    buf = np.zeros(L)
+    w = np.zeros(5)
+    y = np.zeros(n)
+    for i in range(n):
+        di = d[i] if d[i] > 3.5 else 3.5
+        v = _ring_l4(buf, L, i, di, w)
+        if kind == 0:
+            u = x[i]
+            y[i] = v
+        elif kind == 1:
+            u = x[i] + g[i] * v
+            y[i] = v
+        else:
+            u = x[i] + g[i] * v
+            y[i] = v - g[i] * u
+        if not abs(u) < 1e30:
+            u = 0.0
+        buf[i % L] = u
+    return y
+
+
+def delay_line(x, sr=DEFAULT_SR, delay=0.1, t60=0.0, kind="comb"):
+    """``kind`` delay | comb (y = v, line <- x + g v) | allpass (y = v - g (x + g v)), v the line read ``delay`` s back
+    (a number or one value per sample, at least 3.5 samples) with 4th-order Lagrange; g = t60_gain(delay, t60) per
+    sample. Same length as x; mono or stereo."""
+    x = np.asarray(x, float)
+    n = x.shape[0]
+    d = np.broadcast_to(np.asarray(delay, float), (n,)) * sr
+    g = np.ascontiguousarray(np.broadcast_to(t60_gain(d / sr, t60), (n,)), dtype=np.float64)
+    k = {"delay": 0, "comb": 1, "allpass": 2}[kind]
+    d = np.ascontiguousarray(d, dtype=np.float64)
+    one = lambda s: _dline_core(np.ascontiguousarray(s, dtype=np.float64), d, g, k)        # noqa: E731
+    return one(x) if x.ndim == 1 else np.stack([one(x[:, c]) for c in range(x.shape[1])], axis=1)
+
+
+@effect("delay_line", "Comb, allpass or plain delay with a fractional, modulable delay and a decay time: t60 < 0 inverts the feedback (hollow, odd harmonics an octave down).",
+        kind=("comb", "comb | allpass | delay"), time=(0.05, "delay, s"), t60=(1.0, "s for -60 dB, signed; 0 = no feedback"),
+        rate=(0.0, "Hz of a sine moving the delay"), depth=(0.0, "s of delay swing (+-)"), mix=(1.0, "wet 0..1"),
+        tail=(None, "s appended (auto = |t60|, at most 10)"))
+def delay_line_fx(x, sr=DEFAULT_SR, kind="comb", time=0.05, t60=1.0, rate=0.0, depth=0.0, mix=1.0, tail=None):
+    x = np.asarray(x, float)
+    tl = min(abs(float(t60)), 10.0) if tail is None else float(tail)
+    xp = _pad(x, samples(tl + float(time) + abs(float(depth)), sr))
+    n = xp.shape[0]
+    d = float(time) + float(depth) * _lfo(n, sr, float(rate)) if depth and rate else np.full(n, float(time))
+    wet = delay_line(xp, sr, np.maximum(d, 3.5 / sr), t60, kind)
+    return _fade_end(_wetdry(xp, wet, mix), sr)
+
+
+@numba.njit(cache=True)
+def _heads_core(x, frame, ratio, pdisp, tdisp, rnd):
+    n = x.shape[0]
+    L = int(3 * frame + tdisp + 16)
+    buf = np.zeros(L)
+    w = np.zeros(5)
+    y = np.zeros(n)
+    d = np.zeros(4)
+    slope = np.zeros(4)
+    age = np.zeros(4, dtype=np.int64)
+    q = frame // 4
+    r = 0
+    m = rnd.shape[0]
+    for k in range(4):
+        rk = min(max(ratio + pdisp * (2.0 * rnd[r % m] - 1.0), 0.0), 4.0)
+        start = (frame * (rk - 1.0) if rk > 1.0 else 0.0) + 4.0 + tdisp * rnd[(r + 1) % m]
+        r += 2
+        age[k] = k * q
+        slope[k] = 1.0 - rk
+        d[k] = start + slope[k] * age[k]
+    for i in range(n):
+        acc = 0.0
+        for k in range(4):
+            if age[k] >= frame:
+                rk = min(max(ratio + pdisp * (2.0 * rnd[r % m] - 1.0), 0.0), 4.0)
+                d[k] = (frame * (rk - 1.0) if rk > 1.0 else 0.0) + 4.0 + tdisp * rnd[(r + 1) % m]
+                r += 2
+                slope[k] = 1.0 - rk
+                age[k] = 0
+            win = 1.0 - abs(2.0 * age[k] / frame - 1.0)
+            dk = d[k] if d[k] > 3.5 else 3.5
+            acc += win * _ring_l4(buf, L, i, dk, w)
+            d[k] += slope[k]
+            age[k] += 1
+        buf[i % L] = x[i]
+        y[i] = 0.5 * acc
+    return y
+
+
+def pitch_heads(x, sr=DEFAULT_SR, ratio=1.0, window=0.2, pitch_disp=0.0, time_disp=0.0, seed=0):
+    """Causal pitch shifter: four read heads on one delay line, restarted in turn every window / 4, each moving at
+    1 - ratio samples per sample under a triangular window (the four sum to 2, halved). Each restart draws
+    ratio + pitch_disp U(-1, 1) (kept in 0..4) and an extra delay time_disp U(0, 1)."""
+    x = np.asarray(x, float)
+    frame = max(16, (int(float(window) * sr) + 2) & ~3)
+    td = float(np.clip(time_disp, 0.0, window)) * sr
+    rnd = np.random.default_rng(int(seed)).random(2 * (x.shape[0] // max(frame // 4, 1) + 16))
+    one = lambda s: _heads_core(np.ascontiguousarray(s, dtype=np.float64), frame, float(ratio), float(pitch_disp), td, rnd)   # noqa: E731
+    return one(x) if x.ndim == 1 else np.stack([one(x[:, c]) for c in range(x.shape[1])], axis=1)
+
+
+HILBERT_POLES_RE = (1.2524, 5.5671, 22.3423, 89.6271, 364.7914, 2770.1114)
+HILBERT_POLES_IM = (0.3609, 2.7412, 11.1573, 44.7581, 179.6242, 798.4578)
+
+
+def _hilbert_coefs(sr, poles):
+    a = 15.0 * math.pi * np.asarray(poles, float) / sr
+    return -(1.0 - a) / (1.0 + a)
+
+
+@numba.njit(cache=True)
+def _ssb_core(x, shift, sr, cre, cim, analytic):
+    n = x.shape[0]
+    y = np.zeros(n)
+    yi = np.zeros(n)
+    s = np.zeros((2, 6, 2))
+    ph = 0.0
+    for i in range(n):
+        re = x[i]
+        im = x[i]
+        for k in range(6):
+            o = cre[k] * (re - s[0, k, 1]) + s[0, k, 0]
+            s[0, k, 0] = re
+            s[0, k, 1] = o
+            re = o
+            o = cim[k] * (im - s[1, k, 1]) + s[1, k, 0]
+            s[1, k, 0] = im
+            s[1, k, 1] = o
+            im = o
+        if analytic:
+            y[i] = re
+            yi[i] = im
+        else:
+            y[i] = re * math.cos(ph) - im * math.sin(ph)
+        ph += 2.0 * math.pi * shift[i] / sr
+        if ph > math.pi:
+            ph -= 2.0 * math.pi
+        elif ph < -math.pi:
+            ph += 2.0 * math.pi
+    return y, yi
+
+
+def hilbert_pair(x, sr=DEFAULT_SR):
+    """Causal analytic pair (real, imaginary) of a mono signal, 90 degrees apart from about 15 Hz to 0.4 sr: two
+    chains of six first-order allpasses, no latency beyond their group delay."""
+    x = np.ascontiguousarray(x, dtype=np.float64)
+    return _ssb_core(x, np.zeros(x.shape[0]), float(sr), _hilbert_coefs(sr, HILBERT_POLES_RE), _hilbert_coefs(sr, HILBERT_POLES_IM), True)
+
+
+@effect("hilbert_shift", "Causal frequency shifter (single sideband): every partial moves by the same number of Hz, harmonic sounds turn inharmonic and metallic; the shift can glide.",
+        hz=(100.0, "shift, Hz (negative = down)"), hz_end=(None, "shift reached at the end (linear glide)"), mix=(1.0, "wet 0..1"))
+def hilbert_shift(x, sr=DEFAULT_SR, hz=100.0, hz_end=None, mix=1.0):
+    x = np.asarray(x, float)
+    n = x.shape[0]
+    s = np.ascontiguousarray(np.full(n, float(hz)) if hz_end is None else np.linspace(float(hz), float(hz_end), n))
+    ha, hb = _hilbert_coefs(sr, HILBERT_POLES_RE), _hilbert_coefs(sr, HILBERT_POLES_IM)
+    one = lambda v: _ssb_core(np.ascontiguousarray(v, dtype=np.float64), s, float(sr), ha, hb, False)[0]     # noqa: E731
+    wet = one(x) if x.ndim == 1 else np.stack([one(x[:, c]) for c in range(x.shape[1])], axis=1)
+    return _wetdry(x, wet, mix)
+
+
+from . import family_v  # noqa: E402,F401  (HRTF binaural, free reeds, measured bodies, tape bias)

@@ -267,3 +267,29 @@ phase distortion at constant level), `variation_filter(x, sr, n=10, depth_db=8, 
 different colour per seed for repeated samples), `head_shadow(x, sr, azimuth, radius)` (one ear's head-shadow
 filter), `median_comb(x, sr, freq, k=4, amount, transient)` (harmonic comb by a median of taps, the attack left
 dry). `modal_fft(freqs, decays, amps, dur, sr, bins=5, n)`: modal synthesis frame by frame in the frequency domain.
+
+## Added in 1.3.0
+
+- `ladder kind=levien|levien_linear`: Levien's exact linear matrix (`levien_linear`) and the same scheme with a tanh
+  per stage (`levien`); `LEVIEN_SQUARINGS` = 10.
+- `dsp.playhead_loss_db(f, speed)` and `dsp.playhead_loss(x, speed)`: spacing, thickness and gap losses of the
+  playback head; `tape(speed=)` in m/s (0 = unchanged, for instance 0.19 applies them).
+- `calibrate.esr(ref, est)`: error-to-signal ratio, sum of e^2 over sum of y^2.
+- `analysis.sethares_dissonance(freqs, amps, alpha=None)`: sensory dissonance of a set of partials; with `alpha`, of
+  the sound against itself transposed by `alpha`: sweeping `alpha` gives the dissonance curve whose minima are the
+  intervals the timbre prefers.
+- `wg_osc(tau=)` is an amplitude time constant, e^(-t/tau) (it was e^(-t/2tau)); tuning stays exact with damping.
+  `shaker_comb ramp` defaults to 4 / `rate` (gains slide over one turn of the taps). `overdrive shape=cubic|atan`.
+- `wdf_oscillator` resonates exactly (pre-warping), `wdf_port(warp_hz=)`; `FractionalDelay` / `ThiranDelay` clamp the
+  delay to the valid range; `clarinet(reed_table="pasp", embouchure, reed_power)` and `bowed_string(bow_table="pasp",
+  capture)` take the PASP reed and bow tables. The dead `fx.chorus`, `flanger` and `phaser` are gone.
+## Newer options (1.3.0)
+
+- `codec ltp=`, `dsp.gsm_like(ltp)`, `gsm_bitrate` (13 kbit/s with the LTP) and the effect `gsm_call`; `mulaw law="g711"|"g711a"`;
+  `overdrive shape="symclip"`; `tape bias=`; `lowshelf` and `highshelf` `q`; `wah order=4`; `expander direction= thresh_db=`;
+  `limiter input_db=`; `duck hold=`; `radio rotator=` (off by default: `rotator=True` gives the old sound); `virtual_bass`;
+  `vibrato model="scanner"` (`sections`, `chorus`, `section_ms`).
+- `dsp.WALL_MATERIALS["plexiglass"]` (11.5 kg/m2, coincidence 3080 Hz), `phase_splitter`, `phase_splitter_error`, `ppm_meter`,
+  `fdn_echo_density`, `fdn_mixing_time(kind="polack")`, `fdn_degeneration`, `fdn_delays_for_mixing`, `mode_lock`;
+  `filters.shelf1`, `diode_ladder_poles`, `ladder(kind="dangelo", order=, pole_cutoff=)`, `ladder_pole_ratio`, `ladder_k_from_q`.
+- `quality` is about 0.172 for 16 kHz and 0.586 for 32 kHz (measured with `_geo(12000, 64000, q)`).

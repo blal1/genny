@@ -14,7 +14,7 @@ from . import foley as FO
 from .core import DEFAULT_SR
 from .cyber import bearing, gearbox, transformer
 from .foley import CATCH, ENDSTOP, P, RATCHET, _drive, _fin, _mclick, _n, _nm, _phisem, _put
-from .friction import FS, GLASS, _friction_note, _gate, elastoplastic_friction, squeak
+from .friction import FS, GLASS, _friction_note, _gate, elastoplastic_friction, squeak, wineglass_mode_freq
 from .matter import MINNAERT_WR, air_leak, bubble_params, drain, gurgle, pour, sizzle, steam
 from .physical import ambience as amb
 from .pinball import solenoid, spring
@@ -1165,7 +1165,7 @@ def bowed_ceramic(sr=DEFAULT_SR, freq=600.0, dur=2.5, pressure=0.6, speed=0.12, 
     return _fin(y, sr, 0.7, fade=0.01, tail=0.1)
 
 
-GLASS_ALPHA = 1.25                                          # shape factor of a wine glass
+GLASS_ALPHA = 1.4                                           # shape factor of a wine glass
 GLASS_R, GLASS_WALL = 0.035, 0.0015                         # m: rim radius, wall thickness
 RHO_LIQUID, RHO_GLASS = 1000.0, 2500.0
 
@@ -1181,15 +1181,27 @@ def fill_freq(f0, fill, a: float = -1.0) -> float:
     return float(f0) / math.sqrt(1.0 + a * float(np.clip(fill, 0.0, 1.0)) ** 4)
 
 
-@sfx("filled_glass", "A drinking glass struck, its pitch falling as it fills: f0 / sqrt(1 + 2.33 fill^4), 10 semitones lower when full.",
-     freq=(1200.0, "Hz empty"), fill=(0.0, "0 empty .. 1 full"), force=(0.6, "0..1"), seed=(0, "variation"))
-def filled_glass(sr=DEFAULT_SR, freq=1200.0, fill=0.0, force=0.6, seed=0):
-    """Ratios `friction.GLASS`, a 0.2 ms strike, T60 1.2 s, more damping with liquid."""
+def french_glass_ratios(r_over_h: float = 1.2) -> np.ndarray:
+    """Mode ratios of the glass as a thin cylinder (radius R, effective height H = R / r_over_h): (n, vertical m) = (2, 1.875), (3, 1.875),
+    (4, 1.875), (5, 1.875), (2, 4.694), over the lowest."""
+    r, h = GLASS_R, GLASS_WALL
+    k = [wineglass_mode_freq(h, r, r / r_over_h, m, n) for n, m in ((2, 1.875), (3, 1.875), (4, 1.875), (5, 1.875), (2, 4.694))]
+    return np.array(k) / k[0]
+
+
+@sfx("filled_glass", "A drinking glass struck, its pitch falling as it fills: f0 / sqrt(1 + 2.61 fill^4), 11 semitones lower when full.",
+     freq=(1200.0, "Hz empty"), fill=(0.0, "0 empty .. 1 full"), force=(0.6, "0..1"), seed=(0, "variation"),
+     partials=("glass", "glass = the rubbed-glass ratios | french = the modes of a thin cylinder fixed at its base (n = 2, 3, 4, 5 azimuthal, vertical flexure 1 and 2)"))
+def filled_glass(sr=DEFAULT_SR, freq=1200.0, fill=0.0, force=0.6, seed=0, partials="glass"):
+    """Ratios `friction.GLASS` (or the cylinder's modes), a 0.2 ms strike, T60 1.2 s, more damping with liquid."""
+    if partials not in ("glass", "french"):
+        raise ValueError("partials: glass|french")
+    ratios = np.array(GLASS) if partials == "glass" else french_glass_ratios()
     f = fill_freq(np.clip(freq, 200.0, 4000.0), fill)
     fl = float(np.clip(fill, 0.0, 1.0))
     x = np.zeros(_n(1.8))
     x[:max(_n(0.0002), 2)] = float(np.clip(force, 0.05, 1.0))
-    y = _modes(x, f * np.array(GLASS), 1.2 / (1.0 + fl), [1.0, 0.5, 0.3, 0.15, 0.08])
+    y = _modes(x, f * ratios, 1.2 / (1.0 + fl), [1.0, 0.5, 0.3, 0.15, 0.08])
     return _fin(y, sr, 0.25 + 0.5 * float(np.clip(force, 0.05, 1.0)), fade=0.0005, tail=0.1)
 
 

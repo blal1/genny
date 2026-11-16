@@ -56,15 +56,25 @@ def _comb(x: np.ndarray, delay_s: float, fb: float, sr: int) -> np.ndarray:
     exhaust=("auto", "ptr only: the exhaust the PTR paper learned, inline4 | v8 (low, resonant) | v8_metal (mid-range, "
                      "metallic); auto = inline4 below 6 cylinders, else v8"),
     noise=(0.0, "ptr only: 0..1 combustion burst noise shaped by each pulse envelope, plus steady flow noise with throttle"),
+    bank=("filter", "ptr noise: filter (high-pass / low-pass on white noise) | erb (32 ERB-spaced noise bands)"),
+    layout=("", "ptr only: an `engine_layout` name (v8_crossplane, v6_90, inline_4_crossplane...): its firing angles and exhaust banks "
+                "replace the even spacing and `cylinders`; empty = even firing in the usual order"),
 )
 def car_engine(sr=DEFAULT_SR, rpm=1500, cylinders=4, load=0.5, rough=0.25, pipe=0.004, body=1.0, bright=0.0, seed=7, dur=3.0,
-               model="classic", exhaust="auto", inharm=0.0, noise=0.0):
+               model="classic", exhaust="auto", inharm=0.0, noise=0.0, bank="filter", layout=""):
+    if bank not in ("filter", "erb"):
+        raise ValueError("bank must be filter or erb")
     if model == "pd003":
         return _pd003_engine(sr, float(rpm), float(np.clip(load, 0, 1)), int(seed), float(dur))
     if model == "ptr":
+        lay = None
+        if layout:
+            from .engines import firing_banks, firing_offsets
+            lay = (firing_offsets(str(layout)), firing_banks(str(layout)))
+            cylinders = len(lay[0])
         return _ptr_engine(sr, float(rpm), max(1, int(cylinders)), float(np.clip(load, 0, 1)), float(np.clip(rough, 0, 1)),
                            float(pipe), float(np.clip(bright, 0, 1)), int(seed), float(dur), str(exhaust), float(inharm),
-                           float(np.clip(noise, 0, 1)))
+                           float(np.clip(noise, 0, 1)), str(bank), lay)
     rng = np.random.default_rng(int(seed))
     cyl = max(1, int(cylinders))
     rpm = float(rpm)
@@ -221,7 +231,19 @@ PTR_BURST_HP = 1000.0
 PTR_FLOW_LP = 2000.0
 
 
-def _ptr_engine(sr, rpm, cyl, load, rough, pipe, bright, seed, dur, exhaust="auto", inharm=0.0, noise=0.0):
+def _erb_noise(rng, n, sr, edge, high):
+    """Noise from the 32 ERB bands of ``cyber.equalized_noise`` at 0 dB above (``high``) or below ``edge`` Hz and -60 dB
+    elsewhere, at the rms of a unit white noise passed through the same corner."""
+    from .cyber import equalized_noise, erb_centres
+    fc = erb_centres(32)
+    lv = np.where(fc >= edge if high else fc <= edge, 0.0, -60.0)
+    x = equalized_noise(n, rng, lv, sr=sr)
+    ref = F.highpass(rng.standard_normal(n), edge, sr) if high else F.lowpass(rng.standard_normal(n), edge, sr)
+    return x * np.sqrt(np.mean(ref ** 2) / (np.mean(x ** 2) + 1e-30))
+
+
+def _ptr_engine(sr, rpm, cyl, load, rough, pipe, bright, seed, dur, exhaust="auto", inharm=0.0, noise=0.0, bank="filter",
+                layout=None):
     """Pulse-train-resonator engine: every cylinder fires once per engine cycle (f0 = rpm / 120) a bipolar pulse
     P = E(phi) sum_k a_k sin(k (1 + d_k) phi~), E = (1 - e^{-alpha phi}) e^{-beta phi}, a_k ~ e^{-0.5 k lambda}, phase
     bent as phi~ = 2 pi (phi / 2 pi)^nu by the hot leading edge; cylinders 1..n/2 and n/2+1..n on two banks (V engines),
@@ -230,7 +252,9 @@ def _ptr_engine(sr, rpm, cyl, load, rough, pipe, bright, seed, dur, exhaust="aut
     jitter drawn anew every cycle (sd 2 / 720 of a cycle). ``inharm`` 0..1: a Gaussian bump of detuning
     d_k = D exp(-(k - mu)^2 / 2 sigma^2) on the partials, D up to +-0.08, mu and the sign drawn from the seed.
     ``pipe`` / 0.004 scales the tailpipe length. ``noise``: each pulse also carries a burst of high-passed noise
-    under the same envelope E(phi), and a steady low-passed flow noise grows with g_thr (no arcsine shaping)."""
+    under the same envelope E(phi), and a steady low-passed flow noise grows with g_thr (no arcsine shaping).
+    ``bank="erb"`` draws both noises from the ERB-spaced band bank (32 bands, on above 1 kHz for the burst, below 2 kHz for the
+    flow) instead of a filter on white noise."""
     rng = np.random.default_rng(seed)
     n = samples(dur, sr)
     t = np.arange(n) / sr
@@ -246,7 +270,8 @@ def _ptr_engine(sr, rpm, cyl, load, rough, pipe, bright, seed, dur, exhaust="aut
     out = [np.zeros(n) for _ in range(banks)]
     jit = np.random.default_rng(seed + 101)
     for slot, c in enumerate(order):
-        cyc = f0 * t + slot / len(order) + np.clip(rng.normal(0.0, 0.004 + 0.02 * rough), -40 / 720, 40 / 720)
+        fire = slot / len(order) if layout is None else layout[0][slot]
+        cyc = f0 * t + fire + np.clip(rng.normal(0.0, 0.004 + 0.02 * rough), -40 / 720, 40 / 720)
         cyc = cyc + jit.normal(0.0, PTR_JITTER, int(cyc[-1]) + 2)[np.floor(cyc).astype(int)]
         phase = cyc % 1.0
         phi = 2 * np.pi * phase
@@ -254,12 +279,17 @@ def _ptr_engine(sr, rpm, cyl, load, rough, pipe, bright, seed, dur, exhaust="aut
         pulse = (1 - np.exp(-alpha * phi)) * np.exp(-beta * phi) * (np.sin(np.outer(bent, kk)) @ ak)
         gain = 1.0 + rng.uniform(-1, 1) * (0.08 + 0.3 * rough)
         turb = 1.0 + 0.3 * gthr * F.lowpass(rng.standard_normal(n), 400.0, sr)
-        out[(c - 1) * banks // cyl] += gain * pulse * turb
+        ib = (c - 1) * banks // cyl if layout is None or not layout[1] else (0 if layout[1][slot] == "L" else 1) % banks
+        out[ib] += gain * pulse * turb
         if noise > 0:
             nz = np.random.default_rng(seed + 211 + slot)
             env = (1 - np.exp(-alpha * phi)) * np.exp(-beta * phi)
-            burst = F.highpass(nz.standard_normal(n), PTR_BURST_HP, sr) * env
-            flow = F.lowpass(nz.standard_normal(n), PTR_FLOW_LP, sr) * 0.3 * gthr
+            if bank == "erb":
+                burst = _erb_noise(nz, n, sr, PTR_BURST_HP, True) * env
+                flow = _erb_noise(nz, n, sr, PTR_FLOW_LP, False) * 0.3 * gthr
+            else:
+                burst = F.highpass(nz.standard_normal(n), PTR_BURST_HP, sr) * env
+                flow = F.lowpass(nz.standard_normal(n), PTR_FLOW_LP, sr) * 0.3 * gthr
             out[(c - 1) * banks // cyl] += noise * ak.sum() * 0.3 * (burst + flow)
     if exhaust not in PTR_EXHAUST:
         exhaust = "inline4" if cyl < 6 else "v8"
@@ -317,3 +347,27 @@ def engine_knock(sr=DEFAULT_SR, kind="knock", rpm=2500.0, cylinders=4, bore=86.0
     else:
         raise ValueError("kind must be knock|slap|rod")
     return y / (np.max(np.abs(y)) + 1e-9) * 0.8 * (0.4 + 0.6 * sev)
+
+
+def bank_ratio(rpm, root):
+    """Playback ratio and semitones of a loop recorded at ``root`` rpm heard at ``rpm``: 20 against 26 is 0.769, -4.54 semitones."""
+    r = np.asarray(rpm, float) / float(root)
+    return r, 12.0 * np.log2(r)
+
+
+def engine_bank(rpm_curve, bank=(1000.0, 2000.0, 3000.0, 4200.0, 5600.0), sr=DEFAULT_SR, loop=3.0, **engine):
+    """A rev curve (rpm per sample) played from loops of ``car_engine`` rendered at the ``bank`` speeds: each loop is read at
+    rpm / its speed (varispeed) and the two nearest are crossfaded with equal power on the log of the speed."""
+    rpm = np.asarray(rpm_curve, float)
+    b = np.sort(np.asarray(bank, float))
+    lo = np.clip(np.searchsorted(b, rpm) - 1, 0, len(b) - 2)
+    x = np.clip((np.log(rpm) - np.log(b[lo])) / (np.log(b[lo + 1]) - np.log(b[lo])), 0.0, 1.0)
+    out = np.zeros(len(rpm))
+    for i, root in enumerate(b):
+        w = np.where(lo == i, np.cos(0.5 * np.pi * x), 0.0) + np.where(lo + 1 == i, np.sin(0.5 * np.pi * x), 0.0)
+        if not w.any():
+            continue
+        y = car_engine(sr=sr, rpm=float(root), dur=float(loop), **engine)
+        pos = np.cumsum(rpm / root) % len(y)
+        out += w * np.interp(pos, np.arange(len(y)), y, period=len(y))
+    return out
